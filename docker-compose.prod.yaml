@@ -1,0 +1,20 @@
+services:
+  backend:
+    ports: !reset []
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pomnibot.rule=Host(`${DOMAIN:-pomnibot.steins.ru}`)"
+      - "traefik.http.routers.pomnibot.entrypoints=websecure"
+      - "traefik.http.routers.pomnibot.tls=true"
+      - "traefik.http.routers.pomnibot.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.pomnibot.middlewares=pomnibot-headers"
+      - "traefik.http.middlewares.pomnibot-headers.headers.customResponseHeaders.X-Frame-Options="
+      - "traefik.http.middlewares.pomnibot-headers.headers.customResponseHeaders.Content-Security-Policy=frame-ancestors 'self' https://*.max.ru https://max.ru https://*.vk.com https://vk.com *"
+      - "traefik.http.services.pomnibot.loadbalancer.server.port=8080"
+    networks:
+      - traefik-network
+
+networks:
+  traefik-network:
+    name: traefik-network
+    external: true

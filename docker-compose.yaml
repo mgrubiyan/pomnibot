@@ -1,0 +1,13 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${DOCKER_IMAGE:-ghcr.io/mgrubiyan/pomnibot}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      - PORT=8080
+      - BOT_TOKEN=${BOT_TOKEN}
+      - DOMAIN=${DOMAIN:-pomnibot.steins.ru}

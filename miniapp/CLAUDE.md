@@ -49,6 +49,4 @@ React 19 + TypeScript + Vite (Bun runtime), библиотека @maxhub/max-ui.
 - bun run lint — проверка
 
 ## Коммиты
-По-русски, в прошедшем времени и страдательном залоге:
-добавлены, обновлены, описаны. Без трейлеров Co-Authored-By
-и подобных следов ассистента.
+Смотри правила в [../AGENTS.md](../AGENTS.md): Conventional Commits на английском (feat:, fix: и т.д.). Без трейлеров Co-Authored-By и подобных следов ассистента.

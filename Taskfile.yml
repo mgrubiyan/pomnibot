@@ -1,0 +1,74 @@
+version: '3'
+
+dotenv: ['.env']
+
+includes:
+  miniapp:
+    taskfile: ./miniapp/Taskfile.yml
+    dir: ./miniapp
+  backend:
+    taskfile: ./backend/Taskfile.yml
+    dir: ./backend
+
+tasks:
+  default:
+    desc: 'Список доступных задач'
+    cmds:
+      - task --list
+    silent: true
+
+  dev:
+    desc: 'Запуск дев-сервера фронтенда'
+    cmds:
+      - task: miniapp:dev
+
+  build:
+    desc: 'Сборка фронтенда'
+    cmds:
+      - task: miniapp:build
+
+  lint:
+    desc: 'Линтинг всего проекта (фронтенд и бэкенд)'
+    cmds:
+      - task: miniapp:lint
+      - task: backend:lint
+
+  lint:frontend:
+    desc: 'Линтинг фронтенда'
+    cmds:
+      - task: miniapp:lint
+
+  lint:backend:
+    desc: 'Линтинг бэкенда'
+    cmds:
+      - task: backend:lint
+
+  test:
+    desc: 'Запуск тестов бэкенда'
+    cmds:
+      - task: backend:test
+
+  preview:
+    desc: 'Предпросмотр фронтенда'
+    cmds:
+      - task: miniapp:preview
+
+  up:
+    desc: 'Запуск сервисов в Docker Compose'
+    cmds:
+      - docker compose up -d
+
+  down:
+    desc: 'Остановка Docker Compose'
+    cmds:
+      - docker compose down
+
+  logs:
+    desc: 'Просмотр логов Docker Compose'
+    cmds:
+      - docker compose logs -f
+
+  docker:build:
+    desc: 'Сборка Docker-образов'
+    cmds:
+      - docker compose build

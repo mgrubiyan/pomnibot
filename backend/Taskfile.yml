@@ -1,0 +1,17 @@
+version: '3'
+
+tasks:
+  lint:
+    desc: 'Проверка кода бэкенда (golangci-lint)'
+    cmds:
+      - golangci-lint run ./...
+
+  test:
+    desc: 'Запуск тестов бэкенда'
+    cmds:
+      - go test -v ./...
+
+  build:
+    desc: 'Сборка бинарника бэкенда'
+    cmds:
+      - go build -o server ./cmd/server
