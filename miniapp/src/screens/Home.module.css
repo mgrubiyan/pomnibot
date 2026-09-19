@@ -1,0 +1,67 @@
+/* Главный экран. Список наборов — на Cell-компонентах max-ui,
+   вручную свёрстана только карточка «На сегодня». */
+
+.header {
+    padding: 8px 4px 0;
+}
+
+.greeting {
+    margin: 0;
+    /* Длинное имя не должно выдавливать счётчик дней. */
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.days {
+    flex-shrink: 0;
+}
+
+/* Карточка «На сегодня» */
+
+.todayCard {
+    box-sizing: border-box;
+    padding: 20px;
+    border-radius: 16px;
+    background: var(--background-card);
+}
+
+.startButton {
+    margin-top: 12px;
+}
+
+/* Список наборов: скроллится только он, кнопки снизу стоят на месте. */
+
+.setsSection {
+    flex: 1;
+    min-height: 0;
+}
+
+.setsScroll {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 16px;
+}
+
+/* У CellList в режиме island свои поля по 12px, а поля экрана уже
+   заданы каркасом — иначе список окажется уже остальных блоков. */
+.setsList {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.setTitle {
+    overflow-wrap: anywhere;
+}
+
+/* Пустое состояние */
+
+.empty {
+    flex: 1;
+    padding: 0 24px;
+    text-align: center;
+}
+
+.emptyText {
+    text-wrap: pretty;
+}

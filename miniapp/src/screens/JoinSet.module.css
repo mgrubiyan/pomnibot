@@ -1,0 +1,27 @@
+/* Экран ввода кода набора. Макета нет — композиция как на остальных
+   экранах: шапка, содержимое по центру, кнопка внизу. */
+
+.header {
+    padding: 8px 0 0;
+}
+
+.title {
+    margin: 0;
+}
+
+.body {
+    flex: 1;
+    min-height: 0;
+    justify-content: center;
+}
+
+.codeInput {
+    /* Код читается как число, поэтому цифры одной ширины. */
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 2px;
+    text-align: center;
+}
+
+.hint {
+    text-wrap: pretty;
+}

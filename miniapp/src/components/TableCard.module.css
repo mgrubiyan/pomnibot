@@ -1,0 +1,99 @@
+/* Карточка-сортировка: термины раскладываются по колонкам.
+   Перетаскивания нет — выбрал термин, выбрал колонку. */
+
+.column {
+    /* Без этого длинный термин распирает колонку grid'а. */
+    min-width: 0;
+}
+
+/* Сплиттер между категориями: колонки стоят вплотную (gapX = 0),
+   разделитель рисует сама колонка, а воздух дают её поля. */
+.column:not(:last-child) {
+    padding-right: 12px;
+    border-right: 1px solid var(--divider-primary);
+}
+
+.column + .column {
+    padding-left: 12px;
+}
+
+.columnTitle {
+    overflow-wrap: anywhere;
+}
+
+/* Термин */
+
+.chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 8px 12px;
+    /* Прозрачная рамка есть всегда, чтобы выбор и вердикт
+       не сдвигали соседние термины. */
+    border: 2px solid transparent;
+    border-radius: 12px;
+    background: var(--background-card);
+    color: var(--text-primary);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Разложенный термин лежит на карточке, поэтому фон другой. */
+.chipPlaced {
+    background: var(--background-surface);
+}
+
+.chipSelected {
+    border-color: var(--text-primary);
+}
+
+.chipCorrect {
+    border-color: var(--icon-positive);
+}
+
+.chipWrong {
+    border-color: var(--icon-negative);
+}
+
+.chip:active {
+    opacity: 0.6;
+}
+
+.chip:disabled {
+    cursor: default;
+}
+
+.chipText {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* Место, куда кладут выбранный термин */
+
+.slot {
+    min-height: 44px;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 8px 12px;
+    border: 1.5px dashed var(--divider-primary);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.slot:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+
+.pool {
+    flex-wrap: wrap;
+}

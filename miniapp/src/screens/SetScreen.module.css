@@ -1,0 +1,83 @@
+/* Экран набора. Скроллится середина, шапка и кнопка стоят на месте. */
+
+.header {
+    padding: 8px 0 0;
+}
+
+.headerText {
+    min-width: 0;
+}
+
+.title {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+/* Место под прогноз повторений: данных для него пока нет. */
+.forecastPlaceholder {
+    box-sizing: border-box;
+    min-height: 180px;
+    padding: 20px;
+    border-radius: 16px;
+    background: var(--background-card);
+    text-align: center;
+}
+
+.factsList {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.factText {
+    text-wrap: pretty;
+}
+
+.confirmText {
+    text-wrap: pretty;
+}
+
+.cardsHeader {
+    padding: 0 16px;
+}
+
+.cardTitle {
+    /* В макете длинный вопрос обрезается многоточием в одну строку. */
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Плашка отмены. Своего компонента в библиотеке нет, поэтому вручную:
+   инверсия — фон текстовым цветом, текст цветом карточки. */
+.undo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 48px;
+    box-sizing: border-box;
+    padding: 4px 4px 4px 16px;
+    border-radius: 12px;
+    background: var(--text-primary);
+    color: var(--background-card);
+}
+
+.undoButton {
+    min-height: 40px;
+    margin: 0;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--button-primary);
+    font-family: inherit;
+    cursor: pointer;
+}

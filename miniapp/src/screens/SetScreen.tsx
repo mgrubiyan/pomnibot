@@ -1,0 +1,305 @@
+import { useEffect, useState } from 'react';
+import { Button, CellHeader, CellList, CellSimple, Flex, IconButton, Spinner, Typography } from '@maxhub/max-ui';
+import type { Card, CardSet } from '../types';
+import { mockToday } from '../mocks';
+import { Screen } from '../components/Screen';
+import { StatusScreen } from '../components/StatusScreen';
+import { IconChevronLeft, IconOffline, IconTrash } from '../components/Icons';
+import { estimateMinutes } from '../utils/estimate';
+import { aboutMinutesLabel, cardsLabel } from '../utils/plural';
+import s from './SetScreen.module.css';
+
+type Status = 'loading' | 'error' | 'ready';
+
+const LOAD_DELAY = 700;
+
+interface Fact {
+    title: string;
+    text: string;
+    source: string;
+}
+
+/** Контент экрана, а не данные пользователя — живёт в коде. */
+const FACTS: Fact[] = [
+    {
+        title: 'Вспоминать полезнее, чем перечитывать',
+        text: 'Через неделю студенты, которые проверяли себя, вспомнили 61% текста, а те, кто перечитывал, — 40%.',
+        source: 'Roediger, Karpicke · Psychological Science, 2006',
+    },
+    {
+        title: 'Паузы важнее количества',
+        text: 'Разнесённые по дням повторения запоминаются лучше, чем подряд. Чем дальше экзамен, тем длиннее могут быть паузы.',
+        source: 'Cepeda и др. · обзор 317 экспериментов, 2006',
+    },
+    {
+        title: 'Повтор — когда начинаете забывать',
+        text: 'Карточка возвращается, когда вероятность её вспомнить падает примерно до 90%. Так каждое повторение укрепляет память сильнее.',
+        source: 'Модель FSRS · Open Spaced Repetition',
+    },
+];
+
+/**
+ * Моки вместо запроса. Реальный эндпоинт подключим позже.
+ * Экран ошибки — ?fail
+ */
+function loadSet(setId: string): Promise<CardSet> {
+    return new Promise((resolve, reject) => {
+        window.setTimeout(() => {
+            if (new URLSearchParams(window.location.search).has('fail')) {
+                reject(new Error('network'));
+                return;
+            }
+
+            const found = mockToday.sets.find((item) => item.id === setId);
+            if (!found) {
+                reject(new Error('not found'));
+                return;
+            }
+            resolve(found);
+        }, LOAD_DELAY);
+    });
+}
+
+export interface SetScreenProps {
+    setId: string;
+    /** Карточки набора с учётом правок и удалений этой сессии. */
+    cards: Card[];
+    /** Итог последнего действия с карточкой; вернуть можно только удаление. */
+    toast: { kind: 'removed' | 'edited' } | null;
+    onBack: () => void;
+    onStart: (setId: string) => void;
+    onRemove: (setId: string) => void;
+    onOpenCard: (cardId: string) => void;
+    onUndoRemoveCard: () => void;
+}
+
+export function SetScreen({
+    setId,
+    cards,
+    toast,
+    onBack,
+    onStart,
+    onRemove,
+    onOpenCard,
+    onUndoRemoveCard,
+}: SetScreenProps) {
+    const [status, setStatus] = useState<Status>('loading');
+    const [set, setSet] = useState<CardSet | null>(null);
+    const [attempt, setAttempt] = useState(0);
+    const [confirmingRemove, setConfirmingRemove] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        loadSet(setId)
+            .then((next) => {
+                if (cancelled) {
+                    return;
+                }
+                setSet(next);
+                setStatus('ready');
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setStatus('error');
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [attempt, setId]);
+
+    const retry = () => {
+        setStatus('loading');
+        setAttempt((current) => current + 1);
+    };
+
+    if (status === 'loading') {
+        return (
+            <StatusScreen
+                icon={<Spinner size={32} appearance="neutral-themed" />}
+                title="Открываем набор"
+                text="Смотрим, что нужно повторить"
+            />
+        );
+    }
+
+    if (status === 'error' || !set) {
+        return (
+            <StatusScreen
+                icon={<IconOffline size={48} tone="muted" />}
+                title="Нет соединения"
+                text="Проверьте интернет и попробуйте ещё раз"
+                action={
+                    <Flex direction="column" align="stretch" gap={8}>
+                        <Button size="medium" variant="primary" stretched onClick={retry}>
+                            Повторить
+                        </Button>
+                        <Button size="medium" variant="ghost" stretched onClick={onBack}>
+                            На главную
+                        </Button>
+                    </Flex>
+                }
+            />
+        );
+    }
+
+    const hasDue = set.cardsDue > 0;
+    // Чужой набор из списка убирают, свой — удаляют вместе с карточками.
+    const shared = Boolean(set.authorName);
+
+    return (
+        <Screen>
+            <Flex align="center" gap={8} className={s.header}>
+                <IconButton size="small" variant="ghost" aria-label="Назад" onClick={onBack}>
+                    <IconChevronLeft size={20} />
+                </IconButton>
+                <Flex direction="column" align="stretch" gap={2} className={s.headerText}>
+                    <Typography.Text variant="subheader" asChild>
+                        <h1 className={s.title}>{set.title}</h1>
+                    </Typography.Text>
+                    <Typography.Text variant="description" color="secondary">
+                        {cardsLabel(cards.length)}
+                        {hasDue ? ` · ${set.cardsDue} на повтор` : ''}
+                        {set.authorName ? ` · автор: ${set.authorName}` : ''}
+                    </Typography.Text>
+                </Flex>
+            </Flex>
+
+            <Flex direction="column" align="stretch" gap={16} className={s.body}>
+                {/* TODO: здесь будет прогноз повторений — удержание в процентах
+                    и кривая забывания. Данных для него пока нет, решим отдельно. */}
+                <Flex
+                    direction="column"
+                    align="center"
+                    justify="center"
+                    className={s.forecastPlaceholder}
+                >
+                    <Typography.Text variant="description" color="tertiary">
+                        Прогноз повторений появится позже
+                    </Typography.Text>
+                </Flex>
+
+                <Flex direction="column" align="stretch" gap={8}>
+                    <Flex justify="space-between" align="baseline" gap={8} className={s.cardsHeader}>
+                        <Typography.Text variant="label" color="tertiary">
+                            Карточки · {cards.length}
+                        </Typography.Text>
+                    </Flex>
+                    <CellList mode="island" filled className={s.factsList}>
+                        {cards.map((card, index) => (
+                            <CellSimple
+                                key={card.id}
+                                as="button"
+                                separator={index > 0}
+                                showChevron
+                                onClick={() => onOpenCard(card.id)}
+                                title={<span className={s.cardTitle}>{card.question}</span>}
+                                subtitle={card.topic}
+                            />
+                        ))}
+                    </CellList>
+                </Flex>
+
+                <Flex direction="column" align="stretch" gap={8}>
+                    <CellHeader>Почему это работает</CellHeader>
+                    <CellList mode="island" filled className={s.factsList}>
+                        {FACTS.map((fact, index) => (
+                            <CellSimple
+                                key={fact.title}
+                                separator={index > 0}
+                                title={fact.title}
+                                subtitle={
+                                    <Flex direction="column" align="stretch" gap={4}>
+                                        <Typography.Text
+                                            variant="description"
+                                            color="secondary"
+                                            className={s.factText}
+                                        >
+                                            {fact.text}
+                                        </Typography.Text>
+                                        <Typography.Text variant="label" color="tertiary">
+                                            {fact.source}
+                                        </Typography.Text>
+                                    </Flex>
+                                }
+                            />
+                        ))}
+                    </CellList>
+                </Flex>
+            </Flex>
+
+            <Flex direction="column" align="stretch" gap={8}>
+                {toast ? (
+                    <div className={s.undo} role="status">
+                        <Typography.Text variant="detail">
+                            {toast.kind === 'removed' ? 'Карточка удалена' : 'Карточка исправлена'}
+                        </Typography.Text>
+                        {toast.kind === 'removed' ? (
+                            <button type="button" className={s.undoButton} onClick={onUndoRemoveCard}>
+                                <Typography.Text variant="detail">Вернуть</Typography.Text>
+                            </button>
+                        ) : null}
+                    </div>
+                ) : null}
+
+                {confirmingRemove ? (
+                    <>
+                        <Typography.Text variant="description" color="secondary" className={s.confirmText}>
+                            {shared
+                                ? 'Набор пропадёт из вашего списка. У автора он останется.'
+                                : 'Набор и все его карточки удалятся. Вернуть их будет нельзя.'}
+                        </Typography.Text>
+                        <Flex gap={8} align="stretch">
+                            <Button
+                                size="medium"
+                                variant="secondary"
+                                stretched
+                                onClick={() => setConfirmingRemove(false)}
+                            >
+                                Отмена
+                            </Button>
+                            <Button
+                                size="medium"
+                                variant="destructive"
+                                stretched
+                                onClick={() => onRemove(set.id)}
+                            >
+                                {shared ? 'Убрать' : 'Удалить'}
+                            </Button>
+                        </Flex>
+                    </>
+                ) : (
+                    <>
+                        {hasDue ? (
+                            <Button size="medium" variant="primary" stretched onClick={() => onStart(set.id)}>
+                                Повторить {cardsLabel(set.cardsDue)} · {aboutMinutesLabel(estimateMinutes(set.cardsDue))}
+                            </Button>
+                        ) : (
+                            // В макете этого случая нет: если повторять нечего,
+                            // предлагаем пройти набор целиком.
+                            <Button size="medium" variant="secondary" stretched onClick={() => onStart(set.id)}>
+                                Пройти набор целиком
+                            </Button>
+                        )}
+
+                        <Button
+                            size="small"
+                            variant="ghost"
+                            stretched
+                            iconBefore={<IconTrash size={16} tone="muted" />}
+                            onClick={() => setConfirmingRemove(true)}
+                        >
+                            <Typography.Text variant="description" color="tertiary">
+                                {shared ? 'Убрать набор' : 'Удалить набор'}
+                            </Typography.Text>
+                        </Button>
+                    </>
+                )}
+            </Flex>
+        </Screen>
+    );
+}
+
+export default SetScreen;

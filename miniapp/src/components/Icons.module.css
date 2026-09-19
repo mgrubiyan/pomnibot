@@ -1,0 +1,16 @@
+.icon {
+    flex-shrink: 0;
+}
+
+/* Цвета иконок — только переменные дизайн-системы. */
+.iconPositive {
+    color: var(--icon-positive);
+}
+
+.iconNegative {
+    color: var(--icon-negative);
+}
+
+.iconMuted {
+    color: var(--text-tertiary);
+}
