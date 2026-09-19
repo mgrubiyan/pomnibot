@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import AddNote from './screens/AddNote';
 import CardEdit from './screens/CardEdit';
 import CardIssue from './screens/CardIssue';
@@ -25,6 +25,10 @@ type Toast = { kind: 'removed'; cardId: string } | { kind: 'edited' };
 
 function App() {
     const [screen, setScreen] = useState<Screen>({ name: 'home' });
+
+    useEffect(() => {
+        window.WebApp?.ready?.();
+    }, []);
 
     // Правки и удаления пока живут в памяти: бэкенда нет,
     // а хранилища браузера использовать нельзя.

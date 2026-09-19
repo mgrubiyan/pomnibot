@@ -93,3 +93,25 @@ func TestSPAFallback(t *testing.T) {
 		})
 	}
 }
+
+func TestLoggingMiddleware(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+		_, _ = w.Write([]byte("short and stout"))
+	})
+
+	wrapped := loggingMiddleware(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/custom-path", nil)
+	rec := httptest.NewRecorder()
+
+	wrapped.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTeapot {
+		t.Fatalf("expected status %d, got %d", http.StatusTeapot, rec.Code)
+	}
+
+	if rec.Body.String() != "short and stout" {
+		t.Fatalf("expected body %q, got %q", "short and stout", rec.Body.String())
+	}
+}
