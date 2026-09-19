@@ -13,17 +13,17 @@
 ## Запуск
 
 ```bash
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
-- `npm run dev` — дев-сервер на :5173
-- `npm run build` — сборка (`tsc -b` + vite)
-- `npm run lint` — проверка
+- `bun run dev` — дев-сервер на :5173
+- `bun run build` — сборка (`tsc -b` + vite)
+- `bun run lint` — проверка
 
 ## Стек
 
-React 19 + TypeScript + Vite, библиотека [@maxhub/max-ui](https://www.npmjs.com/package/@maxhub/max-ui).
+React 19 + TypeScript + Vite на Bun 1.4+, библиотека [@maxhub/max-ui](https://www.npmjs.com/package/@maxhub/max-ui).
 Состояние — `useState`, без Redux. Роутера нет.
 
 Все цвета берутся из CSS-переменных MAX UI, поэтому тёмная тема работает
@@ -168,4 +168,3 @@ Feed ── «Карточка неверная» ──► CardIssue ─┬─ 
   в ленте теряется. Чтобы его сохранить, Feed нужно не размонтировать.
 - Проверить оба клиента MAX, мобильный и веб. В концепте это отдельный риск,
   а сейчас всё видели только в браузере.
-- В CLAUDE.md записан React 18, а стоит React 19 — надо свести.

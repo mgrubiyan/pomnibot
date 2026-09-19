@@ -10,7 +10,7 @@
 из макета не переносим.
 
 ## Стек
-React 18 + TypeScript + Vite, библиотека @maxhub/max-ui.
+React 19 + TypeScript + Vite (Bun runtime), библиотека @maxhub/max-ui.
 Состояние — useState и контекст, без Redux. Запросы через fetch.
 
 ## Правила
@@ -44,9 +44,9 @@ React 18 + TypeScript + Vite, библиотека @maxhub/max-ui.
 - Тяжёлые библиотеки под анимацию: свайп делаем на CSS transform.
 
 ## Команды
-- npm run dev — дев-сервер
-- npm run build — сборка
-- npm run lint — проверка
+- bun run dev — дев-сервер
+- bun run build — сборка
+- bun run lint — проверка
 
 ## Коммиты
 По-русски, в прошедшем времени и страдательном залоге:
