@@ -41,6 +41,8 @@
     text-align: left;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+    /* Same press feedback as an answer option in the feed. */
+    transition: transform 0.12s ease-out;
 }
 
 /* A placed term sits on the card, hence the different background. */
@@ -62,6 +64,8 @@
 
 .chip:active {
     opacity: 0.6;
+    transform: scale(0.97);
+    transition-duration: 0.06s;
 }
 
 .chip:disabled {
@@ -96,4 +100,16 @@
 
 .pool {
     flex-wrap: wrap;
+}
+
+/* Reduced motion: a press dims the term without moving it. */
+
+@media (prefers-reduced-motion: reduce) {
+    .chip {
+        transition: none;
+    }
+
+    .chip:active {
+        transform: none;
+    }
 }

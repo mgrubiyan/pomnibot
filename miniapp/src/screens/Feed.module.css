@@ -138,10 +138,15 @@
     text-align: left;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+    /* Springs back slower than it goes down, so the press reads as
+       a squeeze rather than a jump. */
+    transition: transform 0.12s ease-out;
 }
 
 .option:active {
     opacity: 0.6;
+    transform: scale(0.97);
+    transition-duration: 0.06s;
 }
 
 .option:disabled {
@@ -221,5 +226,14 @@
     .flipInner:not(.flipped) .faceBack,
     .flipInner.flipped .faceFront {
         visibility: hidden;
+    }
+
+    /* A press still dims the option, it just does not move it. */
+    .option {
+        transition: none;
+    }
+
+    .option:active {
+        transform: none;
     }
 }
