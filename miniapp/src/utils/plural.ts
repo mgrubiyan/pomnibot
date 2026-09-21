@@ -22,6 +22,9 @@ export const cardsLabel = (count: number) =>
 export const daysLabel = (count: number) =>
     `${count} ${plural(count, ['день', 'дня', 'дней'])}`;
 
+export const errorsLabel = (count: number) =>
+    `${count} ${plural(count, ['ошибка', 'ошибки', 'ошибок'])}`;
+
 export const minutesLabel = (count: number) =>
     `${count} ${plural(count, ['минута', 'минуты', 'минут'])}`;
 

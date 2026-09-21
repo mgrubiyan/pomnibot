@@ -140,6 +140,7 @@ function App() {
             <Feed
                 key={screen.setId ?? 'all'}
                 setId={screen.setId}
+                setTitle={screen.setId ? titleOfSet(screen.setId) : undefined}
                 removedCardIds={removedCardIds}
                 cardPatches={cardPatches}
                 onExit={goHome}

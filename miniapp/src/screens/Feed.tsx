@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button, Flex, Input, Spinner, Typography } from '@maxhub/max-ui';
-import type { Card } from '../types';
+import type { AnswerResult, Card } from '../types';
 import { mockCards } from '../mocks';
 import { TableColumns, TablePool } from '../components/TableCard';
 import { visibleCards, type CardPatch } from '../utils/cards';
@@ -12,6 +12,7 @@ import {
 } from '../utils/table';
 import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
+import { Result } from './Result';
 import { cx } from '../utils/cx';
 import {
     IconCheck,
@@ -119,6 +120,8 @@ function matchTranscript(card: Card, phrase: string): string {
 export interface FeedProps {
     /** When set, only the cards of this set are shown. */
     setId?: string;
+    /** Title of that set, for the result screen. */
+    setTitle?: string;
     /** Cards deleted and edited during this session. */
     removedCardIds: string[];
     cardPatches: Record<string, CardPatch>;
@@ -126,7 +129,14 @@ export interface FeedProps {
     onReportCard: (cardId: string) => void;
 }
 
-export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard }: FeedProps) {
+export function Feed({
+    setId,
+    setTitle,
+    removedCardIds,
+    cardPatches,
+    onExit,
+    onReportCard,
+}: FeedProps) {
     const [status, setStatus] = useState<Status>('loading');
     const [cards, setCards] = useState<Card[]>([]);
     const [index, setIndex] = useState(0);
@@ -148,6 +158,9 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
     // The card on its way out is still the current one, so the index
     // only moves on once it has left.
     const [leaving, setLeaving] = useState(false);
+    // One entry per card the user moved on from — the result screen
+    // is built from it, and later the backend will save each one.
+    const [results, setResults] = useState<AnswerResult[]>([]);
 
     const [attempt, setAttempt] = useState(0);
 
@@ -278,6 +291,14 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
     }, [reset]);
 
     const goNext = () => {
+        if (card && verdict) {
+            const result: AnswerResult = {
+                cardId: card.id,
+                correct: verdict === 'correct',
+                answeredAt: new Date().toISOString(),
+            };
+            setResults((current) => [...current, result]);
+        }
         if (!motionAllowed()) {
             showNext();
             return;
@@ -323,6 +344,11 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
     }
 
     if (!card) {
+        // A finished run gets its result; «На сегодня всё» is for a feed
+        // that had nothing to review from the start.
+        if (results.length > 0) {
+            return <Result setTitle={setTitle} cards={cards} results={results} onExit={onExit} />;
+        }
         return (
             <StatusScreen
                 icon={<IconCheck size={48} tone="muted" />}

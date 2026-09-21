@@ -1,0 +1,78 @@
+/* Result screen. Laid out by hand, like the feed: the topic rows carry
+   a bar that no Cell component has. The middle scrolls, the button
+   stays at the bottom. */
+
+.body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+/* Score */
+
+.summary {
+    padding: 20px;
+    border-radius: 16px;
+    background: var(--background-card);
+}
+
+.score {
+    margin: 0;
+}
+
+/* Topics */
+
+.sectionTitle {
+    margin: 0;
+    /* Lines up with the text inside the rows below. */
+    padding: 0 16px;
+}
+
+.topics {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-radius: 16px;
+    background: var(--background-card);
+}
+
+.topic {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 16px;
+}
+
+.topic + .topic {
+    border-top: 1px solid var(--divider-primary);
+}
+
+.topicName {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* The count must not wrap under a long topic name. */
+.topicCount {
+    flex-shrink: 0;
+}
+
+/* Same bar as the progress in the feed. It does not animate here,
+   so width is fine. */
+.bar {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--divider-primary);
+    overflow: hidden;
+}
+
+.barFill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--text-tertiary);
+}
+
+.note {
+    padding: 0 16px;
+}
