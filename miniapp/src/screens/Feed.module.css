@@ -20,6 +20,24 @@
     transition: width 0.2s ease-out;
 }
 
+/* Moving on to the next card: the current one slides up and dissolves,
+   the next one arrives from below. The card is remounted on every id,
+   so cardIn runs by itself; cardOut is put on by the leaving class. */
+
+@keyframes cardIn {
+    from {
+        transform: translateY(24px);
+        opacity: 0;
+    }
+}
+
+@keyframes cardOut {
+    to {
+        transform: translateY(-24px);
+        opacity: 0;
+    }
+}
+
 /* Card turn
 
    The question and the breakdown are two sides of one box: they sit on
@@ -32,6 +50,14 @@
        instead of stretching the screen. */
     min-height: 0;
     perspective: 1000px;
+    animation: cardIn 0.2s ease-out;
+}
+
+/* Leaving is short on purpose: nothing to look at while the card is gone.
+   The duration is mirrored in Feed.tsx (CARD_OUT_MS), which holds the
+   index back until the card is out of the way. */
+.leaving {
+    animation: cardOut 0.15s ease-in forwards;
 }
 
 .flipInner {
@@ -168,6 +194,11 @@
 /* Reduced motion: no turn, the sides simply replace one another. */
 
 @media (prefers-reduced-motion: reduce) {
+    .flip,
+    .leaving {
+        animation: none;
+    }
+
     .flip {
         perspective: none;
     }

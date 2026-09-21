@@ -42,9 +42,11 @@ const VOICE_DELAY = 1500;
 const VOICE_SUBMIT_DELAY = 600;
 /** Matches the transform duration in Feed.module.css. */
 const FLIP_MS = 350;
+/** Matches the cardOut animation in Feed.module.css. */
+const CARD_OUT_MS = 150;
 
-/** With reduced motion there is no turn — the side is simply swapped. */
-const flipAnimated = () => !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** With reduced motion the card changes without turning or sliding. */
+const motionAllowed = () => !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** Answers are compared loosely: case, extra spaces and ё do not matter. */
 const norm = (value: string) => value.trim().toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ');
@@ -143,6 +145,9 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
     // While the card is turning the buttons stay disabled: the answer
     // must not run ahead of the animation.
     const [flipping, setFlipping] = useState(false);
+    // The card on its way out is still the current one, so the index
+    // only moves on once it has left.
+    const [leaving, setLeaving] = useState(false);
 
     const [attempt, setAttempt] = useState(0);
 
@@ -177,7 +182,7 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
         setAttempt((current) => current + 1);
     };
 
-    const startFlip = useCallback(() => setFlipping(flipAnimated()), []);
+    const startFlip = useCallback(() => setFlipping(motionAllowed()), []);
 
     useEffect(() => {
         if (!flipping) {
@@ -218,7 +223,7 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
         };
     }, [listening, card, submit]);
 
-    const reset = () => {
+    const reset = useCallback(() => {
         setGiven(null);
         setVerdict(null);
         setRevealed(false);
@@ -227,7 +232,7 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
         setTranscript('');
         setPicked(null);
         setFlipping(false);
-    };
+    }, []);
 
     const layout = card?.table;
     const placement: Placement =
@@ -262,10 +267,30 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
         startFlip();
     };
 
-    const goNext = () => {
+    const showNext = useCallback(() => {
         setIndex((current) => current + 1);
         reset();
+    }, [reset]);
+
+    const goNext = () => {
+        if (!motionAllowed()) {
+            showNext();
+            return;
+        }
+        setLeaving(true);
     };
+
+    useEffect(() => {
+        if (!leaving) {
+            return;
+        }
+        const timer = window.setTimeout(() => {
+            setLeaving(false);
+            showNext();
+        }, CARD_OUT_MS);
+
+        return () => window.clearTimeout(timer);
+    }, [leaving, showNext]);
 
     if (status === 'loading') {
         return (
@@ -314,6 +339,8 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
     // shown — after «Знал» the screen would otherwise hold no answer.
     const hasGiven = given !== null && card.kind !== 'flip';
     const showRightAnswer = !hasGiven || verdict === 'wrong';
+    // The buttons are off while the card is turning or leaving.
+    const busy = flipping || leaving;
 
     return (
         <Screen>
@@ -334,7 +361,7 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
                 </div>
             </Flex>
 
-            <div key={card.id} className={s.flip}>
+            <div key={card.id} className={cx(s.flip, leaving && s.leaving)}>
                 <div className={cx(s.flipInner, showAnswer && s.flipped)}>
                     <Flex
                         direction="column"
@@ -516,7 +543,7 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
                             size="medium"
                             variant="primary"
                             stretched
-                            disabled={flipping}
+                            disabled={busy}
                             onClick={goNext}
                         >
                             Дальше
@@ -527,7 +554,7 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
                         size="small"
                         variant="ghost"
                         stretched
-                        disabled={flipping}
+                        disabled={busy}
                         iconBefore={<IconFlag size={16} tone="muted" />}
                         onClick={() => onReportCard(card.id)}
                     >
