@@ -4,16 +4,13 @@ import type { CardSet } from '../types';
 import { mockToday } from '../mocks';
 import { Screen } from '../components/Screen';
 import { IconChevronLeft, IconCross } from '../components/Icons';
+import { formatCode } from '../utils/code';
 import s from './JoinSet.module.css';
 
 const CODE_LENGTH = 6;
 const CHECK_DELAY = 700;
 
 const digitsOf = (value: string) => value.replace(/\D/g, '').slice(0, CODE_LENGTH);
-
-/** The sharing mockup shows the code as «482 917» — input follows suit. */
-const formatCode = (digits: string) =>
-    digits.length > 3 ? `${digits.slice(0, 3)} ${digits.slice(3)}` : digits;
 
 /**
  * Mocks instead of a request; the real endpoint comes later:

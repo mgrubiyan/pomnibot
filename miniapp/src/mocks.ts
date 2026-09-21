@@ -6,12 +6,13 @@ export const mockToday: TodayData = {
     dueCount: 12,
     estimatedMinutes: 3,
     sets: [
-        { id: 's1', title: 'Матанализ, лекция 3', cardsTotal: 9, cardsDue: 9 },
+        { id: 's1', title: 'Матанализ, лекция 3', cardsTotal: 9, cardsDue: 9, shareCode: '315604' },
         {
             id: 's2',
             title: 'Дискретная математика, графы и деревья обхода',
             cardsTotal: 3,
             cardsDue: 3,
+            shareCode: '729150',
         },
         {
             id: 's3',

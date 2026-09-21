@@ -6,6 +6,7 @@ import Feed from './screens/Feed';
 import Home from './screens/Home';
 import JoinSet from './screens/JoinSet';
 import SetScreen from './screens/SetScreen';
+import Share from './screens/Share';
 import { mockCards, mockToday } from './mocks';
 import type { CardIssueReason } from './types';
 import { applyPatch, visibleCards, type CardPatch } from './utils/cards';
@@ -15,6 +16,7 @@ type Screen =
     | { name: 'home' }
     | { name: 'set'; setId: string }
     | { name: 'feed'; setId?: string }
+    | { name: 'share'; setId: string }
     | { name: 'add' }
     | { name: 'join' }
     | { name: 'card-issue'; cardId: string }
@@ -136,14 +138,30 @@ function App() {
     }
 
     if (screen.name === 'feed') {
+        const { setId } = screen;
         return (
             <Feed
-                key={screen.setId ?? 'all'}
-                setId={screen.setId}
+                key={setId ?? 'all'}
+                setId={setId}
+                setTitle={setId ? titleOfSet(setId) : undefined}
                 removedCardIds={removedCardIds}
                 cardPatches={cardPatches}
                 onExit={goHome}
                 onReportCard={(cardId) => go({ name: 'card-issue', cardId })}
+                onShare={setId ? () => go({ name: 'share', setId }) : undefined}
+            />
+        );
+    }
+
+    if (screen.name === 'share') {
+        // Back leads to the set: the result screen lived inside the feed
+        // and is gone once we leave it.
+        return (
+            <Share
+                setId={screen.setId}
+                setTitle={titleOfSet(screen.setId)}
+                cardsCount={visibleCards(mockCards, screen.setId, removedCardIds, cardPatches).length}
+                onBack={() => openSet(screen.setId)}
             />
         );
     }

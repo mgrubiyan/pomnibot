@@ -63,6 +63,13 @@ export const IconStop = (props: IconProps) => (
     </Icon>
 );
 
+export const IconCopy = (props: IconProps) => (
+    <Icon {...props}>
+        <rect x="9" y="9" width="11" height="11" rx="2" />
+        <path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3" />
+    </Icon>
+);
+
 export const IconDoc = (props: IconProps) => (
     <Icon {...props}>
         <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
@@ -81,6 +88,13 @@ export const IconOffline = (props: IconProps) => (
         <path d="M3 3l18 18" />
         <path d="M8.5 8.6A5 5 0 0 0 6 18h11" />
         <path d="M20.5 16.3A4 4 0 0 0 17 10h-.6A6 6 0 0 0 10.4 6.2" />
+    </Icon>
+);
+
+export const IconCalendar = (props: IconProps) => (
+    <Icon {...props}>
+        <rect x="4" y="5" width="16" height="16" rx="2" />
+        <path d="M4 10h16M9 3v4M15 3v4" />
     </Icon>
 );
 
