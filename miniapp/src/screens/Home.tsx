@@ -136,9 +136,11 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds }
                 <Typography.Text variant="subheader" asChild>
                     <h1 className={s.greeting}>Привет, {today.userName}</h1>
                 </Typography.Text>
-                {hasSets ? (
+                {/* «0 дней из 7» on the very first day reads as a reproach,
+                    so the counter waits for the first session. */}
+                {hasSets && today.activeDays > 0 ? (
                     <Typography.Text variant="label" color="secondary" className={s.days}>
-                        {daysLabel(today.activeDays)} из 7
+                        Занимались {daysLabel(today.activeDays)} из 7
                     </Typography.Text>
                 ) : null}
             </Flex>
