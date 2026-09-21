@@ -105,6 +105,14 @@
     overscroll-behavior: contain;
 }
 
+/* A flip card has no options to choose from, so the whole side opens the
+   answer. cursor: pointer is not decoration here: without it iOS does not
+   deliver clicks from a plain element to the React root. */
+.tappable {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
 /* The question sits in the middle of the card, the breakdown at the top. */
 .cardCentered {
     justify-content: center;

@@ -258,6 +258,11 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
         setPlacements((current) => ({ ...current, [card.id]: next }));
     };
 
+    const reveal = () => {
+        setRevealed(true);
+        startFlip();
+    };
+
     const checkTable = () => {
         if (!layout) {
             return;
@@ -341,6 +346,9 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
     const showRightAnswer = !hasGiven || verdict === 'wrong';
     // The buttons are off while the card is turning or leaving.
     const busy = flipping || leaving;
+    // A flip card has nothing to pick from, so the side itself opens
+    // the answer — the button below stays for keyboard and screen readers.
+    const tapToReveal = card.kind === 'flip' && !showAnswer;
 
     return (
         <Screen>
@@ -370,7 +378,14 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
                         gap={24}
                         inert={showAnswer || flipping}
                         aria-hidden={showAnswer}
-                        className={cx(s.face, s.faceFront, s.card, s.cardCentered)}
+                        onClick={tapToReveal ? reveal : undefined}
+                        className={cx(
+                            s.face,
+                            s.faceFront,
+                            s.card,
+                            s.cardCentered,
+                            tapToReveal && s.tappable,
+                        )}
                     >
                         <Typography.Text variant="subheader" asChild>
                             <h1 className={s.question}>{card.question}</h1>
@@ -623,10 +638,7 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
                             size="medium"
                             variant="secondary"
                             stretched
-                            onClick={() => {
-                                setRevealed(true);
-                                startFlip();
-                            }}
+                            onClick={reveal}
                         >
                             Показать ответ
                         </Button>
