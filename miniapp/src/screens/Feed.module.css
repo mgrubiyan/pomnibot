@@ -14,10 +14,14 @@
 }
 
 .progressFill {
+    width: 100%;
     height: 100%;
     border-radius: 2px;
     background: var(--text-tertiary);
-    transition: width 0.2s ease-out;
+    /* The bar fills by scaling, not by width: the card change should
+       move it on the compositor, same as everything else here. */
+    transform-origin: left;
+    transition: transform 0.2s ease-out;
 }
 
 /* Moving on to the next card: the current one slides up and dissolves,
@@ -226,6 +230,10 @@
     .flipInner:not(.flipped) .faceBack,
     .flipInner.flipped .faceFront {
         visibility: hidden;
+    }
+
+    .progressFill {
+        transition: none;
     }
 
     /* A press still dims the option, it just does not move it. */

@@ -356,7 +356,7 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
                 <div className={s.progressTrack} aria-hidden="true">
                     <div
                         className={s.progressFill}
-                        style={{ width: `${((index + 1) / cards.length) * 100}%` }}
+                        style={{ transform: `scaleX(${(index + 1) / cards.length})` }}
                     />
                 </div>
             </Flex>
