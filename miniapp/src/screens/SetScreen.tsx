@@ -19,7 +19,7 @@ interface Fact {
     source: string;
 }
 
-/** Контент экрана, а не данные пользователя — живёт в коде. */
+/** Screen copy rather than user data, so it belongs in the code. */
 const FACTS: Fact[] = [
     {
         title: 'Вспоминать полезнее, чем перечитывать',
@@ -39,8 +39,8 @@ const FACTS: Fact[] = [
 ];
 
 /**
- * Моки вместо запроса. Реальный эндпоинт подключим позже.
- * Экран ошибки — ?fail
+ * Mocks instead of a request; the real endpoint comes later.
+ * Error screen — ?fail
  */
 function loadSet(setId: string): Promise<CardSet> {
     return new Promise((resolve, reject) => {
@@ -62,9 +62,9 @@ function loadSet(setId: string): Promise<CardSet> {
 
 export interface SetScreenProps {
     setId: string;
-    /** Карточки набора с учётом правок и удалений этой сессии. */
+    /** Cards of the set with this session's edits and deletions applied. */
     cards: Card[];
-    /** Итог последнего действия с карточкой; вернуть можно только удаление. */
+    /** Outcome of the last action on a card; only a deletion can be undone. */
     toast: { kind: 'removed' | 'edited' } | null;
     onBack: () => void;
     onStart: (setId: string) => void;
@@ -146,7 +146,7 @@ export function SetScreen({
     }
 
     const hasDue = set.cardsDue > 0;
-    // Чужой набор из списка убирают, свой — удаляют вместе с карточками.
+    // Someone else's set is removed from the list, your own goes with its cards.
     const shared = Boolean(set.authorName);
 
     return (
@@ -168,8 +168,8 @@ export function SetScreen({
             </Flex>
 
             <Flex direction="column" align="stretch" gap={16} className={s.body}>
-                {/* TODO: здесь будет прогноз повторений — удержание в процентах
-                    и кривая забывания. Данных для него пока нет, решим отдельно. */}
+                {/* TODO: the review forecast goes here — retention in percent
+                    and the forgetting curve. No data for it yet, decided later. */}
                 <Flex
                     direction="column"
                     align="center"
@@ -277,8 +277,8 @@ export function SetScreen({
                                 Повторить {cardsLabel(set.cardsDue)} · {aboutMinutesLabel(estimateMinutes(set.cardsDue))}
                             </Button>
                         ) : (
-                            // В макете этого случая нет: если повторять нечего,
-                            // предлагаем пройти набор целиком.
+                            // The mockup has no such case: when nothing is due,
+                            // we offer to go through the whole set.
                             <Button size="medium" variant="secondary" stretched onClick={() => onStart(set.id)}>
                                 Пройти набор целиком
                             </Button>

@@ -1,5 +1,5 @@
-/* Экран ввода кода набора. Макета нет — композиция как на остальных
-   экранах: шапка, содержимое по центру, кнопка внизу. */
+/* Set code entry screen. There is no mockup — the composition follows
+   the other screens: header, content in the middle, button at the bottom. */
 
 .header {
     padding: 8px 0 0;
@@ -16,7 +16,7 @@
 }
 
 .codeInput {
-    /* Код читается как число, поэтому цифры одной ширины. */
+    /* The code reads as a number, so the digits share one width. */
     font-variant-numeric: tabular-nums;
     letter-spacing: 2px;
     text-align: center;

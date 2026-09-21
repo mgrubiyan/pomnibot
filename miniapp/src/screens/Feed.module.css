@@ -1,9 +1,9 @@
-/* Лента карточек. Вручную свёрстаны только сама карточка и варианты
-   ответа: у Button из max-ui фиксированная высота (52px у medium),
-   а вариант должен расти под длинный текст.
-   Каркас экрана и иконки — в src/components. */
+/* Card feed. Only the card itself and the answer options are laid out
+   by hand: Button from max-ui has a fixed height (52px for medium),
+   while an option has to grow with long text.
+   The screen frame and the icons live in src/components. */
 
-/* Шапка с прогрессом */
+/* Header with the progress bar */
 
 .progressTrack {
     width: 100%;
@@ -20,29 +20,68 @@
     transition: width 0.2s ease-out;
 }
 
-/* Карточка */
+/* Card turn
+
+   The question and the breakdown are two sides of one box: they sit on
+   top of each other and always share a height. The box is as tall as the
+   taller side allows on screen, so the card never jumps mid-turn. */
+
+.flip {
+    flex: 1;
+    /* min-height keeps a long breakdown scrolling inside the card
+       instead of stretching the screen. */
+    min-height: 0;
+    perspective: 1000px;
+}
+
+.flipInner {
+    position: relative;
+    height: 100%;
+    transform-style: preserve-3d;
+    /* The duration is mirrored in Feed.tsx (FLIP_MS): the buttons
+       stay disabled for exactly as long. */
+    transition: transform 0.35s ease-out;
+}
+
+.flipped {
+    transform: rotateY(180deg);
+}
+
+.face {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
+    /* Without the prefix WebKit shows the back through the front side. */
+    -webkit-backface-visibility: hidden;
+}
+
+/* The back side is pre-rotated: turning the container brings it
+   round to face the reader. */
+.faceBack {
+    transform: rotateY(180deg);
+}
+
+/* The card */
 
 .card {
-    flex: 1;
-    /* min-height нужен, чтобы длинный вопрос скроллился внутри
-       карточки, а не растягивал экран. */
-    min-height: 0;
     box-sizing: border-box;
     padding: 24px 20px;
     border: 2px solid transparent;
     border-radius: 16px;
     background: var(--background-card);
+    /* Whatever does not fit scrolls inside the side;
+       the card itself does not grow. */
     overflow-y: auto;
     overscroll-behavior: contain;
 }
 
-/* Вопрос стоит по центру карточки, разбор выравнивается по верху. */
+/* The question sits in the middle of the card, the breakdown at the top. */
 .cardCentered {
     justify-content: center;
 }
 
-/* Рамка вердикта. Прозрачная рамка есть и в обычном состоянии,
-   поэтому содержимое не дёргается при переходе к разбору. */
+/* Verdict border. A transparent border is there in the normal state
+   too, so the content does not shift when the breakdown appears. */
 .cardCorrect {
     border-color: var(--icon-positive);
 }
@@ -55,7 +94,7 @@
     text-wrap: pretty;
 }
 
-/* Варианты ответа */
+/* Answer options */
 
 .option {
     display: flex;
@@ -83,10 +122,10 @@
     cursor: default;
 }
 
-/* Блок голосового ввода внутри карточки */
+/* Voice input block inside the card */
 
 .voice {
-    /* Не даём распознанной фразе растолкать карточку. */
+    /* Keeps a recognized phrase from pushing the card apart. */
     min-width: 0;
 }
 
@@ -95,7 +134,7 @@
     overflow-wrap: anywhere;
 }
 
-/* Разбор ответа */
+/* Answer breakdown */
 
 .divider {
     width: 100%;
@@ -104,7 +143,7 @@
 }
 
 .answerRow {
-    /* Иконка вердикта не должна сжиматься рядом с длинным ответом. */
+    /* The verdict icon must not shrink next to a long answer. */
     min-width: 0;
 }
 
@@ -124,4 +163,32 @@
 .quote {
     margin: 0;
     text-wrap: pretty;
+}
+
+/* Reduced motion: no turn, the sides simply replace one another. */
+
+@media (prefers-reduced-motion: reduce) {
+    .flip {
+        perspective: none;
+    }
+
+    .flipInner,
+    .flipInner.flipped {
+        transform: none;
+        transition: none;
+        transform-style: flat;
+    }
+
+    .face,
+    .faceBack {
+        transform: none;
+        backface-visibility: visible;
+    }
+
+    /* Hidden via visibility on purpose: Flex from max-ui sets display
+       inline, and no stylesheet rule can override that. */
+    .flipInner:not(.flipped) .faceBack,
+    .flipInner.flipped .faceFront {
+        visibility: hidden;
+    }
 }

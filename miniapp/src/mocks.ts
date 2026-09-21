@@ -24,7 +24,7 @@ export const mockToday: TodayData = {
     ],
 };
 
-/** Всё на сегодня повторено: наборы на месте, карточек на повтор нет. */
+/** Everything is reviewed for today: the sets remain, nothing is due. */
 export const mockTodayDone: TodayData = {
     ...mockToday,
     dueCount: 0,
@@ -32,7 +32,7 @@ export const mockTodayDone: TodayData = {
     sets: mockToday.sets.map((set) => ({ ...set, cardsDue: 0 })),
 };
 
-/** Новый пользователь: конспектов ещё нет. */
+/** A new user: no notes yet. */
 export const mockTodayEmpty: TodayData = {
     userName: 'Матвей',
     activeDays: 0,
@@ -70,7 +70,7 @@ export const mockCards: Card[] = [
         topic: 'Пределы',
     },
     {
-        // Ломающая вёрстку: длинные варианты ответа, каждый в 2-4 строки.
+        // Layout stress test: long answer options, 2-4 lines each.
         id: 'c3',
         setId: 's1',
         kind: 'choice',
@@ -110,7 +110,7 @@ export const mockCards: Card[] = [
         topic: 'Бесконечно малые',
     },
     {
-        // Ломающая вёрстку: вопрос на 6-7 строк, варианты короткие.
+        // Layout stress test: a question of 6-7 lines, short options.
         id: 'c6',
         setId: 's1',
         kind: 'choice',
@@ -149,7 +149,7 @@ export const mockCards: Card[] = [
         topic: 'Пределы',
     },
     {
-        // Метод таблиц: термины раскладываются по колонкам.
+        // Table method: the terms are laid out across the columns.
         id: 'c9',
         setId: 's1',
         kind: 'table',

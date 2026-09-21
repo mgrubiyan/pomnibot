@@ -10,7 +10,7 @@ import { mockCards, mockToday } from './mocks';
 import type { CardIssueReason } from './types';
 import { applyPatch, visibleCards, type CardPatch } from './utils/cards';
 
-/** Роутер пока не нужен: история браузера не используется. */
+/** No router yet: browser history is not used. */
 type Screen =
     | { name: 'home' }
     | { name: 'set'; setId: string }
@@ -20,7 +20,7 @@ type Screen =
     | { name: 'card-issue'; cardId: string }
     | { name: 'card-edit'; cardId: string };
 
-/** Что сообщить на экране набора после действия с карточкой. */
+/** What to report on the set screen after an action on a card. */
 type Toast = { kind: 'removed'; cardId: string } | { kind: 'edited' };
 
 function App() {
@@ -30,15 +30,15 @@ function App() {
         window.WebApp?.ready?.();
     }, []);
 
-    // Правки и удаления пока живут в памяти: бэкенда нет,
-    // а хранилища браузера использовать нельзя.
+    // Edits and deletions live in memory for now: there is no backend,
+    // and browser storage is off limits.
     const [removedSetIds, setRemovedSetIds] = useState<string[]>([]);
     const [removedCardIds, setRemovedCardIds] = useState<string[]>([]);
     const [cardPatches, setCardPatches] = useState<Record<string, CardPatch>>({});
     const [toast, setToast] = useState<Toast | null>(null);
 
-    // Плашка относится к одному действию, поэтому любой переход её гасит,
-    // а ставят её только удаление и сохранение.
+    // The notice belongs to a single action, so any navigation clears it;
+    // only deleting and saving raise it.
     const go = (next: Screen) => {
         setToast(null);
         setScreen(next);
@@ -74,7 +74,7 @@ function App() {
         mockToday.sets.find((set) => set.id === setId)?.title ?? 'Набор';
 
     const removeCard = (cardId: string, setId: string, reason?: CardIssueReason) => {
-        // TODO: причину брака отправлять на бэкенд — это метрика из концепта.
+        // TODO: send the reported reason to the backend — the concept counts it.
         void reason;
         setRemovedCardIds((current) =>
             current.includes(cardId) ? current : [...current, cardId],
@@ -103,7 +103,7 @@ function App() {
     if (screen.name === 'card-issue' || screen.name === 'card-edit') {
         const card = cardOf(screen.cardId);
 
-        // Карточку удалили, пока экран был открыт.
+        // The card was deleted while the screen was open.
         if (!card) {
             return home;
         }

@@ -1,4 +1,4 @@
-/* «Исправить карточку»: форма поверх карточки, кнопки прижаты снизу. */
+/* «Исправить карточку»: a form over the card, buttons pinned to the bottom. */
 
 .header {
     padding: 8px 0 0;
@@ -20,13 +20,13 @@
     overscroll-behavior: contain;
 }
 
-/* Поля внутри карточки — на фоне экрана, чтобы отделяться от неё. */
+/* Fields inside the card take the screen background to stand apart from it. */
 .field {
     background: var(--background-surface);
 }
 
 .optionRow {
-    /* Поле тянется, кнопка удаления держит ширину. */
+    /* The field stretches, the delete button keeps its width. */
     min-width: 0;
 }
 
@@ -50,7 +50,7 @@
     text-wrap: pretty;
 }
 
-/* Кнопка-ссылка: цвет берём из переменной кнопок. */
+/* Link-styled button: the color comes from the button variable. */
 .linkButton {
     align-self: flex-start;
     min-height: 44px;

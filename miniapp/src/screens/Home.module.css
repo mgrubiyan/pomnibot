@@ -1,5 +1,5 @@
-/* Главный экран. Список наборов — на Cell-компонентах max-ui,
-   вручную свёрстана только карточка «На сегодня». */
+/* Home screen. The list of sets is built from max-ui Cell components;
+   only the «На сегодня» card is laid out by hand. */
 
 .header {
     padding: 8px 4px 0;
@@ -7,7 +7,7 @@
 
 .greeting {
     margin: 0;
-    /* Длинное имя не должно выдавливать счётчик дней. */
+    /* A long name must not squeeze out the day counter. */
     min-width: 0;
     overflow-wrap: anywhere;
 }
@@ -16,7 +16,7 @@
     flex-shrink: 0;
 }
 
-/* Карточка «На сегодня» */
+/* The «На сегодня» card */
 
 .todayCard {
     box-sizing: border-box;
@@ -29,7 +29,7 @@
     margin-top: 12px;
 }
 
-/* Список наборов: скроллится только он, кнопки снизу стоят на месте. */
+/* List of sets: only this part scrolls, the buttons below stay put. */
 
 .setsSection {
     flex: 1;
@@ -43,8 +43,8 @@
     border-radius: 16px;
 }
 
-/* У CellList в режиме island свои поля по 12px, а поля экрана уже
-   заданы каркасом — иначе список окажется уже остальных блоков. */
+/* In island mode CellList adds 12px of its own padding while the screen
+   frame already sets one — otherwise the list is narrower than the rest. */
 .setsList {
     padding-left: 0;
     padding-right: 0;
@@ -54,7 +54,7 @@
     overflow-wrap: anywhere;
 }
 
-/* Пустое состояние */
+/* Empty state */
 
 .empty {
     flex: 1;

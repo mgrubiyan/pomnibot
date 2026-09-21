@@ -2,7 +2,7 @@
     flex-shrink: 0;
 }
 
-/* Цвета иконок — только переменные дизайн-системы. */
+/* Icon colors — design system variables only. */
 .iconPositive {
     color: var(--icon-positive);
 }

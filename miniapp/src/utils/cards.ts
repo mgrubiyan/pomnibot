@@ -1,6 +1,6 @@
 import type { Card } from '../types';
 
-/** Что пользователь поправил в карточке. Бэкенда нет — правки живут в App. */
+/** What the user changed in a card. No backend yet, so edits live in App. */
 export interface CardPatch {
     question?: string;
     answer?: string;
@@ -10,7 +10,7 @@ export interface CardPatch {
 export const applyPatch = (card: Card, patch?: CardPatch): Card =>
     patch ? { ...card, ...patch } : card;
 
-/** Карточки набора с учётом правок и удалений этой сессии. */
+/** Cards of a set with this session's edits and deletions applied. */
 export function visibleCards(
     cards: Card[],
     setId: string | undefined,

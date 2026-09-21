@@ -17,12 +17,12 @@ export interface CardEditProps {
 export function CardEdit({ card, setTitle, onBack, onSave, onRemove }: CardEditProps) {
     const [question, setQuestion] = useState(card.question);
     const [answer, setAnswer] = useState(card.answer);
-    // Неверные варианты — всё, кроме правильного ответа.
+    // The wrong options are everything except the right answer.
     const [wrongOptions, setWrongOptions] = useState<string[]>(
         (card.options ?? []).filter((option) => option !== card.answer),
     );
 
-    // Варианты есть только у выбора из списка.
+    // Only a choice card has options.
     const hasOptions = card.kind === 'choice';
     const canSave = question.trim().length > 0 && answer.trim().length > 0;
 
@@ -143,8 +143,8 @@ export function CardEdit({ card, setTitle, onBack, onSave, onRemove }: CardEditP
                         <Typography.Text variant="description" color="tertiary" asChild>
                             <blockquote className={s.quote}>«{card.sourceQuote}»</blockquote>
                         </Typography.Text>
-                        {/* TODO: выбор другого фрагмента конспекта — нужен экран
-                            со списком фрагментов, макета и данных пока нет. */}
+                        {/* TODO: picking another fragment of the notes needs a
+                            screen listing them; no mockup and no data yet. */}
                         <button type="button" className={s.linkButton} disabled>
                             <Typography.Text variant="description">
                                 Выбрать другой фрагмент конспекта

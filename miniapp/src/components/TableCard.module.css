@@ -1,13 +1,13 @@
-/* Карточка-сортировка: термины раскладываются по колонкам.
-   Перетаскивания нет — выбрал термин, выбрал колонку. */
+/* Sorting card: the terms are laid out across the columns.
+   No dragging — pick a term, then pick a column. */
 
 .column {
-    /* Без этого длинный термин распирает колонку grid'а. */
+    /* Without this a long term blows up the grid column. */
     min-width: 0;
 }
 
-/* Сплиттер между категориями: колонки стоят вплотную (gapX = 0),
-   разделитель рисует сама колонка, а воздух дают её поля. */
+/* Splitter between the categories: the columns sit flush (gapX = 0),
+   each column draws the divider itself and its padding gives the air. */
 .column:not(:last-child) {
     padding-right: 12px;
     border-right: 1px solid var(--divider-primary);
@@ -21,7 +21,7 @@
     overflow-wrap: anywhere;
 }
 
-/* Термин */
+/* A term */
 
 .chip {
     display: flex;
@@ -31,8 +31,8 @@
     box-sizing: border-box;
     margin: 0;
     padding: 8px 12px;
-    /* Прозрачная рамка есть всегда, чтобы выбор и вердикт
-       не сдвигали соседние термины. */
+    /* A transparent border is always there so that selection and verdict
+       do not shift the neighbouring terms. */
     border: 2px solid transparent;
     border-radius: 12px;
     background: var(--background-card);
@@ -43,7 +43,7 @@
     -webkit-tap-highlight-color: transparent;
 }
 
-/* Разложенный термин лежит на карточке, поэтому фон другой. */
+/* A placed term sits on the card, hence the different background. */
 .chipPlaced {
     background: var(--background-surface);
 }
@@ -73,7 +73,7 @@
     overflow-wrap: anywhere;
 }
 
-/* Место, куда кладут выбранный термин */
+/* The slot a picked term goes into */
 
 .slot {
     min-height: 44px;

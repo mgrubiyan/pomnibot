@@ -1,8 +1,8 @@
 const rules = new Intl.PluralRules('ru-RU');
 
 /**
- * Выбирает форму слова по числу: [1 карточка, 2 карточки, 5 карточек].
- * Само число не подставляет — только слово.
+ * Picks the plural form for a number: [1 карточка, 2 карточки, 5 карточек].
+ * Returns the word alone — the number is not inserted.
  */
 export function plural(count: number, forms: [string, string, string]): string {
     const category = rules.select(count);
@@ -25,6 +25,6 @@ export const daysLabel = (count: number) =>
 export const minutesLabel = (count: number) =>
     `${count} ${plural(count, ['минута', 'минуты', 'минут'])}`;
 
-/** «около 3 минут» — родительный падеж, отличается от именительного. */
+/** «около 3 минут» needs the genitive, which differs from the forms above. */
 export const aboutMinutesLabel = (count: number) =>
     `около ${count} ${plural(count, ['минуты', 'минут', 'минут'])}`;

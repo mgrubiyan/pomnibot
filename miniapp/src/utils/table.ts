@@ -1,6 +1,6 @@
 import type { TableLayout } from '../types';
 
-/** Куда попал каждый термин: индекс термина -> колонка или null. */
+/** Where each term landed: term index -> column, or null. */
 export type Placement = (string | null)[];
 
 export const emptyPlacement = (layout: TableLayout): Placement => layout.items.map(() => null);

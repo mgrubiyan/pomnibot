@@ -40,8 +40,13 @@ const BOOLEAN_OPTIONS: Option[] = [
 const LOAD_DELAY = 700;
 const VOICE_DELAY = 1500;
 const VOICE_SUBMIT_DELAY = 600;
+/** Matches the transform duration in Feed.module.css. */
+const FLIP_MS = 350;
 
-/** Сравниваем ответы мягко: регистр, лишние пробелы и ё роли не играют. */
+/** With reduced motion there is no turn — the side is simply swapped. */
+const flipAnimated = () => !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** Answers are compared loosely: case, extra spaces and ё do not matter. */
 const norm = (value: string) => value.trim().toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ');
 
 function optionsOf(card: Card): Option[] {
@@ -54,7 +59,7 @@ function optionsOf(card: Card): Option[] {
     return [];
 }
 
-/** У boolean в данных лежит 'true' / 'false', показывать это нельзя. */
+/** Boolean cards store 'true' / 'false', which must never reach the screen. */
 function labelOf(card: Card, value: string): string {
     if (card.kind !== 'boolean') {
         return value;
@@ -63,8 +68,8 @@ function labelOf(card: Card, value: string): string {
 }
 
 /**
- * Моки вместо запроса. Реальный эндпоинт подключим позже.
- * Экран ошибки — ?fail, одна карточка по виду или id — ?card=table, ?card=c9
+ * Mocks instead of a request; the real endpoint comes later.
+ * Error screen — ?fail, a single card by kind or id — ?card=table, ?card=c9
  */
 function loadCards(setId?: string): Promise<Card[]> {
     return new Promise((resolve, reject) => {
@@ -88,7 +93,7 @@ function loadCards(setId?: string): Promise<Card[]> {
     });
 }
 
-/** Заглушка распознавания: движок не подключён, «слышим» верный ответ. */
+/** Recognition stub: no engine yet, so we always «hear» the right answer. */
 function mockTranscript(card: Card): string {
     if (card.kind === 'boolean') {
         return card.answer === 'true' ? 'верно' : 'неверно';
@@ -99,7 +104,7 @@ function mockTranscript(card: Card): string {
     return card.answer.toLowerCase();
 }
 
-/** Распознанную фразу приводим к варианту ответа, если он нашёлся. */
+/** Maps the recognized phrase onto an answer option when one matches. */
 function matchTranscript(card: Card, phrase: string): string {
     const options = optionsOf(card);
     if (options.length === 0) {
@@ -110,9 +115,9 @@ function matchTranscript(card: Card, phrase: string): string {
 }
 
 export interface FeedProps {
-    /** Если задан — проходим только карточки этого набора. */
+    /** When set, only the cards of this set are shown. */
     setId?: string;
-    /** Удалённые и поправленные в этой сессии карточки. */
+    /** Cards deleted and edited during this session. */
     removedCardIds: string[];
     cardPatches: Record<string, CardPatch>;
     onExit: () => void;
@@ -130,17 +135,21 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
     const [draft, setDraft] = useState('');
     const [listening, setListening] = useState(false);
     const [transcript, setTranscript] = useState('');
-    // Раскладку храним по id карточки, а не эффектом на смену карточки:
-    // так она заводится сама и не требует setState в эффекте.
+    // The layout is keyed by card id instead of being reset by an effect:
+    // that way it appears on its own and needs no setState in an effect.
     const [placements, setPlacements] = useState<Record<string, Placement>>({});
     const [picked, setPicked] = useState<{ cardId: string; index: number } | null>(null);
+
+    // While the card is turning the buttons stay disabled: the answer
+    // must not run ahead of the animation.
+    const [flipping, setFlipping] = useState(false);
 
     const [attempt, setAttempt] = useState(0);
 
     const card = cards[index];
 
-    // Перезапуск загрузки — через счётчик попыток: статус переключает
-    // обработчик кнопки, эффект только ходит за данными.
+    // Reloading goes through an attempt counter: the button handler flips
+    // the status, the effect only fetches the data.
     useEffect(() => {
         let cancelled = false;
 
@@ -168,6 +177,17 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
         setAttempt((current) => current + 1);
     };
 
+    const startFlip = useCallback(() => setFlipping(flipAnimated()), []);
+
+    useEffect(() => {
+        if (!flipping) {
+            return;
+        }
+        const timer = window.setTimeout(() => setFlipping(false), FLIP_MS);
+
+        return () => window.clearTimeout(timer);
+    }, [flipping]);
+
     const submit = useCallback(
         (value: string) => {
             if (!card) {
@@ -175,11 +195,12 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
             }
             setGiven(value);
             setVerdict(norm(value) === norm(card.answer) ? 'correct' : 'wrong');
+            startFlip();
         },
-        [card],
+        [card, startFlip],
     );
 
-    // Заглушка голосового ответа: пауза «слушаю», потом фраза, потом ответ.
+    // Voice answer stub: a «listening» pause, then the phrase, then the answer.
     useEffect(() => {
         if (!listening || !card) {
             return;
@@ -205,6 +226,7 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
         setListening(false);
         setTranscript('');
         setPicked(null);
+        setFlipping(false);
     };
 
     const layout = card?.table;
@@ -237,6 +259,7 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
         }
         setRevealed(true);
         setVerdict(correctCount(layout, placement) === layout.items.length ? 'correct' : 'wrong');
+        startFlip();
     };
 
     const goNext = () => {
@@ -287,8 +310,8 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
     const options = optionsOf(card);
     const showAnswer = given !== null || revealed;
     const canVoice = card.kind !== 'flip';
-    // У flip своего ответа нет, поэтому верный показываем всегда —
-    // иначе после самооценки «Знал» на экране не осталось бы ответа.
+    // A flip card has no answer of its own, so the right one is always
+    // shown — after «Знал» the screen would otherwise hold no answer.
     const hasGiven = given !== null && card.kind !== 'flip';
     const showRightAnswer = !hasGiven || verdict === 'wrong';
 
@@ -311,149 +334,157 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
                 </div>
             </Flex>
 
-            {showAnswer ? (
-                <Flex
-                    direction="column"
-                    align="stretch"
-                    gap={16}
-                    aria-live="polite"
-                    className={cx(
-                        s.card,
-                        !layout && verdict === 'correct' && s.cardCorrect,
-                        !layout && verdict === 'wrong' && s.cardWrong,
-                    )}
-                >
-                    {layout ? (
-                        <Typography.Text variant="subheader">
-                            {correctCount(layout, placement)} из {layout.items.length} на своих местах
+            <div key={card.id} className={s.flip}>
+                <div className={cx(s.flipInner, showAnswer && s.flipped)}>
+                    <Flex
+                        direction="column"
+                        align="stretch"
+                        justify="center"
+                        gap={24}
+                        inert={showAnswer || flipping}
+                        aria-hidden={showAnswer}
+                        className={cx(s.face, s.faceFront, s.card, s.cardCentered)}
+                    >
+                        <Typography.Text variant="subheader" asChild>
+                            <h1 className={s.question}>{card.question}</h1>
                         </Typography.Text>
-                    ) : verdict ? (
-                        <Flex align="center" gap={8}>
-                            {verdict === 'correct' ? (
-                                <IconCheck size={28} tone="positive" />
-                            ) : (
-                                <IconCross size={28} tone="negative" />
-                            )}
-                            <Typography.Text variant="subheader">
-                                {verdict === 'correct' ? 'Верно' : 'Неверно'}
-                            </Typography.Text>
-                        </Flex>
-                    ) : (
-                        <Typography.Text variant="subheader">Ответ</Typography.Text>
-                    )}
 
-                    <Typography.Text variant="body-strong" color="secondary">
-                        {card.question}
-                    </Typography.Text>
-
-                    {layout ? (
-                        <TableColumns
-                            layout={layout}
-                            placement={placement}
-                            checked
-                            hasSelection={false}
-                            onDropTo={putInColumn}
-                            onTakeBack={takeBack}
-                        />
-                    ) : null}
-
-                    <Flex direction="column" align="stretch" gap={12}>
-                        {!layout && hasGiven ? (
-                            <Flex align="center" gap={12} className={s.answerRow}>
-                                {verdict === 'correct' ? (
-                                    <IconCheck tone="positive" />
-                                ) : (
-                                    <IconCross tone="negative" />
-                                )}
-                                <Flex direction="column">
-                                    <Typography.Text variant="label" color="tertiary">
-                                        Ваш ответ
-                                    </Typography.Text>
-                                    <Typography.Text variant="body" className={s.answerText}>
-                                        {labelOf(card, given)}
-                                    </Typography.Text>
-                                </Flex>
-                            </Flex>
+                        {layout ? (
+                            <TableColumns
+                                layout={layout}
+                                placement={placement}
+                                checked={false}
+                                hasSelection={pickedIndex !== null}
+                                onDropTo={putInColumn}
+                                onTakeBack={takeBack}
+                            />
                         ) : null}
 
-                        {!layout && showRightAnswer ? (
-                            <Flex align="center" gap={12} className={s.answerRow}>
-                                <IconCheck tone="positive" />
-                                <Flex direction="column">
+                        {listening ? (
+                            <Flex direction="column" align="stretch" gap={4} aria-live="polite" className={s.voice}>
+                                <Flex align="center" gap={4}>
+                                    <IconMic size={14} tone="muted" />
                                     <Typography.Text variant="label" color="tertiary">
-                                        Верный ответ
-                                    </Typography.Text>
-                                    <Typography.Text variant="body" className={s.answerText}>
-                                        {labelOf(card, card.answer)}
+                                        Слушаю…
                                     </Typography.Text>
                                 </Flex>
+                                {transcript ? (
+                                    <Typography.Text variant="body" color="secondary" className={s.transcript}>
+                                        «{transcript}»
+                                    </Typography.Text>
+                                ) : null}
                             </Flex>
                         ) : null}
                     </Flex>
 
-                    <div className={s.divider} />
-
-                    <Typography.Text variant="body" asChild>
-                        <p className={s.explanation}>{card.explanation}</p>
-                    </Typography.Text>
-
-                    <figure className={s.source}>
-                        <Flex direction="column" align="stretch" gap={4}>
-                            <Typography.Text variant="label-strong" color="tertiary" asChild>
-                                <figcaption>
-                                    <Flex align="center" gap={4}>
-                                        <IconDoc size={14} tone="muted" />
-                                        Из вашего конспекта
-                                        {card.sourceRef ? ` · ${card.sourceRef}` : ''}
-                                    </Flex>
-                                </figcaption>
+                    <Flex
+                        direction="column"
+                        align="stretch"
+                        gap={16}
+                        aria-live="polite"
+                        inert={!showAnswer || flipping}
+                        aria-hidden={!showAnswer}
+                        className={cx(
+                            s.face,
+                            s.faceBack,
+                            s.card,
+                            !layout && verdict === 'correct' && s.cardCorrect,
+                            !layout && verdict === 'wrong' && s.cardWrong,
+                        )}
+                    >
+                        {layout ? (
+                            <Typography.Text variant="subheader">
+                                {correctCount(layout, placement)} из {layout.items.length} на своих местах
                             </Typography.Text>
-                            <Typography.Text variant="description" color="tertiary" asChild>
-                                <blockquote className={s.quote}>«{card.sourceQuote}»</blockquote>
-                            </Typography.Text>
-                        </Flex>
-                    </figure>
-                </Flex>
-            ) : (
-                <Flex
-                    direction="column"
-                    align="stretch"
-                    justify="center"
-                    gap={24}
-                    className={cx(s.card, s.cardCentered)}
-                >
-                    <Typography.Text variant="subheader" asChild>
-                        <h1 className={s.question}>{card.question}</h1>
-                    </Typography.Text>
-
-                    {layout ? (
-                        <TableColumns
-                            layout={layout}
-                            placement={placement}
-                            checked={false}
-                            hasSelection={pickedIndex !== null}
-                            onDropTo={putInColumn}
-                            onTakeBack={takeBack}
-                        />
-                    ) : null}
-
-                    {listening ? (
-                        <Flex direction="column" align="stretch" gap={4} aria-live="polite" className={s.voice}>
-                            <Flex align="center" gap={4}>
-                                <IconMic size={14} tone="muted" />
-                                <Typography.Text variant="label" color="tertiary">
-                                    Слушаю…
+                        ) : verdict ? (
+                            <Flex align="center" gap={8}>
+                                {verdict === 'correct' ? (
+                                    <IconCheck size={28} tone="positive" />
+                                ) : (
+                                    <IconCross size={28} tone="negative" />
+                                )}
+                                <Typography.Text variant="subheader">
+                                    {verdict === 'correct' ? 'Верно' : 'Неверно'}
                                 </Typography.Text>
                             </Flex>
-                            {transcript ? (
-                                <Typography.Text variant="body" color="secondary" className={s.transcript}>
-                                    «{transcript}»
-                                </Typography.Text>
+                        ) : (
+                            <Typography.Text variant="subheader">Ответ</Typography.Text>
+                        )}
+
+                        <Typography.Text variant="body-strong" color="secondary">
+                            {card.question}
+                        </Typography.Text>
+
+                        {layout ? (
+                            <TableColumns
+                                layout={layout}
+                                placement={placement}
+                                checked
+                                hasSelection={false}
+                                onDropTo={putInColumn}
+                                onTakeBack={takeBack}
+                            />
+                        ) : null}
+
+                        <Flex direction="column" align="stretch" gap={12}>
+                            {!layout && hasGiven ? (
+                                <Flex align="center" gap={12} className={s.answerRow}>
+                                    {verdict === 'correct' ? (
+                                        <IconCheck tone="positive" />
+                                    ) : (
+                                        <IconCross tone="negative" />
+                                    )}
+                                    <Flex direction="column">
+                                        <Typography.Text variant="label" color="tertiary">
+                                            Ваш ответ
+                                        </Typography.Text>
+                                        <Typography.Text variant="body" className={s.answerText}>
+                                            {labelOf(card, given)}
+                                        </Typography.Text>
+                                    </Flex>
+                                </Flex>
+                            ) : null}
+
+                            {!layout && showRightAnswer ? (
+                                <Flex align="center" gap={12} className={s.answerRow}>
+                                    <IconCheck tone="positive" />
+                                    <Flex direction="column">
+                                        <Typography.Text variant="label" color="tertiary">
+                                            Верный ответ
+                                        </Typography.Text>
+                                        <Typography.Text variant="body" className={s.answerText}>
+                                            {labelOf(card, card.answer)}
+                                        </Typography.Text>
+                                    </Flex>
+                                </Flex>
                             ) : null}
                         </Flex>
-                    ) : null}
-                </Flex>
-            )}
+
+                        <div className={s.divider} />
+
+                        <Typography.Text variant="body" asChild>
+                            <p className={s.explanation}>{card.explanation}</p>
+                        </Typography.Text>
+
+                        <figure className={s.source}>
+                            <Flex direction="column" align="stretch" gap={4}>
+                                <Typography.Text variant="label-strong" color="tertiary" asChild>
+                                    <figcaption>
+                                        <Flex align="center" gap={4}>
+                                            <IconDoc size={14} tone="muted" />
+                                            Из вашего конспекта
+                                            {card.sourceRef ? ` · ${card.sourceRef}` : ''}
+                                        </Flex>
+                                    </figcaption>
+                                </Typography.Text>
+                                <Typography.Text variant="description" color="tertiary" asChild>
+                                    <blockquote className={s.quote}>«{card.sourceQuote}»</blockquote>
+                                </Typography.Text>
+                            </Flex>
+                        </figure>
+                    </Flex>
+                </div>
+            </div>
 
             {showAnswer ? (
                 <Flex direction="column" align="stretch" gap={8}>
@@ -463,6 +494,7 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
                                 size="medium"
                                 variant="secondary"
                                 stretched
+                                disabled={flipping}
                                 iconBefore={<IconCross size={20} tone="negative" />}
                                 onClick={() => setVerdict('wrong')}
                             >
@@ -472,6 +504,7 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
                                 size="medium"
                                 variant="secondary"
                                 stretched
+                                disabled={flipping}
                                 iconBefore={<IconCheck size={20} tone="positive" />}
                                 onClick={() => setVerdict('correct')}
                             >
@@ -479,7 +512,13 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
                             </Button>
                         </Flex>
                     ) : (
-                        <Button size="medium" variant="primary" stretched onClick={goNext}>
+                        <Button
+                            size="medium"
+                            variant="primary"
+                            stretched
+                            disabled={flipping}
+                            onClick={goNext}
+                        >
                             Дальше
                         </Button>
                     )}
@@ -488,6 +527,7 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
                         size="small"
                         variant="ghost"
                         stretched
+                        disabled={flipping}
                         iconBefore={<IconFlag size={16} tone="muted" />}
                         onClick={() => onReportCard(card.id)}
                     >
@@ -556,7 +596,10 @@ export function Feed({ setId, removedCardIds, cardPatches, onExit, onReportCard 
                             size="medium"
                             variant="secondary"
                             stretched
-                            onClick={() => setRevealed(true)}
+                            onClick={() => {
+                                setRevealed(true);
+                                startFlip();
+                            }}
                         >
                             Показать ответ
                         </Button>

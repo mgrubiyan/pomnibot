@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { cx } from '../utils/cx';
 import s from './Icons.module.css';
 
-/** Смысловой цвет иконки; без тона наследуется цвет текста. */
+/** Semantic icon color; without a tone the icon inherits the text color. */
 export type IconTone = 'positive' | 'negative' | 'muted';
 
 export interface IconProps {

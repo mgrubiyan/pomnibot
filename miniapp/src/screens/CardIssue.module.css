@@ -1,4 +1,4 @@
-/* «Что не так с карточкой»: причина перед правкой или удалением. */
+/* «Что не так с карточкой»: the reason asked before an edit or a deletion. */
 
 .header {
     padding: 8px 0 0;
@@ -26,8 +26,8 @@
     overflow-wrap: anywhere;
 }
 
-/* Список причин — свои радиокнопки: в библиотеке есть Radio,
-   но строки-выбора с разделителями нет. */
+/* List of reasons uses hand-made radio buttons: the library has Radio,
+   but no option row with dividers. */
 .reasons {
     margin: 0;
     padding: 0;

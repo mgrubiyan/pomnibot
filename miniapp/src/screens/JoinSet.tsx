@@ -11,13 +11,13 @@ const CHECK_DELAY = 700;
 
 const digitsOf = (value: string) => value.replace(/\D/g, '').slice(0, CODE_LENGTH);
 
-/** В макете шеринга код показан как «482 917» — повторяем при вводе. */
+/** The sharing mockup shows the code as «482 917» — input follows suit. */
 const formatCode = (digits: string) =>
     digits.length > 3 ? `${digits.slice(0, 3)} ${digits.slice(3)}` : digits;
 
 /**
- * Моки вместо запроса. Реальный эндпоинт подключим позже:
- * сейчас код ищется среди наборов, у которых он задан.
+ * Mocks instead of a request; the real endpoint comes later:
+ * for now the code is looked up among the sets that carry one.
  */
 function findSetByCode(code: string): Promise<CardSet> {
     return new Promise((resolve, reject) => {

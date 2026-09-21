@@ -10,7 +10,7 @@ export interface StatusScreenProps {
     action?: ReactNode;
 }
 
-/** Общий каркас для загрузки, ошибки, конца ленты и пустых состояний. */
+/** Shared frame for loading, error, end of feed and empty states. */
 export function StatusScreen({ icon, title, text, action }: StatusScreenProps) {
     return (
         <Screen>

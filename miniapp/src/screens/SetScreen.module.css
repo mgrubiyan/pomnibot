@@ -1,4 +1,4 @@
-/* Экран набора. Скроллится середина, шапка и кнопка стоят на месте. */
+/* Set screen. The middle scrolls, the header and the button stay put. */
 
 .header {
     padding: 8px 0 0;
@@ -20,7 +20,7 @@
     overscroll-behavior: contain;
 }
 
-/* Место под прогноз повторений: данных для него пока нет. */
+/* Room for the review forecast: there is no data for it yet. */
 .forecastPlaceholder {
     box-sizing: border-box;
     min-height: 180px;
@@ -48,15 +48,15 @@
 }
 
 .cardTitle {
-    /* В макете длинный вопрос обрезается многоточием в одну строку. */
+    /* In the mockup a long question is ellipsized onto a single line. */
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-/* Плашка отмены. Своего компонента в библиотеке нет, поэтому вручную:
-   инверсия — фон текстовым цветом, текст цветом карточки. */
+/* Undo notice. The library has no component for it, so it is done by
+   hand: inverted — text color as background, card color as text. */
 .undo {
     display: flex;
     align-items: center;

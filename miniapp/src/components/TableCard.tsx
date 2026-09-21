@@ -41,14 +41,14 @@ function Chip({ text, placed, selected, verdict, disabled, onClick }: ChipProps)
 export interface TableColumnsProps {
     layout: TableLayout;
     placement: Placement;
-    /** Пока карточка не проверена — можно вернуть термин обратно в пул. */
+    /** Until the card is checked a term can be put back into the pool. */
     checked: boolean;
     hasSelection: boolean;
     onDropTo: (column: string) => void;
     onTakeBack: (index: number) => void;
 }
 
-/** Колонки с разложенными терминами — верхняя часть карточки. */
+/** Columns holding the placed terms — the upper part of the card. */
 export function TableColumns({
     layout,
     placement,
@@ -112,7 +112,7 @@ export interface TablePoolProps {
     onSelect: (index: number) => void;
 }
 
-/** Нераспределённые термины — нижняя часть экрана. */
+/** Terms not placed yet — the lower part of the screen. */
 export function TablePool({ layout, placement, selected, onSelect }: TablePoolProps) {
     const left = layout.items.length - placedCount(placement);
 

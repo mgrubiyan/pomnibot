@@ -14,8 +14,8 @@ type Status = 'loading' | 'error' | 'ready';
 const LOAD_DELAY = 700;
 
 /**
- * Моки вместо запроса. Реальный эндпоинт подключим позже.
- * Состояния смотреть через ?home=done, ?home=empty и ?fail
+ * Mocks instead of a request; the real endpoint comes later.
+ * The states are reachable through ?home=done, ?home=empty and ?fail
  */
 function loadToday(): Promise<TodayData> {
     return new Promise((resolve, reject) => {
@@ -39,20 +39,20 @@ function loadToday(): Promise<TodayData> {
     });
 }
 
-/** «24 карточки · 8 на повтор», без хвоста когда повторять нечего. */
+/** «24 карточки · 8 на повтор», without the tail when nothing is due. */
 function setSummary(set: CardSet): string {
     const total = cardsLabel(set.cardsTotal);
     return set.cardsDue > 0 ? `${total} · ${set.cardsDue} на повтор` : total;
 }
 
 export interface HomeProps {
-    /** «Начать» — лента по всем карточкам на повтор. */
+    /** «Начать» — a feed over every card that is due. */
     onStart: () => void;
-    /** Тап по набору — сначала экран набора, лента уже оттуда. */
+    /** Tapping a set opens the set screen first; the feed starts there. */
     onOpenSet: (setId: string) => void;
     onAddNote: () => void;
     onJoinSet: () => void;
-    /** Наборы, удалённые в этой сессии: бэкенда пока нет, помним в App. */
+    /** Sets deleted during this session: no backend yet, App remembers them. */
     removedSetIds: string[];
 }
 
@@ -115,8 +115,8 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds }
 
     const sets = today.sets.filter((set) => !removedSetIds.includes(set.id));
     const hasSets = sets.length > 0;
-    // Счётчики считаем по оставшимся наборам, иначе после удаления
-    // «на сегодня» обещало бы карточки, которых уже нет.
+    // The counters are summed over the remaining sets: otherwise «на сегодня»
+    // would keep promising cards that a deletion has already taken away.
     const dueCount = sets.reduce((total, set) => total + set.cardsDue, 0);
 
     const bottomActions = (

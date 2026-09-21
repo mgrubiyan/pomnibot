@@ -7,9 +7,9 @@ export interface AddNoteProps {
 }
 
 /**
- * Конспект принимает бот, а не мини-приложение — так в концепте.
- * Поэтому экран объясняет, куда идти, и не просит файл.
- * TODO: когда подключим SDK MAX, добавить кнопку перехода в чат с ботом.
+ * Notes are taken by the bot, not by the mini app — that is the concept.
+ * So this screen points the way instead of asking for a file.
+ * TODO: once the MAX SDK is wired up, add a button that opens the bot chat.
  */
 export function AddNote({ onBack }: AddNoteProps) {
     return (
