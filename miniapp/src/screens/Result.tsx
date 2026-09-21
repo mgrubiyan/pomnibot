@@ -12,10 +12,12 @@ export interface ResultProps {
     cards: Card[];
     results: AnswerResult[];
     onExit: () => void;
+    /** Only a single set can be shared; the daily mix has nothing to share. */
+    onShare?: () => void;
 }
 
 /** End of a run: the score and the topics that went worst. */
-export function Result({ setTitle, cards, results, onExit }: ResultProps) {
+export function Result({ setTitle, cards, results, onExit, onShare }: ResultProps) {
     const correct = results.filter((result) => result.correct).length;
     const topics = scoreByTopic(cards, results);
 
@@ -74,8 +76,18 @@ export function Result({ setTitle, cards, results, onExit }: ResultProps) {
                 ) : null}
             </Flex>
 
-            <Flex direction="column" align="stretch">
-                <Button size="medium" variant="secondary" stretched onClick={onExit}>
+            <Flex direction="column" align="stretch" gap={8}>
+                {onShare ? (
+                    <Button size="medium" variant="primary" stretched onClick={onShare}>
+                        Поделиться набором
+                    </Button>
+                ) : null}
+                <Button
+                    size="medium"
+                    variant={onShare ? 'ghost' : 'secondary'}
+                    stretched
+                    onClick={onExit}
+                >
                     На главную
                 </Button>
             </Flex>

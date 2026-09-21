@@ -127,6 +127,8 @@ export interface FeedProps {
     cardPatches: Record<string, CardPatch>;
     onExit: () => void;
     onReportCard: (cardId: string) => void;
+    /** Opens sharing from the result screen; absent for the daily mix. */
+    onShare?: () => void;
 }
 
 export function Feed({
@@ -136,6 +138,7 @@ export function Feed({
     cardPatches,
     onExit,
     onReportCard,
+    onShare,
 }: FeedProps) {
     const [status, setStatus] = useState<Status>('loading');
     const [cards, setCards] = useState<Card[]>([]);
@@ -347,7 +350,15 @@ export function Feed({
         // A finished run gets its result; «На сегодня всё» is for a feed
         // that had nothing to review from the start.
         if (results.length > 0) {
-            return <Result setTitle={setTitle} cards={cards} results={results} onExit={onExit} />;
+            return (
+                <Result
+                    setTitle={setTitle}
+                    cards={cards}
+                    results={results}
+                    onExit={onExit}
+                    onShare={onShare}
+                />
+            );
         }
         return (
             <StatusScreen

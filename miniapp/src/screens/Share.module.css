@@ -1,0 +1,34 @@
+/* Share screen: the code in the middle, the copy button at the bottom. */
+
+.header {
+    padding: 8px 0 0;
+}
+
+.body {
+    flex: 1;
+    min-height: 0;
+}
+
+.codeCard {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 24px 20px;
+    border-radius: 16px;
+    background: var(--background-card);
+    text-align: center;
+}
+
+.code {
+    margin: 0;
+    /* The code is read out and typed in by hand: even digits and some air
+       between them. */
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+    /* One tap selects the whole code — the way out when copying fails. */
+    -webkit-user-select: all;
+    user-select: all;
+}
+
+.meta {
+    overflow-wrap: anywhere;
+}

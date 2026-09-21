@@ -63,6 +63,13 @@ export const IconStop = (props: IconProps) => (
     </Icon>
 );
 
+export const IconCopy = (props: IconProps) => (
+    <Icon {...props}>
+        <rect x="9" y="9" width="11" height="11" rx="2" />
+        <path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3" />
+    </Icon>
+);
+
 export const IconDoc = (props: IconProps) => (
     <Icon {...props}>
         <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
