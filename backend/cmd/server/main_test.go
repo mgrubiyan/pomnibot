@@ -7,30 +7,7 @@ import (
 	"testing/fstest"
 )
 
-func TestHealthzEndpoint(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
-	rec := httptest.NewRecorder()
-
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", rec.Code)
-	}
-
-	expectedBody := `{"status":"ok"}`
-	if rec.Body.String() != expectedBody {
-		t.Fatalf("expected body %q, got %q", expectedBody, rec.Body.String())
-	}
-}
-
-func TestHealthContractEndpoint(t *testing.T) {
+func TestHealthEndpoint(t *testing.T) {
 	mockFS := fstest.MapFS{
 		"index.html": {Data: []byte("<!DOCTYPE html><html><body>Test</body></html>")},
 	}

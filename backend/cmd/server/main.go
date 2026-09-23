@@ -123,7 +123,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		rec := &responseRecorder{ResponseWriter: w, statusCode: http.StatusOK}
 		next.ServeHTTP(rec, r)
 
-		if r.URL.Path == "/healthz" || r.URL.Path == "/health" {
+		if r.URL.Path == "/health" {
 			return
 		}
 
@@ -154,13 +154,6 @@ func setupRouter(staticFS fs.FS) (http.Handler, error) {
 		return nil, err
 	}
 	mux.Handle("/health", apiServer)
-
-	// Health check endpoint (legacy)
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
-	})
 
 	// SPA & static files handler
 	mux.Handle("/", &spaHandler{fileSystem: staticFS})
