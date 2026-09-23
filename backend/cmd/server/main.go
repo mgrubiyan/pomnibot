@@ -5,167 +5,28 @@ import (
 	"context"
 	"embed"
 	"errors"
-	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
-	"path"
-	"strings"
 	"syscall"
 	"time"
 
-	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/bot"
+	httptransport "github.com/mgrubiyan/pomnibot/backend/internal/transport/http"
 )
 
 //go:embed all:dist
 var embeddedDist embed.FS
 
 func getFileSystem() (fs.FS, error) {
-	if staticDir := os.Getenv("STATIC_DIR"); staticDir != "" {
-		slog.Info("serving static files from local directory", "dir", staticDir)
-		return os.DirFS(staticDir), nil
-	}
-
 	distFS, err := fs.Sub(embeddedDist, "dist")
 	if err != nil {
 		return nil, err
 	}
 	slog.Info("serving static files from embedded filesystem")
 	return distFS, nil
-}
-
-type spaHandler struct {
-	fileSystem fs.FS
-	fileServer http.Handler
-}
-
-func newSPAHandler(fileSystem fs.FS) *spaHandler {
-	return &spaHandler{
-		fileSystem: fileSystem,
-		fileServer: http.FileServer(http.FS(fileSystem)),
-	}
-}
-
-func (h *spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Clean up request path
-	cleanPath := path.Clean(r.URL.Path)
-	if cleanPath == "/" {
-		cleanPath = "index.html"
-	} else {
-		cleanPath = strings.TrimPrefix(cleanPath, "/")
-	}
-
-	// Attempt to open the requested file
-	file, err := h.fileSystem.Open(cleanPath)
-	if err != nil {
-		// If file not found, serve index.html for React Router
-		h.serveIndex(w, r)
-		return
-	}
-	defer func() { _ = file.Close() }()
-
-	stat, err := file.Stat()
-	if err != nil || stat.IsDir() {
-		h.serveIndex(w, r)
-		return
-	}
-
-	// Cache headers: immutable for versioned static assets, no-cache for index.html
-	if strings.HasPrefix(cleanPath, "assets/") {
-		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-	} else if cleanPath == "index.html" {
-		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	}
-
-	h.fileServer.ServeHTTP(w, r)
-}
-
-func (h *spaHandler) serveIndex(w http.ResponseWriter, r *http.Request) {
-	indexFile, err := h.fileSystem.Open("index.html")
-	if err != nil {
-		http.Error(w, "index.html not found", http.StatusNotFound)
-		return
-	}
-	defer func() { _ = indexFile.Close() }()
-
-	stat, err := indexFile.Stat()
-	if err != nil {
-		http.Error(w, "failed to stat index.html", http.StatusInternalServerError)
-		return
-	}
-
-	seeker, ok := indexFile.(io.ReadSeeker)
-	if !ok {
-		content, err := io.ReadAll(indexFile)
-		if err != nil {
-			http.Error(w, "failed to read index.html", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(content)
-		return
-	}
-
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	http.ServeContent(w, r, "index.html", stat.ModTime(), seeker)
-}
-
-type responseRecorder struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (rec *responseRecorder) WriteHeader(statusCode int) {
-	rec.statusCode = statusCode
-	rec.ResponseWriter.WriteHeader(statusCode)
-}
-
-func loggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		rec := &responseRecorder{ResponseWriter: w, statusCode: http.StatusOK}
-		next.ServeHTTP(rec, r)
-
-		if r.URL.Path == "/health" {
-			return
-		}
-
-		slog.Info("http request",
-			"method", r.Method,
-			"path", r.URL.Path,
-			"status", rec.statusCode,
-			"duration", time.Since(start).String(),
-			"remote_addr", r.RemoteAddr,
-			"user_agent", r.UserAgent(),
-		)
-	})
-}
-
-type apiService struct{}
-
-func (s *apiService) GetHealth(_ context.Context) (*contracts.HealthResponse, error) {
-	return &contracts.HealthResponse{
-		Status: "ok",
-	}, nil
-}
-
-func setupRouter(handler contracts.Handler, staticFS fs.FS) (http.Handler, error) {
-	staticHandler := newSPAHandler(staticFS)
-
-	apiServer, err := contracts.NewServer(
-		handler,
-		contracts.WithNotFound(staticHandler.ServeHTTP),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return loggingMiddleware(apiServer), nil
 }
 
 func main() {
@@ -183,7 +44,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	router, err := setupRouter(&apiService{}, staticFS)
+	router, err := httptransport.NewRouter(httptransport.NewAPIHandler(), staticFS)
 	if err != nil {
 		slog.Error("failed to initialize router", "error", err)
 		os.Exit(1)
