@@ -1,0 +1,16 @@
+version: '3'
+
+tasks:
+  gen-openapi:
+    desc: "Generate OpenAPI Go handlers and TS clients"
+    sources:
+      - openapi.yaml
+    generates:
+      - ../backend/contracts/**/*
+      - ../miniapp/contracts/**/*
+    cmds:
+      - mkdir -p ../backend/contracts
+      - go run github.com/ogen-go/ogen/cmd/ogen@v1.24.0 --package contracts --target ../backend/contracts --clean openapi.yaml
+      - rm -rf ../miniapp/contracts
+      - mkdir -p ../miniapp/contracts
+      - bunx openapi-typescript-codegen --input openapi.yaml --output ../miniapp/contracts --client fetch --name PomnibotClient --useOptions

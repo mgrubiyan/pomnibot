@@ -4,7 +4,10 @@
 *.local
 *.log
 
+.task/
+
 # Go binaries
+backend/server
 backend/cmd/server/server
 backend/cmd/server/dist/*
 !backend/cmd/server/dist/.gitkeep

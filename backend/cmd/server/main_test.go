@@ -30,6 +30,31 @@ func TestHealthzEndpoint(t *testing.T) {
 	}
 }
 
+func TestHealthContractEndpoint(t *testing.T) {
+	mockFS := fstest.MapFS{
+		"index.html": {Data: []byte("<!DOCTYPE html><html><body>Test</body></html>")},
+	}
+
+	router, err := setupRouter(mockFS)
+	if err != nil {
+		t.Fatalf("failed to setup router: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	expectedBody := `{"status":"ok"}`
+	if rec.Body.String() != expectedBody {
+		t.Fatalf("expected body %q, got %q", expectedBody, rec.Body.String())
+	}
+}
+
 func TestSPAFallback(t *testing.T) {
 	mockFS := fstest.MapFS{
 		"index.html": {

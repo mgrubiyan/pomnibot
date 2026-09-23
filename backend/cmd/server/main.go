@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/bot"
 )
 
@@ -122,7 +123,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		rec := &responseRecorder{ResponseWriter: w, statusCode: http.StatusOK}
 		next.ServeHTTP(rec, r)
 
-		if r.URL.Path == "/healthz" {
+		if r.URL.Path == "/healthz" || r.URL.Path == "/health" {
 			return
 		}
 
@@ -135,6 +136,36 @@ func loggingMiddleware(next http.Handler) http.Handler {
 			"user_agent", r.UserAgent(),
 		)
 	})
+}
+
+type apiService struct{}
+
+func (s *apiService) GetHealth(_ context.Context) (*contracts.HealthResponse, error) {
+	return &contracts.HealthResponse{
+		Status: "ok",
+	}, nil
+}
+
+func setupRouter(staticFS fs.FS) (http.Handler, error) {
+	mux := http.NewServeMux()
+
+	apiServer, err := contracts.NewServer(&apiService{})
+	if err != nil {
+		return nil, err
+	}
+	mux.Handle("/health", apiServer)
+
+	// Health check endpoint (legacy)
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+
+	// SPA & static files handler
+	mux.Handle("/", &spaHandler{fileSystem: staticFS})
+
+	return loggingMiddleware(mux), nil
 }
 
 func main() {
@@ -152,21 +183,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	mux := http.NewServeMux()
-
-	// Health check endpoint
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
-	})
-
-	// SPA & static files handler
-	mux.Handle("/", &spaHandler{fileSystem: staticFS})
+	router, err := setupRouter(staticFS)
+	if err != nil {
+		slog.Error("failed to initialize router", "error", err)
+		os.Exit(1)
+	}
 
 	server := &http.Server{
 		Addr:         ":" + port,
-		Handler:      loggingMiddleware(mux),
+		Handler:      router,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
