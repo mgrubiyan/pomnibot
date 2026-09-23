@@ -23,3 +23,4 @@
   - Backend Go server contracts: `backend/contracts/` (via `ogen`).
   - Frontend TypeScript client: `miniapp/contracts/` (via `openapi-typescript-codegen`).
 - Generated contracts are committed to git; always run `task gen`, `task lint`, and `task test` when modifying contracts.
+- Generated contract paths are marked with `linguist-generated=true` in `.gitattributes` to collapse them in PR review diffs.
