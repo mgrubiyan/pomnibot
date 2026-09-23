@@ -120,3 +120,19 @@ func TestLoggingMiddleware(t *testing.T) {
 		t.Fatalf("expected body %q, got %q", "short and stout", rec.Body.String())
 	}
 }
+
+func BenchmarkSPAHandler_Asset(b *testing.B) {
+	mockFS := fstest.MapFS{
+		"index.html":    {Data: []byte("<!DOCTYPE html><html><body>Test App</body></html>")},
+		"assets/app.js": {Data: []byte("console.log('hello');")},
+	}
+	handler := newSPAHandler(mockFS)
+	req := httptest.NewRequest(http.MethodGet, "/assets/app.js", nil)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+	}
+}

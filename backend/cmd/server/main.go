@@ -39,6 +39,14 @@ func getFileSystem() (fs.FS, error) {
 
 type spaHandler struct {
 	fileSystem fs.FS
+	fileServer http.Handler
+}
+
+func newSPAHandler(fileSystem fs.FS) *spaHandler {
+	return &spaHandler{
+		fileSystem: fileSystem,
+		fileServer: http.FileServer(http.FS(fileSystem)),
+	}
 }
 
 func (h *spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +80,7 @@ func (h *spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	}
 
-	http.FileServer(http.FS(h.fileSystem)).ServeHTTP(w, r)
+	h.fileServer.ServeHTTP(w, r)
 }
 
 func (h *spaHandler) serveIndex(w http.ResponseWriter, r *http.Request) {
@@ -147,7 +155,7 @@ func (s *apiService) GetHealth(_ context.Context) (*contracts.HealthResponse, er
 }
 
 func setupRouter(handler contracts.Handler, staticFS fs.FS) (http.Handler, error) {
-	staticHandler := &spaHandler{fileSystem: staticFS}
+	staticHandler := newSPAHandler(staticFS)
 
 	apiServer, err := contracts.NewServer(
 		handler,
