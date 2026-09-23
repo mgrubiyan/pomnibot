@@ -12,7 +12,7 @@ func TestHealthEndpoint(t *testing.T) {
 		"index.html": {Data: []byte("<!DOCTYPE html><html><body>Test</body></html>")},
 	}
 
-	router, err := setupRouter(mockFS)
+	router, err := setupRouter(&apiService{}, mockFS)
 	if err != nil {
 		t.Fatalf("failed to setup router: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 }
 
-func TestSPAFallback(t *testing.T) {
+func TestStaticAndReactRouter(t *testing.T) {
 	mockFS := fstest.MapFS{
 		"index.html": {
 			Data: []byte("<!DOCTYPE html><html><body>Test App</body></html>"),
@@ -42,7 +42,10 @@ func TestSPAFallback(t *testing.T) {
 		},
 	}
 
-	handler := &spaHandler{fileSystem: mockFS}
+	router, err := setupRouter(&apiService{}, mockFS)
+	if err != nil {
+		t.Fatalf("failed to setup router: %v", err)
+	}
 
 	tests := []struct {
 		name           string
@@ -66,7 +69,7 @@ func TestSPAFallback(t *testing.T) {
 			expectedHeader: "public, max-age=31536000, immutable",
 		},
 		{
-			name:           "Unknown route falls back to index.html",
+			name:           "React router path serves index.html",
 			path:           "/feed/card/123",
 			expectedStatus: http.StatusOK,
 			expectedBody:   "<!DOCTYPE html><html><body>Test App</body></html>",
@@ -79,7 +82,7 @@ func TestSPAFallback(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
 			rec := httptest.NewRecorder()
 
-			handler.ServeHTTP(rec, req)
+			router.ServeHTTP(rec, req)
 
 			if rec.Code != tc.expectedStatus {
 				t.Errorf("path %s: expected status %d, got %d", tc.path, tc.expectedStatus, rec.Code)

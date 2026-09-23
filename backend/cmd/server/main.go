@@ -53,7 +53,7 @@ func (h *spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Attempt to open the requested file
 	file, err := h.fileSystem.Open(cleanPath)
 	if err != nil {
-		// If file not found, serve index.html (SPA Fallback)
+		// If file not found, serve index.html for React Router
 		h.serveIndex(w, r)
 		return
 	}
@@ -146,19 +146,18 @@ func (s *apiService) GetHealth(_ context.Context) (*contracts.HealthResponse, er
 	}, nil
 }
 
-func setupRouter(staticFS fs.FS) (http.Handler, error) {
-	mux := http.NewServeMux()
+func setupRouter(handler contracts.Handler, staticFS fs.FS) (http.Handler, error) {
+	staticHandler := &spaHandler{fileSystem: staticFS}
 
-	apiServer, err := contracts.NewServer(&apiService{})
+	apiServer, err := contracts.NewServer(
+		handler,
+		contracts.WithNotFound(staticHandler.ServeHTTP),
+	)
 	if err != nil {
 		return nil, err
 	}
-	mux.Handle("/health", apiServer)
 
-	// SPA & static files handler
-	mux.Handle("/", &spaHandler{fileSystem: staticFS})
-
-	return loggingMiddleware(mux), nil
+	return loggingMiddleware(apiServer), nil
 }
 
 func main() {
@@ -176,7 +175,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	router, err := setupRouter(staticFS)
+	router, err := setupRouter(&apiService{}, staticFS)
 	if err != nil {
 		slog.Error("failed to initialize router", "error", err)
 		os.Exit(1)
