@@ -13,7 +13,7 @@
 - Always run `task test` to ensure backend unit tests pass.
 - Maintain existing architecture:
   - `miniapp/`: React 19 + TypeScript + Vite frontend powered by Bun and `@maxhub/max-ui`.
-  - `backend/`: Go 1.24 HTTP server serving embedded SPA assets and handling the MAX Bot API service.
+  - `backend/`: Go 1.25 HTTP server serving embedded SPA assets and handling the MAX Bot API service.
   - Deployments: Docker Compose with Traefik reverse proxy and Let's Encrypt TLS.
 
 ## Codegen & Contracts
