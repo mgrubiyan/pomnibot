@@ -1,0 +1,8 @@
+# Generated contracts and code (collapsed by default in GitHub PR diffs)
+backend/contracts/** linguist-generated=true
+miniapp/contracts/** linguist-generated=true
+*_gen.go linguist-generated=true
+
+# Lockfiles and dependency checksums
+bun.lock linguist-generated=true
+go.sum linguist-generated=true

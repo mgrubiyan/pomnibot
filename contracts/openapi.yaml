@@ -1,0 +1,30 @@
+openapi: 3.0.3
+info:
+  title: Pomnibot API
+  version: 0.0.1
+  description: OpenAPI specification for Pomnibot
+servers:
+  - url: /api
+    description: Base API prefix
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          example: ok

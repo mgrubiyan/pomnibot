@@ -1,0 +1,18 @@
+version: '3'
+
+tasks:
+  gen-openapi:
+    desc: "Generate OpenAPI Go handlers and TS clients"
+    sources:
+      - openapi.yaml
+      - client.ts
+    generates:
+      - ../backend/contracts/**/*
+      - ../miniapp/contracts/**/*
+    cmds:
+      - mkdir -p ../backend/contracts
+      - go tool -C ../backend ogen --package contracts --target ../backend/contracts --clean ../contracts/openapi.yaml
+      - rm -rf ../miniapp/contracts
+      - mkdir -p ../miniapp/contracts
+      - bunx openapi-typescript openapi.yaml -o ../miniapp/contracts/schema.ts
+      - cp client.ts ../miniapp/contracts/index.ts

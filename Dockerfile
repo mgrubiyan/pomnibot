@@ -16,12 +16,14 @@ COPY miniapp/ ./
 RUN bun run build
 
 # Stage 2: Build backend with Go
-FROM golang:1.24-alpine AS backend-builder
+FROM golang:1.25-alpine AS backend-builder
 
 WORKDIR /app/backend
 
 # Copy Go module files
-COPY backend/go.mod ./
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+
 COPY backend/ ./
 
 # Copy built frontend assets into the Go embed directory
@@ -52,6 +54,6 @@ EXPOSE 8080
 ENV PORT=8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/healthz || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/api/health || exit 1
 
 ENTRYPOINT ["/app/server"]

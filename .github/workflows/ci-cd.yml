@@ -32,8 +32,22 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
           cache-dependency-path: backend/go.mod
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install contracts dependencies
+        working-directory: contracts
+        run: bun install --frozen-lockfile
+
+      - name: Verify generated contracts
+        run: |
+          task gen --force
+          git diff --exit-code backend/contracts miniapp/contracts
 
       - name: Install frontend dependencies
         working-directory: miniapp

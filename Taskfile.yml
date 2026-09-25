@@ -9,6 +9,9 @@ includes:
   backend:
     taskfile: ./backend/Taskfile.yml
     dir: ./backend
+  contracts:
+    taskfile: ./contracts/Taskfile.yaml
+    dir: ./contracts
 
 tasks:
   default:
@@ -26,6 +29,11 @@ tasks:
     desc: 'Сборка фронтенда'
     cmds:
       - task: miniapp:build
+
+  gen:
+    desc: 'Генерация кода по контрактам OpenAPI (Go и TypeScript)'
+    cmds:
+      - task: contracts:gen-openapi
 
   lint:
     desc: 'Линтинг всего проекта (фронтенд и бэкенд)'
