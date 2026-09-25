@@ -35,15 +35,23 @@ func (h *SPAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Attempt to open the requested file
 	file, err := h.fileSystem.Open(cleanPath)
 	if err != nil {
+		if h.isSpecialPath(cleanPath) {
+			http.NotFound(w, r)
+			return
+		}
 		// If file not found, serve index.html for React Router
-		h.serveIndex(w, r)
+		h.fallbackIndex(w, r)
 		return
 	}
 	defer func() { _ = file.Close() }()
 
 	stat, err := file.Stat()
 	if err != nil || stat.IsDir() {
-		h.serveIndex(w, r)
+		if h.isSpecialPath(cleanPath) {
+			http.NotFound(w, r)
+			return
+		}
+		h.fallbackIndex(w, r)
 		return
 	}
 
@@ -55,6 +63,20 @@ func (h *SPAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.fileServer.ServeHTTP(w, r)
+}
+
+func (h *SPAHandler) fallbackIndex(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	h.serveIndex(w, r)
+}
+
+func (h *SPAHandler) isSpecialPath(cleanPath string) bool {
+	return cleanPath == "api" || strings.HasPrefix(cleanPath, "api/") ||
+		cleanPath == "assets" || strings.HasPrefix(cleanPath, "assets/")
 }
 
 func (h *SPAHandler) serveIndex(w http.ResponseWriter, r *http.Request) {

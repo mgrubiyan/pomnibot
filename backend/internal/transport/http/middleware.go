@@ -23,7 +23,7 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		rec := &responseRecorder{ResponseWriter: w, statusCode: http.StatusOK}
 		next.ServeHTTP(rec, r)
 
-		if r.URL.Path == "/health" {
+		if r.URL.Path == "/api/health" || r.URL.Path == "/health" {
 			return
 		}
 

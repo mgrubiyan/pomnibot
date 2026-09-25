@@ -13,6 +13,7 @@ func NewRouter(handler contracts.Handler, staticFS fs.FS) (http.Handler, error) 
 
 	apiServer, err := contracts.NewServer(
 		handler,
+		contracts.WithPathPrefix("/api"),
 		contracts.WithNotFound(staticHandler.ServeHTTP),
 	)
 	if err != nil {

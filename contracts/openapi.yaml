@@ -3,6 +3,9 @@ info:
   title: Pomnibot API
   version: 0.0.1
   description: OpenAPI specification for Pomnibot
+servers:
+  - url: /api
+    description: Base API prefix
 paths:
   /health:
     get:

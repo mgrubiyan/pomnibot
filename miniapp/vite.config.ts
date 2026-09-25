@@ -12,10 +12,6 @@ export default defineConfig({
         target: backendTarget,
         changeOrigin: true,
       },
-      '/health': {
-        target: backendTarget,
-        changeOrigin: true,
-      },
     },
   },
   optimizeDeps: {

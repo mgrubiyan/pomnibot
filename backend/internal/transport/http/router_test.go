@@ -1,10 +1,13 @@
 package http
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"testing/fstest"
+
+	"github.com/mgrubiyan/pomnibot/backend/contracts"
 )
 
 func TestHealthEndpoint(t *testing.T) {
@@ -17,7 +20,7 @@ func TestHealthEndpoint(t *testing.T) {
 		t.Fatalf("failed to setup router: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
@@ -26,9 +29,13 @@ func TestHealthEndpoint(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", rec.Code)
 	}
 
-	expectedBody := `{"status":"ok"}`
-	if rec.Body.String() != expectedBody {
-		t.Fatalf("expected body %q, got %q", expectedBody, rec.Body.String())
+	var response contracts.HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to parse json response: %v", err)
+	}
+
+	if response.Status != "ok" {
+		t.Fatalf("expected status %q, got %q", "ok", response.Status)
 	}
 }
 
@@ -49,13 +56,16 @@ func TestStaticAndReactRouter(t *testing.T) {
 
 	tests := []struct {
 		name           string
+		method         string
 		path           string
 		expectedStatus int
 		expectedBody   string
 		expectedHeader string
+		expectedAllow  string
 	}{
 		{
 			name:           "Root path serves index.html",
+			method:         http.MethodGet,
 			path:           "/",
 			expectedStatus: http.StatusOK,
 			expectedBody:   "<!DOCTYPE html><html><body>Test App</body></html>",
@@ -63,6 +73,7 @@ func TestStaticAndReactRouter(t *testing.T) {
 		},
 		{
 			name:           "Existing asset serves asset",
+			method:         http.MethodGet,
 			path:           "/assets/app.js",
 			expectedStatus: http.StatusOK,
 			expectedBody:   "console.log('hello');",
@@ -70,16 +81,60 @@ func TestStaticAndReactRouter(t *testing.T) {
 		},
 		{
 			name:           "React router path serves index.html",
+			method:         http.MethodGet,
 			path:           "/feed/card/123",
 			expectedStatus: http.StatusOK,
 			expectedBody:   "<!DOCTYPE html><html><body>Test App</body></html>",
 			expectedHeader: "no-cache, no-store, must-revalidate",
 		},
+		{
+			name:           "React router HEAD serves index headers",
+			method:         http.MethodHead,
+			path:           "/feed/card/123",
+			expectedStatus: http.StatusOK,
+			expectedHeader: "no-cache, no-store, must-revalidate",
+		},
+		{
+			name:           "Unknown API path returns 404 for GET",
+			method:         http.MethodGet,
+			path:           "/api/cards",
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name:           "Unknown API path returns 404 for POST",
+			method:         http.MethodPost,
+			path:           "/api/cards",
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name:           "Missing asset returns 404",
+			method:         http.MethodGet,
+			path:           "/assets/missing.js",
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name:           "Non-GET/HEAD request on missing route returns 405",
+			method:         http.MethodPost,
+			path:           "/feed/card/123",
+			expectedStatus: http.StatusMethodNotAllowed,
+			expectedAllow:  "GET, HEAD",
+		},
+		{
+			name:           "DELETE request on unknown path returns 405",
+			method:         http.MethodDelete,
+			path:           "/whatever",
+			expectedStatus: http.StatusMethodNotAllowed,
+			expectedAllow:  "GET, HEAD",
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			method := tc.method
+			if method == "" {
+				method = http.MethodGet
+			}
+			req := httptest.NewRequest(method, tc.path, nil)
 			rec := httptest.NewRecorder()
 
 			router.ServeHTTP(rec, req)
@@ -88,12 +143,20 @@ func TestStaticAndReactRouter(t *testing.T) {
 				t.Errorf("path %s: expected status %d, got %d", tc.path, tc.expectedStatus, rec.Code)
 			}
 
-			if rec.Body.String() != tc.expectedBody {
+			if tc.expectedBody != "" && rec.Body.String() != tc.expectedBody {
 				t.Errorf("path %s: expected body %q, got %q", tc.path, tc.expectedBody, rec.Body.String())
 			}
 
-			if cacheControl := rec.Header().Get("Cache-Control"); cacheControl != tc.expectedHeader {
-				t.Errorf("path %s: expected Cache-Control %q, got %q", tc.path, tc.expectedHeader, cacheControl)
+			if tc.expectedHeader != "" {
+				if cacheControl := rec.Header().Get("Cache-Control"); cacheControl != tc.expectedHeader {
+					t.Errorf("path %s: expected Cache-Control %q, got %q", tc.path, tc.expectedHeader, cacheControl)
+				}
+			}
+
+			if tc.expectedAllow != "" {
+				if allow := rec.Header().Get("Allow"); allow != tc.expectedAllow {
+					t.Errorf("path %s: expected Allow header %q, got %q", tc.path, tc.expectedAllow, allow)
+				}
 			}
 		})
 	}
