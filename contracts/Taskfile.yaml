@@ -5,12 +5,14 @@ tasks:
     desc: "Generate OpenAPI Go handlers and TS clients"
     sources:
       - openapi.yaml
+      - client.ts
     generates:
       - ../backend/contracts/**/*
       - ../miniapp/contracts/**/*
     cmds:
       - mkdir -p ../backend/contracts
-      - go run github.com/ogen-go/ogen/cmd/ogen@v1.24.0 --package contracts --target ../backend/contracts --clean openapi.yaml
+      - go tool -C ../backend ogen --package contracts --target ../backend/contracts --clean ../contracts/openapi.yaml
       - rm -rf ../miniapp/contracts
       - mkdir -p ../miniapp/contracts
-      - bunx openapi-typescript-codegen --input openapi.yaml --output ../miniapp/contracts --client fetch --name PomnibotClient --useOptions
+      - bunx openapi-typescript openapi.yaml -o ../miniapp/contracts/schema.ts
+      - cp client.ts ../miniapp/contracts/index.ts
