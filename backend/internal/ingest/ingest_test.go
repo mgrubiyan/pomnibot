@@ -63,7 +63,7 @@ func page(n int) string {
 
 func newExtractor(t *testing.T, pdf PDFText) *Extractor {
 	t.Helper()
-	e, err := New(Options{PDF: pdf})
+	e, err := New(nil, Options{PDF: pdf})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,14 +190,17 @@ func TestExtractTextEncodings(t *testing.T) {
 
 func TestExtractRejectsUnsupported(t *testing.T) {
 	e := newExtractor(t, &fakePDF{})
-	for name, data := range map[string][]byte{
-		"binary": {0x00, 0x01, 0x02, 0xFF},
-		"photo":  pngBytes(t, 4, 4),
+	for name, want := range map[string]struct {
+		data []byte
+		err  error
+	}{
+		"binary":            {[]byte{0x00, 0x01, 0x02, 0xFF}, ErrUnsupported},
+		"photo without OCR": {pngBytes(t, 4, 4), ErrNoOCR},
 	} {
-		_, err := e.Extract(context.Background(), []File{{Name: name, Data: data}})
+		_, err := e.Extract(context.Background(), []File{{Name: name, Data: want.data}})
 		var ie *Error
-		if !errors.As(err, &ie) || !errors.Is(err, ErrUnsupported) || ie.Message == "" || ie.File != name {
-			t.Errorf("%s: error = %v, want *Error with ErrUnsupported and a message", name, err)
+		if !errors.As(err, &ie) || !errors.Is(err, want.err) || ie.Message == "" || ie.File != name {
+			t.Errorf("%s: error = %v, want *Error with %v and a message", name, err, want.err)
 		}
 	}
 }
@@ -213,11 +216,11 @@ func TestExtractReportsBrokenPDF(t *testing.T) {
 
 func TestNewChecksPDFToText(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
-	if _, err := New(Options{}); !errors.Is(err, ErrNoPDFToText) {
+	if _, err := New(nil, Options{}); !errors.Is(err, ErrNoPDFToText) {
 		t.Errorf("New() without pdftotext: err = %v, want ErrNoPDFToText", err)
 	}
 
-	e, err := New(Options{DisablePDF: true})
+	e, err := New(nil, Options{DisablePDF: true})
 	if err != nil {
 		t.Fatalf("New(DisablePDF) error = %v", err)
 	}
