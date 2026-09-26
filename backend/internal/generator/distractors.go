@@ -174,9 +174,14 @@ func answerKey(s string) string {
 // "S-период", "Na" and "Гольджи" stay as written, and so do "мРНК" and "pH",
 // whose second letter is a capital.
 func optionForm(s string) string {
-	s = strings.TrimRightFunc(strings.TrimSpace(s), func(r rune) bool {
+	return upperFirst(strings.TrimRightFunc(strings.TrimSpace(s), func(r rune) bool {
 		return unicode.IsSpace(r) || strings.ContainsRune(".,;:", r)
-	})
+	}))
+}
+
+// upperFirst capitalizes the first letter of an ordinary word, leaving
+// "мРНК" and "pH" alone.
+func upperFirst(s string) string {
 	first, size := utf8.DecodeRuneInString(s)
 	second, _ := utf8.DecodeRuneInString(s[size:])
 	if !unicode.IsLower(first) || unicode.IsUpper(second) {

@@ -167,6 +167,30 @@ func TestParseAnswer(t *testing.T) {
 		}
 	})
 
+	t.Run("boolean cards are statements", func(t *testing.T) {
+		boolean := func(question string) string {
+			q, _ := json.Marshal(question)
+			return `{"facts":[{"quote":"Q","topic":"T","cards":[{"kind":"boolean","question":` + string(q) + `,"answer":"true","explanation":"E"}]}]}`
+		}
+		for in, want := range map[string]string{
+			"Анафаза — самая короткая фаза митоза.":                 "Анафаза — самая короткая фаза митоза.",
+			"Митоз — деление клеток":                                "Митоз — деление клеток",
+			"Верно ли, что анафаза — самая короткая фаза митоза?":   "Анафаза — самая короткая фаза митоза.",
+			"правда ли что мРНК синтезируется в ядре ?":             "мРНК синтезируется в ядре.",
+			"Действительно ли, что интерфаза длится дольше митоза?": "Интерфаза длится дольше митоза.",
+		} {
+			facts, invalid, err := parseAnswer([]byte(boolean(in)), 3)
+			if err != nil || invalid != 0 || cardCount(facts) != 1 || facts[0].Cards[0].Question != want {
+				t.Errorf("%q: got %+v, %d invalid, err %v; want %q", in, facts, invalid, err, want)
+			}
+		}
+		for _, question := range []string{"Является ли анафаза самой короткой фазой митоза?", "Верно ли, что ?"} {
+			if facts, invalid, _ := parseAnswer([]byte(boolean(question)), 3); cardCount(facts) != 0 || invalid != 1 {
+				t.Errorf("%q: got %+v, %d invalid; want the card rejected", question, facts, invalid)
+			}
+		}
+	})
+
 	t.Run("more facts or cards than allowed", func(t *testing.T) {
 		answer := `{"facts":[` + validFact + `,` + validFact + `]}`
 		facts, invalid, err := parseAnswer([]byte(answer), 1)

@@ -245,7 +245,11 @@ func parseCard(fields map[string]json.RawMessage) (modelCard, bool) {
 		if !ok {
 			return modelCard{}, false
 		}
-		c.Answer = answer
+		statement, ok := booleanStatement(c.Question)
+		if !ok {
+			return modelCard{}, false
+		}
+		c.Question, c.Answer = statement, answer
 	default:
 		return modelCard{}, false
 	}
@@ -302,6 +306,27 @@ func countCards(item json.RawMessage) int {
 		return min(len(cards), maxCardsPerFact)
 	}
 	return 1
+}
+
+// reTrueLeadIn matches "Верно ли, что" and its kin: a boolean statement the
+// model turned into a question.
+var reTrueLeadIn = regexp.MustCompile(`(?i)^(верно|правда|так|действительно)\s+ли\s*,?\s*что\s+`)
+
+// booleanStatement returns the text of a boolean card as a statement: the
+// student says true or false to a claim, not yes or no to a question.
+// "Верно ли, что анафаза — самая короткая фаза?" becomes "Анафаза — самая
+// короткая фаза."; any other question, such as "Является ли …?", cannot be
+// turned into a claim safely and is rejected.
+func booleanStatement(s string) (string, bool) {
+	body := reTrueLeadIn.ReplaceAllString(s, "")
+	if body == s {
+		return s, !strings.HasSuffix(s, "?")
+	}
+	body = strings.TrimRight(body, " ?.!")
+	if body == "" {
+		return "", false
+	}
+	return upperFirst(body) + ".", true
 }
 
 func parseBool(s string) (string, bool) {
