@@ -24,10 +24,11 @@ const (
 // storage assigns, plus FactID.
 //
 // Cards with the same FactID test one fact in different forms (choice, input,
-// boolean, flip) and share the quote. The feed is meant to show one of them
-// at a time and rotate the form between repetitions.
+// boolean, flip) and share the quote and FactName. The feed is meant to show
+// one of them at a time and rotate the form between repetitions.
 type Card struct {
-	FactID      string   `json:"factId"` // stable within a document: derived from the quote
+	FactID      string   `json:"factId"`   // stable within a document: derived from the quote
+	FactName    string   `json:"factName"` // short name of the fact, narrower than Topic
 	Kind        Kind     `json:"kind"`
 	Question    string   `json:"question"`
 	Options     []string `json:"options,omitempty"` // choice only, includes Answer

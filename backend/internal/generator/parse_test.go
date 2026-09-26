@@ -3,6 +3,7 @@ package generator
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
@@ -11,7 +12,7 @@ import (
 // validCard is a card of the flat form: it carries its own quote and topic.
 const validCard = `{"kind":"flip","question":"Что такое митоз?","answer":"Непрямое деление соматических клеток.","explanation":"Так сказано в тексте.","quote":"Митоз — непрямое деление соматических клеток","topic":"Митоз"}`
 
-const validFact = `{"quote":"Анафаза — самая короткая фаза митоза","topic":"Фазы митоза","cards":[
+const validFact = `{"quote":"Анафаза — самая короткая фаза митоза","topic":"Фазы митоза","name":"Самая короткая фаза митоза","cards":[
 	{"kind":"choice","question":"Какая фаза митоза самая короткая?","answer":"Анафаза","explanation":"E"},
 	{"kind":"input","question":"Какая фаза митоза самая короткая?","answer":"анафаза","explanation":"E"},
 	{"kind":"boolean","question":"Метафаза — самая короткая фаза митоза","answer":"false","explanation":"E"},
@@ -62,11 +63,22 @@ func TestParseAnswer(t *testing.T) {
 			t.Fatalf("got %d facts, %d invalid, err %v", len(facts), invalid, err)
 		}
 		f := facts[0]
-		if f.Quote == "" || f.Topic != "Фазы митоза" || len(f.Cards) != 4 {
+		if f.Quote == "" || f.Topic != "Фазы митоза" || f.Name != "Самая короткая фаза митоза" || len(f.Cards) != 4 {
 			t.Errorf("fact = %+v", f)
 		}
 		if f.Cards[2].Kind != cards.KindBoolean || f.Cards[2].Answer != cards.AnswerFalse {
 			t.Errorf("boolean card = %+v", f.Cards[2])
+		}
+	})
+
+	t.Run("fact without a name keeps its cards", func(t *testing.T) {
+		unnamed := strings.Replace(validFact, `"name":"Самая короткая фаза митоза",`, "", 1)
+		facts, invalid, err := parseAnswer([]byte(`{"facts":[`+unnamed+`]}`), 3)
+		if err != nil || invalid != 0 || len(facts) != 1 || len(facts[0].Cards) != 4 {
+			t.Fatalf("got %+v, %d invalid, err %v", facts, invalid, err)
+		}
+		if facts[0].Name != "Фазы митоза" {
+			t.Errorf("Name = %q, want the topic", facts[0].Name)
 		}
 	})
 

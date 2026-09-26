@@ -216,7 +216,7 @@ func formatCards(list []cards.Card) string {
 		if c.FactID != lastID {
 			fact++
 			lastID = c.FactID
-			fmt.Fprintf(&w, "\n== Факт %d: %s — %s\n", fact, c.Topic, c.SourceRef)
+			fmt.Fprintf(&w, "\n== Факт %d: %s (%s) — %s\n", fact, c.FactName, c.Topic, c.SourceRef)
 			fmt.Fprintf(&w, "   Цитата: «%s»\n", c.SourceQuote)
 		}
 		fmt.Fprintf(&w, "  [%s] %s\n", c.Kind, c.Question)

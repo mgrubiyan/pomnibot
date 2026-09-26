@@ -600,8 +600,8 @@ func TestGenerateStopsOnCancel(t *testing.T) {
 
 // fx is a fact as the fake model writes it: one quote, cards of several kinds.
 type fx struct {
-	quote, topic string
-	cards        []mc
+	quote, topic, name string
+	cards              []mc
 }
 
 func factsJSON(facts ...fx) string {
@@ -618,7 +618,11 @@ func factsJSON(facts ...fx) string {
 		if topic == "" {
 			topic = "Деление клетки"
 		}
-		items = append(items, map[string]any{"quote": f.quote, "topic": topic, "cards": factCards})
+		item := map[string]any{"quote": f.quote, "topic": topic, "cards": factCards}
+		if f.name != "" {
+			item["name"] = f.name
+		}
+		items = append(items, item)
 	}
 	b, err := json.Marshal(map[string]any{"facts": items})
 	if err != nil {
@@ -640,7 +644,7 @@ func TestGenerateFactVariantsShareFactID(t *testing.T) {
 			return answerJSON(mc{kind: cards.KindInput, q: fmt.Sprintf("Какой термин определён в абзаце номер %d?", len(word)), a: word, quote: firstSentence(frag)}), nil
 		}
 		return factsJSON(
-			fx{quote: firstSentence(frag), cards: []mc{
+			fx{quote: firstSentence(frag), name: "Непрямое деление клеток", cards: []mc{
 				{kind: cards.KindChoice, q: "Как называется непрямое деление соматических клеток?", a: "Митоз"},
 				{kind: cards.KindInput, q: "Как называется непрямое деление соматических клеток?", a: "митоз"},
 				{kind: cards.KindBoolean, q: "Митоз — прямое деление соматических клеток", a: "false"},
@@ -667,6 +671,9 @@ func TestGenerateFactVariantsShareFactID(t *testing.T) {
 	var kinds []cards.Kind
 	for _, c := range mitosis {
 		kinds = append(kinds, c.Kind)
+		if c.FactName != "Непрямое деление клеток" {
+			t.Errorf("%s card factName = %q, want the fact's name", c.Kind, c.FactName)
+		}
 		if c.SourceQuote != strings.TrimSuffix(firstSentence(paragraphs[0]), ".") {
 			t.Errorf("%s card quote = %q, want the fact's quote", c.Kind, c.SourceQuote)
 		}
@@ -678,6 +685,12 @@ func TestGenerateFactVariantsShareFactID(t *testing.T) {
 	for _, c := range mitosis {
 		if c.Kind == cards.KindChoice && len(c.Options) != 4 {
 			t.Errorf("choice options = %v, want 4 from other fragments", c.Options)
+		}
+	}
+	// The second fact came without a name: its topic stands in.
+	for _, c := range res.Cards {
+		if c.FactID != res.Cards[0].FactID && c.FactName != c.Topic {
+			t.Errorf("unnamed fact card factName = %q, want topic %q", c.FactName, c.Topic)
 		}
 	}
 }

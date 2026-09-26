@@ -17,6 +17,7 @@ func (cannedModel) Complete(context.Context, providers.Request) (providers.Respo
 	return providers.Response{Content: []byte(`{"facts":[{
 		"quote": "Анафаза — самая короткая фаза митоза",
 		"topic": "Фазы митоза",
+		"name": "Самая короткая фаза митоза",
 		"cards": [
 			{"kind":"input","question":"Какая фаза митоза самая короткая?","answer":"Анафаза","explanation":"Так сказано в конспекте."},
 			{"kind":"boolean","question":"Метафаза — самая короткая фаза митоза.","answer":"false","explanation":"Самая короткая — анафаза."}
@@ -39,10 +40,10 @@ func ExampleNewGenerator() {
 		return
 	}
 	for _, c := range res.Cards {
-		fmt.Printf("[%s] %s → %s (%s)\n", c.Kind, c.Question, c.Answer, c.SourceRef)
+		fmt.Printf("%s: [%s] %s → %s\n", c.FactName, c.Kind, c.Question, c.Answer)
 	}
 	// Output:
 	// saved 2 cards
-	// [input] Какая фаза митоза самая короткая? → Анафаза (Лекция 3, фрагмент 1)
-	// [boolean] Метафаза — самая короткая фаза митоза. → false (Лекция 3, фрагмент 1)
+	// Самая короткая фаза митоза: [input] Какая фаза митоза самая короткая? → Анафаза
+	// Самая короткая фаза митоза: [boolean] Метафаза — самая короткая фаза митоза. → false
 }

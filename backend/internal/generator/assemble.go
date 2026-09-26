@@ -163,6 +163,7 @@ func (a *assembler) acceptFact(f modelFact, pos, index int) (ready []cards.Card,
 
 		card := cards.Card{
 			FactID:      f.ID,
+			FactName:    f.Name,
 			Kind:        mc.Kind,
 			Question:    mc.Question,
 			Answer:      mc.Answer,

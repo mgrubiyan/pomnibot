@@ -18,6 +18,7 @@ type modelFact struct {
 	ID    string
 	Quote string
 	Topic string
+	Name  string
 	Cards []modelCard
 }
 
@@ -153,8 +154,9 @@ func groupFlatCards(items []json.RawMessage, maxFacts int) ([]modelFact, int) {
 	return facts, invalid
 }
 
-// parseFact reads {"quote", "topic", "cards": [...]}. A fact without a quote
-// or topic loses all its cards: nothing can be checked without the quote.
+// parseFact reads {"quote", "topic", "name", "cards": [...]}. A fact without
+// a quote or topic loses all its cards: nothing can be checked without the
+// quote. A missing name is not worth the cards: the topic stands in for it.
 func parseFact(data json.RawMessage) (modelFact, int) {
 	fields, ok := objectFields(data)
 	if !ok {
@@ -170,7 +172,7 @@ func parseFact(data json.RawMessage) (modelFact, int) {
 		return modelFact{}, len(items)
 	}
 
-	f := modelFact{Quote: quote, Topic: topic}
+	f := modelFact{Quote: quote, Topic: topic, Name: factName(fields, topic)}
 	invalid := 0
 	for i, item := range items {
 		if i >= maxCardsPerFact {
@@ -205,7 +207,15 @@ func parseFlatCard(data json.RawMessage) (modelFact, int) {
 	if !okQuote || !okTopic || !okCard {
 		return modelFact{}, 1
 	}
-	return modelFact{Quote: quote, Topic: topic, Cards: []modelCard{c}}, 0
+	return modelFact{Quote: quote, Topic: topic, Name: factName(fields, topic), Cards: []modelCard{c}}, 0
+}
+
+// factName is the fact's name, or its topic when the model gave none.
+func factName(fields map[string]json.RawMessage, topic string) string {
+	if name, ok := stringField(fields, fieldName); ok {
+		return name
+	}
+	return topic
 }
 
 func parseCard(fields map[string]json.RawMessage) (modelCard, bool) {
