@@ -199,9 +199,14 @@ func TestTokenIsSharedAndRefreshedAhead(t *testing.T) {
 		t.Fatalf("8 concurrent calls fetched %d tokens, want 1", n)
 	}
 
-	// No requests in between: the timer alone must replace the token.
+	// No requests in between: the timer alone must replace the token. Wait
+	// for the client to hold it, not for the server to see the request: the
+	// answer is parsed and stored a moment later.
 	deadline := time.Now().Add(3 * time.Second)
-	for api.oauthCalls.Load() < 2 {
+	for {
+		if tok, _ := c.tokens.cached(); tok == "token-2" {
+			break
+		}
 		if time.Now().After(deadline) {
 			t.Fatal("token was not refreshed ahead of expiry")
 		}
