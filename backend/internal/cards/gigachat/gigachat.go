@@ -152,12 +152,33 @@ type APIError struct {
 	Status     int
 	Body       string
 	RetryAfter time.Duration
-	op         string
+	op         string // opToken or "chat <model>"
 }
+
+// opToken marks errors of the OAuth exchange: they say nothing about the
+// model or the request, and the same token serves every model.
+const opToken = "token"
 
 func (e *APIError) Error() string {
 	return fmt.Sprintf("gigachat: %s: status %d: %s", e.op, e.Status, e.Body)
 }
+
+// chatError returns the APIError of a chat completion call in err's chain,
+// or nil for anything else, token errors included.
+func chatError(err error) *APIError {
+	var apiErr *APIError
+	if errors.As(err, &apiErr) && apiErr.op != opToken {
+		return apiErr
+	}
+	return nil
+}
+
+// transportError is a failure to reach GigaChat or to read its answer, the
+// only kind of non-HTTP error that may pass on a retry.
+type transportError struct{ err error }
+
+func (e transportError) Error() string { return e.err.Error() }
+func (e transportError) Unwrap() error { return e.err }
 
 // Complete sends one chat completion. Transport problems are retried here
 // with exponential backoff; if the model stays unavailable, the fallback
@@ -239,8 +260,7 @@ func (c *Client) completeWith(ctx context.Context, model string, req cards.Reque
 			return resp, nil
 		}
 
-		var apiErr *APIError
-		if strict && errors.As(err, &apiErr) &&
+		if apiErr := chatError(err); strict && apiErr != nil &&
 			(apiErr.Status == http.StatusBadRequest || apiErr.Status == http.StatusUnprocessableEntity) {
 			c.log.Warn("gigachat: structured output rejected, retrying with the schema in the prompt",
 				"model", model, "status", apiErr.Status, "body", apiErr.Body)
@@ -341,12 +361,12 @@ func (c *Client) call(ctx context.Context, model string, req cards.Request, stri
 
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
-		return cards.Response{}, fmt.Errorf("gigachat: chat request: %w", err)
+		return cards.Response{}, fmt.Errorf("gigachat: chat request: %w", transportError{err})
 	}
 	defer func() { _ = resp.Body.Close() }()
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
 	if err != nil {
-		return cards.Response{}, fmt.Errorf("gigachat: read chat response: %w", err)
+		return cards.Response{}, fmt.Errorf("gigachat: read chat response: %w", transportError{err})
 	}
 	if resp.StatusCode != http.StatusOK {
 		return cards.Response{}, &APIError{
@@ -381,19 +401,24 @@ func (c *Client) call(ctx context.Context, model string, req cards.Request, stri
 }
 
 // retryable: rate limits, server errors and network trouble pass with time.
+// A malformed request, an undecodable answer or bad credentials do not.
 func retryable(err error) bool {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
 	var apiErr *APIError
 	if errors.As(err, &apiErr) {
 		return apiErr.Status == http.StatusTooManyRequests || apiErr.Status >= 500
 	}
-	return !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
+	var te transportError
+	return errors.As(err, &te)
 }
 
 // isQuotaOrAccess: the model will not answer this account for a while: no
 // tokens left (402), not in the plan (403), unknown model (404).
 func isQuotaOrAccess(err error) bool {
-	var apiErr *APIError
-	if !errors.As(err, &apiErr) {
+	apiErr := chatError(err)
+	if apiErr == nil {
 		return false
 	}
 	switch apiErr.Status {
@@ -403,10 +428,13 @@ func isQuotaOrAccess(err error) bool {
 	return false
 }
 
-// shouldFallback: another model may succeed where this one did not. Bad
-// requests and bad credentials fail the same on any model.
+// shouldFallback: another model may succeed where this one failed, because
+// this one is out of quota, not available, or keeps failing on the server.
+// Not for rate limits (the one-request limit is per account), network trouble
+// (same host), token errors (same token) or bad requests.
 func shouldFallback(err error) bool {
-	return isQuotaOrAccess(err) || retryable(err)
+	apiErr := chatError(err)
+	return apiErr != nil && (isQuotaOrAccess(err) || apiErr.Status >= 500)
 }
 
 func (c *Client) backoffFor(attempt int, err error) time.Duration {

@@ -31,6 +31,13 @@ const (
 	authTimeout  = 30 * time.Second
 )
 
+// nextRefresh is when to replace a token that has ttl left: refreshBefore
+// ahead of expiry, but not before half its life, so a short-lived token (or a
+// skewed clock) does not turn into a refresh every second.
+func nextRefresh(ttl, before time.Duration) time.Duration {
+	return max(ttl-before, ttl/2, time.Second)
+}
+
 // tokenSource exchanges client credentials for an access token and keeps it
 // fresh. The token is replaced by a timer ahead of expiry rather than after
 // a 401: a request never waits for a refresh unless the timer failed.
@@ -40,6 +47,7 @@ type tokenSource struct {
 	scope         string
 	basic         string
 	refreshBefore time.Duration
+	minValid      time.Duration // tokenMinValid, a field for tests
 	log           *slog.Logger
 
 	mu        sync.RWMutex
@@ -58,6 +66,7 @@ func newTokenSource(hc *http.Client, authURL, scope, clientID, clientSecret stri
 		scope:         scope,
 		basic:         base64.StdEncoding.EncodeToString([]byte(clientID + ":" + clientSecret)),
 		refreshBefore: refreshBefore,
+		minValid:      tokenMinValid,
 		log:           log,
 	}
 }
@@ -78,7 +87,7 @@ func (s *tokenSource) Token(ctx context.Context) (string, error) {
 func (s *tokenSource) cached() (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.token, s.token != "" && time.Until(s.expiresAt) > tokenMinValid
+	return s.token, s.token != "" && time.Until(s.expiresAt) > s.minValid
 }
 
 // refreshLocked fetches a token and schedules the next refresh. fetchMu must
@@ -91,7 +100,7 @@ func (s *tokenSource) refreshLocked(ctx context.Context) (string, error) {
 	s.mu.Lock()
 	s.token, s.expiresAt = tok, exp
 	s.mu.Unlock()
-	s.schedule(time.Until(exp) - s.refreshBefore)
+	s.schedule(nextRefresh(time.Until(exp), s.refreshBefore))
 	return tok, nil
 }
 
@@ -114,10 +123,19 @@ func (s *tokenSource) backgroundRefresh() {
 	ctx, cancel := context.WithTimeout(context.Background(), authTimeout)
 	defer cancel()
 	if _, err := s.refreshLocked(ctx); err != nil {
-		s.log.Warn("gigachat: background token refresh failed", "err", err, "retry_in", refreshRetry)
-		// The current token may still be good for minutes; if it runs out,
-		// Token fetches one on demand.
-		s.schedule(refreshRetry)
+		s.mu.RLock()
+		left := time.Until(s.expiresAt)
+		s.mu.RUnlock()
+		// Retry while the current token is still good. Once it has run out,
+		// stop: an idle client should not poll OAuth forever, and the next
+		// request fetches a token on demand.
+		if left > s.minValid {
+			retry := min(refreshRetry, left/2)
+			s.log.Warn("gigachat: background token refresh failed", "err", err, "retry_in", retry)
+			s.schedule(retry)
+			return
+		}
+		s.log.Warn("gigachat: background token refresh failed, next request will fetch a token", "err", err)
 	}
 }
 
@@ -149,19 +167,19 @@ func (s *tokenSource) fetch(ctx context.Context) (string, time.Time, error) {
 
 	resp, err := s.http.Do(req)
 	if err != nil {
-		return "", time.Time{}, fmt.Errorf("gigachat: token request: %w", err)
+		return "", time.Time{}, fmt.Errorf("gigachat: token request: %w", transportError{err})
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
 	if err != nil {
-		return "", time.Time{}, fmt.Errorf("gigachat: read token response: %w", err)
+		return "", time.Time{}, fmt.Errorf("gigachat: read token response: %w", transportError{err})
 	}
 	if resp.StatusCode != http.StatusOK {
 		return "", time.Time{}, &APIError{
 			Status:     resp.StatusCode,
 			Body:       clip(body),
 			RetryAfter: retryAfter(resp.Header),
-			op:         "token",
+			op:         opToken,
 		}
 	}
 
@@ -177,7 +195,7 @@ func (s *tokenSource) fetch(ctx context.Context) (string, time.Time, error) {
 	// look past already, and every request would then fetch a new token.
 	ttl := tokenTTL
 	if tr.ExpiresAt > 0 {
-		if left := time.Until(time.UnixMilli(tr.ExpiresAt)); left > tokenMinValid {
+		if left := time.Until(time.UnixMilli(tr.ExpiresAt)); left > s.minValid {
 			ttl = min(left, tokenTTL)
 		}
 	}

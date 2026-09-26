@@ -44,8 +44,9 @@ func fail(status int) chatReply {
 
 // fakeAPI plays both the OAuth endpoint and chat completions.
 type fakeAPI struct {
-	tokenTTL time.Duration
-	chat     func(n int, req chatRequest) chatReply
+	tokenTTL    time.Duration
+	oauthStatus atomic.Int32 // non-zero: the OAuth endpoint fails with it
+	chat        func(n int, req chatRequest) chatReply
 
 	oauthCalls atomic.Int32
 	mu         sync.Mutex
@@ -64,6 +65,11 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.oauthReqs = append(f.oauthReqs, r)
 		f.oauthForms = append(f.oauthForms, string(body))
 		f.mu.Unlock()
+		if status := int(f.oauthStatus.Load()); status != 0 {
+			w.WriteHeader(status)
+			_, _ = io.WriteString(w, `{"code":7,"message":"scope is invalid"}`)
+			return
+		}
 		ttl := f.tokenTTL
 		if ttl == 0 {
 			ttl = 30 * time.Minute
@@ -173,11 +179,12 @@ func TestCompleteSendsStructuredOutput(t *testing.T) {
 
 func TestTokenIsSharedAndRefreshedAhead(t *testing.T) {
 	api := &fakeAPI{
-		tokenTTL: 40 * time.Second,
+		tokenTTL: 2 * time.Second,
 		chat:     func(int, chatRequest) chatReply { return ok(`{}`) },
 	}
 	c := newTestClient(t, api)
-	c.tokens.refreshBefore = 39500 * time.Millisecond // refresh a second after issue
+	c.tokens.minValid = 100 * time.Millisecond
+	c.tokens.refreshBefore = 1500 * time.Millisecond // refresh a second after issue
 
 	var wg sync.WaitGroup
 	for range 8 {
@@ -347,5 +354,107 @@ func TestConfig(t *testing.T) {
 
 	if _, err := New(Config{ClientID: "id"}); err == nil {
 		t.Error("New() without a secret succeeded")
+	}
+}
+
+func TestNextRefresh(t *testing.T) {
+	tests := []struct {
+		ttl, want time.Duration
+	}{
+		{30 * time.Minute, 25 * time.Minute},
+		{8 * time.Minute, 4 * time.Minute}, // halfway beats 5 minutes ahead
+		{3 * time.Minute, 90 * time.Second},
+		{time.Second, time.Second},
+	}
+	for _, tt := range tests {
+		if got := nextRefresh(tt.ttl, refreshBefore); got != tt.want {
+			t.Errorf("nextRefresh(%v) = %v, want %v", tt.ttl, got, tt.want)
+		}
+	}
+}
+
+func TestTokenErrorIsNotAModelError(t *testing.T) {
+	api := &fakeAPI{chat: func(int, chatRequest) chatReply { return ok(`{}`) }}
+	api.oauthStatus.Store(http.StatusBadRequest)
+	c := newTestClient(t, api)
+
+	_, err := c.Complete(context.Background(), request())
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.op != opToken || apiErr.Status != http.StatusBadRequest {
+		t.Fatalf("error = %v, want the OAuth 400", err)
+	}
+	// Not taken for a rejected schema, not retried, no fallback model: the
+	// same token would fail the same way.
+	if n := api.oauthCalls.Load(); n != 1 {
+		t.Errorf("OAuth called %d times, want 1", n)
+	}
+	if reqs, _ := api.requests(); len(reqs) != 0 {
+		t.Errorf("%d chat requests without a token", len(reqs))
+	}
+	if len(c.models()) != 2 {
+		t.Error("a token error marked the model unavailable")
+	}
+}
+
+func TestDoesNotRetryUndecodableAnswer(t *testing.T) {
+	api := &fakeAPI{chat: func(int, chatRequest) chatReply {
+		return chatReply{status: http.StatusOK, body: "<html>proxy error</html>"}
+	}}
+	c := newTestClient(t, api)
+
+	if _, err := c.Complete(context.Background(), request()); err == nil {
+		t.Fatal("Complete() succeeded on an HTML answer")
+	}
+	if reqs, _ := api.requests(); len(reqs) != 1 {
+		t.Errorf("%d requests, want 1: a broken answer is not a transient error", len(reqs))
+	}
+}
+
+func TestRateLimitDoesNotFallBack(t *testing.T) {
+	api := &fakeAPI{chat: func(int, chatRequest) chatReply {
+		r := fail(http.StatusTooManyRequests)
+		r.header = map[string]string{"Retry-After": "0"}
+		return r
+	}}
+	c := newTestClient(t, api)
+
+	_, err := c.Complete(context.Background(), request())
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Status != http.StatusTooManyRequests {
+		t.Fatalf("error = %v, want 429", err)
+	}
+	reqs, _ := api.requests()
+	if len(reqs) != maxAttempts {
+		t.Errorf("%d requests, want %d retries of the same model", len(reqs), maxAttempts)
+	}
+	for _, r := range reqs {
+		if r.Model != "GigaChat-3-Ultra" {
+			t.Errorf("request to %q: the one-request limit is per account, another model does not help", r.Model)
+		}
+	}
+}
+
+func TestBackgroundRefreshStopsAfterExpiry(t *testing.T) {
+	api := &fakeAPI{
+		tokenTTL: 2 * time.Second,
+		chat:     func(int, chatRequest) chatReply { return ok(`{}`) },
+	}
+	c := newTestClient(t, api)
+	c.tokens.minValid = 100 * time.Millisecond
+	if _, err := c.Complete(context.Background(), request()); err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	api.oauthStatus.Store(http.StatusServiceUnavailable) // OAuth goes down
+
+	// Retries run while the token lives (about 2s), then stop: an idle
+	// client must not poll OAuth forever.
+	time.Sleep(3500 * time.Millisecond)
+	settled := api.oauthCalls.Load()
+	time.Sleep(1500 * time.Millisecond)
+	if n := api.oauthCalls.Load(); n != settled {
+		t.Errorf("OAuth still polled after the token expired: %d calls, then %d", settled, n)
+	}
+	if settled < 2 {
+		t.Errorf("OAuth called %d times, want refresh attempts before expiry", settled)
 	}
 }
