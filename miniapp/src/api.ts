@@ -8,9 +8,17 @@ import { initData } from './max/bridge';
  */
 const INIT_DATA_HEADER = 'X-Max-Init-Data';
 
-const launchData = initData();
-
 /** The one client for every request; outside MAX it goes without the header. */
-export const api = createApiClient(
-    launchData ? { headers: { [INIT_DATA_HEADER]: launchData } } : undefined,
-);
+export const api = createApiClient();
+
+// Read on every request rather than once on import: that way the header
+// does not depend on the bridge script having run before this module.
+api.use({
+    onRequest({ request }) {
+        const data = initData();
+        if (data) {
+            request.headers.set(INIT_DATA_HEADER, data);
+        }
+        return request;
+    },
+});

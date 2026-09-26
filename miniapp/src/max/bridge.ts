@@ -19,8 +19,9 @@ interface MaxWebApp {
         /** Payload of the link the mini app was opened with. */
         start_param?: string;
     };
-    BackButton: MaxBackButton;
-    ready: () => void;
+    /** Optional on purpose: a partial `window.WebApp` must not break start-up. */
+    BackButton?: MaxBackButton;
+    ready?: () => void;
 }
 
 declare global {
@@ -32,7 +33,7 @@ declare global {
 export const webApp = (): MaxWebApp | undefined => window.WebApp;
 
 /** Tells MAX the app is ready to be shown. */
-export const ready = () => webApp()?.ready();
+export const ready = () => webApp()?.ready?.();
 
 /** Empty outside MAX — then there is nothing to send. */
 export const initData = () => webApp()?.initData ?? '';

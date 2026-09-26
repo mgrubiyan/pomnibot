@@ -40,8 +40,9 @@ function loadShareCode(setId: string): Promise<string> {
 }
 
 /**
- * What lands in the group chat. There is no link format for a set yet,
- * so the message carries the code and says where to type it in.
+ * What lands in the group chat. An invite link needs the bot's address,
+ * which the app does not know yet, so the message carries the code and
+ * says where to type it in.
  */
 const inviteText = (title: string, code: string) =>
     `«${title}» в Помниботе — код ${formatCode(code)}. ` +

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button, Flex, IconButton, Input, Typography } from '@maxhub/max-ui';
 import type { CardSet } from '../types';
 import { mockToday } from '../mocks';
@@ -40,6 +40,16 @@ export function JoinSet({ initialCode = '', onBack, onOpenSet }: JoinSetProps) {
     const [digits, setDigits] = useState(initialCode);
     const [checking, setChecking] = useState(false);
     const [notFound, setNotFound] = useState(false);
+    // The check outlives the screen when the user backs out mid-way;
+    // its answer must not pull them onto the set screen after that.
+    const mounted = useRef(false);
+
+    useEffect(() => {
+        mounted.current = true;
+        return () => {
+            mounted.current = false;
+        };
+    }, []);
 
     useBackButton(onBack);
 
@@ -58,8 +68,15 @@ export function JoinSet({ initialCode = '', onBack, onOpenSet }: JoinSetProps) {
         setNotFound(false);
 
         findSetByCode(digits)
-            .then((set) => onOpenSet(set.id))
+            .then((set) => {
+                if (mounted.current) {
+                    onOpenSet(set.id);
+                }
+            })
             .catch(() => {
+                if (!mounted.current) {
+                    return;
+                }
                 setChecking(false);
                 setNotFound(true);
             });
