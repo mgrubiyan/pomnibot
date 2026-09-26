@@ -31,7 +31,7 @@ func (f *fakeOCR) Recognize(_ context.Context, req OCRRequest) ([]OCRPage, error
 
 func newOCRExtractor(t *testing.T, ocr OCR, pdf PDFText) *Extractor {
 	t.Helper()
-	e, err := New(ocr, Options{PDF: pdf})
+	e, err := NewExtractor(ocr, Options{PDF: pdf})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestExtractPhotosInOrder(t *testing.T) {
 
 func TestExtractOCRModelOverride(t *testing.T) {
 	ocr := &fakeOCR{}
-	e, err := New(ocr, Options{PDF: &fakePDF{pages: []string{""}}, OCRModel: "page-column-sort"})
+	e, err := NewExtractor(ocr, Options{PDF: &fakePDF{pages: []string{""}}, OCRModel: "page-column-sort"})
 	if err != nil {
 		t.Fatal(err)
 	}

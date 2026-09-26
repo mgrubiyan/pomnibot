@@ -176,7 +176,7 @@ func extract(ctx context.Context, paths []string, ocrModel string) (ingest.Resul
 		}
 		ocr = client
 	}
-	ext, err := ingest.New(ocr, ingest.Options{DisablePDF: !hasPDF, OCRModel: ocrModel})
+	ext, err := ingest.NewExtractor(ocr, ingest.Options{DisablePDF: !hasPDF, OCRModel: ocrModel})
 	if err != nil {
 		return ingest.Result{}, err
 	}

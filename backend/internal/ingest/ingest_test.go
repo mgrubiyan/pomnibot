@@ -63,7 +63,7 @@ func page(n int) string {
 
 func newExtractor(t *testing.T, pdf PDFText) *Extractor {
 	t.Helper()
-	e, err := New(nil, Options{PDF: pdf})
+	e, err := NewExtractor(nil, Options{PDF: pdf})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,13 +216,13 @@ func TestExtractReportsBrokenPDF(t *testing.T) {
 
 func TestNewChecksPDFToText(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
-	if _, err := New(nil, Options{}); !errors.Is(err, ErrNoPDFToText) {
-		t.Errorf("New() without pdftotext: err = %v, want ErrNoPDFToText", err)
+	if _, err := NewExtractor(nil, Options{}); !errors.Is(err, ErrNoPDFToText) {
+		t.Errorf("NewExtractor() without pdftotext: err = %v, want ErrNoPDFToText", err)
 	}
 
-	e, err := New(nil, Options{DisablePDF: true})
+	e, err := NewExtractor(nil, Options{DisablePDF: true})
 	if err != nil {
-		t.Fatalf("New(DisablePDF) error = %v", err)
+		t.Fatalf("NewExtractor(DisablePDF) error = %v", err)
 	}
 	if _, err := e.Extract(context.Background(), []File{{Name: "a.txt", Data: []byte("текст")}}); err != nil {
 		t.Errorf("text without pdftotext: %v", err)

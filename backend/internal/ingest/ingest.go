@@ -90,7 +90,7 @@ type OCRPage struct {
 // Options configure an Extractor.
 type Options struct {
 	MinPageChars int     // default DefaultMinPageChars
-	PDF          PDFText // nil: pdftotext from PATH, checked in New
+	PDF          PDFText // nil: pdftotext from PATH, checked in NewExtractor
 	DisablePDF   bool    // no pdftotext needed; PDFs are rejected
 	OCRModel     string  // overrides the choice of ModelPhoto or ModelScan
 }
@@ -126,11 +126,11 @@ type Extractor struct {
 	lim  limits
 }
 
-// New returns an Extractor. ocr may be nil: photos are then rejected and
-// scanned pages only produce a warning. Unless a PDFText is given or PDFs
-// are disabled, New checks for pdftotext right away, so a missing binary is
-// found at start rather than on the first PDF.
-func New(ocr OCR, opts Options) (*Extractor, error) {
+// NewExtractor returns an Extractor. ocr may be nil: photos are then
+// rejected and scanned pages only produce a warning. Unless a PDFText is
+// given or PDFs are disabled, NewExtractor checks for pdftotext right away,
+// so a missing binary is found at start rather than on the first PDF.
+func NewExtractor(ocr OCR, opts Options) (*Extractor, error) {
 	if opts.MinPageChars <= 0 {
 		opts.MinPageChars = DefaultMinPageChars
 	}
