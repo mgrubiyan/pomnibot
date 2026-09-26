@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -51,8 +52,13 @@ const (
 	minTemperature = 0.001
 )
 
-// Config configures a Client. ClientID and ClientSecret are required.
+// Config configures a Client. Credentials are required: either AuthKey, or
+// ClientID and ClientSecret.
 type Config struct {
+	// AuthKey is the Authorization Key from the project settings in the
+	// GigaChat cabinet: base64 of "client_id:client_secret". Takes precedence
+	// over ClientID and ClientSecret.
+	AuthKey       string
 	ClientID      string
 	ClientSecret  string
 	Scope         string // GIGACHAT_API_PERS for individuals
@@ -64,11 +70,13 @@ type Config struct {
 	Logger        *slog.Logger
 }
 
-// ConfigFromEnv reads GIGACHAT_CLIENT_ID, GIGACHAT_CLIENT_SECRET,
-// GIGACHAT_SCOPE, GIGACHAT_MODEL, GIGACHAT_FALLBACK_MODEL, GIGACHAT_BASE_URL
-// and GIGACHAT_AUTH_URL. Unset optional values take defaults in New.
+// ConfigFromEnv reads GIGACHAT_AUTH_KEY, GIGACHAT_CLIENT_ID,
+// GIGACHAT_CLIENT_SECRET, GIGACHAT_SCOPE, GIGACHAT_MODEL,
+// GIGACHAT_FALLBACK_MODEL, GIGACHAT_BASE_URL and GIGACHAT_AUTH_URL. Unset
+// optional values take defaults in New.
 func ConfigFromEnv() Config {
 	return Config{
+		AuthKey:       os.Getenv("GIGACHAT_AUTH_KEY"),
 		ClientID:      os.Getenv("GIGACHAT_CLIENT_ID"),
 		ClientSecret:  os.Getenv("GIGACHAT_CLIENT_SECRET"),
 		Scope:         os.Getenv("GIGACHAT_SCOPE"),
@@ -97,8 +105,9 @@ var _ cards.Provider = (*Client)(nil)
 
 // New returns a Client. Call Close when done to stop token refreshing.
 func New(cfg Config) (*Client, error) {
-	if cfg.ClientID == "" || cfg.ClientSecret == "" {
-		return nil, errors.New("gigachat: client id and secret are required")
+	authKey, err := authorizationKey(cfg)
+	if err != nil {
+		return nil, err
 	}
 	cfg.Scope = or(cfg.Scope, DefaultScope)
 	cfg.Model = or(cfg.Model, DefaultModel)
@@ -117,12 +126,33 @@ func New(cfg Config) (*Client, error) {
 	return &Client{
 		cfg:         cfg,
 		http:        hc,
-		tokens:      newTokenSource(hc, cfg.AuthURL, cfg.Scope, cfg.ClientID, cfg.ClientSecret, cfg.Logger),
+		tokens:      newTokenSource(hc, cfg.AuthURL, cfg.Scope, authKey, cfg.Logger),
 		log:         cfg.Logger,
 		backoff:     backoffBase,
 		noStrict:    map[string]bool{},
 		unavailable: map[string]time.Time{},
 	}, nil
+}
+
+// authorizationKey returns the Basic credentials for the OAuth exchange: the
+// Authorization Key as the cabinet shows it, or one built from the client id
+// and secret.
+func authorizationKey(cfg Config) (string, error) {
+	if key := strings.TrimPrefix(strings.TrimSpace(cfg.AuthKey), "Basic "); key != "" {
+		if raw, err := base64.StdEncoding.DecodeString(key); err != nil || !strings.Contains(string(raw), ":") {
+			return "", errors.New("gigachat: AuthKey (GIGACHAT_AUTH_KEY) is not an Authorization Key: base64 of client_id:client_secret expected")
+		}
+		return key, nil
+	}
+	if cfg.ClientID == "" || cfg.ClientSecret == "" {
+		return "", errors.New("gigachat: credentials required: AuthKey (GIGACHAT_AUTH_KEY), or ClientID and ClientSecret (GIGACHAT_CLIENT_ID, GIGACHAT_CLIENT_SECRET)")
+	}
+	// The Authorization Key pasted in place of the secret is an easy slip: it
+	// would be encoded a second time and OAuth would answer a bare 401.
+	if raw, err := base64.StdEncoding.DecodeString(cfg.ClientSecret); err == nil && strings.HasPrefix(string(raw), cfg.ClientID+":") {
+		return "", errors.New("gigachat: ClientSecret (GIGACHAT_CLIENT_SECRET) holds the Authorization Key; set it as AuthKey (GIGACHAT_AUTH_KEY) instead")
+	}
+	return base64.StdEncoding.EncodeToString([]byte(cfg.ClientID + ":" + cfg.ClientSecret)), nil
 }
 
 // Close stops the background token refresh.

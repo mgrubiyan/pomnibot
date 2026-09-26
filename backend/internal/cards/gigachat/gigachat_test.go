@@ -334,6 +334,7 @@ func TestDoesNotRetryBadCredentials(t *testing.T) {
 }
 
 func TestConfig(t *testing.T) {
+	t.Setenv("GIGACHAT_AUTH_KEY", "")
 	t.Setenv("GIGACHAT_CLIENT_ID", "id")
 	t.Setenv("GIGACHAT_CLIENT_SECRET", "secret")
 	t.Setenv("GIGACHAT_SCOPE", "")
@@ -355,6 +356,55 @@ func TestConfig(t *testing.T) {
 	if _, err := New(Config{ClientID: "id"}); err == nil {
 		t.Error("New() without a secret succeeded")
 	}
+}
+
+func TestAuthKey(t *testing.T) {
+	key := base64.StdEncoding.EncodeToString([]byte("client-id:client-secret"))
+
+	t.Run("sent to OAuth as is", func(t *testing.T) {
+		api := &fakeAPI{chat: func(int, chatRequest) chatReply { return ok(`{}`) }}
+		srv := httptest.NewServer(api)
+		defer srv.Close()
+		c, err := New(Config{
+			AuthKey:    " " + key + "\n",
+			BaseURL:    srv.URL + "/v1",
+			AuthURL:    srv.URL + "/oauth",
+			HTTPClient: srv.Client(),
+			Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		})
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+		defer c.Close()
+		if _, err := c.Complete(context.Background(), request()); err != nil {
+			t.Fatalf("Complete() error = %v", err)
+		}
+		if got := api.oauthReqs[0].Header.Get("Authorization"); got != "Basic "+key {
+			t.Errorf("OAuth Authorization = %q, want the key as is", got)
+		}
+	})
+
+	t.Run("read from the environment", func(t *testing.T) {
+		t.Setenv("GIGACHAT_AUTH_KEY", key)
+		if got := ConfigFromEnv().AuthKey; got != key {
+			t.Errorf("AuthKey = %q", got)
+		}
+	})
+
+	t.Run("not a key", func(t *testing.T) {
+		for _, bad := range []string{"not base64!", base64.StdEncoding.EncodeToString([]byte("no colon"))} {
+			if _, err := New(Config{AuthKey: bad}); err == nil || !strings.Contains(err.Error(), "GIGACHAT_AUTH_KEY") {
+				t.Errorf("AuthKey %q: error = %v, want one naming GIGACHAT_AUTH_KEY", bad, err)
+			}
+		}
+	})
+
+	t.Run("pasted in place of the secret", func(t *testing.T) {
+		_, err := New(Config{ClientID: "client-id", ClientSecret: key})
+		if err == nil || !strings.Contains(err.Error(), "GIGACHAT_AUTH_KEY") {
+			t.Errorf("error = %v, want a hint to use GIGACHAT_AUTH_KEY", err)
+		}
+	})
 }
 
 func TestNextRefresh(t *testing.T) {

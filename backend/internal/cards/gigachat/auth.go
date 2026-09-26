@@ -3,7 +3,6 @@ package gigachat
 import (
 	"context"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -59,12 +58,13 @@ type tokenSource struct {
 	closed  bool
 }
 
-func newTokenSource(hc *http.Client, authURL, scope, clientID, clientSecret string, log *slog.Logger) *tokenSource {
+// newTokenSource takes the Authorization Key, base64 of client_id:client_secret.
+func newTokenSource(hc *http.Client, authURL, scope, authKey string, log *slog.Logger) *tokenSource {
 	return &tokenSource{
 		http:          hc,
 		authURL:       authURL,
 		scope:         scope,
-		basic:         base64.StdEncoding.EncodeToString([]byte(clientID + ":" + clientSecret)),
+		basic:         authKey,
 		refreshBefore: refreshBefore,
 		minValid:      tokenMinValid,
 		log:           log,
