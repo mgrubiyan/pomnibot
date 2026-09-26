@@ -2,16 +2,14 @@
 // and prints the cards, the stats and the timings. It is for measuring
 // quality and latency on real notes before there is storage.
 //
-//	cd backend
-//	go run ./cmd/cardsgen -file notes.txt
-//	go run ./cmd/cardsgen -file notes.txt -model GigaChat-2-Max -chunk 2000 -limit 30 -json > run.json
+//	task cardsgen -- notes.txt
+//	task cardsgen -- -model GigaChat-2-Max -chunk 2000 -limit 30 -json notes.txt > run.json
 //
-// Credentials come from GIGACHAT_* variables; .env in the current or parent
-// directory is read if present, without overriding variables already set.
+// Credentials come from GIGACHAT_* variables: task passes the ones from .env
+// in the repository root.
 package main
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -66,12 +64,6 @@ func run() error {
 		level = slog.LevelDebug
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
-
-	for _, path := range []string{".env", "../.env"} {
-		if err := loadDotEnv(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("read %s: %w", path, err)
-		}
-	}
 
 	text, err := os.ReadFile(*file)
 	if err != nil {
@@ -215,51 +207,6 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-// loadDotEnv sets KEY=VALUE pairs from a .env file, keeping variables that
-// are already set.
-func loadDotEnv(path string) error {
-	f, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = f.Close() }()
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		key, value, found := strings.Cut(strings.TrimPrefix(line, "export "), "=")
-		if !found {
-			continue
-		}
-		key = strings.TrimSpace(key)
-		value = dotEnvValue(value)
-		if _, set := os.LookupEnv(key); !set {
-			if err := os.Setenv(key, value); err != nil {
-				return err
-			}
-		}
-	}
-	return sc.Err()
-}
-
-// dotEnvValue unquotes a value in matching quotes and drops a trailing
-// " # comment" from an unquoted one: "GigaChat-3-Ultra # main" must not
-// become a model name.
-func dotEnvValue(v string) string {
-	v = strings.TrimSpace(v)
-	if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') {
-		if end := strings.IndexByte(v[1:], v[0]); end >= 0 {
-			return v[1 : end+1]
-		}
-	}
-	if i := strings.Index(v, " #"); i >= 0 {
-		v = v[:i]
-	}
-	return strings.TrimSpace(v)
 }
 
 func or(v, def string) string {

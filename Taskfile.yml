@@ -56,6 +56,13 @@ tasks:
     cmds:
       - task: backend:test
 
+  cardsgen:
+    desc: 'Карточки из конспекта на живом GigaChat: task cardsgen -- notes.txt'
+    dir: '{{.USER_WORKING_DIR}}'
+    cmds:
+      - go -C '{{.ROOT_DIR}}/backend' build -o '{{.ROOT_DIR}}/.task/bin/cardsgen' ./cmd/cardsgen
+      - "'{{.ROOT_DIR}}/.task/bin/cardsgen' {{.CLI_ARGS}}"
+
   preview:
     desc: 'Предпросмотр фронтенда'
     cmds:

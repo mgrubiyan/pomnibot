@@ -7,7 +7,9 @@ services:
     restart: unless-stopped
     ports:
       - "${PORT:-8080}:8080"
+    env_file:
+      - path: .env
+        required: false
     environment:
       - PORT=8080
-      - BOT_TOKEN=${BOT_TOKEN}
       - DOMAIN=${DOMAIN:-pomnibot.steins.ru}
