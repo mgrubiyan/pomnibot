@@ -227,7 +227,7 @@ func loadDotEnv(path string) error {
 			continue
 		}
 		key = strings.TrimSpace(key)
-		value = strings.Trim(strings.TrimSpace(value), `"'`)
+		value = dotEnvValue(value)
 		if _, set := os.LookupEnv(key); !set {
 			if err := os.Setenv(key, value); err != nil {
 				return err
@@ -235,6 +235,22 @@ func loadDotEnv(path string) error {
 		}
 	}
 	return sc.Err()
+}
+
+// dotEnvValue unquotes a value in matching quotes and drops a trailing
+// " # comment" from an unquoted one: "GigaChat-3-Ultra # main" must not
+// become a model name.
+func dotEnvValue(v string) string {
+	v = strings.TrimSpace(v)
+	if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') {
+		if end := strings.IndexByte(v[1:], v[0]); end >= 0 {
+			return v[1 : end+1]
+		}
+	}
+	if i := strings.Index(v, " #"); i >= 0 {
+		v = v[:i]
+	}
+	return strings.TrimSpace(v)
 }
 
 func or(v, def string) string {
