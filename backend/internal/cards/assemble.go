@@ -223,7 +223,12 @@ func (a *assembler) settle(pos int, final bool) []Card {
 		timeUp := final || pos-p.pos >= maxPendingWait
 		switch {
 		case len(options) >= wantDistractors || (timeUp && len(options) >= minDistractors):
-			p.card.Options = shuffleOptions(p.card.Question, p.card.Answer, options)
+			answer := optionForm(p.card.Answer, startsUpper(p.card.Answer))
+			for i := range options {
+				options[i] = optionForm(options[i], startsUpper(answer))
+			}
+			p.card.Answer = answer
+			p.card.Options = shuffleOptions(p.card.Question, answer, options)
 		case timeUp:
 			p.card.Kind = KindFlip
 			a.stats.DowngradedToFlip++

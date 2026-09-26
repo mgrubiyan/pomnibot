@@ -56,7 +56,10 @@ func TestNormalizeText(t *testing.T) {
 func TestFindQuote(t *testing.T) {
 	const fragment = "Клеточный цикл — это период жизни клетки от одного деления до следующего\n" +
 		"или до её гибели. Ядро окружено «ядерной оболочкой» из двух мембран. " +
-		"Интерфаза делится на пресинтетический (G1) и синтетический (S) периоды."
+		"Интерфаза делится на пресинтетический (G1) и синтетический (S) периоды. " +
+		"Считать, что клетка растёт всегда, неверно, что бы ни говорили. " +
+		"Клетки печени делятся амитозом при повреждении ткани. " +
+		"Раствор замерзает при температуре -5 °C и ниже."
 
 	tests := []struct {
 		name  string
@@ -83,6 +86,23 @@ func TestFindQuote(t *testing.T) {
 			name:  "brackets are kept, the final period is not",
 			quote: "Интерфаза делится на пресинтетический (G1) и синтетический (S)",
 			want:  "Интерфаза делится на пресинтетический (G1) и синтетический (S)",
+		},
+		{
+			name:  "starts inside a word and flips the meaning",
+			quote: "верно, что бы ни говорили",
+		},
+		{
+			name:  "starts inside a word and names another term",
+			quote: "митозом при повреждении ткани",
+		},
+		{
+			name:  "ends inside a word",
+			quote: "Клетки печени делятся амито",
+		},
+		{
+			name:  "number sign is part of the quote",
+			quote: "Раствор замерзает при температуре -5 °C и ниже.",
+			want:  "Раствор замерзает при температуре -5 °C и ниже",
 		},
 		{
 			name:  "paraphrase",
@@ -117,5 +137,20 @@ func TestFindQuote(t *testing.T) {
 				t.Errorf("findQuote() span\n got: %q\nwant: %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestTrimQuote(t *testing.T) {
+	for in, want := range map[string]string{
+		"клетка делится.":    "клетка делится",
+		"-это деление;":      "это деление",
+		" -5 °c и ниже. ":    "-5 °c и ниже",
+		"(g1) и (s)":         "(g1) и (s)",
+		".,;":                "",
+		"стадия g2 (синтез)": "стадия g2 (синтез)",
+	} {
+		if got := trimQuote(in); got != want {
+			t.Errorf("trimQuote(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

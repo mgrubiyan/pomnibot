@@ -318,9 +318,11 @@ func TestGenerateChoiceTakesDistractorsFromOtherFragments(t *testing.T) {
 				kind: KindChoice, q: "Как называется непрямое деление соматических клеток?", a: "Митоз", quote: firstSentence(frag),
 			}), nil
 		}
+		// Other answers come in the model's own spelling: lowercase, with a
+		// period. Options must not differ from the right one by form.
 		return answerJSON(mc{
 			kind: KindInput, q: fmt.Sprintf("Какой термин определяется в абзаце про %s?", strings.ToLower(word)),
-			a: word, quote: firstSentence(frag),
+			a: strings.ToLower(word) + ".", quote: firstSentence(frag),
 		}), nil
 	}}
 
@@ -335,7 +337,7 @@ func TestGenerateChoiceTakesDistractorsFromOtherFragments(t *testing.T) {
 	others := []string{"Мейоз", "Цитокинез", "Апоптоз", "Кроссинговер"}
 	for _, o := range choice.Options {
 		if o != "Митоз" && !slices.Contains(others, o) {
-			t.Errorf("option %q is not an answer from another fragment", o)
+			t.Errorf("option %q is not an answer from another fragment in the answer's form", o)
 		}
 	}
 	if !slices.Contains(choice.Options, "Митоз") {

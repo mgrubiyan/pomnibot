@@ -157,32 +157,37 @@ func overlapsAny(key string, keys []string) bool {
 	return false
 }
 
-// containsPhrase is strings.Contains on word boundaries: "ион" is not in
-// "функционирование".
+// containsPhrase is strings.Contains on word boundaries, see indexPhrase.
 func containsPhrase(s, phrase string) bool {
-	for from := 0; from < len(s); {
-		i := strings.Index(s[from:], phrase)
-		if i < 0 {
-			return false
-		}
-		start, end := from+i, from+i+len(phrase)
-		before, _ := utf8.DecodeLastRuneInString(s[:start])
-		after, _ := utf8.DecodeRuneInString(s[end:])
-		if !isWordRune(before) && !isWordRune(after) {
-			return true
-		}
-		_, size := utf8.DecodeRuneInString(s[start:])
-		from = start + size
-	}
-	return false
-}
-
-func isWordRune(r rune) bool {
-	return r != utf8.RuneError && (unicode.IsLetter(r) || unicode.IsDigit(r))
+	return indexPhrase(s, phrase) >= 0
 }
 
 func answerKey(s string) string {
 	return trimQuote(fold(s).s)
+}
+
+// optionForm trims trailing punctuation and gives the first letter the case
+// the answer's has. Distractors come from other cards as the model wrote
+// them, and "митоз" next to "Мейоз." and "Цитокинез." gives itself away.
+// Acronyms such as "ДНК" keep their case.
+func optionForm(s string, upper bool) string {
+	s = strings.TrimRightFunc(strings.TrimSpace(s), func(r rune) bool {
+		return unicode.IsSpace(r) || strings.ContainsRune(".,;:", r)
+	})
+	first, size := utf8.DecodeRuneInString(s)
+	second, _ := utf8.DecodeRuneInString(s[size:])
+	if !unicode.IsLetter(first) || unicode.IsUpper(second) {
+		return s
+	}
+	if upper {
+		return string(unicode.ToUpper(first)) + s[size:]
+	}
+	return string(unicode.ToLower(first)) + s[size:]
+}
+
+func startsUpper(s string) bool {
+	r, _ := utf8.DecodeRuneInString(s)
+	return unicode.IsUpper(r)
 }
 
 // shuffleOptions puts the answer among the distractors in an order derived

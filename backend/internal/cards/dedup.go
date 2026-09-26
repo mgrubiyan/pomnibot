@@ -6,14 +6,20 @@ import (
 )
 
 // Duplicate detection. Overlapping fragments and repeated material make the
-// model ask the same thing twice in different words. Two questions are the
-// same when their normalized text matches or when the Jaccard similarity of
-// their content-word stems reaches dupThreshold. The first card is kept.
+// model ask the same thing twice in slightly different words. The first card
+// is kept.
+//
+// Two questions are the same when their normalized text matches, when they
+// share nearly all stems (sameJaccard), or when one is the other plus at most
+// maxExtraStems content words and they share at least minCommonStems
+// ("Какие фазы выделяют в митозе?" and "…в митозе клетки?"; but not "Что такое
+// хромосома?" and "Что такое гомологичная хромосома?"). A word swapped for another is what tells questions apart:
+// "…в профазе первого деления мейоза?" and "…второго деления мейоза?" are two
+// cards, though they share 6 stems of 8.
 const (
-	// dupThreshold 0.75 catches "Какие фазы выделяют в митозе?" against
-	// "Какие фазы выделяют в митозе клетки?" (3 of 4 stems) but keeps
-	// "Что такое митоз?" and "Что такое мейоз?" apart.
-	dupThreshold = 0.75
+	maxExtraStems  = 1
+	minCommonStems = 2
+	sameJaccard    = 0.9
 	// stemRunes is a poor man's Russian stemmer: "митоза", "митозом" and
 	// "митоз" share their first five letters.
 	stemRunes = 5
@@ -54,11 +60,25 @@ func (x *questionIndex) isDup(q string) bool {
 		return false
 	}
 	for _, seen := range x.stems {
-		if jaccard(stems, seen) >= dupThreshold {
+		if sameQuestion(stems, seen) {
 			return true
 		}
 	}
 	return false
+}
+
+func sameQuestion(a, b map[string]bool) bool {
+	common := 0
+	for w := range a {
+		if b[w] {
+			common++
+		}
+	}
+	onlyA, onlyB := len(a)-common, len(b)-common
+	if common >= minCommonStems && min(onlyA, onlyB) == 0 && max(onlyA, onlyB) <= maxExtraStems {
+		return true
+	}
+	return float64(common)/float64(common+onlyA+onlyB) >= sameJaccard
 }
 
 func (x *questionIndex) add(q string) {
@@ -88,18 +108,4 @@ func stemSet(words []string) map[string]bool {
 		set[w] = true
 	}
 	return set
-}
-
-func jaccard(a, b map[string]bool) float64 {
-	common := 0
-	for w := range a {
-		if b[w] {
-			common++
-		}
-	}
-	union := len(a) + len(b) - common
-	if union == 0 {
-		return 0
-	}
-	return float64(common) / float64(union)
 }

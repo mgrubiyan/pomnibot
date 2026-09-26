@@ -28,8 +28,16 @@ const (
 	tocShareHeaded   = 0.3  // the same when the fragment has a "Содержание" heading
 	bibShare         = 0.4  // share of text in lines that look like bibliography entries
 	bibShareHeaded   = 0.25 // the same under a "Список литературы" heading
-	titleMarkersMin  = 3    // distinct title-page words: министерство, кафедра, выполнил...
+	titleMarkersMin  = 3    // distinct title-page words, at least one of them strong
 	titleMaxAvgLine  = 60   // title pages are short lines; a paragraph about a university is not
+
+	// A contents entry or a reference is a short line. A longer one is a
+	// paragraph (normalization joins wrapped lines), whatever it ends with.
+	maxTOCLine = 100
+	maxBibLine = 400
+	// A reference needs one strong cue (ISBN, URL) or this many weak ones:
+	// "равен 2 с." alone is physics, "— М.: Мир, 1994. — 540 с." is a book.
+	minBibCues = 2
 
 	// A run of this many table-of-contents or bibliography lines (a heading
 	// counts) gets fragments of its own, so that it neither drags real text
@@ -51,20 +59,35 @@ const (
 )
 
 var (
-	// "Глава 1. Клетка ........ 12", "1.2 Митоз … 14", "Введение 3".
-	reTOCLine = regexp.MustCompile(`(?:\.{3,}|…+|_{3,}|\s)\s*\d{1,4}$`)
+	// "Глава 1. Клетка ........ 12", "1.2 Митоз … 14".
+	reTOCLeader = regexp.MustCompile(`(?:\.{3,}|…+|_{3,})\s*\d{1,4}$`)
+	// "Введение 3" is a contents entry only under a contents heading: without
+	// one, "Крещение Руси — 988" is a date, not a page.
+	reTOCBare = regexp.MustCompile(`\s\d{1,3}$`)
 	reTOCHead = regexp.MustCompile(`(?i)^(содержание|оглавление|contents)\.?$`)
 
-	// Typical parts of a GOST-style reference: "— М.: Мир, 1994. — 517 с.",
-	// "ISBN", "URL:", "// Вестник", "(дата обращения: ...)".
-	reBibLine = regexp.MustCompile(`(?i)(?:^|\s)(?:[МЛ]|СПб|Спб|Минск|Киев|Казань)\.?\s*:|ISBN|URL:|дата обращения|режим доступа|\bизд(?:\.|ательство)|\d+\s*[сc]\.\s*$|\d+\s*p\.\s*$|\s//\s|(?:19|20)\d{2}\.\s*[—–-]`)
+	reBibStrong = regexp.MustCompile(`(?i)ISBN|URL:|дата обращения|режим доступа|\s//\s|doi:`)
+	// Parts of a GOST-style reference, each common enough in prose on its own.
+	reBibWeak = []*regexp.Regexp{
+		regexp.MustCompile(`(?:^|\s)(?:М|Л|СПб|Спб|Минск|Киев|Казань|Новосибирск|Екатеринбург)\.?\s*:\s*\S`), // "М.: Мир"
+		regexp.MustCompile(`(?i)(?:^|[^\p{L}])изд(?:\.|ательство)`),                                          // "изд.", "Издательство"
+		regexp.MustCompile(`\d+\s*[сcp]\.\s*$`),                   // "540 с.", "1267 p."
+		regexp.MustCompile(`(?:19|20)\d{2}\.\s*[—–-]`),            // "1994. —"
+		regexp.MustCompile(`^\d+\.\s*\p{Lu}\p{Ll}+,?\s+\p{Lu}\.`), // "1. Альбертс Б."
+		regexp.MustCompile(`[—–-]\s*Т\.\s*\d`),                    // "— Т. 2"
+	}
 	reBibHead = regexp.MustCompile(`(?i)^(список (использованной |рекомендуемой )?литературы|(рекомендуемая |основная |дополнительная )?литература|библиографический список|библиография|список источников|источники|references|bibliography)\.?:?$`)
 
-	titleMarkers = []string{
-		"министерство", "федеральное государственное", "университет", "институт",
-		"кафедра", "факультет", "выполнил", "проверил", "студент", "группы",
-		"научный руководитель", "реферат", "курсовая работа", "по дисциплине",
-		"конспект лекций", "учебное пособие",
+	// Strong markers hardly occur outside a title page; weak ones do
+	// ("функциональные группы", a lecture about universities), so they only
+	// add up.
+	titleMarkersStrong = []string{
+		"министерство", "федеральное государственное", "выполнил", "проверил",
+		"научный руководитель", "курсовая работа", "реферат",
+	}
+	titleMarkersWeak = []string{
+		"университет", "институт", "кафедра", "факультет", "студент", "группы",
+		"по дисциплине", "конспект лекций", "учебное пособие",
 	}
 )
 
@@ -88,24 +111,28 @@ func junkReason(text string) string {
 	}
 
 	lines := nonEmptyLines(text)
-	var total, tocRunes, bibRunes int
 	var tocHead, bibHead bool
 	for _, line := range lines {
-		n := utf8.RuneCountInString(line)
-		total += n
-		if reTOCLine.MatchString(line) {
-			tocRunes += n
-		}
-		if reBibLine.MatchString(line) {
-			bibRunes += n
-		}
 		tocHead = tocHead || reTOCHead.MatchString(line)
 		bibHead = bibHead || reBibHead.MatchString(line)
 	}
+	var total, tocRunes, bibRunes int
+	for _, line := range lines {
+		n := utf8.RuneCountInString(line)
+		total += n
+		if tocLine(line, tocHead) {
+			tocRunes += n
+		}
+		if bibLine(line) {
+			bibRunes += n
+		}
+	}
 	avgLine := float64(total) / float64(len(lines))
 
-	if avgLine < titleMaxAvgLine && countTitleMarkers(text) >= titleMarkersMin {
-		return junkTitlePage
+	if avgLine < titleMaxAvgLine {
+		if strong, all := countTitleMarkers(text); strong > 0 && all >= titleMarkersMin {
+			return junkTitlePage
+		}
 	}
 	if len(lines) >= minLinesForShare {
 		if share(tocRunes, total) >= pick(tocHead, tocShareHeaded, tocShare) {
@@ -135,14 +162,50 @@ const (
 	lineBib
 )
 
-func classifyLine(line string) lineClass {
-	switch {
-	case reTOCHead.MatchString(line) || reTOCLine.MatchString(line):
-		return lineTOC
-	case reBibHead.MatchString(line) || reBibLine.MatchString(line):
-		return lineBib
+func tocLine(line string, headed bool) bool {
+	if utf8.RuneCountInString(line) > maxTOCLine {
+		return false
 	}
-	return lineText
+	return reTOCLeader.MatchString(line) || headed && reTOCBare.MatchString(line)
+}
+
+func bibLine(line string) bool {
+	if utf8.RuneCountInString(line) > maxBibLine {
+		return false
+	}
+	if reBibStrong.MatchString(line) {
+		return true
+	}
+	cues := 0
+	for _, re := range reBibWeak {
+		if re.MatchString(line) {
+			cues++
+		}
+	}
+	return cues >= minBibCues
+}
+
+// classifyLines tags each line. A bare page number counts as a contents
+// entry only while a contents heading is in effect, that is until the first
+// line that is not an entry: "Крещение Руси — 988" after the contents is a
+// date. Wrapped entries need no allowance, normalization has joined them.
+func classifyLines(lines []string) []lineClass {
+	classes := make([]lineClass, len(lines))
+	headed := false
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+		switch {
+		case reTOCHead.MatchString(line):
+			classes[i], headed = lineTOC, true
+		case tocLine(line, headed):
+			classes[i] = lineTOC
+		case reBibHead.MatchString(line) || bibLine(line):
+			classes[i], headed = lineBib, false
+		default:
+			classes[i], headed = lineText, false
+		}
+	}
+	return classes
 }
 
 // junkRunBreaks marks the lines where a table of contents or a bibliography
@@ -151,10 +214,7 @@ func classifyLine(line string) lineClass {
 // with it, and a contents page does not ride along with the introduction.
 func junkRunBreaks(lines []string) []bool {
 	breaks := make([]bool, len(lines)+1)
-	classes := make([]lineClass, len(lines))
-	for i, line := range lines {
-		classes[i] = classifyLine(strings.TrimSpace(line))
-	}
+	classes := classifyLines(lines)
 	for i := 0; i < len(lines); {
 		c := classes[i]
 		if c == lineText {
@@ -198,15 +258,22 @@ func nonEmptyLines(text string) []string {
 	return out
 }
 
-func countTitleMarkers(text string) int {
+// countTitleMarkers returns how many strong and how many markers in total
+// the text contains.
+func countTitleMarkers(text string) (strong, all int) {
 	lower := strings.ToLower(text)
-	n := 0
-	for _, m := range titleMarkers {
+	for _, m := range titleMarkersStrong {
 		if strings.Contains(lower, m) {
-			n++
+			strong++
 		}
 	}
-	return n
+	all = strong
+	for _, m := range titleMarkersWeak {
+		if strings.Contains(lower, m) {
+			all++
+		}
+	}
+	return strong, all
 }
 
 func share(part, whole int) float64 {

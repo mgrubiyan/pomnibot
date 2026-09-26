@@ -36,13 +36,13 @@ func splitChunks(text string, size, overlap int) []chunk {
 
 	var chunks []chunk
 	for i := 0; i < len(segs); {
-		start := segs[i].start
+		start, startRune := segs[i].start, segs[i].runeStart
 		if n := len(chunks); n > 0 && overlap > 0 && !segs[i].hardBreak {
 			start = overlapStart(text, chunks[n-1].Start, start, overlap)
+			startRune -= utf8.RuneCountInString(text[start:segs[i].start])
 		}
 		j := i
-		for j+1 < len(segs) && !segs[j+1].hardBreak &&
-			utf8.RuneCountInString(text[start:segs[j+1].end]) <= size {
+		for j+1 < len(segs) && !segs[j+1].hardBreak && segs[j+1].runeEnd-startRune <= size {
 			j++
 		}
 		end := segs[j].end
@@ -54,7 +54,8 @@ func splitChunks(text string, size, overlap int) []chunk {
 
 type segment struct {
 	span
-	hardBreak bool // a fragment must start here
+	runeStart, runeEnd int  // the same offsets in characters, for size checks
+	hardBreak          bool // a fragment must start here
 }
 
 // segments splits text into paragraphs (non-empty lines after normalization),
@@ -81,6 +82,16 @@ func segments(text string, limit int) []segment {
 		for k, piece := range splitLong(text, l, limit) {
 			out = append(out, segment{span: piece, hardBreak: k == 0 && breaks[i]})
 		}
+	}
+
+	// Character offsets in one pass: segments are in text order.
+	pos, runes := 0, 0
+	for k := range out {
+		runes += utf8.RuneCountInString(text[pos:out[k].start])
+		out[k].runeStart = runes
+		runes += utf8.RuneCountInString(text[out[k].start:out[k].end])
+		out[k].runeEnd = runes
+		pos = out[k].end
 	}
 	return out
 }

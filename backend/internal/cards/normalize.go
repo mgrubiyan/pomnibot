@@ -189,11 +189,19 @@ func fold(s string) folded {
 
 // trimQuote drops sentence punctuation and spaces around a folded quote: the
 // model often adds a final period or cuts one off. Brackets stay: "(G2)"
-// must not lose its closing half.
+// must not lose its closing half, and neither does the minus of "-5".
 func trimQuote(s string) string {
-	return strings.TrimFunc(s, func(r rune) bool {
+	s = strings.TrimRightFunc(s, func(r rune) bool {
 		return unicode.IsSpace(r) || strings.ContainsRune(".,;:!?-", r)
 	})
+	for {
+		r, size := utf8.DecodeRuneInString(s)
+		next, _ := utf8.DecodeRuneInString(s[size:])
+		if !unicode.IsSpace(r) && !strings.ContainsRune(".,;:!?-", r) || r == '-' && unicode.IsDigit(next) {
+			return s
+		}
+		s = s[size:]
+	}
 }
 
 // minQuoteRunes rejects quotes too short to prove anything: "клетка" is in
@@ -203,16 +211,52 @@ const minQuoteRunes = 20
 // findQuote looks for the model's quote in the fragment text, ignoring case,
 // ё, quote marks, dashes and whitespace. It returns the matching span of the
 // fragment itself, so the card shows the notes and not the model's copy.
+//
+// The match must start and end on word boundaries: "верно, что…" inside
+// "неверно, что…" or "митозом" inside "амитозом" would pass as verbatim
+// while saying the opposite.
 func findQuote(fragment, quote string) (string, bool) {
 	q := trimQuote(fold(quote).s)
 	if utf8.RuneCountInString(q) < minQuoteRunes {
 		return "", false
 	}
 	f := fold(fragment)
-	i := strings.Index(f.s, q)
+	i := indexPhrase(f.s, q)
 	if i < 0 {
 		return "", false
 	}
 	span := fragment[f.start[i]:f.end[i+len(q)-1]]
 	return strings.TrimSpace(span), true
+}
+
+// indexPhrase is strings.Index that only accepts a match not glued to the
+// letters or digits around it: "ион" is not in "функционирование". An edge
+// of the phrase that is itself punctuation needs no boundary.
+func indexPhrase(s, phrase string) int {
+	if phrase == "" {
+		return -1
+	}
+	first, _ := utf8.DecodeRuneInString(phrase)
+	last, _ := utf8.DecodeLastRuneInString(phrase)
+	for from := 0; from <= len(s)-len(phrase); {
+		i := strings.Index(s[from:], phrase)
+		if i < 0 {
+			return -1
+		}
+		start, end := from+i, from+i+len(phrase)
+		before, _ := utf8.DecodeLastRuneInString(s[:start])
+		after, _ := utf8.DecodeRuneInString(s[end:])
+		gluedBefore := isWordRune(first) && isWordRune(before)
+		gluedAfter := isWordRune(last) && isWordRune(after)
+		if !gluedBefore && !gluedAfter {
+			return start
+		}
+		_, size := utf8.DecodeRuneInString(s[start:])
+		from = start + size
+	}
+	return -1
+}
+
+func isWordRune(r rune) bool {
+	return r != utf8.RuneError && (unicode.IsLetter(r) || unicode.IsDigit(r))
 }

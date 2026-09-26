@@ -10,6 +10,8 @@ func TestQuestionIndexDuplicates(t *testing.T) {
 	x := newQuestionIndex()
 	x.add("Что такое митоз?")
 	x.add("Какие фазы выделяют в митозе?")
+	x.add("Какие изменения происходят с хромосомами в профазе первого деления мейоза?")
+	x.add("Что такое хромосома?")
 
 	for _, q := range []string{
 		"что такое митоз",
@@ -25,6 +27,8 @@ func TestQuestionIndexDuplicates(t *testing.T) {
 		"Что такое мейоз?",
 		"Сколько хромосом в клетках человека?",
 		"Какая фаза митоза самая короткая?",
+		"Какие изменения происходят с хромосомами в профазе второго деления мейоза?",
+		"Что такое гомологичная хромосома?",
 	} {
 		if x.isDup(q) {
 			t.Errorf("%q is wrongly detected as a duplicate", q)
@@ -103,5 +107,25 @@ func TestShuffleOptions(t *testing.T) {
 	}
 	if !slices.Equal(distractors, []string{"Мейоз", "Амитоз", "Цитокинез"}) {
 		t.Error("shuffleOptions modified its input")
+	}
+}
+
+func TestOptionForm(t *testing.T) {
+	tests := []struct {
+		in    string
+		upper bool
+		want  string
+	}{
+		{"Мейоз.", false, "мейоз"},
+		{"цитокинез", true, "Цитокинез"},
+		{"ДНК", false, "ДНК"},
+		{"  Репликация ДНК; ", true, "Репликация ДНК"},
+		{"46", true, "46"},
+		{"(2n)", false, "(2n)"},
+	}
+	for _, tt := range tests {
+		if got := optionForm(tt.in, tt.upper); got != tt.want {
+			t.Errorf("optionForm(%q, %v) = %q, want %q", tt.in, tt.upper, got, tt.want)
+		}
 	}
 }
