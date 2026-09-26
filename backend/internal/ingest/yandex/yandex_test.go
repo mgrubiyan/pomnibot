@@ -217,9 +217,21 @@ func TestParseRecognition(t *testing.T) {
 	})
 }
 
+func TestFolderIsOptional(t *testing.T) {
+	f := &fakeVision{syncReply: `{"result":{"textAnnotation":{"fullText":"текст"}}}`}
+	c := newTestClient(t, f)
+	c.cfg.FolderID = ""
+	if _, err := c.Recognize(context.Background(), ingest.OCRRequest{Data: []byte("x"), MimeType: "image/png", Pages: 1}); err != nil {
+		t.Fatalf("Recognize() error = %v", err)
+	}
+	if _, set := f.reqs[0].Header["X-Folder-Id"]; set {
+		t.Error("x-folder-id sent without a folder")
+	}
+}
+
 func TestNewRequiresCredentials(t *testing.T) {
-	if _, err := New(Config{APIKey: "key"}); err == nil {
-		t.Error("New() without a folder succeeded")
+	if _, err := New(Config{FolderID: "folder"}); err == nil {
+		t.Error("New() without a key succeeded")
 	}
 	t.Setenv("YC_API_KEY", "k")
 	t.Setenv("YC_FOLDER_ID", "f")

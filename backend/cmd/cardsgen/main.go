@@ -5,7 +5,7 @@
 // It takes text files, PDFs and photos of pages, told apart by content.
 // Several files are pages of one set of notes, in the order given. PDFs need
 // pdftotext (poppler-utils); photos and scanned pages need Yandex Vision OCR
-// (YC_API_KEY, YC_FOLDER_ID).
+// (YC_API_KEY, and YC_FOLDER_ID unless the key is a service account's).
 //
 //	task cardsgen -- notes.txt
 //	task cardsgen -- -model GigaChat-2-Max -chunk 2000 -limit 30 -json lecture.pdf page2.pdf > run.json
@@ -169,7 +169,7 @@ func extract(ctx context.Context, paths []string, ocrModel string) (ingest.Resul
 
 	// OCR only with credentials: without them text and typed PDFs still work.
 	var ocr ingest.OCR
-	if cfg := yandex.ConfigFromEnv(); cfg.APIKey != "" && cfg.FolderID != "" {
+	if cfg := yandex.ConfigFromEnv(); cfg.APIKey != "" {
 		client, err := yandex.New(cfg)
 		if err != nil {
 			return ingest.Result{}, err

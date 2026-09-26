@@ -46,7 +46,9 @@ const (
 // Languages are the recognition languages: Russian notes with English terms.
 var Languages = []string{"ru", "en"}
 
-// Config configures a Client. APIKey and FolderID are required.
+// Config configures a Client. APIKey is required. FolderID may be empty with
+// a service account's API key: the service then works in that account's
+// folder.
 type Config struct {
 	APIKey       string
 	FolderID     string
@@ -75,8 +77,8 @@ var _ ingest.OCR = (*Client)(nil)
 
 // New returns a Client.
 func New(cfg Config) (*Client, error) {
-	if cfg.APIKey == "" || cfg.FolderID == "" {
-		return nil, errors.New("yandex: YC_API_KEY and YC_FOLDER_ID are required")
+	if cfg.APIKey == "" {
+		return nil, errors.New("yandex: YC_API_KEY is required")
 	}
 	if cfg.BaseURL == "" {
 		cfg.BaseURL = DefaultBaseURL
@@ -226,7 +228,9 @@ func (c *Client) send(ctx context.Context, method, target string, body []byte, o
 		return nil, fmt.Errorf("yandex: create request: %w", err)
 	}
 	req.Header.Set("Authorization", "Api-Key "+c.cfg.APIKey)
-	req.Header.Set("x-folder-id", c.cfg.FolderID)
+	if c.cfg.FolderID != "" {
+		req.Header.Set("x-folder-id", c.cfg.FolderID)
+	}
 	// Notes are the students' personal material: no logging on the service
 	// side.
 	req.Header.Set("x-data-logging-enabled", "false")
