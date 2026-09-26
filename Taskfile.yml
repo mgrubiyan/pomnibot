@@ -31,9 +31,24 @@ tasks:
       - task: miniapp:build
 
   gen:
-    desc: 'Генерация кода по контрактам OpenAPI (Go и TypeScript)'
+    desc: 'Генерация кода (OpenAPI контракты и sqlc)'
     cmds:
       - task: contracts:gen-openapi
+      - task: backend:sqlc
+
+  gen:openapi:
+    desc: 'Генерация кода по контрактам OpenAPI (Go и TypeScript)'
+    aliases:
+      - gen:contracts
+    cmds:
+      - task: contracts:gen-openapi
+
+  gen:sql:
+    desc: 'Генерация Go-кода по SQL-запросам (sqlc)'
+    aliases:
+      - gen:sqlc
+    cmds:
+      - task: backend:sqlc
 
   lint:
     desc: 'Линтинг всего проекта (фронтенд и бэкенд)'

@@ -8,12 +8,90 @@ import (
 
 // Handler handles operations described by OpenAPI v3 specification.
 type Handler interface {
+	// AnswerQuestion implements AnswerQuestion operation.
+	//
+	// Send answer's text for input kind of questions.
+	//
+	// POST /cards/{cardId}/answer
+	AnswerQuestion(ctx context.Context, req *AnswerQuestionRequest, params AnswerQuestionParams) (AnswerQuestionRes, error)
+	// DeleteCard implements DeleteCard operation.
+	//
+	// Delete a card.
+	//
+	// DELETE /cards/{cardId}
+	DeleteCard(ctx context.Context, params DeleteCardParams) (DeleteCardRes, error)
+	// DeleteSet implements DeleteSet operation.
+	//
+	// Delete a card set.
+	//
+	// DELETE /sets/{setId}
+	DeleteSet(ctx context.Context, params DeleteSetParams) (DeleteSetRes, error)
+	// GetCardsBySetID implements GetCardsBySetID operation.
+	//
+	// Get cards.
+	//
+	// GET /sets/{setId}/cards
+	GetCardsBySetID(ctx context.Context, params GetCardsBySetIDParams) (GetCardsBySetIDRes, error)
+	// GetFeedQuestions implements GetFeedQuestions operation.
+	//
+	// Get questions of current feed.
+	//
+	// GET /feed
+	GetFeedQuestions(ctx context.Context) (GetFeedQuestionsRes, error)
 	// GetHealth implements getHealth operation.
 	//
 	// Health check endpoint.
 	//
 	// GET /health
-	GetHealth(ctx context.Context) (*HealthResponse, error)
+	GetHealth(ctx context.Context) (GetHealthRes, error)
+	// GetSet implements GetSet operation.
+	//
+	// Get a card set.
+	//
+	// GET /sets/{setId}
+	GetSet(ctx context.Context, params GetSetParams) (GetSetRes, error)
+	// GetSetPlan implements GetSetPlan operation.
+	//
+	// Get set's facts plan.
+	//
+	// GET /sets/{setId}/plan
+	GetSetPlan(ctx context.Context, params GetSetPlanParams) (GetSetPlanRes, error)
+	// GetSetShareCode implements GetSetShareCode operation.
+	//
+	// Get share code for a set.
+	//
+	// GET /sets/{setId}/share
+	GetSetShareCode(ctx context.Context, params GetSetShareCodeParams) (GetSetShareCodeRes, error)
+	// GetToday implements GetToday operation.
+	//
+	// Get today overview data.
+	//
+	// GET /
+	GetToday(ctx context.Context) (GetTodayRes, error)
+	// JoinSetByShareCode implements JoinSetByShareCode operation.
+	//
+	// Join a card set by code.
+	//
+	// POST /sets/join
+	JoinSetByShareCode(ctx context.Context, req *JoinSetRequest) (JoinSetByShareCodeRes, error)
+	// ReportCardIssue implements ReportCardIssue operation.
+	//
+	// Report an issue with a card.
+	//
+	// POST /cards/{cardId}/issue
+	ReportCardIssue(ctx context.Context, req *ReportCardIssueRequest, params ReportCardIssueParams) (ReportCardIssueRes, error)
+	// SendResults implements SendResults operation.
+	//
+	// Send set/feed results.
+	//
+	// POST /results
+	SendResults(ctx context.Context, req SendResultsRequest) (SendResultsRes, error)
+	// UpdateCard implements UpdateCard operation.
+	//
+	// Update a card.
+	//
+	// PUT /cards/{cardId}
+	UpdateCard(ctx context.Context, req *UpdateCardRequest, params UpdateCardParams) (UpdateCardRes, error)
 }
 
 // Server implements http server based on OpenAPI v3 specification and
