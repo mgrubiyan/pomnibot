@@ -39,7 +39,7 @@ RUN apk --no-cache add ca-certificates tzdata \
     && addgroup -S appgroup && adduser -S appuser -G appgroup
 
 # Install Russian Trusted Root CA into system certificate store
-COPY --from=backend-builder /app/backend/internal/bot/certs/rootca.pem /usr/local/share/ca-certificates/russian_root_ca.crt
+COPY --from=backend-builder /app/backend/internal/tlsroot/rootca.pem /usr/local/share/ca-certificates/russian_root_ca.crt
 RUN update-ca-certificates
 
 WORKDIR /app
