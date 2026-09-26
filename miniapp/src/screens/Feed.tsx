@@ -13,6 +13,7 @@ import {
 import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
 import { Result } from './Result';
+import { useBackButton } from '../max/useBackButton';
 import { cx } from '../utils/cx';
 import {
     IconCheck,
@@ -166,6 +167,10 @@ export function Feed({
     const [results, setResults] = useState<AnswerResult[]>([]);
 
     const [attempt, setAttempt] = useState(0);
+
+    // The feed has no back control of its own: in MAX the header button
+    // leaves it, the same way the result screen does.
+    useBackButton(onExit);
 
     const card = cards[index];
 

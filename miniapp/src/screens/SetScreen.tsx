@@ -5,6 +5,7 @@ import { mockToday } from '../mocks';
 import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
 import { IconChevronLeft, IconOffline, IconTrash } from '../components/Icons';
+import { useBackButton } from '../max/useBackButton';
 import { estimateMinutes } from '../utils/estimate';
 import { aboutMinutesLabel, cardsLabel } from '../utils/plural';
 import s from './SetScreen.module.css';
@@ -87,6 +88,8 @@ export function SetScreen({
     const [set, setSet] = useState<CardSet | null>(null);
     const [attempt, setAttempt] = useState(0);
     const [confirmingRemove, setConfirmingRemove] = useState(false);
+
+    useBackButton(onBack);
 
     useEffect(() => {
         let cancelled = false;

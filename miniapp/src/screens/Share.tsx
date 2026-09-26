@@ -4,6 +4,7 @@ import { mockToday } from '../mocks';
 import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
 import { IconCheck, IconChevronLeft, IconCopy, IconOffline } from '../components/Icons';
+import { useBackButton } from '../max/useBackButton';
 import { copyText } from '../utils/clipboard';
 import { formatCode } from '../utils/code';
 import { cardsLabel } from '../utils/plural';
@@ -58,6 +59,8 @@ export function Share({ setId, setTitle, cardsCount, onBack }: ShareProps) {
     const [code, setCode] = useState('');
     const [attempt, setAttempt] = useState(0);
     const [copyState, setCopyState] = useState<CopyState>('idle');
+
+    useBackButton(onBack);
 
     useEffect(() => {
         let cancelled = false;

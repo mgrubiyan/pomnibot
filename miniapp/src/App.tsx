@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import AddNote from './screens/AddNote';
 import CardEdit from './screens/CardEdit';
 import CardIssue from './screens/CardIssue';
@@ -7,9 +7,11 @@ import Home from './screens/Home';
 import JoinSet from './screens/JoinSet';
 import SetScreen from './screens/SetScreen';
 import Share from './screens/Share';
+import { startParam } from './max/bridge';
 import { mockCards, mockToday } from './mocks';
 import type { CardIssueReason } from './types';
 import { applyPatch, visibleCards, type CardPatch } from './utils/cards';
+import { codeFromStartParam } from './utils/code';
 
 /** No router yet: browser history is not used. */
 type Screen =
@@ -18,19 +20,21 @@ type Screen =
     | { name: 'feed'; setId?: string }
     | { name: 'share'; setId: string }
     | { name: 'add' }
-    | { name: 'join' }
+    | { name: 'join'; code?: string }
     | { name: 'card-issue'; cardId: string }
     | { name: 'card-edit'; cardId: string };
 
 /** What to report on the set screen after an action on a card. */
 type Toast = { kind: 'removed'; cardId: string } | { kind: 'edited' };
 
-function App() {
-    const [screen, setScreen] = useState<Screen>({ name: 'home' });
+/** An invite link opens the code screen with the code filled in. */
+function startScreen(): Screen {
+    const code = codeFromStartParam(startParam());
+    return code ? { name: 'join', code } : { name: 'home' };
+}
 
-    useEffect(() => {
-        window.WebApp?.ready?.();
-    }, []);
+function App() {
+    const [screen, setScreen] = useState<Screen>(startScreen);
 
     // Edits and deletions live in memory for now: there is no backend,
     // and browser storage is off limits.
@@ -99,7 +103,7 @@ function App() {
     }
 
     if (screen.name === 'join') {
-        return <JoinSet onBack={goHome} onOpenSet={openSet} />;
+        return <JoinSet initialCode={screen.code} onBack={goHome} onOpenSet={openSet} />;
     }
 
     if (screen.name === 'card-issue' || screen.name === 'card-edit') {

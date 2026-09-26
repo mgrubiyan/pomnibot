@@ -3,6 +3,7 @@ import { Button, Flex, IconButton, Input, Textarea, Typography } from '@maxhub/m
 import type { Card } from '../types';
 import { Screen } from '../components/Screen';
 import { IconChevronLeft, IconCross, IconDoc, IconPlus, IconTrash } from '../components/Icons';
+import { useBackButton } from '../max/useBackButton';
 import type { CardPatch } from '../utils/cards';
 import s from './CardEdit.module.css';
 
@@ -21,6 +22,8 @@ export function CardEdit({ card, setTitle, onBack, onSave, onRemove }: CardEditP
     const [wrongOptions, setWrongOptions] = useState<string[]>(
         (card.options ?? []).filter((option) => option !== card.answer),
     );
+
+    useBackButton(onBack);
 
     // Only a choice card has options.
     const hasOptions = card.kind === 'choice';

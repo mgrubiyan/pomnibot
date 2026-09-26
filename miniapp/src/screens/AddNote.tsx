@@ -1,6 +1,7 @@
 import { Button, Flex } from '@maxhub/max-ui';
 import { StatusScreen } from '../components/StatusScreen';
 import { IconDoc } from '../components/Icons';
+import { useBackButton } from '../max/useBackButton';
 
 export interface AddNoteProps {
     onBack: () => void;
@@ -12,6 +13,8 @@ export interface AddNoteProps {
  * TODO: once the MAX SDK is wired up, add a button that opens the bot chat.
  */
 export function AddNote({ onBack }: AddNoteProps) {
+    useBackButton(onBack);
+
     return (
         <StatusScreen
             icon={<IconDoc size={48} tone="muted" />}

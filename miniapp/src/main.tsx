@@ -3,19 +3,10 @@ import { createRoot } from 'react-dom/client';
 import { MaxUI } from '@maxhub/max-ui';
 import '@maxhub/max-ui/dist/styles.css';
 import App from './App';
-
-declare global {
-    interface Window {
-        WebApp?: {
-            ready?: () => void;
-            close?: () => void;
-            [key: string]: unknown;
-        };
-    }
-}
+import { ready } from './max/bridge';
 
 // Notify MAX messenger that web app is loaded and ready to be displayed
-window.WebApp?.ready?.();
+ready();
 
 createRoot(document.getElementById('root')!).render(
     <StrictMode>

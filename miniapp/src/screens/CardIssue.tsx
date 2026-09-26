@@ -3,6 +3,7 @@ import { Button, Flex, IconButton, Radio, Typography } from '@maxhub/max-ui';
 import type { Card, CardIssueReason } from '../types';
 import { Screen } from '../components/Screen';
 import { IconChevronLeft } from '../components/Icons';
+import { useBackButton } from '../max/useBackButton';
 import s from './CardIssue.module.css';
 
 const REASONS: { value: CardIssueReason; label: string }[] = [
@@ -22,6 +23,8 @@ export interface CardIssueProps {
 
 export function CardIssue({ card, setTitle, onBack, onEdit, onRemove }: CardIssueProps) {
     const [reason, setReason] = useState<CardIssueReason>('answer');
+
+    useBackButton(onBack);
 
     return (
         <Screen>

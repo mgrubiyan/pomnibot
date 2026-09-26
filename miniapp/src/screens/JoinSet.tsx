@@ -4,10 +4,10 @@ import type { CardSet } from '../types';
 import { mockToday } from '../mocks';
 import { Screen } from '../components/Screen';
 import { IconChevronLeft, IconCross } from '../components/Icons';
-import { formatCode } from '../utils/code';
+import { useBackButton } from '../max/useBackButton';
+import { CODE_LENGTH, formatCode } from '../utils/code';
 import s from './JoinSet.module.css';
 
-const CODE_LENGTH = 6;
 const CHECK_DELAY = 700;
 
 const digitsOf = (value: string) => value.replace(/\D/g, '').slice(0, CODE_LENGTH);
@@ -30,14 +30,18 @@ function findSetByCode(code: string): Promise<CardSet> {
 }
 
 export interface JoinSetProps {
+    /** Code from an invite link; the student still confirms it. */
+    initialCode?: string;
     onBack: () => void;
     onOpenSet: (setId: string) => void;
 }
 
-export function JoinSet({ onBack, onOpenSet }: JoinSetProps) {
-    const [digits, setDigits] = useState('');
+export function JoinSet({ initialCode = '', onBack, onOpenSet }: JoinSetProps) {
+    const [digits, setDigits] = useState(initialCode);
     const [checking, setChecking] = useState(false);
     const [notFound, setNotFound] = useState(false);
+
+    useBackButton(onBack);
 
     const ready = digits.length === CODE_LENGTH;
 
