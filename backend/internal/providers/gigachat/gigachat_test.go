@@ -354,15 +354,31 @@ func TestConfig(t *testing.T) {
 	t.Setenv("GIGACHAT_FALLBACK_MODEL", "GigaChat-2-Max")
 	t.Setenv("GIGACHAT_BASE_URL", "")
 	t.Setenv("GIGACHAT_AUTH_URL", "")
+	t.Setenv("GIGACHAT_MAX_TOKENS", "")
 
-	c, err := New(ConfigFromEnv())
+	cfg, err := ConfigFromEnv()
+	if err != nil {
+		t.Fatalf("ConfigFromEnv() error = %v", err)
+	}
+	c, err := New(cfg)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
 	defer c.Close()
 	if c.cfg.Scope != DefaultScope || c.cfg.Model != DefaultModel || c.cfg.FallbackModel != "GigaChat-2-Max" ||
-		c.cfg.BaseURL != DefaultBaseURL || c.cfg.AuthURL != DefaultAuthURL {
+		c.cfg.BaseURL != DefaultBaseURL || c.cfg.AuthURL != DefaultAuthURL || c.cfg.MaxTokens != DefaultMaxTokens {
 		t.Errorf("config = %+v", c.cfg)
+	}
+
+	t.Setenv("GIGACHAT_MAX_TOKENS", "8000")
+	if cfg, err := ConfigFromEnv(); err != nil || cfg.MaxTokens != 8000 {
+		t.Errorf("GIGACHAT_MAX_TOKENS=8000: MaxTokens = %d, error = %v", cfg.MaxTokens, err)
+	}
+	for _, bad := range []string{"many", "0", "-1"} {
+		t.Setenv("GIGACHAT_MAX_TOKENS", bad)
+		if _, err := ConfigFromEnv(); err == nil || !strings.Contains(err.Error(), "GIGACHAT_MAX_TOKENS") {
+			t.Errorf("GIGACHAT_MAX_TOKENS=%q: error = %v, want one naming the variable", bad, err)
+		}
 	}
 
 	if _, err := New(Config{ClientID: "id"}); err == nil {
@@ -397,8 +413,8 @@ func TestAuthKey(t *testing.T) {
 
 	t.Run("read from the environment", func(t *testing.T) {
 		t.Setenv("GIGACHAT_AUTH_KEY", key)
-		if got := ConfigFromEnv().AuthKey; got != key {
-			t.Errorf("AuthKey = %q", got)
+		if cfg, err := ConfigFromEnv(); err != nil || cfg.AuthKey != key {
+			t.Errorf("AuthKey = %q, error = %v", cfg.AuthKey, err)
 		}
 	})
 

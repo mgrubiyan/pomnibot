@@ -10,7 +10,8 @@
 // out. The model is behind providers.Provider, so GigaChat, YandexGPT or any
 // OpenAI-compatible API plug in without changes here:
 //
-//	llm, err := gigachat.New(gigachat.ConfigFromEnv())
+//	cfg, err := gigachat.ConfigFromEnv()
+//	llm, err := gigachat.New(cfg)
 //	gen := generator.NewGenerator(llm, generator.Options{OnCards: save})
 //	res, err := gen.Generate(ctx, generator.Document{Text: text, Title: title})
 package generator

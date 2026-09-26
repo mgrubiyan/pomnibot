@@ -79,10 +79,10 @@ type Config struct {
 
 // ConfigFromEnv reads GIGACHAT_AUTH_KEY, GIGACHAT_CLIENT_ID,
 // GIGACHAT_CLIENT_SECRET, GIGACHAT_SCOPE, GIGACHAT_MODEL,
-// GIGACHAT_FALLBACK_MODEL, GIGACHAT_BASE_URL and GIGACHAT_AUTH_URL. Unset
-// optional values take defaults in New.
-func ConfigFromEnv() Config {
-	return Config{
+// GIGACHAT_FALLBACK_MODEL, GIGACHAT_BASE_URL, GIGACHAT_AUTH_URL and
+// GIGACHAT_MAX_TOKENS. Unset optional values take defaults in New.
+func ConfigFromEnv() (Config, error) {
+	cfg := Config{
 		AuthKey:       os.Getenv("GIGACHAT_AUTH_KEY"),
 		ClientID:      os.Getenv("GIGACHAT_CLIENT_ID"),
 		ClientSecret:  os.Getenv("GIGACHAT_CLIENT_SECRET"),
@@ -92,6 +92,14 @@ func ConfigFromEnv() Config {
 		BaseURL:       os.Getenv("GIGACHAT_BASE_URL"),
 		AuthURL:       os.Getenv("GIGACHAT_AUTH_URL"),
 	}
+	if v := os.Getenv("GIGACHAT_MAX_TOKENS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			return Config{}, fmt.Errorf("gigachat: GIGACHAT_MAX_TOKENS = %q, want a positive number", v)
+		}
+		cfg.MaxTokens = n
+	}
+	return cfg, nil
 }
 
 // Client calls GigaChat chat completions. It is safe for concurrent use, but

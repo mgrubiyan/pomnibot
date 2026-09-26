@@ -73,7 +73,10 @@ func run() error {
 		*title = strings.TrimSuffix(filepath.Base(*file), filepath.Ext(*file))
 	}
 
-	cfg := gigachat.ConfigFromEnv()
+	cfg, err := gigachat.ConfigFromEnv()
+	if err != nil {
+		return err
+	}
 	if *model != "" {
 		cfg.Model = *model
 	}
