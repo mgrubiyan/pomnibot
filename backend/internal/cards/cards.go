@@ -87,15 +87,16 @@ type Stats struct {
 	Facts          int `json:"facts"`          // distinct facts among the cards returned
 
 	// Card counts. CardsFromModel = every Dropped* + Cards.
-	CardsFromModel   int `json:"cardsFromModel"`   // cards in parsed responses
-	DroppedInvalid   int `json:"droppedInvalid"`   // card breaks the schema: empty field, unknown kind
-	DroppedQuote     int `json:"droppedQuote"`     // its fact's quote not found in the fragment
-	DroppedDuplicate int `json:"droppedDuplicate"` // same fact or same question as earlier
-	DroppedByLimit   int `json:"droppedByLimit"`   // its fact is over MaxFactsPerDoc
-	DroppedVariants  int `json:"droppedVariants"`  // could not keep its kind, other cards cover the fact
-	DowngradedToFlip int `json:"downgradedToFlip"` // choice without enough distractors, the fact's only card
-	InputToFlip      int `json:"inputToFlip"`      // input with an answer too long to type, the fact's only card
-	Cards            int `json:"cards"`            // cards returned
+	CardsFromModel     int `json:"cardsFromModel"`     // cards in parsed responses
+	DroppedInvalid     int `json:"droppedInvalid"`     // card breaks the schema: empty field, unknown kind
+	DroppedQuote       int `json:"droppedQuote"`       // its fact's quote not found in the fragment
+	DroppedUnsupported int `json:"droppedUnsupported"` // choice or input answer not in the quote, or given in the question
+	DroppedDuplicate   int `json:"droppedDuplicate"`   // same fact or same question as earlier
+	DroppedByLimit     int `json:"droppedByLimit"`     // its fact is over MaxFactsPerDoc
+	DroppedVariants    int `json:"droppedVariants"`    // could not keep its kind, other cards cover the fact
+	DowngradedToFlip   int `json:"downgradedToFlip"`   // choice without enough distractors, the fact's only card
+	InputToFlip        int `json:"inputToFlip"`        // input with an answer too long to type, the fact's only card
+	Cards              int `json:"cards"`              // cards returned
 
 	ChunkTimeAvg   time.Duration `json:"chunkTimeAvg"` // model time per fragment, retries included
 	ChunkTimeMax   time.Duration `json:"chunkTimeMax"`

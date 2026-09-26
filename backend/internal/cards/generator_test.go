@@ -155,7 +155,7 @@ func checkStats(t *testing.T, res Result) {
 	if s.Cards != len(res.Cards) {
 		t.Errorf("Stats.Cards = %d, len(Cards) = %d", s.Cards, len(res.Cards))
 	}
-	accounted := s.DroppedInvalid + s.DroppedQuote + s.DroppedDuplicate + s.DroppedByLimit + s.DroppedVariants + s.Cards
+	accounted := s.DroppedInvalid + s.DroppedQuote + s.DroppedUnsupported + s.DroppedDuplicate + s.DroppedByLimit + s.DroppedVariants + s.Cards
 	if s.CardsFromModel != accounted {
 		t.Errorf("CardsFromModel = %d, but dropped + returned = %d (%+v)", s.CardsFromModel, accounted, s)
 	}
@@ -326,7 +326,7 @@ func TestGenerateChoiceTakesDistractorsFromOtherFragments(t *testing.T) {
 		// Other answers come in the model's own spelling: lowercase, with a
 		// period. Options must not differ from the right one by form.
 		return answerJSON(mc{
-			kind: KindInput, q: fmt.Sprintf("Какой термин определяется в абзаце про %s?", strings.ToLower(word)),
+			kind: KindInput, q: fmt.Sprintf("Какой термин определён в абзаце номер %d?", len(word)),
 			a: strings.ToLower(word) + ".", quote: firstSentence(frag),
 		}), nil
 	}}
@@ -364,7 +364,7 @@ func TestGenerateInputWithLongAnswerBecomesFlip(t *testing.T) {
 	doc, opts := testDoc(t, paragraphs[0])
 	p := &fakeProvider{answer: func(_ int, frag string, _ Request) (string, error) {
 		return answerJSON(mc{
-			kind: KindInput, q: "Каково значение митоза?", a: "Точная передача наследственной информации дочерним клеткам", quote: frag[strings.Index(frag, "Биологическое"):],
+			kind: KindInput, q: "Каково биологическое значение?", a: "Точная передача наследственной информации митоза", quote: frag[strings.Index(frag, "Биологическое"):],
 		}), nil
 	}}
 	res := generate(t, p, doc, opts)
@@ -628,7 +628,7 @@ func TestGenerateFactVariantsShareFactID(t *testing.T) {
 	p := &fakeProvider{answer: func(_ int, frag string, _ Request) (string, error) {
 		word := firstWord(frag)
 		if word != "Митоз" {
-			return answerJSON(mc{kind: KindInput, q: "Какой термин определяется в абзаце про " + strings.ToLower(word) + "?", a: word, quote: firstSentence(frag)}), nil
+			return answerJSON(mc{kind: KindInput, q: fmt.Sprintf("Какой термин определён в абзаце номер %d?", len(word)), a: word, quote: firstSentence(frag)}), nil
 		}
 		return factsJSON(
 			fx{quote: firstSentence(frag), cards: []mc{
@@ -725,5 +725,32 @@ func TestGenerateSameFactTwiceIsDuplicate(t *testing.T) {
 	res := generate(t, p, doc, opts)
 	if len(res.Cards) != 2 || res.Stats.Facts != 1 || res.Stats.DroppedDuplicate != 2 {
 		t.Errorf("cards %d, stats %+v; want the second copy of the fact dropped", len(res.Cards), res.Stats)
+	}
+}
+
+func TestGenerateDropsUnsupportedAnswers(t *testing.T) {
+	para := "Клеточный цикл — это период жизни клетки от одного деления до следующего или до её гибели. " +
+		"Клеточный цикл состоит из интерфазы и собственно деления."
+	doc, opts := testDoc(t, para)
+	p := &fakeProvider{answer: func(_ int, frag string, _ Request) (string, error) {
+		return factsJSON(fx{quote: frag, cards: []mc{
+			// Seen live: a verbatim quote and the wrong term, taken from the question.
+			{kind: KindChoice, q: "Как называется период жизни клетки от одного деления до следующего, состоящий из интерфазы и собственно деления?", a: "Интерфаза"},
+			// Seen live: the kind's name written as the answer.
+			{kind: KindInput, q: "Как называется период жизни клетки между делениями?", a: "input"},
+			{kind: KindInput, q: "Как называется период жизни клетки от одного деления до следующего?", a: "клеточный цикл"},
+			{kind: KindFlip, q: "Из чего состоит клеточный цикл?", a: "Из интерфазы и деления."},
+		}}), nil
+	}}
+	res := generate(t, p, doc, opts)
+	var answers []string
+	for _, c := range res.Cards {
+		answers = append(answers, c.Answer)
+	}
+	if !slices.Equal(answers, []string{"клеточный цикл", "Из интерфазы и деления."}) {
+		t.Errorf("answers = %q, want the two supported cards", answers)
+	}
+	if res.Stats.DroppedUnsupported != 2 {
+		t.Errorf("DroppedUnsupported = %d, want 2", res.Stats.DroppedUnsupported)
 	}
 }

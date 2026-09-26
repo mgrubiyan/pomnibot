@@ -20,15 +20,16 @@ type chunkResult struct {
 	invalid   bool // no parseable answer after the retry
 	err       error
 
-	calls            int
-	invalidResponses int
-	factsFromModel   int
-	cardsFromModel   int
-	droppedInvalid   int
-	droppedQuote     int
-	usage            Usage
-	models           map[string]int
-	elapsed          time.Duration
+	calls              int
+	invalidResponses   int
+	factsFromModel     int
+	cardsFromModel     int
+	droppedInvalid     int
+	droppedQuote       int
+	droppedUnsupported int
+	usage              Usage
+	models             map[string]int
+	elapsed            time.Duration
 }
 
 type pendingChoice struct {
@@ -314,6 +315,7 @@ func (a *assembler) count(r chunkResult) {
 	s.CardsFromModel += r.cardsFromModel
 	s.DroppedInvalid += r.droppedInvalid
 	s.DroppedQuote += r.droppedQuote
+	s.DroppedUnsupported += r.droppedUnsupported
 
 	if r.calls > 0 {
 		a.timeSum += r.elapsed

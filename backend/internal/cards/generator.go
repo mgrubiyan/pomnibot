@@ -259,7 +259,20 @@ func (g *Generator) processChunk(ctx context.Context, title string, total int, r
 		}
 		f.Quote = quote
 		f.ID = factID(quote)
-		r.facts = append(r.facts, f)
+
+		kept := f.Cards[:0]
+		for _, c := range f.Cards {
+			if answerChecked(c.Kind) && !answerSupported(c, quote) {
+				r.droppedUnsupported++
+				log.Info("cards: answer not in the quote or given in the question",
+					"kind", c.Kind, "question", c.Question, "answer", c.Answer)
+				continue
+			}
+			kept = append(kept, c)
+		}
+		if f.Cards = kept; len(f.Cards) > 0 {
+			r.facts = append(r.facts, f)
+		}
 	}
 	r.elapsed = time.Since(began)
 	return r
