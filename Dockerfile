@@ -35,7 +35,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/server ./cmd/serv
 # Stage 3: Minimal and secure runtime image
 FROM alpine:3.21 AS runner
 
-RUN apk --no-cache add ca-certificates tzdata \
+# poppler-utils: pdftotext for the text layer of PDF notes
+RUN apk --no-cache add ca-certificates tzdata poppler-utils \
     && addgroup -S appgroup && adduser -S appuser -G appgroup
 
 # Install Russian Trusted Root CA into system certificate store

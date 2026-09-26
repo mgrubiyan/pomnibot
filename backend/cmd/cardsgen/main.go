@@ -1,9 +1,13 @@
-// Command cardsgen runs card generation on a text file against live GigaChat
-// and prints the cards, the stats and the timings. It is for measuring
-// quality and latency on real notes before there is storage.
+// Command cardsgen runs card generation on notes against live GigaChat and
+// prints the cards, the stats and the timings. It is for measuring quality
+// and latency on real notes before there is storage.
+//
+// It takes text files and PDFs, told apart by content. Several files are
+// pages of one set of notes, in the order given. PDFs need pdftotext
+// (poppler-utils).
 //
 //	task cardsgen -- notes.txt
-//	task cardsgen -- -model GigaChat-2-Max -chunk 2000 -limit 30 -json notes.txt > run.json
+//	task cardsgen -- -model GigaChat-2-Max -chunk 2000 -limit 30 -json lecture.pdf page2.pdf > run.json
 //
 // Credentials come from GIGACHAT_* variables: task passes the ones from .env
 // in the repository root.
@@ -25,6 +29,7 @@ import (
 	"time"
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
+	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
 )
@@ -38,8 +43,8 @@ func main() {
 
 func run() error {
 	var (
-		file        = flag.String("file", "", "text file with the notes (or pass it as an argument)")
-		title       = flag.String("title", "", "document title for sourceRef (default: file name)")
+		file        = flag.String("file", "", "file with the notes; more files can follow as arguments")
+		title       = flag.String("title", "", "document title for sourceRef (default: first file name)")
 		model       = flag.String("model", "", "model, overrides GIGACHAT_MODEL")
 		chunk       = flag.Int("chunk", generator.DefaultChunkSize, "fragment size in characters")
 		overlap     = flag.Int("overlap", generator.DefaultChunkOverlap, "fragment overlap in characters, -1 for none")
@@ -51,10 +56,11 @@ func run() error {
 		verbose     = flag.Bool("v", false, "debug logs")
 	)
 	flag.Parse()
-	if *file == "" && flag.NArg() > 0 {
-		*file = flag.Arg(0)
+	paths := flag.Args()
+	if *file != "" {
+		paths = append([]string{*file}, paths...)
 	}
-	if *file == "" {
+	if len(paths) == 0 {
 		flag.Usage()
 		return errors.New("no input file")
 	}
@@ -65,12 +71,15 @@ func run() error {
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
 
-	text, err := os.ReadFile(*file)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	notes, err := extract(ctx, paths)
 	if err != nil {
-		return fmt.Errorf("read notes: %w", err)
+		return err
 	}
 	if *title == "" {
-		*title = strings.TrimSuffix(filepath.Base(*file), filepath.Ext(*file))
+		*title = strings.TrimSuffix(filepath.Base(paths[0]), filepath.Ext(paths[0]))
 	}
 
 	cfg, err := gigachat.ConfigFromEnv()
@@ -85,9 +94,6 @@ func run() error {
 		return err
 	}
 	defer client.Close()
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	began := time.Now()
 	delivered := 0
@@ -109,14 +115,19 @@ func run() error {
 		},
 	})
 
-	fmt.Fprintf(os.Stderr, "%s: %d символов, модель %s\n", *file, len([]rune(string(text))), or(cfg.Model, gigachat.DefaultModel))
-	res, genErr := gen.Generate(ctx, generator.Document{Text: string(text), Title: *title})
+	fmt.Fprintf(os.Stderr, "%s: %d символов, модель %s\n", strings.Join(paths, ", "), len([]rune(notes.Text)), or(cfg.Model, gigachat.DefaultModel))
+	res, genErr := gen.Generate(ctx, generator.Document{Text: notes.Text, Title: *title})
 
 	if *asJSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		enc.SetEscapeHTML(false)
-		if err := enc.Encode(res); err != nil {
+		out := struct {
+			generator.Result
+			Ingest ingest.Result `json:"ingest"`
+		}{res, notes}
+		out.Ingest.Text = "" // the notes themselves are not the output
+		if err := enc.Encode(out); err != nil {
 			return fmt.Errorf("encode result: %w", err)
 		}
 	} else {
@@ -126,6 +137,44 @@ func run() error {
 		return fmt.Errorf("generation stopped: %w", genErr)
 	}
 	return nil
+}
+
+// extract reads the files and pulls the text out of them. pdftotext is
+// required only when one of them is a PDF.
+func extract(ctx context.Context, paths []string) (ingest.Result, error) {
+	files := make([]ingest.File, 0, len(paths))
+	hasPDF := false
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return ingest.Result{}, fmt.Errorf("read notes: %w", err)
+		}
+		files = append(files, ingest.File{Name: filepath.Base(path), Data: data})
+		hasPDF = hasPDF || ingest.DetectKind(data) == ingest.KindPDF
+	}
+
+	ext, err := ingest.New(ingest.Options{DisablePDF: !hasPDF})
+	if err != nil {
+		return ingest.Result{}, err
+	}
+	res, err := ext.Extract(ctx, files)
+	var ie *ingest.Error
+	if errors.As(err, &ie) {
+		return ingest.Result{}, fmt.Errorf("%s: %s (%w)", ie.File, ie.Message, err)
+	}
+	if err != nil {
+		return ingest.Result{}, err
+	}
+
+	fmt.Fprintf(os.Stderr, "Извлечено: %d стр., источник %s, %d символов\n",
+		len(res.Pages), res.Source, len([]rune(res.Text)))
+	for _, w := range res.Warnings {
+		fmt.Fprintln(os.Stderr, "  ⚠", w)
+	}
+	if strings.TrimSpace(res.Text) == "" {
+		return ingest.Result{}, errors.New("в файлах не нашлось текста")
+	}
+	return res, nil
 }
 
 // formatCards prints cards grouped by fact: the quote once, then every card
