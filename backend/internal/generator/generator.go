@@ -1,4 +1,19 @@
-package cards
+// Package generator turns lecture notes into self-check cards.
+//
+// The pipeline never trusts the model with facts: every card must carry a
+// verbatim quote from the fragment it was generated from, and the quote is
+// checked in code. Wrong options for choice cards are taken from answers to
+// other fragments of the same document, never invented. See docs/concept.md,
+// section 6.
+//
+// The package is storage-agnostic: text in, cards (models/cards) and stats
+// out. The model is behind providers.Provider, so GigaChat, YandexGPT or any
+// OpenAI-compatible API plug in without changes here:
+//
+//	llm, err := gigachat.New(gigachat.ConfigFromEnv())
+//	gen := generator.NewGenerator(llm, generator.Options{OnCards: save})
+//	res, err := gen.Generate(ctx, generator.Document{Text: text, Title: title})
+package generator
 
 import (
 	"context"
@@ -6,10 +21,14 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"log/slog"
 	"slices"
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
 const (
@@ -20,23 +39,19 @@ const (
 	// this many fragments in a row, after its own retries and fallback model:
 	// bad credentials or an outage, not a flaky fragment.
 	maxConsecutiveFailures = 3
-	// Completion budget: a fact with its quote and four cards is about 600
-	// tokens; the margin keeps a verbose answer from being cut mid-JSON.
-	tokensPerFact   = 900
-	tokensReserve   = 200
-	logAnswerLength = 300
+	logAnswerLength        = 300
 )
 
 // Generator makes cards from documents. It is safe for concurrent use.
 type Generator struct {
-	provider Provider
+	provider providers.Provider
 	opts     Options
 	system   string
 	schema   json.RawMessage
 }
 
-// New returns a Generator. Zero Options fields take defaults.
-func New(p Provider, opts Options) *Generator {
+// NewGenerator returns a Generator. Zero Options fields take defaults.
+func NewGenerator(p providers.Provider, opts Options) *Generator {
 	opts = opts.withDefaults()
 	return &Generator{
 		provider: p,
@@ -57,7 +72,7 @@ func New(p Provider, opts Options) *Generator {
 // holds what was made before.
 func (g *Generator) Generate(ctx context.Context, doc Document) (Result, error) {
 	began := time.Now()
-	log := g.opts.Logger
+	log := slog.Default()
 
 	text := normalizeText(doc.Text)
 	all := splitChunks(text, g.opts.ChunkSize, g.opts.ChunkOverlap)
@@ -88,7 +103,7 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (Result, error) 
 	results := make(chan chunkResult, len(work))
 	go g.dispatch(runCtx, doc.Title, len(all), work, asm, slots, results)
 
-	deliver := func(cards []Card) {
+	deliver := func(cards []cards.Card) {
 		if len(cards) == 0 {
 			return
 		}
@@ -200,14 +215,13 @@ func (g *Generator) dispatch(ctx context.Context, title string, total int, work 
 // unparseable answer and checks every quote against the fragment.
 func (g *Generator) processChunk(ctx context.Context, title string, total int, r chunkResult) chunkResult {
 	began := time.Now()
-	log := g.opts.Logger.With("fragment", r.chunk.Index+1)
+	log := slog.With("fragment", r.chunk.Index+1)
 	r.models = map[string]int{}
 
-	req := Request{
+	req := providers.Request{
 		System:      g.system,
 		Schema:      g.schema,
 		Temperature: 0,
-		MaxTokens:   g.opts.MaxFactsPerChunk*tokensPerFact + tokensReserve,
 	}
 	var parsed []modelFact
 	answered := false
@@ -280,13 +294,13 @@ func (g *Generator) processChunk(ctx context.Context, title string, total int, r
 
 // notify hands a batch to OnCards. A panic there is the caller's bug and
 // must not take the rest of the document down with it.
-func (g *Generator) notify(cards []Card) {
+func (g *Generator) notify(cards []cards.Card) {
 	if g.opts.OnCards == nil {
 		return
 	}
 	defer func() {
 		if p := recover(); p != nil {
-			g.opts.Logger.Error("cards: OnCards panicked", "panic", p)
+			slog.Error("cards: OnCards panicked", "panic", p)
 		}
 	}()
 	g.opts.OnCards(slices.Clone(cards))
@@ -300,7 +314,7 @@ func factID(quote string) string {
 	return fmt.Sprintf("%016x", h.Sum64())
 }
 
-func countFacts(cards []Card) int {
+func countFacts(cards []cards.Card) int {
 	seen := map[string]bool{}
 	for _, c := range cards {
 		seen[c.FactID] = true

@@ -1,6 +1,10 @@
-package cards
+package generator
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
+)
 
 func TestAnswerSupported(t *testing.T) {
 	const quote = "Интерфаза делится на три периода: пресинтетический (G1), синтетический (S) и постсинтетический (G2). " +
@@ -23,7 +27,7 @@ func TestAnswerSupported(t *testing.T) {
 		{"Что контролирует переход между периодами?", "контрольные точки", false}, // not in this quote
 	}
 	for _, tt := range tests {
-		c := modelCard{Kind: KindChoice, Question: tt.question, Answer: tt.answer}
+		c := modelCard{Kind: cards.KindChoice, Question: tt.question, Answer: tt.answer}
 		if got := answerSupported(c, quote); got != tt.want {
 			t.Errorf("answerSupported(%q → %q) = %v, want %v", tt.question, tt.answer, got, tt.want)
 		}
@@ -33,7 +37,7 @@ func TestAnswerSupported(t *testing.T) {
 func TestAnswerSupportedAcrossWordForms(t *testing.T) {
 	// Seen live: a correct card rejected because «точки» ≠ «точках» by stem.
 	const quote = "Переход между периодами цикла контролируется в контрольных точках"
-	c := modelCard{Kind: KindChoice, Question: "Что контролирует переходы между периодами клеточного цикла?", Answer: "контрольные точки"}
+	c := modelCard{Kind: cards.KindChoice, Question: "Что контролирует переходы между периодами клеточного цикла?", Answer: "контрольные точки"}
 	if !answerSupported(c, quote) {
 		t.Error("«контрольные точки» is in «в контрольных точках», and «контролирует» is another word")
 	}

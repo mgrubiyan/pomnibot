@@ -26,8 +26,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mgrubiyan/pomnibot/backend/internal/cards"
-	"github.com/mgrubiyan/pomnibot/backend/internal/cards/gigachat"
+	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
+	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
 )
 
 func main() {
@@ -42,12 +43,12 @@ func run() error {
 		file        = flag.String("file", "", "text file with the notes (or pass it as an argument)")
 		title       = flag.String("title", "", "document title for sourceRef (default: file name)")
 		model       = flag.String("model", "", "model, overrides GIGACHAT_MODEL")
-		chunk       = flag.Int("chunk", cards.DefaultChunkSize, "fragment size in characters")
-		overlap     = flag.Int("overlap", cards.DefaultChunkOverlap, "fragment overlap in characters, -1 for none")
+		chunk       = flag.Int("chunk", generator.DefaultChunkSize, "fragment size in characters")
+		overlap     = flag.Int("overlap", generator.DefaultChunkOverlap, "fragment overlap in characters, -1 for none")
 		limit       = flag.Int("limit", 0, "max facts per document, 0 for no limit")
-		perChunk    = flag.Int("per-chunk", cards.DefaultMaxFactsPerChunk, "max facts per fragment, each with up to 4 cards")
-		concurrency = flag.Int("concurrency", cards.DefaultConcurrency, "parallel model calls; freemium allows 1")
-		timeout     = flag.Duration("call-timeout", cards.DefaultCallTimeout, "timeout per model call")
+		perChunk    = flag.Int("per-chunk", generator.DefaultMaxFactsPerChunk, "max facts per fragment, each with up to 4 cards")
+		concurrency = flag.Int("concurrency", generator.DefaultConcurrency, "parallel model calls; freemium allows 1")
+		timeout     = flag.Duration("call-timeout", generator.DefaultCallTimeout, "timeout per model call")
 		asJSON      = flag.Bool("json", false, "print the result as JSON to stdout")
 		verbose     = flag.Bool("v", false, "debug logs")
 	)
@@ -64,7 +65,7 @@ func run() error {
 	if *verbose {
 		level = slog.LevelDebug
 	}
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
 
 	for _, path := range []string{".env", "../.env"} {
 		if err := loadDotEnv(path); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -81,7 +82,6 @@ func run() error {
 	}
 
 	cfg := gigachat.ConfigFromEnv()
-	cfg.Logger = logger
 	if *model != "" {
 		cfg.Model = *model
 	}
@@ -96,14 +96,13 @@ func run() error {
 
 	began := time.Now()
 	delivered := 0
-	gen := cards.New(client, cards.Options{
+	gen := generator.NewGenerator(client, generator.Options{
 		Concurrency:      *concurrency,
 		ChunkSize:        *chunk,
 		ChunkOverlap:     *overlap,
 		MaxFactsPerChunk: *perChunk,
 		MaxFactsPerDoc:   *limit,
 		CallTimeout:      *timeout,
-		Logger:           logger,
 		OnCards: func(batch []cards.Card) {
 			delivered += len(batch)
 			refs := map[string]bool{}
@@ -116,7 +115,7 @@ func run() error {
 	})
 
 	fmt.Fprintf(os.Stderr, "%s: %d символов, модель %s\n", *file, len([]rune(string(text))), or(cfg.Model, gigachat.DefaultModel))
-	res, genErr := gen.Generate(ctx, cards.Document{Text: string(text), Title: *title})
+	res, genErr := gen.Generate(ctx, generator.Document{Text: string(text), Title: *title})
 
 	if *asJSON {
 		enc := json.NewEncoder(os.Stdout)
@@ -163,7 +162,7 @@ func formatCards(list []cards.Card) string {
 	return w.String()
 }
 
-func formatStats(s cards.Stats) string {
+func formatStats(s generator.Stats) string {
 	var w strings.Builder
 	pct := func(n int) string {
 		if s.CardsFromModel == 0 {

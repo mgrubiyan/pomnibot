@@ -1,4 +1,4 @@
-package cards
+package generator
 
 import (
 	"fmt"
@@ -6,6 +6,9 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
 // chunkResult is what a worker returns for one fragment. Quotes are already
@@ -27,13 +30,13 @@ type chunkResult struct {
 	droppedInvalid     int
 	droppedQuote       int
 	droppedUnsupported int
-	usage              Usage
+	usage              providers.Usage
 	models             map[string]int
 	elapsed            time.Duration
 }
 
 type pendingChoice struct {
-	card Card
+	card cards.Card
 	pos  int
 	seq  int
 	// hasSiblings: other cards of the fact are delivered, so a choice card
@@ -51,7 +54,7 @@ type reserved struct {
 }
 
 type placedCard struct {
-	card Card
+	card cards.Card
 	pos  int
 	seq  int
 }
@@ -112,11 +115,11 @@ func (a *assembler) budgetSpent(pos int) bool {
 
 // add takes the next fragment result in order and returns cards ready to
 // deliver.
-func (a *assembler) add(r chunkResult) []Card {
+func (a *assembler) add(r chunkResult) []cards.Card {
 	a.count(r)
 
 	allowance := a.quota(r.pos) - int(a.accepted.Load())
-	var ready []Card
+	var ready []cards.Card
 	for _, f := range r.facts {
 		if a.facts[f.ID] {
 			// The same quote again, typically from the overlap with the
@@ -146,7 +149,7 @@ func (a *assembler) add(r chunkResult) []Card {
 // budget. Cards ready now are returned; choice cards wait in settle for
 // distractors. ok is false when every card repeated an earlier question: the
 // fact then costs nothing.
-func (a *assembler) acceptFact(f modelFact, pos, index int) (ready []Card, ok bool) {
+func (a *assembler) acceptFact(f modelFact, pos, index int) (ready []cards.Card, ok bool) {
 	var choices []pendingChoice
 	var questions []string
 	for _, mc := range f.Cards {
@@ -158,7 +161,7 @@ func (a *assembler) acceptFact(f modelFact, pos, index int) (ready []Card, ok bo
 		// the question, and that is not a duplicate.
 		questions = append(questions, mc.Question)
 
-		card := Card{
+		card := cards.Card{
 			FactID:      f.ID,
 			Kind:        mc.Kind,
 			Question:    mc.Question,
@@ -170,15 +173,15 @@ func (a *assembler) acceptFact(f modelFact, pos, index int) (ready []Card, ok bo
 		}
 		a.seq++
 		switch {
-		case card.Kind == KindChoice:
+		case card.Kind == cards.KindChoice:
 			choices = append(choices, pendingChoice{card: card, pos: pos, seq: a.seq})
 			continue
-		case card.Kind == KindInput && len(strings.Fields(card.Answer)) > maxInputWords:
+		case card.Kind == cards.KindInput && len(strings.Fields(card.Answer)) > maxInputWords:
 			if len(f.Cards) > 1 {
 				a.stats.DroppedVariants++
 				continue
 			}
-			card.Kind = KindFlip
+			card.Kind = cards.KindFlip
 			a.stats.InputToFlip++
 		}
 		ready = append(ready, a.place(card, pos, a.seq))
@@ -201,7 +204,7 @@ func (a *assembler) acceptFact(f modelFact, pos, index int) (ready []Card, ok bo
 
 // finish fills what is left of the budget from the reserve and settles
 // choice cards still waiting for distractors.
-func (a *assembler) finish() []Card {
+func (a *assembler) finish() []cards.Card {
 	ready := a.backfill()
 	return append(ready, a.settle(a.work, true)...)
 }
@@ -209,7 +212,7 @@ func (a *assembler) finish() []Card {
 // backfill spends budget that fragments left unused (few or no facts in the
 // last ones) on facts trimmed earlier. It takes one fact per fragment in
 // turn, so the spread stays even rather than favouring the first fragment.
-func (a *assembler) backfill() []Card {
+func (a *assembler) backfill() []cards.Card {
 	room := a.maxDoc - int(a.accepted.Load())
 	if a.maxDoc == 0 || room <= 0 || len(a.reserve) == 0 {
 		return nil
@@ -222,7 +225,7 @@ func (a *assembler) backfill() []Card {
 		byPos[len(byPos)-1] = append(byPos[len(byPos)-1], r)
 	}
 
-	var ready []Card
+	var ready []cards.Card
 	for round := 0; room > 0; round++ {
 		took := false
 		for _, group := range byPos {
@@ -257,8 +260,8 @@ func (a *assembler) backfill() []Card {
 // maxPendingWait fragments, or at the end, minDistractors will do. With fewer
 // it is dropped if other cards of its fact are out, and becomes a flip card
 // if it is the fact's only one.
-func (a *assembler) settle(pos int, final bool) []Card {
-	var ready []Card
+func (a *assembler) settle(pos int, final bool) []cards.Card {
+	var ready []cards.Card
 	kept := a.pending[:0]
 	for _, p := range a.pending {
 		options := a.pool.pick(p.card, p.pos, wantDistractors)
@@ -275,7 +278,7 @@ func (a *assembler) settle(pos int, final bool) []Card {
 			a.stats.DroppedVariants++
 			continue
 		case timeUp:
-			p.card.Kind = KindFlip
+			p.card.Kind = cards.KindFlip
 			a.stats.DowngradedToFlip++
 		default:
 			kept = append(kept, p)
@@ -287,7 +290,7 @@ func (a *assembler) settle(pos int, final bool) []Card {
 	return ready
 }
 
-func (a *assembler) place(c Card, pos, seq int) Card {
+func (a *assembler) place(c cards.Card, pos, seq int) cards.Card {
 	a.placed = append(a.placed, placedCard{card: c, pos: pos, seq: seq})
 	return c
 }
@@ -327,14 +330,14 @@ func (a *assembler) count(r chunkResult) {
 
 // cards returns every delivered card in document order, the cards of one
 // fact next to each other.
-func (a *assembler) cards() []Card {
+func (a *assembler) cards() []cards.Card {
 	sort.SliceStable(a.placed, func(i, j int) bool {
 		if a.placed[i].pos != a.placed[j].pos {
 			return a.placed[i].pos < a.placed[j].pos
 		}
 		return a.placed[i].seq < a.placed[j].seq
 	})
-	out := make([]Card, len(a.placed))
+	out := make([]cards.Card, len(a.placed))
 	for i, p := range a.placed {
 		out[i] = p.card
 	}

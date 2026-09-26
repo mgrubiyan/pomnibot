@@ -1,9 +1,11 @@
-package cards
+package generator
 
 import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 )
 
 // systemPrompt sets the rules. The model is asked for a verbatim quote and
@@ -81,7 +83,7 @@ func cardSchema(maxFacts int) json.RawMessage {
 		"properties": map[string]any{
 			fieldKind: map[string]any{
 				"type":        "string",
-				"enum":        []Kind{KindChoice, KindInput, KindBoolean, KindFlip},
+				"enum":        []cards.Kind{cards.KindChoice, cards.KindInput, cards.KindBoolean, cards.KindFlip},
 				"description": "Вид карточки",
 			},
 			fieldQuestion:    str("Вопрос или, для boolean, утверждение"),

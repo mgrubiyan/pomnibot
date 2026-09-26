@@ -1,9 +1,11 @@
-package cards
+package generator
 
 import (
 	"fmt"
 	"slices"
 	"testing"
+
+	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 )
 
 func TestQuestionIndexDuplicates(t *testing.T) {
@@ -45,7 +47,7 @@ type entry struct {
 func poolWith(entries ...entry) *distractorPool {
 	p := newDistractorPool()
 	for _, e := range entries {
-		p.add(KindChoice, e.answer, e.topic, e.pos)
+		p.add(cards.KindChoice, e.answer, e.topic, e.pos)
 	}
 	return p
 }
@@ -62,8 +64,8 @@ func TestDistractorPick(t *testing.T) {
 		entry{"Совокупность процессов между двумя делениями клетки", "Клеточный цикл", 4}, // far too long
 		entry{"Кроссинговер", "Мейоз", 4}, // appears in the quote
 	)
-	card := Card{
-		Kind:        KindChoice,
+	card := cards.Card{
+		Kind:        cards.KindChoice,
 		Question:    "Как называется непрямое деление соматических клеток?",
 		Answer:      "Митоз",
 		SourceQuote: "Митоз — непрямое деление соматических клеток; кроссинговер при нём не происходит.",
@@ -78,8 +80,8 @@ func TestDistractorPick(t *testing.T) {
 		t.Errorf("pick() = %v, want %v", got, want)
 	}
 
-	numeric := Card{Question: "Сколько хромосом у человека?", Answer: "46", SourceQuote: "46 хромосом"}
-	p.add(KindInput, "23", "Хромосомы", 5)
+	numeric := cards.Card{Question: "Сколько хромосом у человека?", Answer: "46", SourceQuote: "46 хромосом"}
+	p.add(cards.KindInput, "23", "Хромосомы", 5)
 	if got := p.pick(numeric, 2, 3); !slices.Equal(got, []string{"23"}) {
 		t.Errorf("numeric answer: pick() = %v, want [23]", got)
 	}

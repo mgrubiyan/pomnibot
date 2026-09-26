@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -17,8 +18,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mgrubiyan/pomnibot/backend/internal/cards"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
+
+// TestMain silences the provider's warnings: tests trigger retries and
+// fallbacks on purpose.
+func TestMain(m *testing.M) {
+	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	os.Exit(m.Run())
+}
 
 type chatReply struct {
 	status int
@@ -115,7 +123,6 @@ func newTestClient(t *testing.T, api *fakeAPI) *Client {
 		BaseURL:       srv.URL + "/v1",
 		AuthURL:       srv.URL + "/oauth",
 		HTTPClient:    srv.Client(),
-		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -127,8 +134,8 @@ func newTestClient(t *testing.T, api *fakeAPI) *Client {
 
 var schema = json.RawMessage(`{"type":"object","properties":{"cards":{"type":"array"}},"required":["cards"]}`)
 
-func request() cards.Request {
-	return cards.Request{System: "Правила.", User: "Фрагмент.", Schema: schema, MaxTokens: 1700}
+func request() providers.Request {
+	return providers.Request{System: "Правила.", User: "Фрагмент.", Schema: schema}
 }
 
 func TestCompleteSendsStructuredOutput(t *testing.T) {
@@ -146,7 +153,7 @@ func TestCompleteSendsStructuredOutput(t *testing.T) {
 
 	reqs, auth := api.requests()
 	req := reqs[0]
-	if req.Model != "GigaChat-3-Ultra" || req.Stream || req.MaxTokens != 1700 {
+	if req.Model != "GigaChat-3-Ultra" || req.Stream || req.MaxTokens != DefaultMaxTokens {
 		t.Errorf("request = %+v", req)
 	}
 	if req.Temperature <= 0 || req.Temperature > 0.001 {
@@ -375,7 +382,6 @@ func TestAuthKey(t *testing.T) {
 			BaseURL:    srv.URL + "/v1",
 			AuthURL:    srv.URL + "/oauth",
 			HTTPClient: srv.Client(),
-			Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 		})
 		if err != nil {
 			t.Fatalf("New() error = %v", err)

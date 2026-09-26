@@ -1,4 +1,4 @@
-package cards
+package generator
 
 import (
 	"hash/fnv"
@@ -7,6 +7,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 )
 
 // Distractors for choice cards are answers to cards from other fragments of
@@ -53,8 +55,8 @@ func newDistractorPool() *distractorPool {
 	return &distractorPool{seen: map[string]bool{}}
 }
 
-func (p *distractorPool) add(kind Kind, answer, topic string, pos int) {
-	if kind == KindBoolean {
+func (p *distractorPool) add(kind cards.Kind, answer, topic string, pos int) {
+	if kind == cards.KindBoolean {
 		return
 	}
 	key := answerKey(answer)
@@ -79,7 +81,7 @@ func (p *distractorPool) add(kind Kind, answer, topic string, pos int) {
 // be of comparable length. Among those, same-topic and closer-length answers
 // win; ties go to nearer fragments, then alphabetical order, so the choice is
 // deterministic.
-func (p *distractorPool) pick(c Card, pos, n int) []string {
+func (p *distractorPool) pick(c cards.Card, pos, n int) []string {
 	answer := answerKey(c.Answer)
 	question := fold(c.Question).s
 	quote := fold(c.SourceQuote).s

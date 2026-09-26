@@ -1,4 +1,4 @@
-// Package gigachat is a cards.Provider for the GigaChat API, on plain
+// Package gigachat is a providers.Provider for the GigaChat API, on plain
 // net/http.
 //
 // It handles what is specific to GigaChat: OAuth token exchange, the Russian
@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mgrubiyan/pomnibot/backend/internal/cards"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 	"github.com/mgrubiyan/pomnibot/backend/internal/tlsroot"
 )
 
@@ -37,6 +37,10 @@ const (
 	DefaultScope         = "GIGACHAT_API_PERS"
 	DefaultModel         = "GigaChat-3-Ultra"
 	DefaultFallbackModel = "GigaChat-2-Max"
+	// DefaultMaxTokens fits a fragment's worth of cards with room to spare:
+	// three facts with four cards each took about 2000 tokens on
+	// GigaChat-3-Ultra, and a cut answer is broken JSON.
+	DefaultMaxTokens = 4096
 )
 
 const (
@@ -67,7 +71,10 @@ type Config struct {
 	BaseURL       string // up to the API version: https://api.giga.chat/v1
 	AuthURL       string
 	HTTPClient    *http.Client // nil: a client trusting the Russian Trusted Root CA
-	Logger        *slog.Logger
+	// MaxTokens caps the answer, DefaultMaxTokens by default. It is set here
+	// rather than by the caller: token counts depend on the model's tokenizer
+	// and price.
+	MaxTokens int
 }
 
 // ConfigFromEnv reads GIGACHAT_AUTH_KEY, GIGACHAT_CLIENT_ID,
@@ -93,7 +100,6 @@ type Client struct {
 	cfg     Config
 	http    *http.Client
 	tokens  *tokenSource
-	log     *slog.Logger
 	backoff time.Duration
 
 	mu          sync.Mutex
@@ -101,7 +107,7 @@ type Client struct {
 	unavailable map[string]time.Time // model → skip until
 }
 
-var _ cards.Provider = (*Client)(nil)
+var _ providers.Provider = (*Client)(nil)
 
 // New returns a Client. Call Close when done to stop token refreshing.
 func New(cfg Config) (*Client, error) {
@@ -116,8 +122,8 @@ func New(cfg Config) (*Client, error) {
 	if cfg.FallbackModel == cfg.Model {
 		cfg.FallbackModel = ""
 	}
-	if cfg.Logger == nil {
-		cfg.Logger = slog.Default()
+	if cfg.MaxTokens <= 0 {
+		cfg.MaxTokens = DefaultMaxTokens
 	}
 	hc := cfg.HTTPClient
 	if hc == nil {
@@ -126,8 +132,7 @@ func New(cfg Config) (*Client, error) {
 	return &Client{
 		cfg:         cfg,
 		http:        hc,
-		tokens:      newTokenSource(hc, cfg.AuthURL, cfg.Scope, authKey, cfg.Logger),
-		log:         cfg.Logger,
+		tokens:      newTokenSource(hc, cfg.AuthURL, cfg.Scope, authKey),
 		backoff:     backoffBase,
 		noStrict:    map[string]bool{},
 		unavailable: map[string]time.Time{},
@@ -214,26 +219,26 @@ func (e transportError) Unwrap() error { return e.err }
 // with exponential backoff; if the model stays unavailable, the fallback
 // model gets the request. The answer is returned as is: with or without
 // structured output, the caller validates it.
-func (c *Client) Complete(ctx context.Context, req cards.Request) (cards.Response, error) {
+func (c *Client) Complete(ctx context.Context, req providers.Request) (providers.Response, error) {
 	models := c.models()
 	var err error
 	for i, model := range models {
-		var resp cards.Response
+		var resp providers.Response
 		resp, err = c.completeWith(ctx, model, req)
 		if err == nil {
 			return resp, nil
 		}
 		if ctx.Err() != nil || !shouldFallback(err) {
-			return cards.Response{}, err
+			return providers.Response{}, err
 		}
 		if isQuotaOrAccess(err) {
 			c.markUnavailable(model)
 		}
 		if i+1 < len(models) {
-			c.log.Warn("gigachat: switching to fallback model", "model", model, "fallback", models[i+1], "err", err)
+			slog.Warn("gigachat: switching to fallback model", "model", model, "fallback", models[i+1], "err", err)
 		}
 	}
-	return cards.Response{}, err
+	return providers.Response{}, err
 }
 
 // models lists the models to try in order, skipping one that recently ran
@@ -278,7 +283,7 @@ func (c *Client) setStrictOff(model string) {
 // model. If the API rejects it with 400 or 422, the same request goes again
 // without it, the schema moved into the system prompt; when that works, the
 // model is remembered and later calls skip straight to the plain form.
-func (c *Client) completeWith(ctx context.Context, model string, req cards.Request) (cards.Response, error) {
+func (c *Client) completeWith(ctx context.Context, model string, req providers.Request) (providers.Response, error) {
 	strict := len(req.Schema) > 0 && !c.strictOff(model)
 	droppedStrict := false
 	for attempt := 1; ; attempt++ {
@@ -292,23 +297,23 @@ func (c *Client) completeWith(ctx context.Context, model string, req cards.Reque
 
 		if apiErr := chatError(err); strict && apiErr != nil &&
 			(apiErr.Status == http.StatusBadRequest || apiErr.Status == http.StatusUnprocessableEntity) {
-			c.log.Warn("gigachat: structured output rejected, retrying with the schema in the prompt",
+			slog.Warn("gigachat: structured output rejected, retrying with the schema in the prompt",
 				"model", model, "status", apiErr.Status, "body", apiErr.Body)
 			strict, droppedStrict = false, true
 			attempt--
 			continue
 		}
 		if ctx.Err() != nil || !retryable(err) || attempt >= maxAttempts {
-			return cards.Response{}, err
+			return providers.Response{}, err
 		}
 
 		wait := c.backoffFor(attempt, err)
-		c.log.Warn("gigachat: request failed, retrying",
+		slog.Warn("gigachat: request failed, retrying",
 			"model", model, "attempt", attempt, "wait", wait.Round(time.Millisecond), "err", err)
 		select {
 		case <-time.After(wait):
 		case <-ctx.Done():
-			return cards.Response{}, fmt.Errorf("gigachat: %w (last error: %w)", ctx.Err(), err)
+			return providers.Response{}, fmt.Errorf("gigachat: %w (last error: %w)", ctx.Err(), err)
 		}
 	}
 }
@@ -351,7 +356,7 @@ type chatResponse struct {
 
 const schemaPromptNote = "\n\nОтвет — только JSON, соответствующий этой JSON Schema:\n"
 
-func (c *Client) call(ctx context.Context, model string, req cards.Request, strict bool) (cards.Response, error) {
+func (c *Client) call(ctx context.Context, model string, req providers.Request, strict bool) (providers.Response, error) {
 	system := req.System
 	var format *responseFormat
 	switch {
@@ -370,20 +375,20 @@ func (c *Client) call(ctx context.Context, model string, req cards.Request, stri
 		// The API wants temperature > 0; values up to 0.001 switch it to the
 		// most deterministic mode, which is what temperature 0 means.
 		Temperature:    max(req.Temperature, minTemperature),
-		MaxTokens:      req.MaxTokens,
+		MaxTokens:      c.cfg.MaxTokens,
 		ResponseFormat: format,
 	})
 	if err != nil {
-		return cards.Response{}, fmt.Errorf("gigachat: marshal request: %w", err)
+		return providers.Response{}, fmt.Errorf("gigachat: marshal request: %w", err)
 	}
 
 	token, err := c.tokens.Token(ctx)
 	if err != nil {
-		return cards.Response{}, err
+		return providers.Response{}, err
 	}
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.cfg.BaseURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
-		return cards.Response{}, fmt.Errorf("gigachat: create request: %w", err)
+		return providers.Response{}, fmt.Errorf("gigachat: create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
@@ -391,15 +396,15 @@ func (c *Client) call(ctx context.Context, model string, req cards.Request, stri
 
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
-		return cards.Response{}, fmt.Errorf("gigachat: chat request: %w", transportError{err})
+		return providers.Response{}, fmt.Errorf("gigachat: chat request: %w", transportError{err})
 	}
 	defer func() { _ = resp.Body.Close() }()
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
 	if err != nil {
-		return cards.Response{}, fmt.Errorf("gigachat: read chat response: %w", transportError{err})
+		return providers.Response{}, fmt.Errorf("gigachat: read chat response: %w", transportError{err})
 	}
 	if resp.StatusCode != http.StatusOK {
-		return cards.Response{}, &APIError{
+		return providers.Response{}, &APIError{
 			Status:     resp.StatusCode,
 			Body:       clip(respBody),
 			RetryAfter: retryAfter(resp.Header),
@@ -409,20 +414,20 @@ func (c *Client) call(ctx context.Context, model string, req cards.Request, stri
 
 	var cr chatResponse
 	if err := json.Unmarshal(respBody, &cr); err != nil {
-		return cards.Response{}, fmt.Errorf("gigachat: decode chat response: %w", err)
+		return providers.Response{}, fmt.Errorf("gigachat: decode chat response: %w", err)
 	}
 	if len(cr.Choices) == 0 {
-		return cards.Response{}, fmt.Errorf("gigachat: chat response has no choices: %s", clip(respBody))
+		return providers.Response{}, fmt.Errorf("gigachat: chat response has no choices: %s", clip(respBody))
 	}
 	choice := cr.Choices[0]
 	if choice.FinishReason == "blacklist" || choice.FinishReason == "length" {
 		// Passed on anyway: the caller sees an unusable answer and handles it
 		// like any other.
-		c.log.Warn("gigachat: answer cut short", "model", model, "finish_reason", choice.FinishReason)
+		slog.Warn("gigachat: answer cut short", "model", model, "finish_reason", choice.FinishReason)
 	}
-	return cards.Response{
+	return providers.Response{
 		Content: []byte(choice.Message.Content),
-		Usage: cards.Usage{
+		Usage: providers.Usage{
 			PromptTokens:     cr.Usage.PromptTokens,
 			CompletionTokens: cr.Usage.CompletionTokens,
 		},

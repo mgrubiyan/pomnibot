@@ -1,9 +1,11 @@
-package cards
+package generator
 
 import (
 	"encoding/json"
 	"errors"
 	"testing"
+
+	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 )
 
 // validCard is a card of the flat form: it carries its own quote and topic.
@@ -63,7 +65,7 @@ func TestParseAnswer(t *testing.T) {
 		if f.Quote == "" || f.Topic != "Фазы митоза" || len(f.Cards) != 4 {
 			t.Errorf("fact = %+v", f)
 		}
-		if f.Cards[2].Kind != KindBoolean || f.Cards[2].Answer != AnswerFalse {
+		if f.Cards[2].Kind != cards.KindBoolean || f.Cards[2].Answer != cards.AnswerFalse {
 			t.Errorf("boolean card = %+v", f.Cards[2])
 		}
 	})
@@ -117,7 +119,7 @@ func TestParseAnswer(t *testing.T) {
 		if err != nil || invalid != 0 || cardCount(facts) != 2 {
 			t.Fatalf("got %+v, %d invalid, err %v", facts, invalid, err)
 		}
-		if facts[0].Cards[0].Answer != AnswerTrue || facts[0].Cards[1].Answer != "1961" {
+		if facts[0].Cards[0].Answer != cards.AnswerTrue || facts[0].Cards[1].Answer != "1961" {
 			t.Errorf("answers = %q, %q", facts[0].Cards[0].Answer, facts[0].Cards[1].Answer)
 		}
 	})
@@ -144,7 +146,7 @@ func TestParseAnswer(t *testing.T) {
 	})
 
 	t.Run("boolean answers are normalized", func(t *testing.T) {
-		for in, want := range map[string]string{"true": AnswerTrue, "Верно": AnswerTrue, "FALSE": AnswerFalse, "нет": AnswerFalse} {
+		for in, want := range map[string]string{"true": cards.AnswerTrue, "Верно": cards.AnswerTrue, "FALSE": cards.AnswerFalse, "нет": cards.AnswerFalse} {
 			answer := `{"facts":[{"quote":"Q","topic":"T","cards":[{"kind":"boolean","question":"Q","answer":"` + in + `","explanation":"E"}]}]}`
 			facts, _, err := parseAnswer([]byte(answer), 3)
 			if err != nil || cardCount(facts) != 1 || facts[0].Cards[0].Answer != want {

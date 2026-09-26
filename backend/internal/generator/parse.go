@@ -1,4 +1,4 @@
-package cards
+package generator
 
 import (
 	"bytes"
@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 )
 
 // modelFact is one fact as the model returned it: a quote and the cards that
@@ -21,7 +23,7 @@ type modelFact struct {
 
 // modelCard is one card of a fact as the model returned it.
 type modelCard struct {
-	Kind        Kind
+	Kind        cards.Kind
 	Question    string
 	Answer      string
 	Explanation string
@@ -225,10 +227,10 @@ func parseCard(fields map[string]json.RawMessage) (modelCard, bool) {
 		*f.dst = v
 	}
 
-	c.Kind = Kind(strings.ToLower(kind))
+	c.Kind = cards.Kind(strings.ToLower(kind))
 	switch c.Kind {
-	case KindChoice, KindFlip, KindInput:
-	case KindBoolean:
+	case cards.KindChoice, cards.KindFlip, cards.KindInput:
+	case cards.KindBoolean:
 		answer, ok := parseBool(c.Answer)
 		if !ok {
 			return modelCard{}, false
@@ -295,9 +297,9 @@ func countCards(item json.RawMessage) int {
 func parseBool(s string) (string, bool) {
 	switch strings.ToLower(strings.Trim(s, " .!")) {
 	case "true", "верно", "да", "правда":
-		return AnswerTrue, true
+		return cards.AnswerTrue, true
 	case "false", "неверно", "нет", "ложь":
-		return AnswerFalse, true
+		return cards.AnswerFalse, true
 	}
 	return "", false
 }

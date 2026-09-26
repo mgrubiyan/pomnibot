@@ -1,6 +1,10 @@
-package cards
+package generator
 
-import "slices"
+import (
+	"slices"
+
+	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
+)
 
 // Answer checks for choice and input cards, whose answer is a short term the
 // student picks or types. The quote proves the fact, but not that the model
@@ -28,8 +32,8 @@ const (
 	minCommonPrefix = 4
 )
 
-func answerChecked(k Kind) bool {
-	return k == KindChoice || k == KindInput
+func answerChecked(k cards.Kind) bool {
+	return k == cards.KindChoice || k == cards.KindInput
 }
 
 // answerSupported reports whether a choice or input answer passes both

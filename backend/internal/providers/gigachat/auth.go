@@ -47,7 +47,6 @@ type tokenSource struct {
 	basic         string
 	refreshBefore time.Duration
 	minValid      time.Duration // tokenMinValid, a field for tests
-	log           *slog.Logger
 
 	mu        sync.RWMutex
 	token     string
@@ -59,7 +58,7 @@ type tokenSource struct {
 }
 
 // newTokenSource takes the Authorization Key, base64 of client_id:client_secret.
-func newTokenSource(hc *http.Client, authURL, scope, authKey string, log *slog.Logger) *tokenSource {
+func newTokenSource(hc *http.Client, authURL, scope, authKey string) *tokenSource {
 	return &tokenSource{
 		http:          hc,
 		authURL:       authURL,
@@ -67,7 +66,6 @@ func newTokenSource(hc *http.Client, authURL, scope, authKey string, log *slog.L
 		basic:         authKey,
 		refreshBefore: refreshBefore,
 		minValid:      tokenMinValid,
-		log:           log,
 	}
 }
 
@@ -131,11 +129,11 @@ func (s *tokenSource) backgroundRefresh() {
 		// request fetches a token on demand.
 		if left > s.minValid {
 			retry := min(refreshRetry, left/2)
-			s.log.Warn("gigachat: background token refresh failed", "err", err, "retry_in", retry)
+			slog.Warn("gigachat: background token refresh failed", "err", err, "retry_in", retry)
 			s.schedule(retry)
 			return
 		}
-		s.log.Warn("gigachat: background token refresh failed, next request will fetch a token", "err", err)
+		slog.Warn("gigachat: background token refresh failed, next request will fetch a token", "err", err)
 	}
 }
 
@@ -200,7 +198,7 @@ func (s *tokenSource) fetch(ctx context.Context) (string, time.Time, error) {
 		}
 	}
 	exp := time.Now().Add(ttl)
-	s.log.Debug("gigachat: access token received", "expires_at", exp)
+	slog.Debug("gigachat: access token received", "expires_at", exp)
 	return tr.AccessToken, exp, nil
 }
 
