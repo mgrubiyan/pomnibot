@@ -1,0 +1,351 @@
+package gigachat
+
+import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"regexp"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/mgrubiyan/pomnibot/backend/internal/cards"
+)
+
+type chatReply struct {
+	status int
+	body   string
+	header map[string]string
+}
+
+func ok(content string) chatReply {
+	b, _ := json.Marshal(map[string]any{
+		"model": "GigaChat-3-Ultra:3.0.1",
+		"choices": []map[string]any{{
+			"message":       map[string]string{"role": "assistant", "content": content},
+			"finish_reason": "stop",
+		}},
+		"usage": map[string]int{"prompt_tokens": 120, "completion_tokens": 30, "total_tokens": 150},
+	})
+	return chatReply{status: http.StatusOK, body: string(b)}
+}
+
+func fail(status int) chatReply {
+	return chatReply{status: status, body: fmt.Sprintf(`{"status":%d,"message":"error"}`, status)}
+}
+
+// fakeAPI plays both the OAuth endpoint and chat completions.
+type fakeAPI struct {
+	tokenTTL time.Duration
+	chat     func(n int, req chatRequest) chatReply
+
+	oauthCalls atomic.Int32
+	mu         sync.Mutex
+	oauthReqs  []*http.Request
+	oauthForms []string
+	chatReqs   []chatRequest
+	chatAuth   []string
+}
+
+func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	switch r.URL.Path {
+	case "/oauth":
+		n := f.oauthCalls.Add(1)
+		body, _ := io.ReadAll(r.Body)
+		f.mu.Lock()
+		f.oauthReqs = append(f.oauthReqs, r)
+		f.oauthForms = append(f.oauthForms, string(body))
+		f.mu.Unlock()
+		ttl := f.tokenTTL
+		if ttl == 0 {
+			ttl = 30 * time.Minute
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"access_token": fmt.Sprintf("token-%d", n),
+			"expires_at":   time.Now().Add(ttl).UnixMilli(),
+		})
+	case "/v1/chat/completions":
+		var req chatRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		f.mu.Lock()
+		f.chatReqs = append(f.chatReqs, req)
+		f.chatAuth = append(f.chatAuth, r.Header.Get("Authorization"))
+		n := len(f.chatReqs)
+		f.mu.Unlock()
+		reply := f.chat(n, req)
+		for k, v := range reply.header {
+			w.Header().Set(k, v)
+		}
+		w.WriteHeader(reply.status)
+		_, _ = io.WriteString(w, reply.body)
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+func (f *fakeAPI) requests() ([]chatRequest, []string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]chatRequest(nil), f.chatReqs...), append([]string(nil), f.chatAuth...)
+}
+
+func newTestClient(t *testing.T, api *fakeAPI) *Client {
+	t.Helper()
+	srv := httptest.NewServer(api)
+	t.Cleanup(srv.Close)
+	c, err := New(Config{
+		ClientID:      "client-id",
+		ClientSecret:  "client-secret",
+		Model:         "GigaChat-3-Ultra",
+		FallbackModel: "GigaChat-2-Max",
+		BaseURL:       srv.URL + "/v1",
+		AuthURL:       srv.URL + "/oauth",
+		HTTPClient:    srv.Client(),
+		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	c.backoff = time.Millisecond
+	t.Cleanup(c.Close)
+	return c
+}
+
+var schema = json.RawMessage(`{"type":"object","properties":{"cards":{"type":"array"}},"required":["cards"]}`)
+
+func request() cards.Request {
+	return cards.Request{System: "Правила.", User: "Фрагмент.", Schema: schema, MaxTokens: 1700}
+}
+
+func TestCompleteSendsStructuredOutput(t *testing.T) {
+	api := &fakeAPI{chat: func(int, chatRequest) chatReply { return ok(`{"cards":[]}`) }}
+	c := newTestClient(t, api)
+
+	resp, err := c.Complete(context.Background(), request())
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	if string(resp.Content) != `{"cards":[]}` || resp.Model != "GigaChat-3-Ultra:3.0.1" ||
+		resp.Usage.PromptTokens != 120 || resp.Usage.CompletionTokens != 30 {
+		t.Errorf("response = %+v", resp)
+	}
+
+	reqs, auth := api.requests()
+	req := reqs[0]
+	if req.Model != "GigaChat-3-Ultra" || req.Stream || req.MaxTokens != 1700 {
+		t.Errorf("request = %+v", req)
+	}
+	if req.Temperature <= 0 || req.Temperature > 0.001 {
+		t.Errorf("temperature = %v, want the deterministic mode", req.Temperature)
+	}
+	if len(req.Messages) != 2 || req.Messages[0].Role != "system" || req.Messages[0].Content != "Правила." ||
+		req.Messages[1].Role != "user" || req.Messages[1].Content != "Фрагмент." {
+		t.Errorf("messages = %+v", req.Messages)
+	}
+	if rf := req.ResponseFormat; rf == nil || rf.Type != "json_schema" || !rf.Strict || string(rf.Schema) != string(schema) {
+		t.Errorf("response_format = %+v", rf)
+	}
+	if auth[0] != "Bearer token-1" {
+		t.Errorf("Authorization = %q", auth[0])
+	}
+
+	oauth := api.oauthReqs[0]
+	wantBasic := "Basic " + base64.StdEncoding.EncodeToString([]byte("client-id:client-secret"))
+	if oauth.Header.Get("Authorization") != wantBasic {
+		t.Errorf("OAuth Authorization = %q", oauth.Header.Get("Authorization"))
+	}
+	uuid4 := regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	if !uuid4.MatchString(oauth.Header.Get("RqUID")) {
+		t.Errorf("RqUID = %q, want a UUID v4", oauth.Header.Get("RqUID"))
+	}
+	if api.oauthForms[0] != "scope=GIGACHAT_API_PERS" {
+		t.Errorf("OAuth form = %q", api.oauthForms[0])
+	}
+}
+
+func TestTokenIsSharedAndRefreshedAhead(t *testing.T) {
+	api := &fakeAPI{
+		tokenTTL: 40 * time.Second,
+		chat:     func(int, chatRequest) chatReply { return ok(`{}`) },
+	}
+	c := newTestClient(t, api)
+	c.tokens.refreshBefore = 39500 * time.Millisecond // refresh a second after issue
+
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			if _, err := c.Complete(context.Background(), request()); err != nil {
+				t.Errorf("Complete() error = %v", err)
+			}
+		})
+	}
+	wg.Wait()
+	if n := api.oauthCalls.Load(); n != 1 {
+		t.Fatalf("8 concurrent calls fetched %d tokens, want 1", n)
+	}
+
+	// No requests in between: the timer alone must replace the token.
+	deadline := time.Now().Add(3 * time.Second)
+	for api.oauthCalls.Load() < 2 {
+		if time.Now().After(deadline) {
+			t.Fatal("token was not refreshed ahead of expiry")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, err := c.Complete(context.Background(), request()); err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	_, auth := api.requests()
+	if last := auth[len(auth)-1]; last != "Bearer token-2" {
+		t.Errorf("after refresh Authorization = %q, want the new token", last)
+	}
+}
+
+func TestRetriesRateLimitAndServerErrors(t *testing.T) {
+	api := &fakeAPI{chat: func(n int, _ chatRequest) chatReply {
+		switch n {
+		case 1:
+			r := fail(http.StatusTooManyRequests)
+			r.header = map[string]string{"Retry-After": "0"}
+			return r
+		case 2:
+			return fail(http.StatusServiceUnavailable)
+		}
+		return ok(`{"cards":[]}`)
+	}}
+	c := newTestClient(t, api)
+
+	if _, err := c.Complete(context.Background(), request()); err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	reqs, _ := api.requests()
+	if len(reqs) != 3 {
+		t.Errorf("%d chat requests, want 3", len(reqs))
+	}
+	for _, r := range reqs {
+		if r.Model != "GigaChat-3-Ultra" {
+			t.Errorf("model = %q, want no fallback for transient errors that pass", r.Model)
+		}
+	}
+}
+
+func TestFallsBackWhenModelIsOutOfQuota(t *testing.T) {
+	api := &fakeAPI{chat: func(_ int, req chatRequest) chatReply {
+		if req.Model == "GigaChat-3-Ultra" {
+			return fail(http.StatusPaymentRequired)
+		}
+		return ok(`{"cards":[]}`)
+	}}
+	c := newTestClient(t, api)
+
+	for range 2 {
+		if _, err := c.Complete(context.Background(), request()); err != nil {
+			t.Fatalf("Complete() error = %v", err)
+		}
+	}
+	reqs, _ := api.requests()
+	var models []string
+	for _, r := range reqs {
+		models = append(models, r.Model)
+	}
+	// The second call goes straight to the fallback: no point asking a model
+	// that has just run out of tokens.
+	want := []string{"GigaChat-3-Ultra", "GigaChat-2-Max", "GigaChat-2-Max"}
+	if strings.Join(models, ",") != strings.Join(want, ",") {
+		t.Errorf("models = %v, want %v", models, want)
+	}
+}
+
+func TestFallsBackWhenModelKeepsFailing(t *testing.T) {
+	api := &fakeAPI{chat: func(_ int, req chatRequest) chatReply {
+		if req.Model == "GigaChat-3-Ultra" {
+			return fail(http.StatusInternalServerError)
+		}
+		return ok(`{"cards":[]}`)
+	}}
+	c := newTestClient(t, api)
+
+	if _, err := c.Complete(context.Background(), request()); err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	reqs, _ := api.requests()
+	if len(reqs) != maxAttempts+1 || reqs[len(reqs)-1].Model != "GigaChat-2-Max" {
+		t.Errorf("%d requests, last to %q; want %d retries then the fallback", len(reqs), reqs[len(reqs)-1].Model, maxAttempts)
+	}
+}
+
+func TestDropsStructuredOutputWhenRejected(t *testing.T) {
+	api := &fakeAPI{chat: func(_ int, req chatRequest) chatReply {
+		if req.ResponseFormat != nil {
+			return fail(http.StatusUnprocessableEntity)
+		}
+		return ok("```json\n{\"cards\":[]}\n```")
+	}}
+	c := newTestClient(t, api)
+
+	for range 2 {
+		resp, err := c.Complete(context.Background(), request())
+		if err != nil {
+			t.Fatalf("Complete() error = %v", err)
+		}
+		if !strings.Contains(string(resp.Content), `{"cards":[]}`) {
+			t.Errorf("content = %q", resp.Content)
+		}
+	}
+	reqs, _ := api.requests()
+	if len(reqs) != 3 {
+		t.Fatalf("%d requests, want 3: rejected, plain, plain", len(reqs))
+	}
+	if reqs[0].ResponseFormat == nil || reqs[1].ResponseFormat != nil || reqs[2].ResponseFormat != nil {
+		t.Error("structured output was not dropped after the rejection, or was retried again")
+	}
+	if !strings.Contains(reqs[1].Messages[0].Content, string(schema)) {
+		t.Error("without structured output the schema must go into the system prompt")
+	}
+}
+
+func TestDoesNotRetryBadCredentials(t *testing.T) {
+	api := &fakeAPI{chat: func(int, chatRequest) chatReply { return fail(http.StatusUnauthorized) }}
+	c := newTestClient(t, api)
+
+	_, err := c.Complete(context.Background(), request())
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Status != http.StatusUnauthorized {
+		t.Fatalf("error = %v, want a 401 APIError", err)
+	}
+	if reqs, _ := api.requests(); len(reqs) != 1 {
+		t.Errorf("%d requests, want 1: neither retries nor fallback help a 401", len(reqs))
+	}
+}
+
+func TestConfig(t *testing.T) {
+	t.Setenv("GIGACHAT_CLIENT_ID", "id")
+	t.Setenv("GIGACHAT_CLIENT_SECRET", "secret")
+	t.Setenv("GIGACHAT_SCOPE", "")
+	t.Setenv("GIGACHAT_MODEL", "")
+	t.Setenv("GIGACHAT_FALLBACK_MODEL", "GigaChat-2-Max")
+	t.Setenv("GIGACHAT_BASE_URL", "")
+	t.Setenv("GIGACHAT_AUTH_URL", "")
+
+	c, err := New(ConfigFromEnv())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer c.Close()
+	if c.cfg.Scope != DefaultScope || c.cfg.Model != DefaultModel || c.cfg.FallbackModel != "GigaChat-2-Max" ||
+		c.cfg.BaseURL != DefaultBaseURL || c.cfg.AuthURL != DefaultAuthURL {
+		t.Errorf("config = %+v", c.cfg)
+	}
+
+	if _, err := New(Config{ClientID: "id"}); err == nil {
+		t.Error("New() without a secret succeeded")
+	}
+}
