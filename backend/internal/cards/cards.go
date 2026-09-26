@@ -37,8 +37,13 @@ const (
 )
 
 // Card mirrors Card in miniapp/src/types.ts without id and setId, which the
-// storage assigns.
+// storage assigns, plus FactID.
+//
+// Cards with the same FactID test one fact in different forms (choice, input,
+// boolean, flip) and share the quote. The feed is meant to show one of them
+// at a time and rotate the form between repetitions.
 type Card struct {
+	FactID      string   `json:"factId"` // stable within a document: derived from the quote
 	Kind        Kind     `json:"kind"`
 	Question    string   `json:"question"`
 	Options     []string `json:"options,omitempty"` // choice only, includes Answer
@@ -68,7 +73,7 @@ type Stats struct {
 	Chunks         int            `json:"chunks"`         // fragments after splitting
 	ChunksFiltered int            `json:"chunksFiltered"` // junk, never sent to the model
 	FilteredBy     map[string]int `json:"filteredBy"`     // junk reason → fragments
-	ChunksSkipped  int            `json:"chunksSkipped"`  // not sent: MaxCardsPerDoc already used up
+	ChunksSkipped  int            `json:"chunksSkipped"`  // not sent: MaxFactsPerDoc already used up
 	ChunksFailed   int            `json:"chunksFailed"`   // provider error after its retries and fallback
 	ChunksInvalid  int            `json:"chunksInvalid"`  // no valid JSON after the retry, fragment skipped
 
@@ -78,13 +83,18 @@ type Stats struct {
 	PromptTokens     int            `json:"promptTokens"`
 	CompletionTokens int            `json:"completionTokens"`
 
+	FactsFromModel int `json:"factsFromModel"` // facts in parsed responses
+	Facts          int `json:"facts"`          // distinct facts among the cards returned
+
+	// Card counts. CardsFromModel = every Dropped* + Cards.
 	CardsFromModel   int `json:"cardsFromModel"`   // cards in parsed responses
 	DroppedInvalid   int `json:"droppedInvalid"`   // card breaks the schema: empty field, unknown kind
-	DroppedQuote     int `json:"droppedQuote"`     // quote not found in its fragment
-	DroppedDuplicate int `json:"droppedDuplicate"` // same question as an earlier card
-	DroppedByLimit   int `json:"droppedByLimit"`   // over MaxCardsPerDoc
-	DowngradedToFlip int `json:"downgradedToFlip"` // choice without enough distractors
-	InputToFlip      int `json:"inputToFlip"`      // input with an answer too long to type
+	DroppedQuote     int `json:"droppedQuote"`     // its fact's quote not found in the fragment
+	DroppedDuplicate int `json:"droppedDuplicate"` // same fact or same question as earlier
+	DroppedByLimit   int `json:"droppedByLimit"`   // its fact is over MaxFactsPerDoc
+	DroppedVariants  int `json:"droppedVariants"`  // could not keep its kind, other cards cover the fact
+	DowngradedToFlip int `json:"downgradedToFlip"` // choice without enough distractors, the fact's only card
+	InputToFlip      int `json:"inputToFlip"`      // input with an answer too long to type, the fact's only card
 	Cards            int `json:"cards"`            // cards returned
 
 	ChunkTimeAvg   time.Duration `json:"chunkTimeAvg"` // model time per fragment, retries included
@@ -132,7 +142,7 @@ const (
 	DefaultConcurrency      = 1
 	DefaultChunkSize        = 2500
 	DefaultChunkOverlap     = 150
-	DefaultMaxCardsPerChunk = 3
+	DefaultMaxFactsPerChunk = 3
 	DefaultCallTimeout      = 2 * time.Minute
 )
 
@@ -141,8 +151,8 @@ type Options struct {
 	Concurrency      int           // parallel model calls, default 1
 	ChunkSize        int           // fragment size in characters, default 2500
 	ChunkOverlap     int           // characters shared with the previous fragment, default 150, negative for none
-	MaxCardsPerChunk int           // default 3
-	MaxCardsPerDoc   int           // 0 means no limit
+	MaxFactsPerChunk int           // facts per fragment, default 3; each fact gets up to 4 cards
+	MaxFactsPerDoc   int           // 0 means no limit
 	CallTimeout      time.Duration // per model call, retries of the provider included
 	// OnCards receives cards as soon as they are final, so a long document
 	// shows progress in minutes rather than all at once at the end. It is
@@ -168,11 +178,11 @@ func (o Options) withDefaults() Options {
 	// Overlap is context, not content: a large one means paying for the
 	// same text twice.
 	o.ChunkOverlap = min(o.ChunkOverlap, o.ChunkSize/4)
-	if o.MaxCardsPerChunk <= 0 {
-		o.MaxCardsPerChunk = DefaultMaxCardsPerChunk
+	if o.MaxFactsPerChunk <= 0 {
+		o.MaxFactsPerChunk = DefaultMaxFactsPerChunk
 	}
-	if o.MaxCardsPerDoc < 0 {
-		o.MaxCardsPerDoc = 0
+	if o.MaxFactsPerDoc < 0 {
+		o.MaxFactsPerDoc = 0
 	}
 	if o.CallTimeout <= 0 {
 		o.CallTimeout = DefaultCallTimeout

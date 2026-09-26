@@ -44,8 +44,8 @@ func run() error {
 		model       = flag.String("model", "", "model, overrides GIGACHAT_MODEL")
 		chunk       = flag.Int("chunk", cards.DefaultChunkSize, "fragment size in characters")
 		overlap     = flag.Int("overlap", cards.DefaultChunkOverlap, "fragment overlap in characters, -1 for none")
-		limit       = flag.Int("limit", 0, "max cards per document, 0 for no limit")
-		perChunk    = flag.Int("per-chunk", cards.DefaultMaxCardsPerChunk, "max cards per fragment")
+		limit       = flag.Int("limit", 0, "max facts per document, 0 for no limit")
+		perChunk    = flag.Int("per-chunk", cards.DefaultMaxFactsPerChunk, "max facts per fragment, each with up to 4 cards")
 		concurrency = flag.Int("concurrency", cards.DefaultConcurrency, "parallel model calls; freemium allows 1")
 		timeout     = flag.Duration("call-timeout", cards.DefaultCallTimeout, "timeout per model call")
 		asJSON      = flag.Bool("json", false, "print the result as JSON to stdout")
@@ -100,8 +100,8 @@ func run() error {
 		Concurrency:      *concurrency,
 		ChunkSize:        *chunk,
 		ChunkOverlap:     *overlap,
-		MaxCardsPerChunk: *perChunk,
-		MaxCardsPerDoc:   *limit,
+		MaxFactsPerChunk: *perChunk,
+		MaxFactsPerDoc:   *limit,
 		CallTimeout:      *timeout,
 		Logger:           logger,
 		OnCards: func(batch []cards.Card) {
@@ -134,11 +134,19 @@ func run() error {
 	return nil
 }
 
+// formatCards prints cards grouped by fact: the quote once, then every card
+// that tests it.
 func formatCards(list []cards.Card) string {
 	var w strings.Builder
-	for i, c := range list {
-		fmt.Fprintf(&w, "\n#%d [%s] %s — %s\n", i+1, c.Kind, c.Topic, c.SourceRef)
-		fmt.Fprintf(&w, "  В: %s\n", c.Question)
+	fact, lastID := 0, ""
+	for _, c := range list {
+		if c.FactID != lastID {
+			fact++
+			lastID = c.FactID
+			fmt.Fprintf(&w, "\n== Факт %d: %s — %s\n", fact, c.Topic, c.SourceRef)
+			fmt.Fprintf(&w, "   Цитата: «%s»\n", c.SourceQuote)
+		}
+		fmt.Fprintf(&w, "  [%s] %s\n", c.Kind, c.Question)
 		if len(c.Options) > 0 {
 			opts := make([]string, len(c.Options))
 			for j, o := range c.Options {
@@ -147,11 +155,10 @@ func formatCards(list []cards.Card) string {
 					opts[j] += " ✓"
 				}
 			}
-			fmt.Fprintf(&w, "  Варианты: %s\n", strings.Join(opts, " | "))
+			fmt.Fprintf(&w, "     Варианты: %s\n", strings.Join(opts, " | "))
 		}
-		fmt.Fprintf(&w, "  О: %s\n", c.Answer)
-		fmt.Fprintf(&w, "  Объяснение: %s\n", c.Explanation)
-		fmt.Fprintf(&w, "  Цитата: «%s»\n", c.SourceQuote)
+		fmt.Fprintf(&w, "     О: %s\n", c.Answer)
+		fmt.Fprintf(&w, "     Объяснение: %s\n", c.Explanation)
 	}
 	return w.String()
 }
@@ -174,11 +181,13 @@ func formatStats(s cards.Stats) string {
 	fmt.Fprintf(&w, "  без валидного JSON:  %d\n", s.ChunksInvalid)
 	fmt.Fprintf(&w, "Вызовов модели:        %d (невалидных ответов %d) %s\n", s.ModelCalls, s.InvalidResponses, formatCounts(s.CallsByModel))
 	fmt.Fprintf(&w, "Токены:                prompt %d, completion %d\n", s.PromptTokens, s.CompletionTokens)
+	fmt.Fprintf(&w, "Фактов:                %d от модели, %d в итоге\n", s.FactsFromModel, s.Facts)
 	fmt.Fprintf(&w, "Карточек от модели:    %d\n", s.CardsFromModel)
 	fmt.Fprintf(&w, "  цитата не найдена:   %d (%s)\n", s.DroppedQuote, pct(s.DroppedQuote))
 	fmt.Fprintf(&w, "  дубликаты:           %d (%s)\n", s.DroppedDuplicate, pct(s.DroppedDuplicate))
 	fmt.Fprintf(&w, "  не по схеме:         %d (%s)\n", s.DroppedInvalid, pct(s.DroppedInvalid))
 	fmt.Fprintf(&w, "  сверх лимита:        %d (%s)\n", s.DroppedByLimit, pct(s.DroppedByLimit))
+	fmt.Fprintf(&w, "  вариант не удержал вид: %d (%s; факт покрыт другими)\n", s.DroppedVariants, pct(s.DroppedVariants))
 	fmt.Fprintf(&w, "  choice → flip:       %d (мало дистракторов)\n", s.DowngradedToFlip)
 	fmt.Fprintf(&w, "  input → flip:        %d (длинный ответ)\n", s.InputToFlip)
 	fmt.Fprintf(&w, "Итого карточек:        %d\n", s.Cards)

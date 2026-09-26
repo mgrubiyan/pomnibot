@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"slices"
 	"sync"
 	"time"
@@ -19,9 +20,9 @@ const (
 	// this many fragments in a row, after its own retries and fallback model:
 	// bad credentials or an outage, not a flaky fragment.
 	maxConsecutiveFailures = 3
-	// Completion budget: a card with a quote and an explanation is about
-	// 200 tokens; the margin keeps a verbose answer from being cut mid-JSON.
-	tokensPerCard   = 500
+	// Completion budget: a fact with its quote and four cards is about 600
+	// tokens; the margin keeps a verbose answer from being cut mid-JSON.
+	tokensPerFact   = 900
 	tokensReserve   = 200
 	logAnswerLength = 300
 )
@@ -40,14 +41,14 @@ func New(p Provider, opts Options) *Generator {
 	return &Generator{
 		provider: p,
 		opts:     opts,
-		system:   buildSystemPrompt(opts.MaxCardsPerChunk),
-		schema:   cardSchema(opts.MaxCardsPerChunk),
+		system:   buildSystemPrompt(opts.MaxFactsPerChunk),
+		schema:   cardSchema(opts.MaxFactsPerChunk),
 	}
 }
 
 // Generate runs the pipeline on one document: normalize, split, drop junk,
 // one model call per fragment, check quotes, drop duplicates, add
-// distractors, trim to MaxCardsPerDoc. Cards reach OnCards as they are ready;
+// distractors, trim to MaxFactsPerDoc. Cards reach OnCards as they are ready;
 // the Result holds all of them in document order.
 //
 // A fragment that fails does not fail the document. An error is returned when
@@ -79,7 +80,7 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (Result, error) 
 		"title", doc.Title, "chars", utf8.RuneCountInString(text),
 		"fragments", len(all), "filtered", stats.ChunksFiltered)
 
-	asm := newAssembler(doc.Title, len(work), g.opts.MaxCardsPerDoc, &stats)
+	asm := newAssembler(doc.Title, len(work), g.opts.MaxFactsPerDoc, &stats)
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -149,6 +150,7 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (Result, error) 
 
 	result := Result{Cards: asm.cards(), Stats: stats}
 	result.Stats.Cards = len(result.Cards)
+	result.Stats.Facts = countFacts(result.Cards)
 	result.Stats.Total = time.Since(began)
 	log.Info("cards: document done",
 		"title", doc.Title, "cards", result.Stats.Cards,
@@ -205,9 +207,9 @@ func (g *Generator) processChunk(ctx context.Context, title string, total int, r
 		System:      g.system,
 		Schema:      g.schema,
 		Temperature: 0,
-		MaxTokens:   g.opts.MaxCardsPerChunk*tokensPerCard + tokensReserve,
+		MaxTokens:   g.opts.MaxFactsPerChunk*tokensPerFact + tokensReserve,
 	}
-	var parsed []modelCard
+	var parsed []modelFact
 	answered := false
 	for attempt := range answerAttempts {
 		req.User = buildUserPrompt(title, r.chunk, total, attempt > 0)
@@ -229,28 +231,35 @@ func (g *Generator) processChunk(ctx context.Context, title string, total int, r
 		}
 		r.models[model]++
 
-		cards, invalid, err := parseAnswer(resp.Content, g.opts.MaxCardsPerChunk)
+		facts, invalid, err := parseAnswer(resp.Content, g.opts.MaxFactsPerChunk)
 		if err != nil {
 			r.invalidResponses++
 			log.Warn("cards: invalid model answer",
 				"attempt", attempt+1, "err", err, "answer", clip(resp.Content, logAnswerLength))
 			continue
 		}
-		parsed, r.droppedInvalid, answered = cards, invalid, true
+		parsed, r.droppedInvalid, answered = facts, invalid, true
 		break
 	}
 	r.invalid = r.err == nil && !answered
-	r.cardsFromModel = len(parsed) + r.droppedInvalid
+	r.factsFromModel = len(parsed)
+	r.cardsFromModel = r.droppedInvalid
+	for _, f := range parsed {
+		r.cardsFromModel += len(f.Cards)
+	}
 
-	for _, mc := range parsed {
-		quote, ok := findQuote(r.chunk.Text, mc.Quote)
+	// One quote per fact: a fact that fails the check takes all its cards
+	// with it.
+	for _, f := range parsed {
+		quote, ok := findQuote(r.chunk.Text, f.Quote)
 		if !ok {
-			r.droppedQuote++
-			log.Info("cards: quote not found in fragment", "question", mc.Question, "quote", mc.Quote)
+			r.droppedQuote += len(f.Cards)
+			log.Info("cards: quote not found in fragment", "topic", f.Topic, "quote", f.Quote)
 			continue
 		}
-		mc.Quote = quote
-		r.cards = append(r.cards, mc)
+		f.Quote = quote
+		f.ID = factID(quote)
+		r.facts = append(r.facts, f)
 	}
 	r.elapsed = time.Since(began)
 	return r
@@ -268,6 +277,22 @@ func (g *Generator) notify(cards []Card) {
 		}
 	}()
 	g.opts.OnCards(slices.Clone(cards))
+}
+
+// factID derives a fact's id from its verified quote, so the same fact met
+// again in an overlapping fragment gets the same id.
+func factID(quote string) string {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(fold(quote).s))
+	return fmt.Sprintf("%016x", h.Sum64())
+}
+
+func countFacts(cards []Card) int {
+	seen := map[string]bool{}
+	for _, c := range cards {
+		seen[c.FactID] = true
+	}
+	return len(seen)
 }
 
 func clip(b []byte, n int) string {

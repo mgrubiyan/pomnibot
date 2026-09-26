@@ -53,19 +53,19 @@ func newDistractorPool() *distractorPool {
 	return &distractorPool{seen: map[string]bool{}}
 }
 
-func (p *distractorPool) add(c modelCard, pos int) {
-	if c.Kind == KindBoolean {
+func (p *distractorPool) add(kind Kind, answer, topic string, pos int) {
+	if kind == KindBoolean {
 		return
 	}
-	key := answerKey(c.Answer)
+	key := answerKey(answer)
 	if key == "" || p.seen[key] {
 		return
 	}
 	p.seen[key] = true
 	p.entries = append(p.entries, poolEntry{
-		answer:   c.Answer,
+		answer:   answer,
 		key:      key,
-		topic:    answerKey(c.Topic),
+		topic:    answerKey(topic),
 		pos:      pos,
 		runes:    utf8.RuneCountInString(key),
 		hasDigit: strings.IndexFunc(key, unicode.IsDigit) >= 0,
@@ -166,28 +166,21 @@ func answerKey(s string) string {
 	return trimQuote(fold(s).s)
 }
 
-// optionForm trims trailing punctuation and gives the first letter the case
-// the answer's has. Distractors come from other cards as the model wrote
-// them, and "митоз" next to "Мейоз." and "Цитокинез." gives itself away.
-// Acronyms such as "ДНК" keep their case.
-func optionForm(s string, upper bool) string {
+// optionForm trims trailing punctuation and capitalizes the first letter, so
+// that every option, the right one included, has one form: "митоз" next to
+// "Мейоз." and "Цитокинез." gives itself away. Nothing is ever lowercased:
+// "S-период", "Na" and "Гольджи" stay as written, and so do "мРНК" and "pH",
+// whose second letter is a capital.
+func optionForm(s string) string {
 	s = strings.TrimRightFunc(strings.TrimSpace(s), func(r rune) bool {
 		return unicode.IsSpace(r) || strings.ContainsRune(".,;:", r)
 	})
 	first, size := utf8.DecodeRuneInString(s)
 	second, _ := utf8.DecodeRuneInString(s[size:])
-	if !unicode.IsLetter(first) || unicode.IsUpper(second) {
+	if !unicode.IsLower(first) || unicode.IsUpper(second) {
 		return s
 	}
-	if upper {
-		return string(unicode.ToUpper(first)) + s[size:]
-	}
-	return string(unicode.ToLower(first)) + s[size:]
-}
-
-func startsUpper(s string) bool {
-	r, _ := utf8.DecodeRuneInString(s)
-	return unicode.IsUpper(r)
+	return string(unicode.ToUpper(first)) + s[size:]
 }
 
 // shuffleOptions puts the answer among the distractors in an order derived

@@ -45,7 +45,7 @@ type entry struct {
 func poolWith(entries ...entry) *distractorPool {
 	p := newDistractorPool()
 	for _, e := range entries {
-		p.add(modelCard{Kind: KindChoice, Answer: e.answer, Topic: e.topic}, e.pos)
+		p.add(KindChoice, e.answer, e.topic, e.pos)
 	}
 	return p
 }
@@ -79,7 +79,7 @@ func TestDistractorPick(t *testing.T) {
 	}
 
 	numeric := Card{Question: "Сколько хромосом у человека?", Answer: "46", SourceQuote: "46 хромосом"}
-	p.add(modelCard{Kind: KindInput, Answer: "23", Topic: "Хромосомы"}, 5)
+	p.add(KindInput, "23", "Хромосомы", 5)
 	if got := p.pick(numeric, 2, 3); !slices.Equal(got, []string{"23"}) {
 		t.Errorf("numeric answer: pick() = %v, want [23]", got)
 	}
@@ -111,21 +111,22 @@ func TestShuffleOptions(t *testing.T) {
 }
 
 func TestOptionForm(t *testing.T) {
-	tests := []struct {
-		in    string
-		upper bool
-		want  string
-	}{
-		{"Мейоз.", false, "мейоз"},
-		{"цитокинез", true, "Цитокинез"},
-		{"ДНК", false, "ДНК"},
-		{"  Репликация ДНК; ", true, "Репликация ДНК"},
-		{"46", true, "46"},
-		{"(2n)", false, "(2n)"},
-	}
-	for _, tt := range tests {
-		if got := optionForm(tt.in, tt.upper); got != tt.want {
-			t.Errorf("optionForm(%q, %v) = %q, want %q", tt.in, tt.upper, got, tt.want)
+	for in, want := range map[string]string{
+		"Мейоз.":             "Мейоз",
+		"цитокинез":          "Цитокинез",
+		"ДНК":                "ДНК",
+		"  Репликация ДНК; ": "Репликация ДНК",
+		"46":                 "46",
+		"(2n)":               "(2n)",
+		"S-период":           "S-период",
+		"Na":                 "Na",
+		"Гольджи":            "Гольджи",
+		"мРНК":               "мРНК",
+		"pH":                 "pH",
+		"метафазная пластинка": "Метафазная пластинка",
+	} {
+		if got := optionForm(in); got != want {
+			t.Errorf("optionForm(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

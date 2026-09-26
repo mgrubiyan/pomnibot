@@ -13,7 +13,7 @@ import (
 type chunkResult struct {
 	pos       int // position among fragments sent to the model
 	chunk     chunk
-	cards     []modelCard // quote found, Quote replaced with the span of the notes
+	facts     []modelFact // quote found: Quote is the span of the notes, ID is set
 	holdsSlot bool        // a concurrency slot the assembler must release
 	skipped   bool        // budget used up before the call
 	cancelled bool
@@ -22,6 +22,7 @@ type chunkResult struct {
 
 	calls            int
 	invalidResponses int
+	factsFromModel   int
 	cardsFromModel   int
 	droppedInvalid   int
 	droppedQuote     int
@@ -34,13 +35,16 @@ type pendingChoice struct {
 	card Card
 	pos  int
 	seq  int
+	// hasSiblings: other cards of the fact are delivered, so a choice card
+	// left without distractors is dropped rather than turned into a flip.
+	hasSiblings bool
 }
 
-// reserved is a verified card that did not fit its fragment's share of
-// MaxCardsPerDoc. It may still get in at the end if later fragments leave
+// reserved is a verified fact that did not fit its fragment's share of
+// MaxFactsPerDoc. It may still get in at the end if later fragments leave
 // part of the budget unused.
 type reserved struct {
-	card  modelCard
+	fact  modelFact
 	pos   int
 	index int // chunk.Index, for SourceRef
 }
@@ -61,8 +65,9 @@ type assembler struct {
 	work     int // fragments sent to the model, the budget is spread over them
 	maxDoc   int
 	stats    *Stats
-	accepted atomic.Int64 // cards counted against MaxCardsPerDoc, pending ones included
+	accepted atomic.Int64 // facts counted against MaxFactsPerDoc
 
+	facts     map[string]bool // ids of accepted facts
 	questions *questionIndex
 	pool      *distractorPool
 	pending   []pendingChoice
@@ -80,15 +85,16 @@ func newAssembler(title string, work, maxDoc int, stats *Stats) *assembler {
 		work:      work,
 		maxDoc:    maxDoc,
 		stats:     stats,
+		facts:     map[string]bool{},
 		questions: newQuestionIndex(),
 		pool:      newDistractorPool(),
 	}
 }
 
-// quota is how many cards fragments 0..pos may have together: MaxCardsPerDoc
+// quota is how many facts fragments 0..pos may have together: MaxFactsPerDoc
 // spread evenly over the document. What a fragment leaves unused carries
 // over to the next ones, so an empty fragment does not shrink the total, and
-// a long document gets cards from its end, not only its first N.
+// a long document gets facts from its end, not only its first N.
 func (a *assembler) quota(pos int) int {
 	if a.maxDoc == 0 {
 		return int(^uint(0) >> 1)
@@ -96,7 +102,7 @@ func (a *assembler) quota(pos int) int {
 	return (pos + 1) * a.maxDoc / a.work
 }
 
-// budgetSpent reports whether fragment pos can get no cards whatever the
+// budgetSpent reports whether fragment pos can get no facts whatever the
 // fragments before it return, so the model call can be skipped. accepted only
 // grows, so a stale read errs towards making the call.
 func (a *assembler) budgetSpent(pos int) bool {
@@ -110,52 +116,86 @@ func (a *assembler) add(r chunkResult) []Card {
 
 	allowance := a.quota(r.pos) - int(a.accepted.Load())
 	var ready []Card
-	for _, mc := range r.cards {
-		if a.questions.isDup(mc.Question) {
-			a.stats.DroppedDuplicate++
+	for _, f := range r.facts {
+		if a.facts[f.ID] {
+			// The same quote again, typically from the overlap with the
+			// previous fragment.
+			a.stats.DroppedDuplicate += len(f.Cards)
 			continue
 		}
-		// Trimmed cards still lend their answers as distractors: the text
+		// Trimmed facts still lend their answers as distractors: the text
 		// is verified, it just does not fit in the budget.
-		a.pool.add(mc, r.pos)
+		for _, mc := range f.Cards {
+			a.pool.add(mc.Kind, mc.Answer, f.Topic, r.pos)
+		}
 		if allowance <= 0 {
-			a.stats.DroppedByLimit++
-			a.reserve = append(a.reserve, reserved{card: mc, pos: r.pos, index: r.chunk.Index})
+			a.stats.DroppedByLimit += len(f.Cards)
+			a.reserve = append(a.reserve, reserved{fact: f, pos: r.pos, index: r.chunk.Index})
 			continue
 		}
-		allowance--
-		if c, ok := a.accept(mc, r.pos, r.chunk.Index); ok {
-			ready = append(ready, c)
+		if cards, ok := a.acceptFact(f, r.pos, r.chunk.Index); ok {
+			allowance--
+			ready = append(ready, cards...)
 		}
 	}
 	return append(ready, a.settle(r.pos, false)...)
 }
 
-// accept counts a card against the budget and either places it or, for a
-// choice card, queues it for distractors. It returns the card and true when
-// it is ready to deliver.
-func (a *assembler) accept(mc modelCard, pos, index int) (Card, bool) {
+// acceptFact turns a fact's cards into Cards and counts the fact against the
+// budget. Cards ready now are returned; choice cards wait in settle for
+// distractors. ok is false when every card repeated an earlier question: the
+// fact then costs nothing.
+func (a *assembler) acceptFact(f modelFact, pos, index int) (ready []Card, ok bool) {
+	var choices []pendingChoice
+	var questions []string
+	for _, mc := range f.Cards {
+		if a.questions.isDup(mc.Question) {
+			a.stats.DroppedDuplicate++
+			continue
+		}
+		// Indexed after the loop: choice and input of one fact often share
+		// the question, and that is not a duplicate.
+		questions = append(questions, mc.Question)
+
+		card := Card{
+			FactID:      f.ID,
+			Kind:        mc.Kind,
+			Question:    mc.Question,
+			Answer:      mc.Answer,
+			Explanation: mc.Explanation,
+			SourceQuote: f.Quote,
+			SourceRef:   sourceRef(a.title, index),
+			Topic:       f.Topic,
+		}
+		a.seq++
+		switch {
+		case card.Kind == KindChoice:
+			choices = append(choices, pendingChoice{card: card, pos: pos, seq: a.seq})
+			continue
+		case card.Kind == KindInput && len(strings.Fields(card.Answer)) > maxInputWords:
+			if len(f.Cards) > 1 {
+				a.stats.DroppedVariants++
+				continue
+			}
+			card.Kind = KindFlip
+			a.stats.InputToFlip++
+		}
+		ready = append(ready, a.place(card, pos, a.seq))
+	}
+	for _, q := range questions {
+		a.questions.add(q)
+	}
+	if len(ready) == 0 && len(choices) == 0 {
+		return nil, false
+	}
+
+	a.facts[f.ID] = true
 	a.accepted.Add(1)
-	a.questions.add(mc.Question)
-	card := Card{
-		Kind:        mc.Kind,
-		Question:    mc.Question,
-		Answer:      mc.Answer,
-		Explanation: mc.Explanation,
-		SourceQuote: mc.Quote,
-		SourceRef:   sourceRef(a.title, index),
-		Topic:       mc.Topic,
+	for i := range choices {
+		choices[i].hasSiblings = len(ready) > 0
 	}
-	a.seq++
-	switch {
-	case card.Kind == KindChoice:
-		a.pending = append(a.pending, pendingChoice{card: card, pos: pos, seq: a.seq})
-		return Card{}, false
-	case card.Kind == KindInput && len(strings.Fields(card.Answer)) > maxInputWords:
-		card.Kind = KindFlip
-		a.stats.InputToFlip++
-	}
-	return a.place(card, pos, a.seq), true
+	a.pending = append(a.pending, choices...)
+	return ready, true
 }
 
 // finish fills what is left of the budget from the reserve and settles
@@ -165,8 +205,8 @@ func (a *assembler) finish() []Card {
 	return append(ready, a.settle(a.work, true)...)
 }
 
-// backfill spends budget that fragments left unused (few or no cards in the
-// last ones) on cards trimmed earlier. It takes one card per fragment in
+// backfill spends budget that fragments left unused (few or no facts in the
+// last ones) on facts trimmed earlier. It takes one fact per fragment in
 // turn, so the spread stays even rather than favouring the first fragment.
 func (a *assembler) backfill() []Card {
 	room := a.maxDoc - int(a.accepted.Load())
@@ -193,14 +233,14 @@ func (a *assembler) backfill() []Card {
 			}
 			took = true
 			r := group[round]
-			a.stats.DroppedByLimit--
-			if a.questions.isDup(r.card.Question) {
-				a.stats.DroppedDuplicate++ // repeats a card accepted after it was trimmed
+			a.stats.DroppedByLimit -= len(r.fact.Cards)
+			if a.facts[r.fact.ID] {
+				a.stats.DroppedDuplicate += len(r.fact.Cards) // accepted from a later fragment
 				continue
 			}
-			room--
-			if c, ok := a.accept(r.card, r.pos, r.index); ok {
-				ready = append(ready, c)
+			if cards, ok := a.acceptFact(r.fact, r.pos, r.index); ok {
+				room--
+				ready = append(ready, cards...)
 			}
 		}
 		if !took {
@@ -213,8 +253,9 @@ func (a *assembler) backfill() []Card {
 
 // settle gives pending choice cards their options. A card is released with
 // wantDistractors options as soon as the pool has them; once it has waited
-// maxPendingWait fragments, or at the end, minDistractors will do, and with
-// fewer it becomes a flip card.
+// maxPendingWait fragments, or at the end, minDistractors will do. With fewer
+// it is dropped if other cards of its fact are out, and becomes a flip card
+// if it is the fact's only one.
 func (a *assembler) settle(pos int, final bool) []Card {
 	var ready []Card
 	kept := a.pending[:0]
@@ -223,12 +264,15 @@ func (a *assembler) settle(pos int, final bool) []Card {
 		timeUp := final || pos-p.pos >= maxPendingWait
 		switch {
 		case len(options) >= wantDistractors || (timeUp && len(options) >= minDistractors):
-			answer := optionForm(p.card.Answer, startsUpper(p.card.Answer))
+			answer := optionForm(p.card.Answer)
 			for i := range options {
-				options[i] = optionForm(options[i], startsUpper(answer))
+				options[i] = optionForm(options[i])
 			}
 			p.card.Answer = answer
 			p.card.Options = shuffleOptions(p.card.Question, answer, options)
+		case timeUp && p.hasSiblings:
+			a.stats.DroppedVariants++
+			continue
 		case timeUp:
 			p.card.Kind = KindFlip
 			a.stats.DowngradedToFlip++
@@ -266,6 +310,7 @@ func (a *assembler) count(r chunkResult) {
 	for m, n := range r.models {
 		s.CallsByModel[m] += n
 	}
+	s.FactsFromModel += r.factsFromModel
 	s.CardsFromModel += r.cardsFromModel
 	s.DroppedInvalid += r.droppedInvalid
 	s.DroppedQuote += r.droppedQuote
@@ -278,7 +323,8 @@ func (a *assembler) count(r chunkResult) {
 	}
 }
 
-// cards returns every delivered card in document order.
+// cards returns every delivered card in document order, the cards of one
+// fact next to each other.
 func (a *assembler) cards() []Card {
 	sort.SliceStable(a.placed, func(i, j int) bool {
 		if a.placed[i].pos != a.placed[j].pos {
