@@ -58,10 +58,13 @@ WHERE i.card_id = $1
 ORDER BY i.id ASC;
 
 -- name: ListCardsBySetID :many
-SELECT *
-FROM cards
-WHERE set_id = $1
-ORDER BY created_at ASC;
+SELECT c.*
+FROM cards c
+JOIN card_sets s ON s.id = c.set_id
+LEFT JOIN user_card_sets ucs ON ucs.set_id = s.id AND ucs.user_id = $2
+WHERE c.set_id = $1
+  AND (s.creator_id = $2 OR ucs.user_id = $2)
+ORDER BY c.created_at ASC;
 
 -- name: UpdateCardByID :one
 UPDATE cards

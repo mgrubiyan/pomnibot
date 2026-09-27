@@ -300,13 +300,21 @@ func (q *Queries) ListCardTableItemsByCardID(ctx context.Context, cardID pgtype.
 
 const listCardsBySetID = `-- name: ListCardsBySetID :many
 SELECT id, set_id, kind, question, answer_choice_index, answer_text, answer_boolean, explanation, source_quote, source_ref, topic, created_at, updated_at
-FROM cards
-WHERE set_id = $1
-ORDER BY created_at ASC
+FROM cards c
+JOIN card_sets s ON s.id = c.set_id
+LEFT JOIN user_card_sets ucs ON ucs.set_id = s.id AND ucs.user_id = $2
+WHERE c.set_id = $1
+  AND (s.creator_id = $2 OR ucs.user_id = $2)
+ORDER BY c.created_at ASC
 `
 
-func (q *Queries) ListCardsBySetID(ctx context.Context, setID pgtype.UUID) ([]Card, error) {
-	rows, err := q.db.Query(ctx, listCardsBySetID, setID)
+type ListCardsBySetIDParams struct {
+	SetID  pgtype.UUID `json:"set_id"`
+	UserID int64       `json:"user_id"`
+}
+
+func (q *Queries) ListCardsBySetID(ctx context.Context, arg ListCardsBySetIDParams) ([]Card, error) {
+	rows, err := q.db.Query(ctx, listCardsBySetID, arg.SetID, arg.UserID)
 	if err != nil {
 		return nil, err
 	}

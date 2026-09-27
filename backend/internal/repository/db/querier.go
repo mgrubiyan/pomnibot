@@ -34,7 +34,7 @@ type Querier interface {
 	ListCardOptionsByCardID(ctx context.Context, cardID pgtype.UUID) ([]CardOption, error)
 	ListCardTableColumnsByCardID(ctx context.Context, cardID pgtype.UUID) ([]CardTableColumn, error)
 	ListCardTableItemsByCardID(ctx context.Context, cardID pgtype.UUID) ([]ListCardTableItemsByCardIDRow, error)
-	ListCardsBySetID(ctx context.Context, setID pgtype.UUID) ([]Card, error)
+	ListCardsBySetID(ctx context.Context, arg ListCardsBySetIDParams) ([]Card, error)
 	ListSetsByUserID(ctx context.Context, creatorID int64) ([]ListSetsByUserIDRow, error)
 	RecordCardReview(ctx context.Context, arg RecordCardReviewParams) (CardReview, error)
 	UpdateCardByID(ctx context.Context, arg UpdateCardByIDParams) (Card, error)
