@@ -1,32 +1,24 @@
 import { useState } from 'react';
 import { Button, Flex, IconButton, Input, Typography } from '@maxhub/max-ui';
 import type { CardSet } from '../types';
-import { mockToday } from '../mocks';
+import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { IconChevronLeft, IconCross } from '../components/Icons';
 import { formatCode } from '../utils/code';
 import s from './JoinSet.module.css';
 
 const CODE_LENGTH = 6;
-const CHECK_DELAY = 700;
 
 const digitsOf = (value: string) => value.replace(/\D/g, '').slice(0, CODE_LENGTH);
 
-/**
- * Mocks instead of a request; the real endpoint comes later:
- * for now the code is looked up among the sets that carry one.
- */
-function findSetByCode(code: string): Promise<CardSet> {
-    return new Promise((resolve, reject) => {
-        window.setTimeout(() => {
-            const found = mockToday.sets.find((set) => set.shareCode === code);
-            if (found) {
-                resolve(found);
-                return;
-            }
-            reject(new Error('not found'));
-        }, CHECK_DELAY);
+async function findSetByCode(code: string): Promise<CardSet> {
+    const { data, error } = await api.POST('/sets/join', {
+        body: { code },
     });
+    if (error || !data) {
+        throw new Error(error?.message ?? 'not found');
+    }
+    return data;
 }
 
 export interface JoinSetProps {
