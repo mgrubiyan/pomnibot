@@ -71,10 +71,10 @@ jobs:
         working-directory: contracts
         run: bun install --frozen-lockfile
 
-#      - name: Install sqlc
-#        run: |
-#          go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
-#
+      - name: Install sqlc
+        run: |
+          go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+
       - name: Verify generated contracts
         run: |
           task gen --force
