@@ -13,8 +13,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mgrubiyan/pomnibot/backend/internal/bot"
+	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
+	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 	httptransport "github.com/mgrubiyan/pomnibot/backend/internal/transport/http"
+	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
 //go:embed all:dist
@@ -38,16 +42,54 @@ func main() {
 		port = "8080"
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	staticFS, err := getFileSystem()
 	if err != nil {
 		slog.Error("failed to initialize static filesystem", "error", err)
 		os.Exit(1)
 	}
 
-	// Initialize API handler with usecase services.
-	// Domain usecase services are wired here; repository/database implementations
-	// will be provided in subsequent data layer sessions.
-	apiHandler := httptransport.NewAPIHandler(nil, nil, nil)
+	var (
+		setService        usecase.SetService
+		cardService       usecase.CardService
+		homescreenService usecase.HomescreenService
+	)
+
+	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
+		slog.Info("connecting to database and executing migrations...")
+		if err := repository.RunMigrations(ctx, dbURL); err != nil {
+			slog.Error("failed to run database migrations", "error", err)
+			os.Exit(1)
+		}
+
+		pool, err := pgxpool.New(ctx, dbURL)
+		if err != nil {
+			slog.Error("failed to initialize database connection pool", "error", err)
+			os.Exit(1)
+		}
+		defer pool.Close()
+
+		if err := pool.Ping(ctx); err != nil {
+			slog.Error("failed to ping database", "error", err)
+			os.Exit(1)
+		}
+
+		queries := db.New(pool)
+		if err := repository.SeedIfEmpty(ctx, pool, queries); err != nil {
+			slog.Warn("mock data seeder encountered an issue", "error", err)
+		}
+
+		setService = usecase.NewSetService(queries)
+		cardService = usecase.NewCardService(queries)
+		homescreenService = usecase.NewHomescreenService(queries)
+		slog.Info("persistence layer and usecase services wired successfully")
+	} else {
+		slog.Warn("DATABASE_URL is not set; running in static SPA mode with unimplemented handlers")
+	}
+
+	apiHandler := httptransport.NewAPIHandler(setService, cardService, homescreenService)
 	router, err := httptransport.NewRouter(apiHandler, staticFS)
 	if err != nil {
 		slog.Error("failed to initialize router", "error", err)
@@ -61,9 +103,6 @@ func main() {
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	// Initialize MAX Bot if BOT_TOKEN is provided
 	if botToken := os.Getenv("BOT_TOKEN"); botToken != "" {

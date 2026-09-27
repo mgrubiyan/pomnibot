@@ -32,3 +32,8 @@ tasks:
       - internal/repository/db/**/*.go
     cmds:
       - sqlc generate
+
+  seed:
+    desc: 'Запуск сидера моковых данных'
+    cmds:
+      - go run ./cmd/seeder

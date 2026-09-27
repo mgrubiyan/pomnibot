@@ -102,3 +102,18 @@ tasks:
     desc: 'Сборка Docker-образов'
     cmds:
       - docker compose build
+
+  db:up:
+    desc: 'Запуск PostgreSQL в Docker Compose'
+    cmds:
+      - docker compose up -d postgres
+
+  db:down:
+    desc: 'Остановка PostgreSQL в Docker Compose'
+    cmds:
+      - docker compose stop postgres
+
+  db:seed:
+    desc: 'Запуск сидера данных'
+    cmds:
+      - task: backend:seed

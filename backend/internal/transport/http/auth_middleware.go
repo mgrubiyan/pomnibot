@@ -16,36 +16,56 @@ var (
 )
 
 type maxUser struct {
-	ID int64 `json:"id"`
+	ID        int64  `json:"id"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+}
+
+func resolveUserName(u maxUser) string {
+	if strings.TrimSpace(u.Name) != "" {
+		return strings.TrimSpace(u.Name)
+	}
+	fullName := strings.TrimSpace(u.FirstName + " " + u.LastName)
+	if fullName != "" {
+		return fullName
+	}
+	if strings.TrimSpace(u.FirstName) != "" {
+		return strings.TrimSpace(u.FirstName)
+	}
+	if strings.TrimSpace(u.Username) != "" {
+		return strings.TrimSpace(u.Username)
+	}
+	return "MAX User"
 }
 
 // AuthMiddleware extracts MAX WebApp user data exclusively from the X-Init-Data HTTP header.
 // Query parameters are not inspected for initData. If valid user data is found, user.id is
-// injected into context via WithUserID. If missing or invalid, it logs a warning via slog.Warn,
-// injects fake ID 0 into context, and continues the handler chain.
+// injected into context via WithUserID and user name via WithUserName. If missing or invalid, it logs a warning via slog.Warn,
+// injects fake ID 0 and name "Browser Test User" into context, and continues the handler chain.
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fallbackCtx := WithUserName(WithUserID(r.Context(), 0), "Browser Test User")
+
 		rawInitData := strings.TrimSpace(r.Header.Get("X-Init-Data"))
 		if rawInitData == "" {
 			slog.Warn("failed to extract user from MAX initData, using fake id 0", "error", errMissingInitDataHeader)
-			ctx := WithUserID(r.Context(), 0)
-			next.ServeHTTP(w, r.WithContext(ctx))
+			next.ServeHTTP(w, r.WithContext(fallbackCtx))
 			return
 		}
 
 		vals, err := url.ParseQuery(rawInitData)
 		if err != nil {
 			slog.Warn("failed to extract user from MAX initData, using fake id 0", "error", err)
-			ctx := WithUserID(r.Context(), 0)
-			next.ServeHTTP(w, r.WithContext(ctx))
+			next.ServeHTTP(w, r.WithContext(fallbackCtx))
 			return
 		}
 
 		userRaw := vals.Get("user")
 		if userRaw == "" {
 			slog.Warn("failed to extract user from MAX initData, using fake id 0", "error", errMissingUserField)
-			ctx := WithUserID(r.Context(), 0)
-			next.ServeHTTP(w, r.WithContext(ctx))
+			next.ServeHTTP(w, r.WithContext(fallbackCtx))
 			return
 		}
 
@@ -62,19 +82,17 @@ func AuthMiddleware(next http.Handler) http.Handler {
 
 		if unmarshalErr != nil {
 			slog.Warn("failed to extract user from MAX initData, using fake id 0", "error", unmarshalErr)
-			ctx := WithUserID(r.Context(), 0)
-			next.ServeHTTP(w, r.WithContext(ctx))
+			next.ServeHTTP(w, r.WithContext(fallbackCtx))
 			return
 		}
 
 		if u.ID == 0 {
 			slog.Warn("failed to extract user from MAX initData, using fake id 0", "error", errInvalidUserID)
-			ctx := WithUserID(r.Context(), 0)
-			next.ServeHTTP(w, r.WithContext(ctx))
+			next.ServeHTTP(w, r.WithContext(fallbackCtx))
 			return
 		}
 
-		ctx := WithUserID(r.Context(), u.ID)
+		ctx := WithUserName(WithUserID(r.Context(), u.ID), resolveUserName(u))
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
