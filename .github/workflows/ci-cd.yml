@@ -44,7 +44,11 @@ jobs:
         working-directory: contracts
         run: bun install --frozen-lockfile
 
-      - name: Verify generated contracts
+      - name: Install sqlc
+        run: |
+          go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+
+      - name: Verify generated contracts and sqlc queries
         run: |
           task gen --force
           git diff --exit-code backend/contracts miniapp/contracts
