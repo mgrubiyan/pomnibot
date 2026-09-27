@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Flex, Input, Spinner, Typography } from '@maxhub/max-ui';
+import { Button, Flex, IconButton, Input, Spinner, Typography } from '@maxhub/max-ui';
 import type { AnswerResult, Card } from '../types';
 import { api } from '../api';
 import { TableColumns, TablePool } from '../components/TableCard';
@@ -16,6 +16,7 @@ import { Result } from './Result';
 import { cx } from '../utils/cx';
 import {
     IconCheck,
+    IconChevronLeft,
     IconCross,
     IconDoc,
     IconFlag,
@@ -130,6 +131,7 @@ export interface FeedProps {
     removedCardIds: string[];
     cardPatches: Record<string, CardPatch>;
     onExit: () => void;
+    onBack?: () => void;
     onReportCard: (card: Card) => void;
     /** Opens sharing from the result screen; absent for the daily mix. */
     onShare?: () => void;
@@ -141,6 +143,7 @@ export function Feed({
     removedCardIds,
     cardPatches,
     onExit,
+    onBack,
     onReportCard,
     onShare,
 }: FeedProps) {
@@ -327,6 +330,15 @@ export function Feed({
 
     const submittedRef = useRef(false);
 
+    const handleBack = () => {
+        submittedRef.current = true;
+        if (onBack) {
+            onBack();
+        } else {
+            onExit();
+        }
+    };
+
     useEffect(() => {
         if (!card && results.length > 0 && !submittedRef.current) {
             submittedRef.current = true;
@@ -355,9 +367,14 @@ export function Feed({
                 title="Нет соединения"
                 text="Проверьте интернет и попробуйте ещё раз"
                 action={
-                    <Button size="medium" variant="primary" stretched onClick={retry}>
-                        Повторить
-                    </Button>
+                    <Flex direction="column" align="stretch" gap={8}>
+                        <Button size="medium" variant="primary" stretched onClick={retry}>
+                            Повторить
+                        </Button>
+                        <Button size="medium" variant="ghost" stretched onClick={handleBack}>
+                            Назад
+                        </Button>
+                    </Flex>
                 }
             />
         );
@@ -408,10 +425,20 @@ export function Feed({
         <Screen>
             <Flex direction="column" align="stretch" gap={8}>
                 <Flex justify="space-between" align="center" gap={8}>
-                    <Typography.Text variant="label" color="secondary">
-                        {card.topic}
-                    </Typography.Text>
-                    <Typography.Text variant="label" color="secondary">
+                    <Flex align="center" gap={8} style={{ minWidth: 0 }}>
+                        <IconButton
+                            size="small"
+                            variant="ghost"
+                            aria-label="Назад"
+                            onClick={handleBack}
+                        >
+                            <IconChevronLeft size={20} />
+                        </IconButton>
+                        <Typography.Text variant="label" color="secondary">
+                            {card.topic}
+                        </Typography.Text>
+                    </Flex>
+                    <Typography.Text variant="label" color="secondary" style={{ flexShrink: 0 }}>
                         {index + 1} / {cards.length}
                     </Typography.Text>
                 </Flex>

@@ -268,6 +268,7 @@ function App() {
                 removedCardIds={removedCardIds}
                 cardPatches={cardPatches}
                 onExit={goHome}
+                onBack={setId ? () => openSet(setId) : goHome}
                 onReportCard={(card) => openCardIssueFromFeed(card, setId)}
                 onShare={setId ? () => go({ name: 'share', setId }) : undefined}
             />
