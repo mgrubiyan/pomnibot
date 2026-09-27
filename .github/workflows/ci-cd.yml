@@ -63,7 +63,7 @@ jobs:
 
       - name: Run DATA-API Validator
         run: |
-          python contracts/validate_data_api.py DATA-API.yaml \
+          python contracts/validate_data_api.py contracts/data-api/DATA-API.yaml \
           --openapi contracts/openapi.yaml --schema contracts/data-api/DATA-API.schema.json
 
       - name: Install contracts dependencies
