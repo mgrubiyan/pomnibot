@@ -31,10 +31,10 @@ tasks:
       - task: miniapp:build
 
   gen:
-    desc: 'Генерация кода (OpenAPI контракты и sqlc)'
+    desc: 'Генерация кода (OpenAPI контракты)'
     cmds:
       - task: contracts:gen-openapi
-      - task: backend:sqlc
+#      - task: backend:sqlc
 
   gen:openapi:
     desc: 'Генерация кода по контрактам OpenAPI (Go и TypeScript)'
