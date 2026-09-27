@@ -43,12 +43,19 @@ tasks:
     cmds:
       - task: contracts:gen-openapi
 
-  gen:sql:
-    desc: 'Генерация Go-кода по SQL-запросам (sqlc)'
+  gen:data-api:
+    desc: 'Генерация DATA-API.yaml'
     aliases:
-      - gen:sqlc
+      - gen:data-api
     cmds:
-      - task: backend:sqlc
+      - task: contracts:gen-data-api
+
+#  gen:sql:
+#    desc: 'Генерация Go-кода по SQL-запросам (sqlc)'
+#    aliases:
+#      - gen:sqlc
+#    cmds:
+#      - task: backend:sqlc
 
   lint:
     desc: 'Линтинг всего проекта (фронтенд и бэкенд)'
