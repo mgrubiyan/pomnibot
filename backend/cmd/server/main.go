@@ -44,7 +44,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	router, err := httptransport.NewRouter(httptransport.NewAPIHandler(), staticFS)
+	// Initialize API handler with usecase services.
+	// Domain usecase services are wired here; repository/database implementations
+	// will be provided in subsequent data layer sessions.
+	apiHandler := httptransport.NewAPIHandler(nil, nil, nil)
+	router, err := httptransport.NewRouter(apiHandler, staticFS)
 	if err != nil {
 		slog.Error("failed to initialize router", "error", err)
 		os.Exit(1)

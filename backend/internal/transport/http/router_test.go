@@ -1,21 +1,26 @@
 package http
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"testing/fstest"
 
+	"github.com/google/uuid"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
+	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
 func TestHealthEndpoint(t *testing.T) {
 	mockFS := fstest.MapFS{
-		"index.html": {Data: []byte("<!DOCTYPE html><html><body>Test</body></html>")},
+		"index.html": &fstest.MapFile{Data: []byte("<!DOCTYPE html><html><body>Test</body></html>")},
 	}
 
-	router, err := NewRouter(NewAPIHandler(), mockFS)
+	router, err := NewRouter(NewAPIHandler(nil, nil, nil), mockFS)
 	if err != nil {
 		t.Fatalf("failed to setup router: %v", err)
 	}
@@ -41,15 +46,15 @@ func TestHealthEndpoint(t *testing.T) {
 
 func TestStaticAndReactRouter(t *testing.T) {
 	mockFS := fstest.MapFS{
-		"index.html": {
+		"index.html": &fstest.MapFile{
 			Data: []byte("<!DOCTYPE html><html><body>Test App</body></html>"),
 		},
-		"assets/app.js": {
+		"assets/app.js": &fstest.MapFile{
 			Data: []byte("console.log('hello');"),
 		},
 	}
 
-	router, err := NewRouter(NewAPIHandler(), mockFS)
+	router, err := NewRouter(NewAPIHandler(nil, nil, nil), mockFS)
 	if err != nil {
 		t.Fatalf("failed to setup router: %v", err)
 	}
@@ -184,10 +189,70 @@ func TestLoggingMiddleware(t *testing.T) {
 	}
 }
 
+type authTestHandler struct {
+	contracts.UnimplementedHandler
+	capturedUserID int64
+	capturedOk     bool
+}
+
+func (h *authTestHandler) GetHealth(ctx context.Context) (contracts.GetHealthRes, error) {
+	h.capturedUserID, h.capturedOk = UserIDFromContext(ctx)
+	return &contracts.HealthResponse{Status: "ok"}, nil
+}
+
+func TestRouter_AuthMiddlewareIntegration(t *testing.T) {
+	t.Run("propagates valid user from X-Init-Data header", func(t *testing.T) {
+		h := &authTestHandler{}
+		router, err := NewRouter(h, fstest.MapFS{})
+		if err != nil {
+			t.Fatalf("failed to create router: %v", err)
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+		req.Header.Set("X-Init-Data", `user={"id":424242}`)
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", rec.Code)
+		}
+		if !h.capturedOk {
+			t.Fatal("expected UserID to be present in context")
+		}
+		if h.capturedUserID != 424242 {
+			t.Fatalf("expected userID 424242, got %d", h.capturedUserID)
+		}
+	})
+
+	t.Run("falls back to 0 when X-Init-Data is absent", func(t *testing.T) {
+		h := &authTestHandler{}
+		router, err := NewRouter(h, fstest.MapFS{})
+		if err != nil {
+			t.Fatalf("failed to create router: %v", err)
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", rec.Code)
+		}
+		if !h.capturedOk {
+			t.Fatal("expected UserID to be present in context")
+		}
+		if h.capturedUserID != 0 {
+			t.Fatalf("expected fallback userID 0, got %d", h.capturedUserID)
+		}
+	})
+}
+
 func BenchmarkSPAHandler_Asset(b *testing.B) {
 	mockFS := fstest.MapFS{
-		"index.html":    {Data: []byte("<!DOCTYPE html><html><body>Test App</body></html>")},
-		"assets/app.js": {Data: []byte("console.log('hello');")},
+		"index.html":    &fstest.MapFile{Data: []byte("<!DOCTYPE html><html><body>Test App</body></html>")},
+		"assets/app.js": &fstest.MapFile{Data: []byte("console.log('hello');")},
 	}
 	handler := NewSPAHandler(mockFS)
 	req := httptest.NewRequest(http.MethodGet, "/assets/app.js", nil)
@@ -198,4 +263,240 @@ func BenchmarkSPAHandler_Asset(b *testing.B) {
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 	}
+}
+
+func TestRouter_E2E_Integration(t *testing.T) {
+	mockFS := fstest.MapFS{
+		"index.html": &fstest.MapFile{Data: []byte("<!DOCTYPE html><html><body>Test</body></html>")},
+	}
+
+	testUserID := int64(98765)
+	testSetID := uuid.New()
+	testCardID := uuid.New()
+
+	mockSet := &mockSetService{
+		getSetFunc: func(_ context.Context, userID int64, setID uuid.UUID) (*contracts.CardSet, error) {
+			if userID != testUserID {
+				t.Errorf("expected userID %d, got %d", testUserID, userID)
+			}
+			if setID != testSetID {
+				return nil, usecase.ErrNotFound
+			}
+			return &contracts.CardSet{
+				ID:    setID,
+				Title: "E2E Sets",
+			}, nil
+		},
+		getCardsBySetIDFunc: func(_ context.Context, userID int64, setID uuid.UUID) ([]contracts.Card, error) {
+			if userID != testUserID {
+				t.Errorf("expected userID %d, got %d", testUserID, userID)
+			}
+			if setID != testSetID {
+				return nil, usecase.ErrNotFound
+			}
+			return []contracts.Card{
+				{
+					ID:       testCardID,
+					SetId:    setID,
+					Kind:     contracts.CardKindChoice,
+					Question: "What is 2+2?",
+					Options:  []string{"3", "4", "5"},
+					Answer:   contracts.NewStringCardAnswer("4"),
+				},
+			}, nil
+		},
+	}
+
+	mockCard := &mockCardService{
+		answerQuestionFunc: func(_ context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error) {
+			if userID != testUserID {
+				t.Errorf("expected userID %d, got %d", testUserID, userID)
+			}
+			if cardID != testCardID {
+				return nil, usecase.ErrNotFound
+			}
+			return &contracts.AnswerQuestionResponse{
+				IsCorrect:  answer == "4",
+				UserAnswer: answer,
+			}, nil
+		},
+	}
+
+	mockHome := &mockHomescreenService{
+		getTodayFunc: func(_ context.Context, userID int64) (*contracts.TodayData, error) {
+			if userID != testUserID {
+				t.Errorf("expected userID %d, got %d", testUserID, userID)
+			}
+			return &contracts.TodayData{
+				UserName:   "Tester",
+				ActiveDays: 3,
+				DueCount:   7,
+			}, nil
+		},
+		getFeedQuestionsFunc: func(_ context.Context, userID int64) ([]contracts.Card, error) {
+			if userID != testUserID {
+				t.Errorf("expected userID %d, got %d", testUserID, userID)
+			}
+			return []contracts.Card{
+				{
+					ID:       testCardID,
+					SetId:    testSetID,
+					Kind:     contracts.CardKindChoice,
+					Question: "Feed Question",
+					Answer:   contracts.NewStringCardAnswer("Feed Answer"),
+				},
+			}, nil
+		},
+		sendResultsFunc: func(_ context.Context, userID int64, results []contracts.AnswerResult) error {
+			if userID != testUserID {
+				t.Errorf("expected userID %d, got %d", testUserID, userID)
+			}
+			if len(results) != 1 {
+				t.Errorf("expected 1 result, got %d", len(results))
+			}
+			return nil
+		},
+	}
+
+	handler := NewAPIHandler(mockSet, mockCard, mockHome)
+	router, err := NewRouter(handler, mockFS)
+	if err != nil {
+		t.Fatalf("failed to create router: %v", err)
+	}
+
+	authHeader := fmt.Sprintf(`user={"id":%d}`, testUserID)
+
+	t.Run("GET /api/health returns 200 OK", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var resp contracts.HealthResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse json: %v", err)
+		}
+		if resp.Status != "ok" {
+			t.Errorf("expected status 'ok', got %q", resp.Status)
+		}
+	})
+
+	t.Run("GET /api/sets/{setId} with auth returns 200 CardSet", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/sets/"+testSetID.String(), nil)
+		req.Header.Set("X-Init-Data", authHeader)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var resp contracts.CardSet
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse json: %v", err)
+		}
+		if resp.ID != testSetID || resp.Title != "E2E Sets" {
+			t.Errorf("unexpected response: %+v", resp)
+		}
+	})
+
+	t.Run("GET /api/sets/{setId}/cards with auth returns 200 and cards", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/sets/"+testSetID.String()+"/cards", nil)
+		req.Header.Set("X-Init-Data", authHeader)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var resp []contracts.Card
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse json: %v", err)
+		}
+		if len(resp) != 1 || resp[0].ID != testCardID {
+			t.Errorf("unexpected cards: %+v", resp)
+		}
+	})
+
+	t.Run("POST /api/cards/{cardId}/answer with auth returns 200", func(t *testing.T) {
+		body := bytes.NewBufferString(`{"answer":"4"}`)
+		req := httptest.NewRequest(http.MethodPost, "/api/cards/"+testCardID.String()+"/answer", body)
+		req.Header.Set("X-Init-Data", authHeader)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var resp contracts.AnswerQuestionResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse json: %v", err)
+		}
+		if !resp.IsCorrect || resp.UserAnswer != "4" {
+			t.Errorf("unexpected answer response: %+v", resp)
+		}
+	})
+
+	t.Run("GET /api/ (today) with auth returns 200 TodayData", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/", nil)
+		req.Header.Set("X-Init-Data", authHeader)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var resp contracts.TodayData
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse json: %v", err)
+		}
+		if resp.UserName != "Tester" || resp.DueCount != 7 {
+			t.Errorf("unexpected today data: %+v", resp)
+		}
+	})
+
+	t.Run("GET /api/feed with auth returns 200 feed cards", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/feed", nil)
+		req.Header.Set("X-Init-Data", authHeader)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var resp []contracts.Card
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse json: %v", err)
+		}
+		if len(resp) != 1 || resp[0].Question != "Feed Question" {
+			t.Errorf("unexpected feed response: %+v", resp)
+		}
+	})
+
+	t.Run("POST /api/results with auth returns 204 No Content", func(t *testing.T) {
+		body := bytes.NewBufferString(fmt.Sprintf(`[{"cardId":"%s","correct":true,"answeredAt":"2026-09-27T05:00:00Z"}]`, testCardID))
+		req := httptest.NewRequest(http.MethodPost, "/api/results", body)
+		req.Header.Set("X-Init-Data", authHeader)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("expected status 204, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("Relational isolation returns 404 for unknown or cross-tenant set", func(t *testing.T) {
+		unknownSetID := uuid.New()
+		req := httptest.NewRequest(http.MethodGet, "/api/sets/"+unknownSetID.String(), nil)
+		req.Header.Set("X-Init-Data", authHeader)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected status 404, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
 }
