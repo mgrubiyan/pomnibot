@@ -59,7 +59,7 @@ INSERT INTO user_fact_progress (
 VALUES (
     $1,
     $2,
-    CASE WHEN $3::BOOLEAN THEN 700 + 32 ELSE GREATEST(400, 700 - 32) END,
+    CASE WHEN $3::BOOLEAN THEN 700 + 201 ELSE GREATEST(400, 700 - 201) END,
     CASE WHEN NOT $3::BOOLEAN THEN TRUE ELSE FALSE END,
     CASE WHEN $3::BOOLEAN THEN 1 ELSE 0 END,
     CASE WHEN NOT $3::BOOLEAN THEN 1 ELSE 0 END,
@@ -70,11 +70,11 @@ VALUES (
 )
 ON CONFLICT (user_id, fact_id) DO UPDATE SET
     elo = CASE
-        WHEN $3::BOOLEAN THEN user_fact_progress.elo + 32
-        ELSE GREATEST(400, user_fact_progress.elo - 32)
+        WHEN $3::BOOLEAN THEN user_fact_progress.elo + 201
+        ELSE GREATEST(400, user_fact_progress.elo - 201)
     END,
     ceiling_found = CASE
-        WHEN NOT $3::BOOLEAN OR user_fact_progress.ceiling_found OR (user_fact_progress.elo + 32 >= 1400) THEN TRUE
+        WHEN NOT $3::BOOLEAN OR user_fact_progress.ceiling_found OR (user_fact_progress.elo + 201 >= 1400) THEN TRUE
         ELSE FALSE
     END,
     consecutive_correct = CASE
@@ -90,14 +90,14 @@ ON CONFLICT (user_id, fact_id) DO UPDATE SET
         ELSE user_fact_progress.ease_factor
     END,
     interval_days = CASE
-        WHEN $3::BOOLEAN AND NOT (NOT $3::BOOLEAN OR user_fact_progress.ceiling_found OR (user_fact_progress.elo + 32 >= 1400)) THEN 0
+        WHEN $3::BOOLEAN AND NOT (NOT $3::BOOLEAN OR user_fact_progress.ceiling_found OR (user_fact_progress.elo + 201 >= 1400)) THEN 0
         WHEN NOT $3::BOOLEAN THEN 1
         WHEN user_fact_progress.interval_days = 0 THEN 1
         WHEN user_fact_progress.interval_days = 1 THEN 3
         ELSE LEAST(30, (user_fact_progress.interval_days * user_fact_progress.ease_factor)::INT)
     END,
     next_review_at = CASE
-        WHEN $3::BOOLEAN AND NOT (NOT $3::BOOLEAN OR user_fact_progress.ceiling_found OR (user_fact_progress.elo + 32 >= 1400)) THEN CURRENT_TIMESTAMP
+        WHEN $3::BOOLEAN AND NOT (NOT $3::BOOLEAN OR user_fact_progress.ceiling_found OR (user_fact_progress.elo + 201 >= 1400)) THEN CURRENT_TIMESTAMP
         WHEN NOT $3::BOOLEAN THEN CURRENT_TIMESTAMP + INTERVAL '1 day'
         WHEN user_fact_progress.interval_days = 0 THEN CURRENT_TIMESTAMP + INTERVAL '1 day'
         WHEN user_fact_progress.interval_days = 1 THEN CURRENT_TIMESTAMP + INTERVAL '3 days'
