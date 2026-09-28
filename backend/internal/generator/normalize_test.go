@@ -119,6 +119,21 @@ func TestNormalizedPageStartsWithRepeatedTitles(t *testing.T) {
 	}
 }
 
+// Seen live on photos: the second page opens with a phrase the first one
+// also has, and its start was found inside the first page.
+func TestNormalizedPageStartsWhenOpeningRepeatsEarlier(t *testing.T) {
+	pages := []string{
+		"Билет 19. Первый вопрос: изменение функций на [0°; 90°]. Значения тригонометрических функций углов 30°, 45°, 60°.\nЕсли β > α, то sin возрастает.",
+		"Значения тригонометрических функций для некоторых углов:\nsin 30° = 1/2.",
+	}
+	orig := pages[0] + "\n" + pages[1]
+	norm := normalizeText(orig)
+	got := normalizedPageStarts(orig, []int{0, len(pages[0]) + 1}, norm)
+	if !strings.HasPrefix(norm[got[1]:], "Значения тригонометрических функций для") {
+		t.Errorf("page 2 starts at %q", norm[got[1]:])
+	}
+}
+
 func TestFindQuote(t *testing.T) {
 	const fragment = "Клеточный цикл — это период жизни клетки от одного деления до следующего\n" +
 		"или до её гибели. Ядро окружено «ядерной оболочкой» из двух мембран. " +
