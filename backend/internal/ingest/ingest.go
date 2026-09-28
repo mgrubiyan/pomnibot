@@ -39,9 +39,10 @@ type PageInfo struct {
 	File     int    `json:"file"`   // index in the files passed to Extract
 	Page     int    `json:"page"`   // 1-based within its file
 	Source   Source `json:"source"`
-	Chars    int    `json:"chars"`    // non-space characters of the page text
-	NeedsOCR bool   `json:"needsOcr"` // a photo, or a PDF page with almost no text layer
-	Poor     bool   `json:"poor"`     // recognized badly: the student should retake it
+	Chars    int    `json:"chars"`             // non-space characters of the page text
+	NeedsOCR bool   `json:"needsOcr"`          // a photo, or a PDF page with almost no text layer
+	Poor     bool   `json:"poor"`              // recognized badly: the student should retake it
+	Recoded  bool   `json:"recoded,omitempty"` // text layer had Cyrillic read as Latin-1, see recodeLatin1
 }
 
 // Result is the extracted text. Warnings are for the student, in Russian: the
@@ -215,12 +216,15 @@ func (e *Extractor) readPDF(ctx context.Context, res *Result, file int, f File) 
 	first := len(res.Pages)
 	var scanned []int
 	for i, text := range pages {
+		text, recoded := recodeLatin1(text)
+		pages[i] = text
 		info := PageInfo{
-			Number: first + i + 1,
-			File:   file,
-			Page:   i + 1,
-			Source: SourceText,
-			Chars:  countChars(text),
+			Number:  first + i + 1,
+			File:    file,
+			Page:    i + 1,
+			Source:  SourceText,
+			Chars:   countChars(text),
+			Recoded: recoded,
 		}
 		if info.Chars < e.opts.MinPageChars {
 			info.NeedsOCR = true

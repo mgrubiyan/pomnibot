@@ -120,6 +120,32 @@ func TestExtractPDFTextLayer(t *testing.T) {
 	}
 }
 
+// LaTeX slides with Type 3 fonts carry no Unicode map, and pdftotext gives
+// their Cyrillic as Latin-1: Windows-1251 codes, or T2A with "ё" at 0xBC.
+func TestExtractRecodesCyrillicReadAsLatin1(t *testing.T) {
+	// The heading comes from another font, with a proper Unicode map.
+	mojibake := "Лекция 5. Ïðåïðîöåññîð — ïåðâàÿ ôàçà òðàíñëÿöèè. Äèðåêòèâû — å¼ èíñòðóêöèè, îíè íà÷èíàþòñÿ ñ ñèìâîëà '#': #include <iostream>. " +
+		"Ïëþñû: ïðîñòîòà çàïóñêà, âîçìîæíîñòü áûñòðî òåñòèðîâàòü è èçìåíÿòü êîä áåç êîìïèëÿöèè. ¨ëêà è ¸æ."
+	want := "Лекция 5. Препроцессор — первая фаза трансляции. Директивы — её инструкции, они начинаются с символа '#': #include <iostream>. " +
+		"Плюсы: простота запуска, возможность быстро тестировать и изменять код без компиляции. Ёлка и ёж."
+	// A slide of code: far more ASCII letters than recoded ones.
+	code := "Ïðèìåð ïðîñòðàíñòâà èì¸í:\nnamespace math {\n  int square(int x) { return x * x; }\n}\nint main() {\n  std::cout << math::square(3) << std::endl;\n  using namespace std;\n  return 0;\n}"
+	codeWant := "Пример пространства имён:\nnamespace math {\n  int square(int x) { return x * x; }\n}\nint main() {\n  std::cout << math::square(3) << std::endl;\n  using namespace std;\n  return 0;\n}"
+	french := "Le café est très apprécié à Paris, où l'on préfère l'expresso. " + page(2)
+	pdf := &fakePDF{pages: []string{mojibake, code, french}}
+
+	res, err := newExtractor(t, pdf).Extract(context.Background(), []File{{Name: "slides.pdf", Data: pdfBytes}})
+	if err != nil {
+		t.Fatalf("Extract() error = %v", err)
+	}
+	if wantText := want + "\n" + codeWant + "\n" + strings.TrimSpace(french); res.Text != wantText {
+		t.Errorf("text:\n got: %q\nwant: %q", res.Text, wantText)
+	}
+	if len(res.Pages) != 3 || !res.Pages[0].Recoded || !res.Pages[1].Recoded || res.Pages[2].Recoded {
+		t.Errorf("pages = %+v, want the first two recoded", res.Pages)
+	}
+}
+
 func TestExtractMarksScannedPages(t *testing.T) {
 	pdf := &fakePDF{pages: []string{page(1), "  12 \n", page(3)}}
 	res, err := newExtractor(t, pdf).Extract(context.Background(), []File{{Name: "scan.pdf", Data: pdfBytes}})
@@ -285,5 +311,30 @@ func TestPDFToTextBinary(t *testing.T) {
 	}
 	if len(pages) != 1 || !strings.Contains(pages[0], "Mitosis is indirect cell division") {
 		t.Errorf("pages = %q", pages)
+	}
+}
+
+func TestRecodeLatin1(t *testing.T) {
+	tests := []struct{ name, in, want string }{
+		{"short words do not count against", "Â äàííîì êîäå pi çàìåíèòñÿ íà 4, à âñå âõîæäåíèÿ r - íà 2.",
+			"В данном коде pi заменится на 4, а все вхождения r - на 2."},
+		{"a two-word heading over code", "Çàïóñê ïðåïðîöåññîðà\ng++ -E main.cpp -o main.i\ncat main.i | head -n 20",
+			"Запуск препроцессора\ng++ -E main.cpp -o main.i\ncat main.i | head -n 20"},
+		{"German stays", "Die Größe der Äpfel hängt vom Boden ab, sagt Müller.", ""},
+		{"a French name stays", "Как писал Жан-Поль Сартр в книге «L'Être et le néant», свобода — это выбор.", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := recodeLatin1(tt.in)
+			if tt.want == "" {
+				if ok || got != tt.in {
+					t.Errorf("recoded %q as %q", tt.in, got)
+				}
+				return
+			}
+			if !ok || got != tt.want {
+				t.Errorf("recodeLatin1() = %q, %v; want %q", got, ok, tt.want)
+			}
+		})
 	}
 }
