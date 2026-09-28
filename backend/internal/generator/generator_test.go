@@ -598,7 +598,7 @@ func TestGenerateFiltersJunkBeforeModel(t *testing.T) {
 				t.Errorf("junk %q reached the model", junk)
 			}
 		}
-		if len(req.Schema) == 0 || req.Temperature != 0 || !strings.Contains(req.System, "Не больше 3 фактов") {
+		if len(req.Schema) == 0 || req.Temperature != 0 || !strings.Contains(req.System, fmt.Sprintf("Не больше %d фактов", DefaultMaxFactsPerChunk)) {
 			t.Error("request lacks the schema, zero temperature or the card limit")
 		}
 	}
@@ -747,6 +747,40 @@ func TestGenerateFactVariantsShareFactID(t *testing.T) {
 		if c.FactID != res.Cards[0].FactID && c.FactName != c.Topic {
 			t.Errorf("unnamed fact card factName = %q, want topic %q", c.FactName, c.Topic)
 		}
+	}
+}
+
+// A page of dense notes has more than three facts worth a card: by default
+// the model is asked for five per fragment, and five are accepted.
+func TestGenerateAsksForFiveFactsByDefault(t *testing.T) {
+	doc, _ := testDoc(t, paragraphs[0])
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		var facts []fx
+		for i := range 6 {
+			facts = append(facts, fx{quote: leadingWords(frag, 4+i), cards: []mc{{
+				kind: cards.KindFlip, q: fmt.Sprintf("Вопрос номер %d о митозе?", i+1), a: "Ответ из текста.",
+			}}})
+		}
+		return factsJSON(facts...), nil
+	}}
+	res := generate(t, p, doc, Options{})
+
+	req := p.requests[0]
+	var schema struct {
+		Properties struct {
+			Facts struct {
+				MaxItems int `json:"maxItems"`
+			} `json:"facts"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(req.Schema, &schema); err != nil || schema.Properties.Facts.MaxItems != 5 {
+		t.Errorf("schema facts maxItems = %d (err %v), want 5", schema.Properties.Facts.MaxItems, err)
+	}
+	if !strings.Contains(req.System, "до 5 ключевых фактов") {
+		t.Error("system prompt does not ask for up to 5 facts")
+	}
+	if res.Stats.Facts != 5 {
+		t.Errorf("accepted %d facts, want 5 of the 6 returned", res.Stats.Facts)
 	}
 }
 

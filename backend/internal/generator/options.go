@@ -69,7 +69,7 @@ const (
 	DefaultConcurrency      = 1
 	DefaultChunkSize        = 2500
 	DefaultChunkOverlap     = 150
-	DefaultMaxFactsPerChunk = 3
+	DefaultMaxFactsPerChunk = 5
 	DefaultCallTimeout      = 2 * time.Minute
 )
 
@@ -78,7 +78,7 @@ type Options struct {
 	Concurrency      int           // parallel model calls, default 1
 	ChunkSize        int           // fragment size in characters, default 2500
 	ChunkOverlap     int           // characters shared with the previous fragment, default 150, negative for none
-	MaxFactsPerChunk int           // facts per fragment, default 3; each fact gets up to 4 cards
+	MaxFactsPerChunk int           // facts per fragment, default 5; each fact gets up to 4 cards
 	MaxFactsPerDoc   int           // 0 means no limit
 	CallTimeout      time.Duration // per model call, retries of the provider included
 	// OnCards receives cards as soon as they are final, so a long document

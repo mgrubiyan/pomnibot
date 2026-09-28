@@ -38,9 +38,10 @@ const (
 	DefaultModel         = "GigaChat-3-Ultra"
 	DefaultFallbackModel = "GigaChat-2-Max"
 	// DefaultMaxTokens fits a fragment's worth of cards with room to spare:
-	// three facts with four cards each took about 2000 tokens on
-	// GigaChat-3-Ultra, and a cut answer is broken JSON.
-	DefaultMaxTokens = 4096
+	// a fact with four cards and choice distractors took up to about 850
+	// tokens on GigaChat-3-Ultra, five facts about 4000, and a cut answer is
+	// broken JSON. Only the tokens written are billed.
+	DefaultMaxTokens = 8192
 )
 
 const (
