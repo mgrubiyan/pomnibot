@@ -12,7 +12,7 @@
 //
 //	cfg, err := gigachat.ConfigFromEnv()
 //	llm, err := gigachat.New(cfg)
-//	gen := generator.NewGenerator(llm, generator.Options{OnCards: save})
+//	gen := generator.NewGenerator(llm, generator.Options{OnBatch: save})
 //	res, err := gen.Generate(ctx, generator.Document{Text: text, Title: title, ID: setID})
 package generator
 
@@ -65,7 +65,7 @@ func NewGenerator(p providers.Provider, opts Options) *Generator {
 
 // Generate runs the pipeline on one document: normalize, split, drop junk,
 // one model call per fragment, check quotes, drop duplicates, add
-// distractors, trim to MaxFactsPerDoc. Cards reach OnCards as they are ready;
+// distractors, trim to MaxFactsPerDoc. Cards reach OnBatch as they are ready;
 // the Result holds all of them in document order.
 //
 // A fragment that fails does not fail the document. An error is returned when
@@ -108,14 +108,14 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (Result, error) 
 	results := make(chan chunkResult, len(work))
 	go g.dispatch(runCtx, doc, len(all), work, asm, slots, results)
 
-	deliver := func(cards []cards.Card) {
-		if len(cards) == 0 {
+	deliver := func(cs []cards.Card) {
+		if len(cs) == 0 {
 			return
 		}
 		if stats.FirstCardAfter == 0 {
 			stats.FirstCardAfter = time.Since(began)
 		}
-		g.notify(cards)
+		g.notify(Batch{Facts: asm.newFacts(cs), Cards: cs})
 	}
 
 	var (
@@ -152,7 +152,7 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (Result, error) 
 			}
 			if r.holdsSlot {
 				// Released after assembly and the failure check, so the next
-				// dispatch sees these cards and a stop, and before OnCards,
+				// dispatch sees these cards and a stop, and before OnBatch,
 				// so a slow callback does not hold up the next model call.
 				<-slots
 			}
@@ -169,8 +169,9 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (Result, error) 
 	}
 
 	result := Result{Cards: asm.cards(), Stats: stats}
+	result.Facts = asm.factsOf(result.Cards)
 	result.Stats.Cards = len(result.Cards)
-	result.Stats.Facts = countFacts(result.Cards)
+	result.Stats.Facts = len(result.Facts)
 	result.Stats.Total = time.Since(began)
 	log.Info("cards: document done",
 		"title", doc.Title, "cards", result.Stats.Cards,
@@ -298,18 +299,18 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, total int, r
 	return r
 }
 
-// notify hands a batch to OnCards. A panic there is the caller's bug and
+// notify hands a batch to OnBatch. A panic there is the caller's bug and
 // must not take the rest of the document down with it.
-func (g *Generator) notify(cards []cards.Card) {
-	if g.opts.OnCards == nil {
+func (g *Generator) notify(b Batch) {
+	if g.opts.OnBatch == nil {
 		return
 	}
 	defer func() {
 		if p := recover(); p != nil {
-			slog.Error("cards: OnCards panicked", "panic", p)
+			slog.Error("cards: OnBatch panicked", "panic", p)
 		}
 	}()
-	g.opts.OnCards(slices.Clone(cards))
+	g.opts.OnBatch(Batch{Facts: slices.Clone(b.Facts), Cards: slices.Clone(b.Cards)})
 }
 
 // factID derives a fact's id from the document and the verified quote, so the
@@ -321,14 +322,6 @@ func factID(docID, quote string) string {
 	_, _ = h.Write([]byte{0})
 	_, _ = h.Write([]byte(fold(quote).s))
 	return fmt.Sprintf("%016x", h.Sum64())
-}
-
-func countFacts(cards []cards.Card) int {
-	seen := map[string]bool{}
-	for _, c := range cards {
-		seen[c.FactID] = true
-	}
-	return len(seen)
 }
 
 func clip(b []byte, n int) string {

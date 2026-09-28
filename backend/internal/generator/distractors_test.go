@@ -69,10 +69,9 @@ func TestDistractorPick(t *testing.T) {
 		Question:    "Как называется непрямое деление соматических клеток?",
 		Answer:      "Митоз",
 		SourceQuote: "Митоз — непрямое деление соматических клеток; кроссинговер при нём не происходит.",
-		Topic:       "Деление клетки",
 	}
 
-	got := p.pick(card, 0, 3)
+	got := p.pick(card, "Деление клетки", 0, 3)
 	want := []string{"Мейоз", "Цитокинез", "Апоптоз"}
 	slices.Sort(got)
 	slices.Sort(want)
@@ -82,7 +81,7 @@ func TestDistractorPick(t *testing.T) {
 
 	numeric := cards.Card{Question: "Сколько хромосом у человека?", Answer: "46", SourceQuote: "46 хромосом"}
 	p.add(cards.KindInput, "23", "Хромосомы", 5)
-	if got := p.pick(numeric, 2, 3); !slices.Equal(got, []string{"23"}) {
+	if got := p.pick(numeric, "", 2, 3); !slices.Equal(got, []string{"23"}) {
 		t.Errorf("numeric answer: pick() = %v, want [23]", got)
 	}
 }

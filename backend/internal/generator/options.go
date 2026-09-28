@@ -23,10 +23,20 @@ type Document struct {
 	PageStarts []int
 }
 
-// Result is what Generate returns: accepted cards in document order and stats.
+// Result is what Generate returns: the facts and their cards in document
+// order, and stats.
 type Result struct {
+	Facts []cards.Fact `json:"facts"`
 	Cards []cards.Card `json:"cards"`
 	Stats Stats        `json:"stats"`
+}
+
+// Batch is what OnBatch receives: cards now final and the facts first met
+// among them. A fact comes once, in the batch with its first card, so the
+// storage can insert it before its cards.
+type Batch struct {
+	Facts []cards.Fact
+	Cards []cards.Card
 }
 
 // Stats describes one Generate run. Every dropped card and every chunk that
@@ -64,7 +74,7 @@ type Stats struct {
 
 	ChunkTimeAvg   time.Duration `json:"chunkTimeAvg"` // model time per fragment, retries included
 	ChunkTimeMax   time.Duration `json:"chunkTimeMax"`
-	FirstCardAfter time.Duration `json:"firstCardAfter"` // from Generate start to the first OnCards batch
+	FirstCardAfter time.Duration `json:"firstCardAfter"` // from Generate start to the first OnBatch batch
 	Total          time.Duration `json:"total"`
 }
 
@@ -87,11 +97,11 @@ type Options struct {
 	MaxFactsPerChunk int           // facts per fragment, default 5; each fact gets up to 4 cards
 	MaxFactsPerDoc   int           // 0 means no limit
 	CallTimeout      time.Duration // per model call, retries of the provider included
-	// OnCards receives cards as soon as they are final, so a long document
-	// shows progress in minutes rather than all at once at the end. It is
-	// called from a single goroutine, outside locks, only with non-empty
-	// batches; a panic in it is logged and does not stop generation.
-	OnCards func([]cards.Card)
+	// OnBatch receives cards as soon as they are final, with their new facts,
+	// so a long document shows progress in minutes rather than all at once at
+	// the end. It is called from a single goroutine, outside locks, only with
+	// non-empty batches; a panic in it is logged and does not stop generation.
+	OnBatch func(Batch)
 }
 
 func (o Options) withDefaults() Options {

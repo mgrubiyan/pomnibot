@@ -85,11 +85,11 @@ func (p *distractorPool) add(kind cards.Kind, answer, topic string, pos int) {
 // be of comparable length. Among those, same-topic and closer-length answers
 // win; ties go to nearer fragments, then alphabetical order, so the choice is
 // deterministic.
-func (p *distractorPool) pick(c cards.Card, pos, n int) []string {
+func (p *distractorPool) pick(c cards.Card, topic string, pos, n int) []string {
 	answer := answerKey(c.Answer)
 	question := fold(c.Question).s
 	quote := fold(c.SourceQuote).s
-	topic := answerKey(c.Topic)
+	topic = answerKey(topic)
 	runes := utf8.RuneCountInString(answer)
 	hasDigit := strings.IndexFunc(answer, unicode.IsDigit) >= 0
 	if runes == 0 {

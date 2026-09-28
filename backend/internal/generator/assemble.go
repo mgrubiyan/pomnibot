@@ -36,9 +36,10 @@ type chunkResult struct {
 }
 
 type pendingChoice struct {
-	card cards.Card
-	pos  int
-	seq  int
+	card  cards.Card
+	topic string // the fact's, for same-topic distractors
+	pos   int
+	seq   int
 	// hasSiblings: other cards of the fact are delivered, so a choice card
 	// left without distractors is dropped rather than turned into a flip.
 	hasSiblings bool
@@ -71,7 +72,8 @@ type assembler struct {
 	stats    *Stats
 	accepted atomic.Int64 // facts counted against MaxFactsPerDoc
 
-	facts     map[string]bool // ids of accepted facts
+	facts     map[string]cards.Fact // accepted facts by id
+	sent      map[string]bool       // ids of facts already in a batch
 	questions *questionIndex
 	pool      *distractorPool
 	pending   []pendingChoice
@@ -90,7 +92,8 @@ func newAssembler(title string, pages []int, work, maxDoc int, stats *Stats) *as
 		work:      work,
 		maxDoc:    maxDoc,
 		stats:     stats,
-		facts:     map[string]bool{},
+		facts:     map[string]cards.Fact{},
+		sent:      map[string]bool{},
 		questions: newQuestionIndex(),
 		pool:      newDistractorPool(),
 	}
@@ -122,7 +125,7 @@ func (a *assembler) add(r chunkResult) []cards.Card {
 	allowance := a.quota(r.pos) - int(a.accepted.Load())
 	var ready []cards.Card
 	for _, f := range r.facts {
-		if a.facts[f.ID] {
+		if _, dup := a.facts[f.ID]; dup {
 			// The same quote again, typically from the overlap with the
 			// previous fragment.
 			a.stats.DroppedDuplicate += len(f.Cards)
@@ -164,14 +167,12 @@ func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok boo
 
 		card := cards.Card{
 			FactID:      f.ID,
-			FactName:    f.Name,
 			Kind:        mc.Kind,
 			Question:    mc.Question,
 			Answer:      mc.Answer,
 			Explanation: mc.Explanation,
 			SourceQuote: f.Quote,
 			SourceRef:   sourceRef(a.title, a.pages, f.Start, f.End),
-			Topic:       f.Topic,
 		}
 		a.seq++
 		switch {
@@ -183,7 +184,7 @@ func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok boo
 				card.Options = options
 				break
 			}
-			choices = append(choices, pendingChoice{card: card, pos: pos, seq: a.seq})
+			choices = append(choices, pendingChoice{card: card, topic: f.Topic, pos: pos, seq: a.seq})
 			continue
 		case card.Kind == cards.KindInput && len(strings.Fields(card.Answer)) > maxInputWords:
 			if len(f.Cards) > 1 {
@@ -202,7 +203,7 @@ func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok boo
 		return nil, false
 	}
 
-	a.facts[f.ID] = true
+	a.facts[f.ID] = cards.Fact{ID: f.ID, Name: f.Name, Topic: f.Topic}
 	a.accepted.Add(1)
 	for i := range choices {
 		choices[i].hasSiblings = len(ready) > 0
@@ -247,7 +248,7 @@ func (a *assembler) backfill() []cards.Card {
 			took = true
 			r := group[round]
 			a.stats.DroppedByLimit -= len(r.fact.Cards)
-			if a.facts[r.fact.ID] {
+			if _, dup := a.facts[r.fact.ID]; dup {
 				a.stats.DroppedDuplicate += len(r.fact.Cards) // accepted from a later fragment
 				continue
 			}
@@ -273,7 +274,7 @@ func (a *assembler) settle(pos int, final bool) []cards.Card {
 	var ready []cards.Card
 	kept := a.pending[:0]
 	for _, p := range a.pending {
-		options := a.pool.pick(p.card, p.pos, wantDistractors)
+		options := a.pool.pick(p.card, p.topic, p.pos, wantDistractors)
 		timeUp := final || pos-p.pos >= maxPendingWait
 		switch {
 		case len(options) >= wantDistractors || (timeUp && len(options) >= minDistractors):
@@ -339,6 +340,31 @@ func (a *assembler) count(r chunkResult) {
 
 // cards returns every delivered card in document order, the cards of one
 // fact next to each other.
+// newFacts returns the facts of cards not yet in a batch, marking them sent.
+func (a *assembler) newFacts(cs []cards.Card) []cards.Fact {
+	var out []cards.Fact
+	for _, c := range cs {
+		if !a.sent[c.FactID] {
+			a.sent[c.FactID] = true
+			out = append(out, a.facts[c.FactID])
+		}
+	}
+	return out
+}
+
+// factsOf returns the facts of cards in the order of their first card.
+func (a *assembler) factsOf(cs []cards.Card) []cards.Fact {
+	seen := map[string]bool{}
+	var out []cards.Fact
+	for _, c := range cs {
+		if !seen[c.FactID] {
+			seen[c.FactID] = true
+			out = append(out, a.facts[c.FactID])
+		}
+	}
+	return out
+}
+
 func (a *assembler) cards() []cards.Card {
 	sort.SliceStable(a.placed, func(i, j int) bool {
 		if a.placed[i].pos != a.placed[j].pos {

@@ -20,15 +20,22 @@ const (
 	AnswerFalse = "false"
 )
 
+// Fact is one statement of the notes, which several cards test in different
+// forms (choice, input, boolean, flip). The storage keeps facts apart from
+// cards, and so does the generator: a card refers to its fact by id.
+type Fact struct {
+	ID    string `json:"id"`   // derived from the document id and the quote
+	Name  string `json:"name"` // short name of the fact, narrower than Topic
+	Topic string `json:"topic"`
+}
+
 // Card mirrors Card in miniapp/src/types.ts without id and setId, which the
-// storage assigns, plus FactID.
+// storage assigns, and topic, which its fact holds; plus FactID.
 //
-// Cards with the same FactID test one fact in different forms (choice, input,
-// boolean, flip) and share the quote and FactName. The feed is meant to show
-// one of them at a time and rotate the form between repetitions.
+// Cards of one fact share the quote. The feed is meant to show one of them
+// at a time and rotate the form between repetitions.
 type Card struct {
-	FactID      string   `json:"factId"`   // derived from the document id and the quote
-	FactName    string   `json:"factName"` // short name of the fact, narrower than Topic
+	FactID      string   `json:"factId"`
 	Kind        Kind     `json:"kind"`
 	Question    string   `json:"question"`
 	Options     []string `json:"options,omitempty"` // choice only, includes Answer
@@ -36,5 +43,4 @@ type Card struct {
 	Explanation string   `json:"explanation"`
 	SourceQuote string   `json:"sourceQuote"` // exact text of the normalized notes
 	SourceRef   string   `json:"sourceRef,omitempty"`
-	Topic       string   `json:"topic"`
 }

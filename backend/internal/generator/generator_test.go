@@ -330,7 +330,7 @@ func TestGenerateChoiceWithoutDistractorsBecomesFlip(t *testing.T) {
 func TestGenerateChoiceTakesDistractorsFromOtherFragments(t *testing.T) {
 	doc, opts := testDoc(t, paragraphs[:5]...)
 	var batches [][]cards.Card
-	opts.OnCards = func(batch []cards.Card) { batches = append(batches, batch) }
+	opts.OnBatch = func(b Batch) { batches = append(batches, b.Cards) }
 	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
 		word := firstWord(frag)
 		if word == "Митоз" {
@@ -378,7 +378,7 @@ func TestGenerateChoiceTakesDistractorsFromOtherFragments(t *testing.T) {
 func TestGenerateChoiceTakesDistractorsFromModel(t *testing.T) {
 	doc, opts := testDoc(t, paragraphs[:2]...)
 	var batches [][]cards.Card
-	opts.OnCards = func(batch []cards.Card) { batches = append(batches, batch) }
+	opts.OnBatch = func(b Batch) { batches = append(batches, b.Cards) }
 	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
 		if firstWord(frag) != "Митоз" {
 			return `{"facts":[]}`, nil
@@ -481,8 +481,8 @@ func TestGenerateDeliversCardsProgressively(t *testing.T) {
 	doc, opts := testDoc(t, paragraphs[:3]...)
 	var batches atomic.Int32
 	var sizes []int
-	opts.OnCards = func(batch []cards.Card) {
-		sizes = append(sizes, len(batch))
+	opts.OnBatch = func(b Batch) {
+		sizes = append(sizes, len(b.Cards))
 		batches.Add(1)
 	}
 	p := &fakeProvider{answer: func(call int, frag string, _ providers.Request) (string, error) {
@@ -510,7 +510,7 @@ func TestGenerateDeliversCardsProgressively(t *testing.T) {
 
 func TestGenerateSurvivesPanickingCallback(t *testing.T) {
 	doc, opts := testDoc(t, paragraphs[:2]...)
-	opts.OnCards = func([]cards.Card) { panic("storage is down") }
+	opts.OnBatch = func(Batch) { panic("storage is down") }
 	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
 		return answerJSON(mc{kind: cards.KindFlip, q: "Что такое " + strings.ToLower(firstWord(frag)) + "?", a: "Ответ.", quote: firstSentence(frag)}), nil
 	}}
@@ -766,13 +766,17 @@ func TestGenerateFactVariantsShareFactID(t *testing.T) {
 	if len(byFact) != 6 || res.Stats.Facts != 6 || res.Stats.FactsFromModel != 6 {
 		t.Fatalf("%d facts (stats %d of %d), want 6", len(byFact), res.Stats.Facts, res.Stats.FactsFromModel)
 	}
+	facts := map[string]cards.Fact{}
+	for _, f := range res.Facts {
+		facts[f.ID] = f
+	}
+	if name := facts[res.Cards[0].FactID].Name; name != "Непрямое деление клеток" {
+		t.Errorf("mitosis fact name = %q, want the name the model gave", name)
+	}
 	mitosis := byFact[res.Cards[0].FactID]
 	var kinds []cards.Kind
 	for _, c := range mitosis {
 		kinds = append(kinds, c.Kind)
-		if c.FactName != "Непрямое деление клеток" {
-			t.Errorf("%s card factName = %q, want the fact's name", c.Kind, c.FactName)
-		}
 		if c.SourceQuote != strings.TrimSuffix(firstSentence(paragraphs[0]), ".") {
 			t.Errorf("%s card quote = %q, want the fact's quote", c.Kind, c.SourceQuote)
 		}
@@ -786,10 +790,10 @@ func TestGenerateFactVariantsShareFactID(t *testing.T) {
 			t.Errorf("choice options = %v, want 4 from other fragments", c.Options)
 		}
 	}
-	// The second fact came without a name: its topic stands in.
-	for _, c := range res.Cards {
-		if c.FactID != res.Cards[0].FactID && c.FactName != c.Topic {
-			t.Errorf("unnamed fact card factName = %q, want topic %q", c.FactName, c.Topic)
+	// The other facts came without a name: their topic stands in.
+	for _, f := range res.Facts[1:] {
+		if f.Name != f.Topic {
+			t.Errorf("unnamed fact name = %q, want topic %q", f.Name, f.Topic)
 		}
 	}
 }
@@ -825,6 +829,60 @@ func TestGenerateAsksForFiveFactsByDefault(t *testing.T) {
 	}
 	if res.Stats.Facts != 5 {
 		t.Errorf("accepted %d facts, want 5 of the 6 returned", res.Stats.Facts)
+	}
+}
+
+// Facts go apart from cards, as the storage keeps them: a card refers to its
+// fact by id only, and name and topic are not repeated on every card.
+func TestGenerateReturnsFactsApart(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[:3]...)
+	var batches []Batch
+	opts.OnBatch = func(b Batch) { batches = append(batches, b) }
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		word := firstWord(frag)
+		return factsJSON(fx{quote: firstSentence(frag), topic: "Деление клетки", name: "Что такое " + strings.ToLower(word), cards: []mc{
+			{kind: cards.KindFlip, q: "Что такое " + strings.ToLower(word) + "?", a: "Ответ из текста."},
+			{kind: cards.KindBoolean, q: word + " — это деление.", a: "true"},
+		}}), nil
+	}}
+	res := generate(t, p, doc, opts)
+
+	if len(res.Facts) != 3 || len(res.Cards) != 6 {
+		t.Fatalf("got %d facts and %d cards, want 3 and 6", len(res.Facts), len(res.Cards))
+	}
+	for i, f := range res.Facts {
+		if f.ID == "" || f.Topic != "Деление клетки" || f.Name != "Что такое "+strings.ToLower(firstWord(paragraphs[i])) {
+			t.Errorf("fact %d = %+v, want in document order with its name and topic", i, f)
+		}
+		for _, c := range res.Cards[2*i : 2*i+2] {
+			if c.FactID != f.ID {
+				t.Errorf("card %q has factId %q, want %q", c.Question, c.FactID, f.ID)
+			}
+		}
+	}
+	b, _ := json.Marshal(res.Cards[0])
+	if strings.Contains(string(b), "factName") || strings.Contains(string(b), "topic") {
+		t.Errorf("card JSON repeats its fact: %s", b)
+	}
+
+	// Each fact comes once, no later than the first of its cards, so the
+	// storage can insert it before them.
+	sent := map[string]bool{}
+	for _, b := range batches {
+		for _, f := range b.Facts {
+			if sent[f.ID] {
+				t.Errorf("fact %q delivered twice", f.ID)
+			}
+			sent[f.ID] = true
+		}
+		for _, c := range b.Cards {
+			if !sent[c.FactID] {
+				t.Errorf("card %q delivered before its fact", c.Question)
+			}
+		}
+	}
+	if len(sent) != 3 {
+		t.Errorf("%d facts delivered, want 3", len(sent))
 	}
 }
 

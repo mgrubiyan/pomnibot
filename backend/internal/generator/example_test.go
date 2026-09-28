@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
-	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
@@ -28,7 +27,8 @@ func ExampleNewGenerator() {
 	gen := generator.NewGenerator(cannedModel{}, generator.Options{
 		// Called as fragments are done, in document order: the feed can show
 		// the first cards before the whole document is processed.
-		OnCards: func(batch []cards.Card) { fmt.Println("saved", len(batch), "cards") },
+		// A fact comes in the batch with its first card, to be stored first.
+		OnBatch: func(b generator.Batch) { fmt.Println("saved", len(b.Facts), "fact and", len(b.Cards), "cards") },
 	})
 	res, err := gen.Generate(context.Background(), generator.Document{
 		Title: "Лекция 3",
@@ -39,11 +39,13 @@ func ExampleNewGenerator() {
 		fmt.Println(err)
 		return
 	}
+	fmt.Printf("%s (%s)\n", res.Facts[0].Name, res.Facts[0].Topic)
 	for _, c := range res.Cards {
-		fmt.Printf("%s: [%s] %s → %s\n", c.FactName, c.Kind, c.Question, c.Answer)
+		fmt.Printf("  [%s] %s → %s\n", c.Kind, c.Question, c.Answer)
 	}
 	// Output:
-	// saved 2 cards
-	// Самая короткая фаза митоза: [input] Какая фаза митоза самая короткая? → Анафаза
-	// Самая короткая фаза митоза: [boolean] Метафаза — самая короткая фаза митоза. → false
+	// saved 1 fact and 2 cards
+	// Самая короткая фаза митоза (Фазы митоза)
+	//   [input] Какая фаза митоза самая короткая? → Анафаза
+	//   [boolean] Метафаза — самая короткая фаза митоза. → false
 }

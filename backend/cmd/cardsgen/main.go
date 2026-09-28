@@ -118,14 +118,14 @@ func run() error {
 		MaxFactsPerChunk: *perChunk,
 		MaxFactsPerDoc:   *limit,
 		CallTimeout:      *timeout,
-		OnCards: func(batch []cards.Card) {
-			delivered += len(batch)
+		OnBatch: func(b generator.Batch) {
+			delivered += len(b.Cards)
 			refs := map[string]bool{}
-			for _, c := range batch {
+			for _, c := range b.Cards {
 				refs[c.SourceRef] = true
 			}
 			fmt.Fprintf(os.Stderr, "[%7.1fs] +%d (всего %d) %s\n",
-				time.Since(began).Seconds(), len(batch), delivered, strings.Join(sortedKeys(refs), "; "))
+				time.Since(began).Seconds(), len(b.Cards), delivered, strings.Join(sortedKeys(refs), "; "))
 		},
 	})
 
@@ -149,7 +149,7 @@ func run() error {
 			return fmt.Errorf("encode result: %w", err)
 		}
 	} else {
-		fmt.Print(formatCards(res.Cards) + formatStats(res.Stats))
+		fmt.Print(formatCards(res.Facts, res.Cards) + formatStats(res.Stats))
 	}
 	if genErr != nil {
 		return fmt.Errorf("generation stopped: %w", genErr)
@@ -213,14 +213,19 @@ func extract(ctx context.Context, paths []string, ocrModel string) (ingest.Resul
 
 // formatCards prints cards grouped by fact: the quote once, then every card
 // that tests it.
-func formatCards(list []cards.Card) string {
+func formatCards(facts []cards.Fact, list []cards.Card) string {
+	byID := make(map[string]cards.Fact, len(facts))
+	for _, f := range facts {
+		byID[f.ID] = f
+	}
 	var w strings.Builder
 	fact, lastID := 0, ""
 	for _, c := range list {
 		if c.FactID != lastID {
 			fact++
 			lastID = c.FactID
-			fmt.Fprintf(&w, "\n== Факт %d: %s (%s) — %s\n", fact, c.FactName, c.Topic, c.SourceRef)
+			f := byID[c.FactID]
+			fmt.Fprintf(&w, "\n== Факт %d: %s (%s) — %s\n", fact, f.Name, f.Topic, c.SourceRef)
 			fmt.Fprintf(&w, "   Цитата: «%s»\n", c.SourceQuote)
 		}
 		fmt.Fprintf(&w, "  [%s] %s\n", c.Kind, c.Question)
