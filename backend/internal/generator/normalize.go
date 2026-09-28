@@ -233,36 +233,44 @@ const minQuoteRunes = 20
 // its sentences is verbatim, in order and close to the previous one; the
 // card then shows the whole passage, what was left out included.
 func findQuote(fragment, quote string) (string, bool) {
+	start, end, ok := locateQuote(fragment, quote)
+	return fragment[start:end], ok
+}
+
+// locateQuote is findQuote giving the byte offsets of the span in fragment.
+func locateQuote(fragment, quote string) (start, end int, ok bool) {
 	q := trimQuote(fold(quote).s)
 	if utf8.RuneCountInString(q) < minQuoteRunes {
-		return "", false
+		return 0, 0, false
 	}
 	f := fold(fragment)
 	if i := indexPhrase(f.s, q, 0); i >= 0 {
-		return spanOf(fragment, f, i, i+len(q)), true
+		start, end = spanOf(fragment, f, i, i+len(q))
+		return start, end, true
 	}
 
 	pieces := quotePieces(q)
 	if len(pieces) < 2 {
-		return "", false
+		return 0, 0, false
 	}
-	start, end := -1, 0
+	first, last := -1, 0
 	for _, p := range pieces {
-		i := indexPhrase(f.s, p, end)
+		i := indexPhrase(f.s, p, last)
 		if i < 0 {
-			return "", false
+			return 0, 0, false
 		}
-		if start < 0 {
-			start = i
-		} else if utf8.RuneCountInString(f.s[end:i]) > maxQuoteGap {
-			return "", false
+		if first < 0 {
+			first = i
+		} else if utf8.RuneCountInString(f.s[last:i]) > maxQuoteGap {
+			return 0, 0, false
 		}
-		end = i + len(p)
+		last = i + len(p)
 	}
-	if utf8.RuneCountInString(f.s[start:end]) > maxQuoteSpan {
-		return "", false
+	if utf8.RuneCountInString(f.s[first:last]) > maxQuoteSpan {
+		return 0, 0, false
 	}
-	return spanOf(fragment, f, start, end), true
+	start, end = spanOf(fragment, f, first, last)
+	return start, end, true
 }
 
 const (
@@ -303,9 +311,100 @@ func quotePieces(q string) []string {
 	return pieces
 }
 
-// spanOf returns the source text behind f.s[i:j].
-func spanOf(source string, f folded, i, j int) string {
-	return strings.TrimSpace(source[f.start[i]:f.end[j-1]])
+// spanOf returns the offsets of the source text behind f.s[i:j], without
+// the whitespace around it.
+func spanOf(source string, f folded, i, j int) (start, end int) {
+	start, end = f.start[i], f.end[j-1]
+	s := source[start:end]
+	start += len(s) - len(strings.TrimLeftFunc(s, unicode.IsSpace))
+	end -= len(s) - len(strings.TrimRightFunc(s, unicode.IsSpace))
+	return start, end
+}
+
+// normalizedPageStarts maps page starts, byte offsets in the original text,
+// to offsets in its normalized form. Normalization only drops and squeezes
+// whitespace and glues hyphenated words and broken lines, so each page is
+// found again by its first letters, whitespace ignored, after the page
+// before it. A page with no text starts where the next one does, so that no
+// quote is cited from it; one not found starts where the search stands.
+func normalizedPageStarts(orig string, starts []int, norm string) []int {
+	if len(starts) == 0 {
+		return nil
+	}
+	var sq strings.Builder
+	var at []int // offset in norm of each byte of sq
+	for i, r := range norm {
+		if unicode.IsSpace(r) {
+			continue
+		}
+		n, _ := sq.WriteRune(r)
+		for range n {
+			at = append(at, i)
+		}
+	}
+	squeezed := sq.String()
+
+	out := make([]int, len(starts))
+	var blank []int // pages with no text, waiting for the next page's start
+	from := 0
+	for i, start := range starts {
+		end := len(orig)
+		if i+1 < len(starts) {
+			end = starts[i+1]
+		}
+		start, end = min(max(start, 0), len(orig)), min(max(end, 0), len(orig))
+		page := ""
+		if start < end {
+			page = orig[start:end]
+		}
+		if pageAnchor(page, 1) == "" {
+			blank = append(blank, i)
+			continue
+		}
+		// A short page may end in a hyphen that normalization removed: try
+		// shorter beginnings before giving up. The next page is looked for
+		// past this one's beginning: Beamer repeats a title on every slide.
+		found := from
+		for n := pageAnchorRunes; n >= pageAnchorRunes/4; n /= 2 {
+			anchor := pageAnchor(page, n)
+			if j := strings.Index(squeezed[from:], anchor); j >= 0 {
+				found = from + j
+				from = found + len(anchor)
+				break
+			}
+		}
+		pos := len(norm)
+		if found < len(at) {
+			pos = at[found]
+		}
+		for _, b := range append(blank, i) {
+			out[b] = pos
+		}
+		blank = blank[:0]
+	}
+	for _, b := range blank {
+		out[b] = len(norm)
+	}
+	return out
+}
+
+// pageAnchorRunes letters are enough to find a page's beginning.
+const pageAnchorRunes = 24
+
+// pageAnchor is the first n letters of a page's normalized text, whitespace
+// dropped.
+func pageAnchor(page string, n int) string {
+	var b strings.Builder
+	for _, r := range normalizeText(page) {
+		if unicode.IsSpace(r) {
+			continue
+		}
+		b.WriteRune(r)
+		if n--; n == 0 {
+			break
+		}
+	}
+	return b.String()
 }
 
 // indexPhrase is strings.Index from byte from that only accepts a match not

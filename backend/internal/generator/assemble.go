@@ -48,9 +48,8 @@ type pendingChoice struct {
 // MaxFactsPerDoc. It may still get in at the end if later fragments leave
 // part of the budget unused.
 type reserved struct {
-	fact  modelFact
-	pos   int
-	index int // chunk.Index, for SourceRef
+	fact modelFact
+	pos  int
 }
 
 type placedCard struct {
@@ -66,7 +65,8 @@ type placedCard struct {
 // the dispatcher.
 type assembler struct {
 	title    string
-	work     int // fragments sent to the model, the budget is spread over them
+	pages    []int // page starts in the normalized text, for SourceRef
+	work     int   // fragments sent to the model, the budget is spread over them
 	maxDoc   int
 	stats    *Stats
 	accepted atomic.Int64 // facts counted against MaxFactsPerDoc
@@ -83,9 +83,10 @@ type assembler struct {
 	timeCount int
 }
 
-func newAssembler(title string, work, maxDoc int, stats *Stats) *assembler {
+func newAssembler(title string, pages []int, work, maxDoc int, stats *Stats) *assembler {
 	return &assembler{
 		title:     title,
+		pages:     pages,
 		work:      work,
 		maxDoc:    maxDoc,
 		stats:     stats,
@@ -134,10 +135,10 @@ func (a *assembler) add(r chunkResult) []cards.Card {
 		}
 		if allowance <= 0 {
 			a.stats.DroppedByLimit += len(f.Cards)
-			a.reserve = append(a.reserve, reserved{fact: f, pos: r.pos, index: r.chunk.Index})
+			a.reserve = append(a.reserve, reserved{fact: f, pos: r.pos})
 			continue
 		}
-		if cards, ok := a.acceptFact(f, r.pos, r.chunk.Index); ok {
+		if cards, ok := a.acceptFact(f, r.pos); ok {
 			allowance--
 			ready = append(ready, cards...)
 		}
@@ -149,7 +150,7 @@ func (a *assembler) add(r chunkResult) []cards.Card {
 // budget. Cards ready now are returned; choice cards wait in settle for
 // distractors. ok is false when every card repeated an earlier question: the
 // fact then costs nothing.
-func (a *assembler) acceptFact(f modelFact, pos, index int) (ready []cards.Card, ok bool) {
+func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok bool) {
 	var choices []pendingChoice
 	var questions []string
 	for _, mc := range f.Cards {
@@ -169,7 +170,7 @@ func (a *assembler) acceptFact(f modelFact, pos, index int) (ready []cards.Card,
 			Answer:      mc.Answer,
 			Explanation: mc.Explanation,
 			SourceQuote: f.Quote,
-			SourceRef:   sourceRef(a.title, index),
+			SourceRef:   sourceRef(a.title, a.pages, f.Start, f.End),
 			Topic:       f.Topic,
 		}
 		a.seq++
@@ -250,7 +251,7 @@ func (a *assembler) backfill() []cards.Card {
 				a.stats.DroppedDuplicate += len(r.fact.Cards) // accepted from a later fragment
 				continue
 			}
-			if cards, ok := a.acceptFact(r.fact, r.pos, r.index); ok {
+			if cards, ok := a.acceptFact(r.fact, r.pos); ok {
 				room--
 				ready = append(ready, cards...)
 			}
@@ -352,9 +353,28 @@ func (a *assembler) cards() []cards.Card {
 	return out
 }
 
-func sourceRef(title string, index int) string {
-	if title == "" {
-		return fmt.Sprintf("Фрагмент %d", index+1)
+// sourceRef tells the student where the quote is: the page, or both pages
+// when it runs over a page break. Fragments are the generator's own and mean
+// nothing to the student, so without pages only the title is left.
+func sourceRef(title string, pages []int, start, end int) string {
+	var ref string
+	if len(pages) > 1 {
+		first, last := pageAt(pages, start), pageAt(pages, max(start, end-1))
+		ref = fmt.Sprintf("стр. %d", first)
+		if last != first {
+			ref = fmt.Sprintf("стр. %d–%d", first, last)
+		}
 	}
-	return fmt.Sprintf("%s, фрагмент %d", title, index+1)
+	switch {
+	case ref == "":
+		return title
+	case title == "":
+		return ref
+	}
+	return title + ", " + ref
+}
+
+// pageAt is the 1-based number of the page the offset falls on.
+func pageAt(pages []int, offset int) int {
+	return max(1, sort.Search(len(pages), func(i int) bool { return pages[i] > offset }))
 }

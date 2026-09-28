@@ -89,6 +89,36 @@ func TestFindQuoteIgnoresBullets(t *testing.T) {
 	}
 }
 
+// Normalization glues a word hyphenated over a page break and squeezes
+// spaces; page starts are found again by their first letters.
+func TestNormalizedPageStarts(t *testing.T) {
+	pages := []string{"Митоз — непрямое деле-", "ние соматических клеток. Это  важно.", "", "Мейоз   уменьшает число хромосом вдвое."}
+	orig := pages[0] + "\n" + pages[1] + "\n" + pages[3]
+	starts := []int{0, len(pages[0]) + 1, len(pages[0]) + len(pages[1]) + 2, len(pages[0]) + len(pages[1]) + 2}
+	norm := normalizeText(orig)
+	got := normalizedPageStarts(orig, starts, norm)
+	for i, want := range []string{"Митоз — непрямое", "ние соматических", "Мейоз уменьшает", "Мейоз уменьшает"} {
+		if !strings.HasPrefix(norm[got[i]:], want) {
+			t.Errorf("page %d starts at %q, want %q", i+1, norm[got[i]:], want)
+		}
+	}
+}
+
+// Beamer repeats a frame's title on every slide of it: two pages with the
+// same beginning must still get their own starts.
+func TestNormalizedPageStartsWithRepeatedTitles(t *testing.T) {
+	pages := []string{
+		"Препроцессор и его директивы\n\nПрепроцессор - первая фаза трансляции.",
+		"Препроцессор и его директивы\n\nПрепроцессор разбивает код на лексемы.",
+	}
+	orig := pages[0] + "\n" + pages[1]
+	norm := normalizeText(orig)
+	got := normalizedPageStarts(orig, []int{0, len(pages[0]) + 1}, norm)
+	if !strings.HasPrefix(norm[got[1]:], "Препроцессор и его директивы\n\nПрепроцессор разбивает") {
+		t.Errorf("page 2 starts at %q", norm[got[1]:])
+	}
+}
+
 func TestFindQuote(t *testing.T) {
 	const fragment = "Клеточный цикл — это период жизни клетки от одного деления до следующего\n" +
 		"или до её гибели. Ядро окружено «ядерной оболочкой» из двух мембран. " +

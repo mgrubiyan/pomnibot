@@ -12,10 +12,15 @@ import (
 // derived from it and the quote: the same notes uploaded twice must not share
 // fact ids, which the storage keeps unique across all sets. Without an ID
 // every Generate call picks a random one.
+//
+// PageStarts are byte offsets in Text where pages 1, 2, … start, as
+// ingest.PageInfo.Start gives them: cards then cite pages. Without them, as
+// for plain text, cards cite the title only.
 type Document struct {
-	Text  string
-	Title string
-	ID    string
+	Text       string
+	Title      string
+	ID         string
+	PageStarts []int
 }
 
 // Result is what Generate returns: accepted cards in document order and stats.

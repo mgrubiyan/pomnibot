@@ -130,7 +130,11 @@ func run() error {
 	})
 
 	fmt.Fprintf(os.Stderr, "%s: %d символов, модель %s\n", strings.Join(paths, ", "), len([]rune(notes.Text)), or(cfg.Model, gigachat.DefaultModel))
-	res, genErr := gen.Generate(ctx, generator.Document{Text: notes.Text, Title: *title})
+	doc := generator.Document{Text: notes.Text, Title: *title}
+	for _, p := range notes.Pages {
+		doc.PageStarts = append(doc.PageStarts, p.Start)
+	}
+	res, genErr := gen.Generate(ctx, doc)
 
 	if *asJSON {
 		enc := json.NewEncoder(os.Stdout)

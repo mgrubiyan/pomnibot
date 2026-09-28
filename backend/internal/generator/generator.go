@@ -100,7 +100,7 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (Result, error) 
 		"title", doc.Title, "chars", utf8.RuneCountInString(text),
 		"fragments", len(all), "filtered", stats.ChunksFiltered)
 
-	asm := newAssembler(doc.Title, len(work), g.opts.MaxFactsPerDoc, &stats)
+	asm := newAssembler(doc.Title, normalizedPageStarts(doc.Text, doc.PageStarts, text), len(work), g.opts.MaxFactsPerDoc, &stats)
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -270,18 +270,19 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, total int, r
 	// One quote per fact: a fact that fails the check takes all its cards
 	// with it.
 	for _, f := range parsed {
-		quote, ok := findQuote(r.chunk.Text, f.Quote)
+		start, end, ok := locateQuote(r.chunk.Text, f.Quote)
 		if !ok {
 			r.droppedQuote += len(f.Cards)
 			log.Info("cards: quote not found in fragment", "topic", f.Topic, "quote", f.Quote)
 			continue
 		}
-		f.Quote = quote
-		f.ID = factID(doc.ID, quote)
+		f.Quote = r.chunk.Text[start:end]
+		f.Start, f.End = r.chunk.Start+start, r.chunk.Start+end
+		f.ID = factID(doc.ID, f.Quote)
 
 		kept := f.Cards[:0]
 		for _, c := range f.Cards {
-			if answerChecked(c.Kind) && !answerSupported(c, quote) {
+			if answerChecked(c.Kind) && !answerSupported(c, f.Quote) {
 				r.droppedUnsupported++
 				log.Info("cards: answer not in the quote or given in the question",
 					"kind", c.Kind, "question", c.Question, "answer", c.Answer)

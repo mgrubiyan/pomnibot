@@ -154,7 +154,12 @@ func testDoc(t *testing.T, paras ...string) (Document, Options) {
 	if len(paras) > 1 && 2*shortest+2 <= longest {
 		t.Fatalf("paragraphs too uneven to be one fragment each: %d..%d", shortest, longest)
 	}
+	// Each paragraph is a page of its own, so cards cite a paragraph as
+	// "стр. N".
 	doc := Document{Title: "Лекция 3", Text: strings.Join(paras, "\n\n")}
+	for i := range paras {
+		doc.PageStarts = append(doc.PageStarts, len(strings.Join(paras[:i], "\n\n"))+min(i, 1)*2)
+	}
 	return doc, Options{ChunkSize: longest, ChunkOverlap: -1}
 }
 
@@ -201,7 +206,7 @@ func TestGenerateAcceptsQuoteDifferingInSpacesAndYo(t *testing.T) {
 	if want := "Ядро окружено «ядерной оболочкой», её наружная мембрана переходит в эндоплазматическую сеть"; c.SourceQuote != want {
 		t.Errorf("SourceQuote = %q, want the text of the notes %q", c.SourceQuote, want)
 	}
-	if c.SourceRef != "Лекция 3, фрагмент 1" {
+	if c.SourceRef != "Лекция 3" { // one page: nothing to cite but the title
 		t.Errorf("SourceRef = %q", c.SourceRef)
 	}
 }
@@ -294,7 +299,7 @@ func TestGenerateDropsDuplicateQuestions(t *testing.T) {
 	if len(res.Cards) != 1 {
 		t.Fatalf("got %d cards, want 1", len(res.Cards))
 	}
-	if res.Cards[0].SourceRef != "Лекция 3, фрагмент 1" {
+	if res.Cards[0].SourceRef != "Лекция 3, стр. 1" {
 		t.Errorf("kept the card from %q, want the first one", res.Cards[0].SourceRef)
 	}
 	if res.Stats.DroppedDuplicate != 1 {
@@ -364,7 +369,7 @@ func TestGenerateChoiceTakesDistractorsFromOtherFragments(t *testing.T) {
 		return slices.ContainsFunc(b, func(c cards.Card) bool { return c.Kind == cards.KindChoice })
 	})
 	if i < 0 || i == len(batches)-1 || !slices.ContainsFunc(batches[i], func(c cards.Card) bool {
-		return c.SourceRef == "Лекция 3, фрагмент 4"
+		return c.SourceRef == "Лекция 3, стр. 4"
 	}) {
 		t.Errorf("choice card delivered in batch %d of %d, want with the fourth fragment", i, len(batches))
 	}
@@ -542,7 +547,7 @@ func TestGenerateSpreadsCardLimitOverDocument(t *testing.T) {
 	for _, c := range res.Cards {
 		refs = append(refs, c.SourceRef)
 	}
-	want := []string{"Лекция 3, фрагмент 2", "Лекция 3, фрагмент 3", "Лекция 3, фрагмент 5", "Лекция 3, фрагмент 6"}
+	want := []string{"Лекция 3, стр. 2", "Лекция 3, стр. 3", "Лекция 3, стр. 5", "Лекция 3, стр. 6"}
 	if !slices.Equal(refs, want) {
 		t.Errorf("cards from %v, want %v", refs, want)
 	}
@@ -579,7 +584,7 @@ func TestGenerateBackfillsUnusedCardLimit(t *testing.T) {
 	for _, c := range res.Cards {
 		perFragment[c.SourceRef]++
 	}
-	if len(res.Cards) != 5 || perFragment["Лекция 3, фрагмент 1"] != 2 || perFragment["Лекция 3, фрагмент 2"] != 3 {
+	if len(res.Cards) != 5 || perFragment["Лекция 3, стр. 1"] != 2 || perFragment["Лекция 3, стр. 2"] != 3 {
 		t.Errorf("cards per fragment %v, want 2 and 3", perFragment)
 	}
 	if res.Stats.DroppedByLimit != 1 {
@@ -662,7 +667,7 @@ func TestGenerateRespectsConcurrency(t *testing.T) {
 				t.Fatalf("got %d cards, want %d", len(res.Cards), len(paragraphs))
 			}
 			for i, c := range res.Cards {
-				if want := fmt.Sprintf("Лекция 3, фрагмент %d", i+1); c.SourceRef != want {
+				if want := fmt.Sprintf("Лекция 3, стр. %d", i+1); c.SourceRef != want {
 					t.Errorf("card %d from %q, want document order", i, c.SourceRef)
 				}
 			}
@@ -820,6 +825,41 @@ func TestGenerateAsksForFiveFactsByDefault(t *testing.T) {
 	}
 	if res.Stats.Facts != 5 {
 		t.Errorf("accepted %d facts, want 5 of the 6 returned", res.Stats.Facts)
+	}
+}
+
+// Students know pages, not fragments: a card cites the page its quote is on,
+// or both pages when the quote runs over a page break.
+func TestGenerateCitesPages(t *testing.T) {
+	pages := []string{paragraphs[0], paragraphs[1], paragraphs[2]}
+	text := strings.Join(pages, "\n") // as ingest joins the pages of a PDF
+	starts := []int{0, len(pages[0]) + 1, len(pages[0]) + len(pages[1]) + 2}
+	lastOf := func(p string) string {
+		s := strings.Split(strings.TrimSuffix(p, "."), ". ")
+		return s[len(s)-1] + "."
+	}
+	p := &fakeProvider{answer: func(int, string, providers.Request) (string, error) {
+		return factsJSON(
+			fx{quote: firstSentence(pages[0]), cards: []mc{{kind: cards.KindFlip, q: "Что такое митоз?", a: "Деление."}}},
+			fx{quote: secondSentence(pages[1]), cards: []mc{{kind: cards.KindFlip, q: "Что получается при мейозе?", a: "Гаплоидные клетки."}}},
+			fx{quote: lastOf(pages[1]) + " " + firstSentence(pages[2]), cards: []mc{{kind: cards.KindFlip, q: "Что такое цитокинез?", a: "Разделение цитоплазмы."}}},
+		), nil
+	}}
+
+	res := generate(t, p, Document{Title: "Лекция 3", Text: text, PageStarts: starts}, Options{})
+	var refs []string
+	for _, c := range res.Cards {
+		refs = append(refs, c.SourceRef)
+	}
+	if want := []string{"Лекция 3, стр. 1", "Лекция 3, стр. 2", "Лекция 3, стр. 2–3"}; !slices.Equal(refs, want) {
+		t.Errorf("refs = %q, want %q", refs, want)
+	}
+
+	// Plain text has no pages to cite, and fragment numbers mean nothing to
+	// a student.
+	res = generate(t, p, Document{Title: "Лекция 3", Text: text}, Options{})
+	if len(res.Cards) == 0 || res.Cards[0].SourceRef != "Лекция 3" {
+		t.Errorf("without pages SourceRef = %q, want the title", res.Cards[0].SourceRef)
 	}
 }
 

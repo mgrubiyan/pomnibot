@@ -15,11 +15,12 @@ import (
 // test it in different forms. After the quote check, Quote holds the span of
 // the notes and ID identifies the fact.
 type modelFact struct {
-	ID    string
-	Quote string
-	Topic string
-	Name  string
-	Cards []modelCard
+	ID         string
+	Quote      string
+	Start, End int // the quote's byte offsets in the normalized document
+	Topic      string
+	Name       string
+	Cards      []modelCard
 }
 
 // modelCard is one card of a fact as the model returned it.

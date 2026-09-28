@@ -146,6 +146,32 @@ func TestExtractRecodesCyrillicReadAsLatin1(t *testing.T) {
 	}
 }
 
+// Cards cite pages, so the generator needs to know where each one starts in
+// the joined text: pages of a PDF are joined by a line break, files by an
+// empty line, and a blank page starts where the next one does.
+func TestExtractRecordsWherePagesStart(t *testing.T) {
+	pdf := &fakePDF{pages: []string{"  " + page(1), "", page(3)}}
+	res, err := newExtractor(t, pdf).Extract(context.Background(), []File{
+		{Name: "lecture.pdf", Data: pdfBytes},
+		{Name: "notes.txt", Data: []byte(page(4))},
+	})
+	if err != nil {
+		t.Fatalf("Extract() error = %v", err)
+	}
+	if len(res.Pages) != 4 {
+		t.Fatalf("got %d pages, want 4", len(res.Pages))
+	}
+	for i, want := range []int{1, 3, 3, 4} {
+		start := res.Pages[i].Start
+		if head := strings.TrimSpace(page(want))[:20]; !strings.HasPrefix(res.Text[start:], head) {
+			t.Errorf("page %d starts at %d with %q, want %q", i+1, start, res.Text[start:min(start+20, len(res.Text))], head)
+		}
+	}
+	if !strings.Contains(res.Text, strings.TrimSpace(page(3))+"\n\n"+strings.TrimSpace(page(4))) {
+		t.Errorf("files must be joined by an empty line: %q", res.Text)
+	}
+}
+
 func TestExtractMarksScannedPages(t *testing.T) {
 	pdf := &fakePDF{pages: []string{page(1), "  12 \n", page(3)}}
 	res, err := newExtractor(t, pdf).Extract(context.Background(), []File{{Name: "scan.pdf", Data: pdfBytes}})

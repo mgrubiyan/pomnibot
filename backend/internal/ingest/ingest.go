@@ -43,6 +43,7 @@ type PageInfo struct {
 	NeedsOCR bool   `json:"needsOcr"`          // a photo, or a PDF page with almost no text layer
 	Poor     bool   `json:"poor"`              // recognized badly: the student should retake it
 	Recoded  bool   `json:"recoded,omitempty"` // text layer had Cyrillic read as Latin-1, see recodeLatin1
+	Start    int    `json:"start"`             // byte offset in Result.Text where the page's text starts
 }
 
 // Result is the extracted text. Warnings are for the student, in Russian: the
@@ -149,20 +150,25 @@ func NewExtractor(ocr OCR, opts Options) (*Extractor, error) {
 // Extract reads files as pages of one set of notes, in the given order.
 func (e *Extractor) Extract(ctx context.Context, files []File) (Result, error) {
 	var res Result
-	var parts []string
+	var b strings.Builder
+	var blank []int // pages with no text, waiting for the next page's start
+	lastFile := -1  // file of the last page written
 	for i, f := range files {
 		if err := ctx.Err(); err != nil {
 			return Result{}, err
 		}
-		var text string
+		first := len(res.Pages)
+		var pages []string
 		var err error
 		switch kind := DetectKind(f.Data); kind {
 		case KindText:
-			text = e.readText(&res, i, f)
+			pages = []string{e.readText(&res, i, f)}
 		case KindPDF:
-			text, err = e.readPDF(ctx, &res, i, f)
+			pages, err = e.readPDF(ctx, &res, i, f)
 		case KindJPEG, KindPNG:
+			var text string
 			text, err = e.readImage(ctx, &res, i, f)
+			pages = []string{text}
 		default:
 			err = &Error{File: f.Name, Err: ErrUnsupported,
 				Message: "Формат не поддерживается: пришлите текст, PDF или фото страниц."}
@@ -170,11 +176,34 @@ func (e *Extractor) Extract(ctx context.Context, files []File) (Result, error) {
 		if err != nil {
 			return Result{}, err
 		}
-		if strings.TrimSpace(text) != "" {
-			parts = append(parts, text)
+
+		// Pages of one file are joined by a line break, so that a sentence
+		// cut by a page break can be glued back; files by an empty line.
+		for k, text := range pages {
+			n := first + k
+			if text = strings.TrimSpace(text); text == "" {
+				blank = append(blank, n)
+				continue
+			}
+			switch {
+			case b.Len() == 0:
+			case lastFile == i:
+				b.WriteByte('\n')
+			default:
+				b.WriteString("\n\n")
+			}
+			for _, p := range append(blank, n) {
+				res.Pages[p].Start = b.Len()
+			}
+			blank = blank[:0]
+			b.WriteString(text)
+			lastFile = i
 		}
 	}
-	res.Text = strings.Join(parts, "\n\n")
+	for _, p := range blank {
+		res.Pages[p].Start = b.Len()
+	}
+	res.Text = b.String()
 	res.Source = overallSource(res.Pages)
 	return res, nil
 }
@@ -195,21 +224,19 @@ func (e *Extractor) readText(res *Result, file int, f File) string {
 	return text
 }
 
-// readPDF takes the text layer page by page. Pages with almost none go to
-// OCR, and only their text is taken from it: a PDF of typed and photographed
-// pages gives a mixed result. Pages of one PDF are joined with a single line
-// break, so a sentence cut by a page break can be glued back by the
-// generator's normalization.
-func (e *Extractor) readPDF(ctx context.Context, res *Result, file int, f File) (string, error) {
+// readPDF takes the text layer page by page and returns the text of each
+// page. Pages with almost none go to OCR, and only their text is taken from
+// it: a PDF of typed and photographed pages gives a mixed result.
+func (e *Extractor) readPDF(ctx context.Context, res *Result, file int, f File) ([]string, error) {
 	if e.pdf == nil {
-		return "", &Error{File: f.Name, Err: ErrNoPDF, Message: "PDF сейчас не принимаются."}
+		return nil, &Error{File: f.Name, Err: ErrNoPDF, Message: "PDF сейчас не принимаются."}
 	}
 	pages, err := e.pdf.Pages(ctx, f.Data)
 	if err != nil {
 		if ctx.Err() != nil {
-			return "", err
+			return nil, err
 		}
-		return "", &Error{File: f.Name, Err: err,
+		return nil, &Error{File: f.Name, Err: err,
 			Message: "Не удалось прочитать PDF: файл повреждён или защищён паролем."}
 	}
 
@@ -240,17 +267,11 @@ func (e *Extractor) readPDF(ctx context.Context, res *Result, file int, f File) 
 					"Страница %d похожа на скан: в ней почти нет текста, а распознавание не настроено.", first+i+1))
 			}
 		} else if err := e.recognizePDF(ctx, res, f, pages, scanned, first); err != nil {
-			return "", err
+			return nil, err
 		}
 	}
 
-	var texts []string
-	for _, text := range pages {
-		if t := strings.TrimSpace(text); t != "" {
-			texts = append(texts, t)
-		}
-	}
-	return strings.Join(texts, "\n"), nil
+	return pages, nil
 }
 
 // recognizePDF sends the whole PDF to OCR (the service takes a PDF, not a
