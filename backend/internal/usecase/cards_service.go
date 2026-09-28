@@ -23,7 +23,7 @@ func NewCardService(querier db.Querier) CardService {
 	return &cardServiceImpl{querier: querier}
 }
 
-func (s *cardServiceImpl) UpdateCard(ctx context.Context, _ int64, cardID uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error) {
+func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID int64, cardID uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error) {
 	if req == nil {
 		return nil, fmt.Errorf("%w: request body is required", ErrValidation)
 	}
@@ -33,12 +33,15 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, _ int64, cardID uuid.U
 		return nil, fmt.Errorf("%w: invalid card id", ErrValidation)
 	}
 
-	existing, err := s.querier.GetCardByID(ctx, pgCardID)
+	existing, err := s.querier.GetCardByIDForAuthor(ctx, db.GetCardByIDForAuthorParams{
+		ID:       pgCardID,
+		AuthorID: userID,
+	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
-		return nil, fmt.Errorf("get card by id: %w", err)
+		return nil, fmt.Errorf("get card by id for author: %w", err)
 	}
 
 	// Update base card fields
@@ -49,6 +52,7 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, _ int64, cardID uuid.U
 		Explanation: existing.Explanation,
 		SourceQuote: existing.SourceQuote,
 		SourceRef:   existing.SourceRef,
+		AuthorID:    userID,
 	}
 	if req.Question.IsSet() {
 		arg.Question = req.Question.Value
@@ -65,6 +69,9 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, _ int64, cardID uuid.U
 
 	updated, err := s.querier.UpdateCard(ctx, arg)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
 		return nil, fmt.Errorf("update card: %w", err)
 	}
 
@@ -110,22 +117,21 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, _ int64, cardID uuid.U
 	return res, nil
 }
 
-func (s *cardServiceImpl) DeleteCard(ctx context.Context, _ int64, cardID uuid.UUID) error {
+func (s *cardServiceImpl) DeleteCard(ctx context.Context, userID int64, cardID uuid.UUID) error {
 	var pgCardID pgtype.UUID
 	if err := pgCardID.Scan(cardID.String()); err != nil {
 		return fmt.Errorf("%w: invalid card id", ErrValidation)
 	}
 
-	_, err := s.querier.GetCardByID(ctx, pgCardID)
+	rows, err := s.querier.DeleteCard(ctx, db.DeleteCardParams{
+		ID:       pgCardID,
+		AuthorID: userID,
+	})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrNotFound
-		}
-		return fmt.Errorf("get card by id: %w", err)
-	}
-
-	if err := s.querier.DeleteCard(ctx, pgCardID); err != nil {
 		return fmt.Errorf("delete card: %w", err)
+	}
+	if rows == 0 {
+		return ErrNotFound
 	}
 
 	return nil
@@ -141,7 +147,10 @@ func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID int64, card
 		return nil, err
 	}
 
-	card, err := s.querier.GetCardByID(ctx, pgCardID)
+	card, err := s.querier.GetCardByID(ctx, db.GetCardByIDParams{
+		ID:     pgCardID,
+		UserID: userID,
+	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -192,7 +201,10 @@ func (s *cardServiceImpl) ReportCardIssue(ctx context.Context, userID int64, car
 		return err
 	}
 
-	_, err := s.querier.GetCardByID(ctx, pgCardID)
+	_, err := s.querier.GetCardByID(ctx, db.GetCardByIDParams{
+		ID:     pgCardID,
+		UserID: userID,
+	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound

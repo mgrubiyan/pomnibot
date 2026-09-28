@@ -112,7 +112,10 @@ func (s *homescreenServiceImpl) SendResults(ctx context.Context, userID int64, r
 			return fmt.Errorf("%w: invalid card id %s", ErrValidation, res.CardId)
 		}
 
-		card, err := s.querier.GetCardByID(ctx, pgCardID)
+		card, err := s.querier.GetCardByID(ctx, db.GetCardByIDParams{
+			ID:     pgCardID,
+			UserID: userID,
+		})
 		if err != nil {
 			return fmt.Errorf("card %s not found: %w", res.CardId, ErrNotFound)
 		}

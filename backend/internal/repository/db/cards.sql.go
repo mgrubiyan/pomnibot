@@ -134,13 +134,26 @@ func (q *Queries) CreateCardTableItem(ctx context.Context, arg CreateCardTableIt
 	return i, err
 }
 
-const deleteCard = `-- name: DeleteCard :exec
-DELETE FROM cards WHERE id = $1
+const deleteCard = `-- name: DeleteCard :execrows
+DELETE FROM cards c
+USING facts f, sets s
+WHERE c.id = $1
+  AND c.fact_id = f.id
+  AND f.set_id = s.id
+  AND s.author_id = $2
 `
 
-func (q *Queries) DeleteCard(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteCard, id)
-	return err
+type DeleteCardParams struct {
+	ID       pgtype.UUID `json:"id"`
+	AuthorID int64       `json:"author_id"`
+}
+
+func (q *Queries) DeleteCard(ctx context.Context, arg DeleteCardParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteCard, arg.ID, arg.AuthorID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteCardOptions = `-- name: DeleteCardOptions :exec
@@ -190,7 +203,17 @@ JOIN facts f ON c.fact_id = f.id
 JOIN card_kinds ck ON c.kind = ck.kind
 LEFT JOIN topics t ON f.topic_id = t.id
 WHERE c.id = $1
+  AND EXISTS (
+      SELECT 1 FROM sets s
+      WHERE s.id = f.set_id
+        AND (s.author_id = $2 OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = $2))
+  )
 `
+
+type GetCardByIDParams struct {
+	ID     pgtype.UUID `json:"id"`
+	UserID int64       `json:"user_id"`
+}
 
 type GetCardByIDRow struct {
 	ID              pgtype.UUID        `json:"id"`
@@ -208,9 +231,74 @@ type GetCardByIDRow struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
-func (q *Queries) GetCardByID(ctx context.Context, id pgtype.UUID) (GetCardByIDRow, error) {
-	row := q.db.QueryRow(ctx, getCardByID, id)
+func (q *Queries) GetCardByID(ctx context.Context, arg GetCardByIDParams) (GetCardByIDRow, error) {
+	row := q.db.QueryRow(ctx, getCardByID, arg.ID, arg.UserID)
 	var i GetCardByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.SetID,
+		&i.FactID,
+		&i.Kind,
+		&i.DifficultyLevel,
+		&i.Question,
+		&i.AnswerText,
+		&i.Explanation,
+		&i.SourceQuote,
+		&i.SourceRef,
+		&i.Topic,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getCardByIDForAuthor = `-- name: GetCardByIDForAuthor :one
+SELECT
+    c.id,
+    f.set_id,
+    c.fact_id,
+    c.kind,
+    ck.difficulty_level,
+    c.question,
+    c.answer_text,
+    c.explanation,
+    c.source_quote,
+    c.source_ref,
+    COALESCE(t.name, '') AS topic,
+    c.created_at,
+    c.updated_at
+FROM cards c
+JOIN facts f ON c.fact_id = f.id
+JOIN card_kinds ck ON c.kind = ck.kind
+LEFT JOIN topics t ON f.topic_id = t.id
+JOIN sets s ON f.set_id = s.id
+WHERE c.id = $1 AND s.author_id = $2
+`
+
+type GetCardByIDForAuthorParams struct {
+	ID       pgtype.UUID `json:"id"`
+	AuthorID int64       `json:"author_id"`
+}
+
+type GetCardByIDForAuthorRow struct {
+	ID              pgtype.UUID        `json:"id"`
+	SetID           pgtype.UUID        `json:"set_id"`
+	FactID          string             `json:"fact_id"`
+	Kind            string             `json:"kind"`
+	DifficultyLevel int16              `json:"difficulty_level"`
+	Question        string             `json:"question"`
+	AnswerText      pgtype.Text        `json:"answer_text"`
+	Explanation     string             `json:"explanation"`
+	SourceQuote     string             `json:"source_quote"`
+	SourceRef       pgtype.Text        `json:"source_ref"`
+	Topic           string             `json:"topic"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetCardByIDForAuthor(ctx context.Context, arg GetCardByIDForAuthorParams) (GetCardByIDForAuthorRow, error) {
+	row := q.db.QueryRow(ctx, getCardByIDForAuthor, arg.ID, arg.AuthorID)
+	var i GetCardByIDForAuthorRow
 	err := row.Scan(
 		&i.ID,
 		&i.SetID,
@@ -345,8 +433,18 @@ JOIN facts f ON c.fact_id = f.id
 JOIN card_kinds ck ON c.kind = ck.kind
 LEFT JOIN topics t ON f.topic_id = t.id
 WHERE f.set_id = $1
+  AND EXISTS (
+      SELECT 1 FROM sets s
+      WHERE s.id = $1
+        AND (s.author_id = $2 OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = $2))
+  )
 ORDER BY c.created_at ASC
 `
+
+type GetCardsBySetIDParams struct {
+	SetID  pgtype.UUID `json:"set_id"`
+	UserID int64       `json:"user_id"`
+}
 
 type GetCardsBySetIDRow struct {
 	ID              pgtype.UUID        `json:"id"`
@@ -364,8 +462,8 @@ type GetCardsBySetIDRow struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
-func (q *Queries) GetCardsBySetID(ctx context.Context, setID pgtype.UUID) ([]GetCardsBySetIDRow, error) {
-	rows, err := q.db.Query(ctx, getCardsBySetID, setID)
+func (q *Queries) GetCardsBySetID(ctx context.Context, arg GetCardsBySetIDParams) ([]GetCardsBySetIDRow, error) {
+	rows, err := q.db.Query(ctx, getCardsBySetID, arg.SetID, arg.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -519,8 +617,12 @@ SET
     source_quote = COALESCE($5, source_quote),
     source_ref = COALESCE($6, source_ref),
     updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
-RETURNING id, fact_id, kind, question, answer_text, explanation, source_quote, source_ref, created_at, updated_at
+FROM facts f
+JOIN sets s ON f.set_id = s.id
+WHERE cards.id = $1
+  AND cards.fact_id = f.id
+  AND s.author_id = $7
+RETURNING cards.id, cards.fact_id, cards.kind, cards.question, cards.answer_text, cards.explanation, cards.source_quote, cards.source_ref, cards.created_at, cards.updated_at
 `
 
 type UpdateCardParams struct {
@@ -530,6 +632,7 @@ type UpdateCardParams struct {
 	Explanation string      `json:"explanation"`
 	SourceQuote string      `json:"source_quote"`
 	SourceRef   pgtype.Text `json:"source_ref"`
+	AuthorID    int64       `json:"author_id"`
 }
 
 func (q *Queries) UpdateCard(ctx context.Context, arg UpdateCardParams) (Card, error) {
@@ -540,6 +643,7 @@ func (q *Queries) UpdateCard(ctx context.Context, arg UpdateCardParams) (Card, e
 		arg.Explanation,
 		arg.SourceQuote,
 		arg.SourceRef,
+		arg.AuthorID,
 	)
 	var i Card
 	err := row.Scan(

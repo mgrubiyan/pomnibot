@@ -58,32 +58,54 @@ func (s *setServiceImpl) DeleteSet(ctx context.Context, userID int64, setID uuid
 	}
 
 	if isAuthor {
-		if err := s.querier.DeleteSet(ctx, db.DeleteSetParams{
+		rows, err := s.querier.DeleteSet(ctx, db.DeleteSetParams{
 			ID:       pgUUID,
 			AuthorID: userID,
-		}); err != nil {
+		})
+		if err != nil {
 			return fmt.Errorf("delete set: %w", err)
+		}
+		if rows == 0 {
+			return ErrNotFound
 		}
 		return nil
 	}
 
 	// If not author, user leaves the set
-	if err := s.querier.LeaveSet(ctx, db.LeaveSetParams{
+	rows, err := s.querier.LeaveSet(ctx, db.LeaveSetParams{
 		SetID:  pgUUID,
 		UserID: userID,
-	}); err != nil {
+	})
+	if err != nil {
 		return fmt.Errorf("leave set: %w", err)
+	}
+	if rows == 0 {
+		return ErrNotFound
 	}
 	return nil
 }
 
-func (s *setServiceImpl) GetCardsBySetID(ctx context.Context, _ int64, setID uuid.UUID) ([]contracts.Card, error) {
+func (s *setServiceImpl) GetCardsBySetID(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.Card, error) {
 	var pgUUID pgtype.UUID
 	if err := pgUUID.Scan(setID.String()); err != nil {
 		return nil, fmt.Errorf("%w: invalid set id", ErrValidation)
 	}
 
-	rows, err := s.querier.GetCardsBySetID(ctx, pgUUID)
+	// Verify set exists and user has membership
+	if _, err := s.querier.GetSetByID(ctx, db.GetSetByIDParams{
+		ID:     pgUUID,
+		UserID: userID,
+	}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get set by id: %w", err)
+	}
+
+	rows, err := s.querier.GetCardsBySetID(ctx, db.GetCardsBySetIDParams{
+		SetID:  pgUUID,
+		UserID: userID,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("get cards by set id: %w", err)
 	}
@@ -108,6 +130,17 @@ func (s *setServiceImpl) GetSetPlan(ctx context.Context, userID int64, setID uui
 	var pgUUID pgtype.UUID
 	if err := pgUUID.Scan(setID.String()); err != nil {
 		return nil, fmt.Errorf("%w: invalid set id", ErrValidation)
+	}
+
+	// Verify set exists and user has membership
+	if _, err := s.querier.GetSetByID(ctx, db.GetSetByIDParams{
+		ID:     pgUUID,
+		UserID: userID,
+	}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get set by id: %w", err)
 	}
 
 	rows, err := s.querier.GetSetPlan(ctx, db.GetSetPlanParams{

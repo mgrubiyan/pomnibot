@@ -20,16 +20,17 @@ type Querier interface {
 	CreateCardTableItem(ctx context.Context, arg CreateCardTableItemParams) (CardTableItem, error)
 	CreateFact(ctx context.Context, arg CreateFactParams) (Fact, error)
 	CreateSet(ctx context.Context, arg CreateSetParams) (Set, error)
-	DeleteCard(ctx context.Context, id pgtype.UUID) error
+	DeleteCard(ctx context.Context, arg DeleteCardParams) (int64, error)
 	DeleteCardOptions(ctx context.Context, cardID pgtype.UUID) error
 	DeleteCardTableColumns(ctx context.Context, cardID pgtype.UUID) error
 	DeleteCardTableItems(ctx context.Context, cardID pgtype.UUID) error
-	DeleteSet(ctx context.Context, arg DeleteSetParams) error
-	GetCardByID(ctx context.Context, id pgtype.UUID) (GetCardByIDRow, error)
+	DeleteSet(ctx context.Context, arg DeleteSetParams) (int64, error)
+	GetCardByID(ctx context.Context, arg GetCardByIDParams) (GetCardByIDRow, error)
+	GetCardByIDForAuthor(ctx context.Context, arg GetCardByIDForAuthorParams) (GetCardByIDForAuthorRow, error)
 	GetCardOptions(ctx context.Context, cardID pgtype.UUID) ([]CardOption, error)
 	GetCardTableColumns(ctx context.Context, cardID pgtype.UUID) ([]CardTableColumn, error)
 	GetCardTableItems(ctx context.Context, cardID pgtype.UUID) ([]CardTableItem, error)
-	GetCardsBySetID(ctx context.Context, setID pgtype.UUID) ([]GetCardsBySetIDRow, error)
+	GetCardsBySetID(ctx context.Context, arg GetCardsBySetIDParams) ([]GetCardsBySetIDRow, error)
 	GetFactsBySetID(ctx context.Context, setID pgtype.UUID) ([]GetFactsBySetIDRow, error)
 	GetFeedCardsForUser(ctx context.Context, userID int64) ([]GetFeedCardsForUserRow, error)
 	GetSetByID(ctx context.Context, arg GetSetByIDParams) (GetSetByIDRow, error)
@@ -41,7 +42,7 @@ type Querier interface {
 	InitUserFactProgress(ctx context.Context, arg InitUserFactProgressParams) error
 	IsSetAuthor(ctx context.Context, arg IsSetAuthorParams) (bool, error)
 	JoinSet(ctx context.Context, arg JoinSetParams) (UserSet, error)
-	LeaveSet(ctx context.Context, arg LeaveSetParams) error
+	LeaveSet(ctx context.Context, arg LeaveSetParams) (int64, error)
 	RecordAnswerResult(ctx context.Context, arg RecordAnswerResultParams) (AnswerResult, error)
 	UpdateCard(ctx context.Context, arg UpdateCardParams) (Card, error)
 	UpdateFactProgressOnAnswer(ctx context.Context, arg UpdateFactProgressOnAnswerParams) (UserFactProgress, error)

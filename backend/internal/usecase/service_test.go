@@ -2,6 +2,7 @@ package usecase_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -110,13 +111,13 @@ func TestSetService_DeleteSet(t *testing.T) {
 		isSetAuthorFunc: func(_ context.Context, arg db.IsSetAuthorParams) (bool, error) {
 			return arg.AuthorID == 100, nil
 		},
-		deleteSetFunc: func(_ context.Context, _ db.DeleteSetParams) error {
+		deleteSetFunc: func(_ context.Context, _ db.DeleteSetParams) (int64, error) {
 			deleted = true
-			return nil
+			return 1, nil
 		},
-		leaveSetFunc: func(_ context.Context, _ db.LeaveSetParams) error {
+		leaveSetFunc: func(_ context.Context, _ db.LeaveSetParams) (int64, error) {
 			left = true
-			return nil
+			return 1, nil
 		},
 	}
 
@@ -148,7 +149,10 @@ func TestCardService_AnswerQuestion(t *testing.T) {
 	progressUpdated := false
 
 	mock := &mockQuerier{
-		getCardByIDFunc: func(_ context.Context, _ pgtype.UUID) (db.GetCardByIDRow, error) {
+		getCardByIDFunc: func(_ context.Context, arg db.GetCardByIDParams) (db.GetCardByIDRow, error) {
+			if arg.UserID != 100 {
+				return db.GetCardByIDRow{}, pgx.ErrNoRows
+			}
 			return db.GetCardByIDRow{
 				ID:          pgUUID,
 				FactID:      "fact-1",
@@ -231,7 +235,10 @@ func TestHomescreenService_SendResults(t *testing.T) {
 	count := 0
 
 	mock := &mockQuerier{
-		getCardByIDFunc: func(_ context.Context, _ pgtype.UUID) (db.GetCardByIDRow, error) {
+		getCardByIDFunc: func(_ context.Context, arg db.GetCardByIDParams) (db.GetCardByIDRow, error) {
+			if arg.UserID != 100 {
+				return db.GetCardByIDRow{}, pgx.ErrNoRows
+			}
 			return db.GetCardByIDRow{
 				ID:     pgUUID,
 				FactID: "fact-1",
@@ -261,5 +268,161 @@ func TestHomescreenService_SendResults(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("expected 1 result recorded, got %d", count)
+	}
+}
+
+func TestCardService_UpdateCard_Authorization(t *testing.T) {
+	cardUUID := uuid.New()
+	var pgUUID pgtype.UUID
+	_ = pgUUID.Scan(cardUUID.String())
+
+	setUUID := uuid.New()
+	var pgSetUUID pgtype.UUID
+	_ = pgSetUUID.Scan(setUUID.String())
+
+	authorID := int64(100)
+	otherUserID := int64(999)
+
+	mock := &mockQuerier{
+		getCardByIDForAuthorFunc: func(_ context.Context, arg db.GetCardByIDForAuthorParams) (db.GetCardByIDForAuthorRow, error) {
+			if arg.AuthorID == authorID && arg.ID == pgUUID {
+				return db.GetCardByIDForAuthorRow{
+					ID:         pgUUID,
+					SetID:      pgSetUUID,
+					Kind:       "flip",
+					Question:   "Old question",
+					AnswerText: pgtype.Text{String: "Answer", Valid: true},
+				}, nil
+			}
+			return db.GetCardByIDForAuthorRow{}, pgx.ErrNoRows
+		},
+		updateCardFunc: func(_ context.Context, arg db.UpdateCardParams) (db.Card, error) {
+			if arg.AuthorID != authorID {
+				return db.Card{}, pgx.ErrNoRows
+			}
+			return db.Card{
+				ID:         arg.ID,
+				Kind:       "flip",
+				Question:   arg.Question,
+				AnswerText: arg.AnswerText,
+			}, nil
+		},
+	}
+
+	svc := usecase.NewCardService(mock)
+
+	// Author succeeds
+	req := &contracts.UpdateCardRequest{
+		Question: contracts.NewOptString("New question"),
+	}
+	res, err := svc.UpdateCard(context.Background(), authorID, cardUUID, req)
+	if err != nil {
+		t.Fatalf("unexpected error for author: %v", err)
+	}
+	if res.Question != "New question" {
+		t.Fatalf("expected 'New question', got %s", res.Question)
+	}
+
+	// Non-author fails with ErrNotFound
+	_, err = svc.UpdateCard(context.Background(), otherUserID, cardUUID, req)
+	if !errors.Is(err, usecase.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for non-author, got %v", err)
+	}
+}
+
+func TestCardService_DeleteCard_Authorization(t *testing.T) {
+	cardUUID := uuid.New()
+	authorID := int64(100)
+	otherUserID := int64(999)
+
+	mock := &mockQuerier{
+		deleteCardFunc: func(_ context.Context, arg db.DeleteCardParams) (int64, error) {
+			if arg.AuthorID == authorID {
+				return 1, nil
+			}
+			return 0, nil
+		},
+	}
+
+	svc := usecase.NewCardService(mock)
+
+	// Author succeeds
+	if err := svc.DeleteCard(context.Background(), authorID, cardUUID); err != nil {
+		t.Fatalf("unexpected error for author: %v", err)
+	}
+
+	// Non-author fails with ErrNotFound
+	err := svc.DeleteCard(context.Background(), otherUserID, cardUUID)
+	if !errors.Is(err, usecase.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for non-author, got %v", err)
+	}
+}
+
+func TestSetService_GetCardsBySetID_Authorization(t *testing.T) {
+	setUUID := uuid.New()
+	var pgSetUUID pgtype.UUID
+	_ = pgSetUUID.Scan(setUUID.String())
+
+	memberID := int64(100)
+	nonMemberID := int64(999)
+
+	mock := &mockQuerier{
+		getSetByIDFunc: func(_ context.Context, arg db.GetSetByIDParams) (db.GetSetByIDRow, error) {
+			if arg.UserID == memberID && arg.ID == pgSetUUID {
+				return db.GetSetByIDRow{ID: pgSetUUID, Title: "Set 1"}, nil
+			}
+			return db.GetSetByIDRow{}, pgx.ErrNoRows
+		},
+		getCardsBySetIDFunc: func(_ context.Context, arg db.GetCardsBySetIDParams) ([]db.GetCardsBySetIDRow, error) {
+			if arg.UserID == memberID && arg.SetID == pgSetUUID {
+				return []db.GetCardsBySetIDRow{
+					{
+						ID:       pgtype.UUID{Bytes: [16]byte{1}, Valid: true},
+						SetID:    pgSetUUID,
+						Kind:     "flip",
+						Question: "Q1",
+					},
+				}, nil
+			}
+			return nil, nil
+		},
+	}
+
+	svc := usecase.NewSetService(mock)
+
+	// Member succeeds
+	cards, err := svc.GetCardsBySetID(context.Background(), memberID, setUUID)
+	if err != nil {
+		t.Fatalf("unexpected error for member: %v", err)
+	}
+	if len(cards) != 1 {
+		t.Fatalf("expected 1 card, got %d", len(cards))
+	}
+
+	// Non-member fails with ErrNotFound
+	_, err = svc.GetCardsBySetID(context.Background(), nonMemberID, setUUID)
+	if !errors.Is(err, usecase.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for non-member, got %v", err)
+	}
+}
+
+func TestSetService_DeleteSet_NonMember(t *testing.T) {
+	setUUID := uuid.New()
+	nonMemberID := int64(999)
+
+	mock := &mockQuerier{
+		isSetAuthorFunc: func(_ context.Context, _ db.IsSetAuthorParams) (bool, error) {
+			return false, nil
+		},
+		leaveSetFunc: func(_ context.Context, _ db.LeaveSetParams) (int64, error) {
+			return 0, nil // User was not enrolled
+		},
+	}
+
+	svc := usecase.NewSetService(mock)
+
+	err := svc.DeleteSet(context.Background(), nonMemberID, setUUID)
+	if !errors.Is(err, usecase.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound when leaving unenrolled set, got %v", err)
 	}
 }

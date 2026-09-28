@@ -37,7 +37,34 @@ FROM cards c
 JOIN facts f ON c.fact_id = f.id
 JOIN card_kinds ck ON c.kind = ck.kind
 LEFT JOIN topics t ON f.topic_id = t.id
-WHERE c.id = $1;
+WHERE c.id = $1
+  AND EXISTS (
+      SELECT 1 FROM sets s
+      WHERE s.id = f.set_id
+        AND (s.author_id = @user_id OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = @user_id))
+  );
+
+-- name: GetCardByIDForAuthor :one
+SELECT
+    c.id,
+    f.set_id,
+    c.fact_id,
+    c.kind,
+    ck.difficulty_level,
+    c.question,
+    c.answer_text,
+    c.explanation,
+    c.source_quote,
+    c.source_ref,
+    COALESCE(t.name, '') AS topic,
+    c.created_at,
+    c.updated_at
+FROM cards c
+JOIN facts f ON c.fact_id = f.id
+JOIN card_kinds ck ON c.kind = ck.kind
+LEFT JOIN topics t ON f.topic_id = t.id
+JOIN sets s ON f.set_id = s.id
+WHERE c.id = $1 AND s.author_id = $2;
 
 -- name: GetCardsBySetID :many
 SELECT
@@ -59,6 +86,11 @@ JOIN facts f ON c.fact_id = f.id
 JOIN card_kinds ck ON c.kind = ck.kind
 LEFT JOIN topics t ON f.topic_id = t.id
 WHERE f.set_id = $1
+  AND EXISTS (
+      SELECT 1 FROM sets s
+      WHERE s.id = $1
+        AND (s.author_id = @user_id OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = @user_id))
+  )
 ORDER BY c.created_at ASC;
 
 -- name: GetCardOptions :many
@@ -87,11 +119,20 @@ SET
     source_quote = COALESCE($5, source_quote),
     source_ref = COALESCE($6, source_ref),
     updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
-RETURNING *;
+FROM facts f
+JOIN sets s ON f.set_id = s.id
+WHERE cards.id = $1
+  AND cards.fact_id = f.id
+  AND s.author_id = $7
+RETURNING cards.id, cards.fact_id, cards.kind, cards.question, cards.answer_text, cards.explanation, cards.source_quote, cards.source_ref, cards.created_at, cards.updated_at;
 
--- name: DeleteCard :exec
-DELETE FROM cards WHERE id = $1;
+-- name: DeleteCard :execrows
+DELETE FROM cards c
+USING facts f, sets s
+WHERE c.id = $1
+  AND c.fact_id = f.id
+  AND f.set_id = s.id
+  AND s.author_id = $2;
 
 -- name: DeleteCardOptions :exec
 DELETE FROM card_options WHERE card_id = $1;

@@ -52,7 +52,7 @@ func (q *Queries) CreateSet(ctx context.Context, arg CreateSetParams) (Set, erro
 	return i, err
 }
 
-const deleteSet = `-- name: DeleteSet :exec
+const deleteSet = `-- name: DeleteSet :execrows
 DELETE FROM sets WHERE id = $1 AND author_id = $2
 `
 
@@ -61,9 +61,12 @@ type DeleteSetParams struct {
 	AuthorID int64       `json:"author_id"`
 }
 
-func (q *Queries) DeleteSet(ctx context.Context, arg DeleteSetParams) error {
-	_, err := q.db.Exec(ctx, deleteSet, arg.ID, arg.AuthorID)
-	return err
+func (q *Queries) DeleteSet(ctx context.Context, arg DeleteSetParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSet, arg.ID, arg.AuthorID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getSetByID = `-- name: GetSetByID :one
@@ -84,6 +87,7 @@ SELECT
 FROM sets s
 JOIN users u ON s.author_id = u.id
 WHERE s.id = $1
+  AND (s.author_id = $2 OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = $2))
 `
 
 type GetSetByIDParams struct {
@@ -275,7 +279,7 @@ func (q *Queries) JoinSet(ctx context.Context, arg JoinSetParams) (UserSet, erro
 	return i, err
 }
 
-const leaveSet = `-- name: LeaveSet :exec
+const leaveSet = `-- name: LeaveSet :execrows
 DELETE FROM user_sets WHERE set_id = $1 AND user_id = $2
 `
 
@@ -284,7 +288,10 @@ type LeaveSetParams struct {
 	UserID int64       `json:"user_id"`
 }
 
-func (q *Queries) LeaveSet(ctx context.Context, arg LeaveSetParams) error {
-	_, err := q.db.Exec(ctx, leaveSet, arg.SetID, arg.UserID)
-	return err
+func (q *Queries) LeaveSet(ctx context.Context, arg LeaveSetParams) (int64, error) {
+	result, err := q.db.Exec(ctx, leaveSet, arg.SetID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

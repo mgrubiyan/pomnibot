@@ -20,7 +20,8 @@ SELECT
        AND (ufp.next_review_at IS NULL OR ufp.next_review_at <= NOW())) AS cards_due
 FROM sets s
 JOIN users u ON s.author_id = u.id
-WHERE s.id = $1;
+WHERE s.id = $1
+  AND (s.author_id = $2 OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = $2));
 
 -- name: GetSetByShareCode :one
 SELECT
@@ -73,10 +74,10 @@ SELECT EXISTS(
     SELECT 1 FROM sets WHERE id = $1 AND author_id = $2
 ) AS is_author;
 
--- name: DeleteSet :exec
+-- name: DeleteSet :execrows
 DELETE FROM sets WHERE id = $1 AND author_id = $2;
 
--- name: LeaveSet :exec
+-- name: LeaveSet :execrows
 DELETE FROM user_sets WHERE set_id = $1 AND user_id = $2;
 
 -- name: CountTotalDueCardsForUser :one

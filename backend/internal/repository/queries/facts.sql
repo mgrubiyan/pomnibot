@@ -23,6 +23,11 @@ SELECT
 FROM facts f
 LEFT JOIN user_fact_progress ufp ON ufp.fact_id = f.id AND ufp.user_id = $2
 WHERE f.set_id = $1
+  AND EXISTS (
+      SELECT 1 FROM sets s
+      WHERE s.id = $1
+        AND (s.author_id = $2 OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = $2))
+  )
 ORDER BY COALESCE(ufp.next_review_at, CURRENT_TIMESTAMP) ASC;
 
 -- name: InitUserFactProgress :exec

@@ -15,13 +15,15 @@ type mockQuerier struct {
 	createCardIssueFunc            func(ctx context.Context, arg db.CreateCardIssueParams) (db.CardIssue, error)
 	createCardOptionFunc           func(ctx context.Context, arg db.CreateCardOptionParams) (db.CardOption, error)
 	createSetFunc                  func(ctx context.Context, arg db.CreateSetParams) (db.Set, error)
-	deleteCardFunc                 func(ctx context.Context, id pgtype.UUID) error
-	deleteSetFunc                  func(ctx context.Context, arg db.DeleteSetParams) error
-	getCardByIDFunc                func(ctx context.Context, id pgtype.UUID) (db.GetCardByIDRow, error)
+	deleteCardFunc                 func(ctx context.Context, arg db.DeleteCardParams) (int64, error)
+	deleteSetFunc                  func(ctx context.Context, arg db.DeleteSetParams) (int64, error)
+	getCardByIDFunc                func(ctx context.Context, arg db.GetCardByIDParams) (db.GetCardByIDRow, error)
+	getCardByIDForAuthorFunc       func(ctx context.Context, arg db.GetCardByIDForAuthorParams) (db.GetCardByIDForAuthorRow, error)
 	getCardOptionsFunc             func(ctx context.Context, cardID pgtype.UUID) ([]db.CardOption, error)
 	getCardTableColumnsFunc        func(ctx context.Context, cardID pgtype.UUID) ([]db.CardTableColumn, error)
 	getCardTableItemsFunc          func(ctx context.Context, cardID pgtype.UUID) ([]db.CardTableItem, error)
-	getCardsBySetIDFunc            func(ctx context.Context, setID pgtype.UUID) ([]db.GetCardsBySetIDRow, error)
+	getCardsBySetIDFunc            func(ctx context.Context, arg db.GetCardsBySetIDParams) ([]db.GetCardsBySetIDRow, error)
+	leaveSetFunc                   func(ctx context.Context, arg db.LeaveSetParams) (int64, error)
 	getFeedCardsForUserFunc        func(ctx context.Context, userID int64) ([]db.GetFeedCardsForUserRow, error)
 	getSetByIDFunc                 func(ctx context.Context, arg db.GetSetByIDParams) (db.GetSetByIDRow, error)
 	getSetByShareCodeFunc          func(ctx context.Context, arg db.GetSetByShareCodeParams) (db.GetSetByShareCodeRow, error)
@@ -31,7 +33,6 @@ type mockQuerier struct {
 	initUserFactProgressFunc       func(ctx context.Context, arg db.InitUserFactProgressParams) error
 	isSetAuthorFunc                func(ctx context.Context, arg db.IsSetAuthorParams) (bool, error)
 	joinSetFunc                    func(ctx context.Context, arg db.JoinSetParams) (db.UserSet, error)
-	leaveSetFunc                   func(ctx context.Context, arg db.LeaveSetParams) error
 	recordAnswerResultFunc         func(ctx context.Context, arg db.RecordAnswerResultParams) (db.AnswerResult, error)
 	updateCardFunc                 func(ctx context.Context, arg db.UpdateCardParams) (db.Card, error)
 	updateFactProgressOnAnswerFunc func(ctx context.Context, arg db.UpdateFactProgressOnAnswerParams) (db.UserFactProgress, error)
@@ -80,25 +81,32 @@ func (m *mockQuerier) CreateCardIssue(ctx context.Context, arg db.CreateCardIssu
 	return db.CardIssue{}, nil
 }
 
-func (m *mockQuerier) DeleteCard(ctx context.Context, id pgtype.UUID) error {
+func (m *mockQuerier) DeleteCard(ctx context.Context, arg db.DeleteCardParams) (int64, error) {
 	if m.deleteCardFunc != nil {
-		return m.deleteCardFunc(ctx, id)
+		return m.deleteCardFunc(ctx, arg)
 	}
-	return nil
+	return 1, nil
 }
 
-func (m *mockQuerier) DeleteSet(ctx context.Context, arg db.DeleteSetParams) error {
+func (m *mockQuerier) DeleteSet(ctx context.Context, arg db.DeleteSetParams) (int64, error) {
 	if m.deleteSetFunc != nil {
 		return m.deleteSetFunc(ctx, arg)
 	}
-	return nil
+	return 1, nil
 }
 
-func (m *mockQuerier) GetCardByID(ctx context.Context, id pgtype.UUID) (db.GetCardByIDRow, error) {
+func (m *mockQuerier) GetCardByID(ctx context.Context, arg db.GetCardByIDParams) (db.GetCardByIDRow, error) {
 	if m.getCardByIDFunc != nil {
-		return m.getCardByIDFunc(ctx, id)
+		return m.getCardByIDFunc(ctx, arg)
 	}
 	return db.GetCardByIDRow{}, nil
+}
+
+func (m *mockQuerier) GetCardByIDForAuthor(ctx context.Context, arg db.GetCardByIDForAuthorParams) (db.GetCardByIDForAuthorRow, error) {
+	if m.getCardByIDForAuthorFunc != nil {
+		return m.getCardByIDForAuthorFunc(ctx, arg)
+	}
+	return db.GetCardByIDForAuthorRow{}, nil
 }
 
 func (m *mockQuerier) GetCardOptions(ctx context.Context, cardID pgtype.UUID) ([]db.CardOption, error) {
@@ -122,9 +130,9 @@ func (m *mockQuerier) GetCardTableItems(ctx context.Context, cardID pgtype.UUID)
 	return nil, nil
 }
 
-func (m *mockQuerier) GetCardsBySetID(ctx context.Context, setID pgtype.UUID) ([]db.GetCardsBySetIDRow, error) {
+func (m *mockQuerier) GetCardsBySetID(ctx context.Context, arg db.GetCardsBySetIDParams) ([]db.GetCardsBySetIDRow, error) {
 	if m.getCardsBySetIDFunc != nil {
-		return m.getCardsBySetIDFunc(ctx, setID)
+		return m.getCardsBySetIDFunc(ctx, arg)
 	}
 	return nil, nil
 }
@@ -192,11 +200,11 @@ func (m *mockQuerier) JoinSet(ctx context.Context, arg db.JoinSetParams) (db.Use
 	return db.UserSet{}, nil
 }
 
-func (m *mockQuerier) LeaveSet(ctx context.Context, arg db.LeaveSetParams) error {
+func (m *mockQuerier) LeaveSet(ctx context.Context, arg db.LeaveSetParams) (int64, error) {
 	if m.leaveSetFunc != nil {
 		return m.leaveSetFunc(ctx, arg)
 	}
-	return nil
+	return 1, nil
 }
 
 func (m *mockQuerier) RecordAnswerResult(ctx context.Context, arg db.RecordAnswerResultParams) (db.AnswerResult, error) {
