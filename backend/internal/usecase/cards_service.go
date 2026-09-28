@@ -15,12 +15,16 @@ import (
 )
 
 type cardServiceImpl struct {
-	querier db.Querier
+	querier     db.Querier
+	userService UserService
 }
 
 // NewCardService creates a new CardService implementation backed by db.Querier.
-func NewCardService(querier db.Querier) CardService {
-	return &cardServiceImpl{querier: querier}
+func NewCardService(querier db.Querier, userService UserService) CardService {
+	return &cardServiceImpl{
+		querier:     querier,
+		userService: userService,
+	}
 }
 
 func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID int64, cardID uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error) {
@@ -143,7 +147,7 @@ func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID int64, card
 		return nil, fmt.Errorf("%w: invalid card id", ErrValidation)
 	}
 
-	if err := EnsureUser(ctx, s.querier, userID, ""); err != nil {
+	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return nil, err
 	}
 
@@ -197,7 +201,7 @@ func (s *cardServiceImpl) ReportCardIssue(ctx context.Context, userID int64, car
 		return fmt.Errorf("%w: invalid card id", ErrValidation)
 	}
 
-	if err := EnsureUser(ctx, s.querier, userID, ""); err != nil {
+	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return err
 	}
 

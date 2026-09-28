@@ -71,14 +71,18 @@ func SeedFromData(ctx context.Context, queries *db.Queries, dataBytes []byte) er
 
 	// 1. Create or ensure default admin/author user
 	const authorID int64 = 100001
+	adminLastName := "Admin"
 	author, err := queries.UpsertUser(ctx, db.UpsertUserParams{
-		ID:   authorID,
-		Name: "Pomnibot Content Admin",
+		ID:        authorID,
+		FirstName: "Pomnibot Content",
+		LastName:  pgtype.Text{String: adminLastName, Valid: true},
+		Username:  pgtype.Text{Valid: false},
+		IsBot:     false,
 	})
 	if err != nil {
 		return fmt.Errorf("upsert default author: %w", err)
 	}
-	slog.InfoContext(ctx, "author user ready", "userID", author.ID, "name", author.Name)
+	slog.InfoContext(ctx, "author user ready", "userID", author.ID, "firstName", author.FirstName)
 
 	// 2. Create default card set
 	const defaultShareCode = "101101"

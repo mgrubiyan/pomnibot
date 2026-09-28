@@ -137,9 +137,12 @@ type Topic struct {
 
 type User struct {
 	ID           int64              `json:"id"`
-	Name         string             `json:"name"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	LastActiveAt pgtype.Timestamptz `json:"last_active_at"`
+	FirstName    string             `json:"first_name"`
+	LastName     pgtype.Text        `json:"last_name"`
+	Username     pgtype.Text        `json:"username"`
+	IsBot        bool               `json:"is_bot"`
 }
 
 type UserFactProgress struct {

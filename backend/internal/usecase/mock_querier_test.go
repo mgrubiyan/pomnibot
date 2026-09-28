@@ -37,6 +37,7 @@ type mockQuerier struct {
 	updateCardFunc                 func(ctx context.Context, arg db.UpdateCardParams) (db.Card, error)
 	updateFactProgressOnAnswerFunc func(ctx context.Context, arg db.UpdateFactProgressOnAnswerParams) (db.UserFactProgress, error)
 	upsertUserFunc                 func(ctx context.Context, arg db.UpsertUserParams) (db.User, error)
+	ensureUserFunc                 func(ctx context.Context, id int64) (db.User, error)
 }
 
 func (m *mockQuerier) CountTotalDueCardsForUser(ctx context.Context, userID int64) (int32, error) {
@@ -232,5 +233,18 @@ func (m *mockQuerier) UpsertUser(ctx context.Context, arg db.UpsertUserParams) (
 	if m.upsertUserFunc != nil {
 		return m.upsertUserFunc(ctx, arg)
 	}
-	return db.User{ID: arg.ID, Name: arg.Name}, nil
+	return db.User{
+		ID:        arg.ID,
+		FirstName: arg.FirstName,
+		LastName:  arg.LastName,
+		Username:  arg.Username,
+		IsBot:     arg.IsBot,
+	}, nil
+}
+
+func (m *mockQuerier) EnsureUser(ctx context.Context, id int64) (db.User, error) {
+	if m.ensureUserFunc != nil {
+		return m.ensureUserFunc(ctx, id)
+	}
+	return db.User{ID: id}, nil
 }

@@ -31,3 +31,18 @@ type HomescreenService interface {
 	GetFeedQuestions(ctx context.Context, userID int64) ([]contracts.Card, error)
 	SendResults(ctx context.Context, userID int64, results []contracts.AnswerResult) error
 }
+
+// UpsertUserParams defines fields required to upsert a user into the system.
+type UpsertUserParams struct {
+	ID        int64
+	FirstName string
+	LastName  *string
+	Username  *string
+	IsBot     bool
+}
+
+// UserService defines user domain operations.
+type UserService interface {
+	UpsertUser(ctx context.Context, params UpsertUserParams) error
+	EnsureUser(ctx context.Context, userID int64) error
+}
