@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -13,16 +14,20 @@ import (
 )
 
 type homescreenServiceImpl struct {
-	querier db.Querier
+	querier     db.Querier
+	userService UserService
 }
 
 // NewHomescreenService creates a new HomescreenService implementation backed by db.Querier.
-func NewHomescreenService(querier db.Querier) HomescreenService {
-	return &homescreenServiceImpl{querier: querier}
+func NewHomescreenService(querier db.Querier, userService UserService) HomescreenService {
+	return &homescreenServiceImpl{
+		querier:     querier,
+		userService: userService,
+	}
 }
 
 func (s *homescreenServiceImpl) GetToday(ctx context.Context, userID int64) (*contracts.TodayData, error) {
-	if err := EnsureUser(ctx, s.querier, userID, ""); err != nil {
+	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return nil, err
 	}
 
@@ -58,8 +63,8 @@ func (s *homescreenServiceImpl) GetToday(ctx context.Context, userID int64) (*co
 			CardsTotal: int(r.CardsTotal),
 			CardsDue:   int(r.CardsDue),
 		}
-		if r.AuthorName != "" {
-			item.AuthorName.SetTo(r.AuthorName)
+		if r.AuthorName.Valid && r.AuthorName.String != "" {
+			item.AuthorName.SetTo(r.AuthorName.String)
 		}
 		if r.ShareCode != "" {
 			item.ShareCode.SetTo(r.ShareCode)
@@ -70,8 +75,17 @@ func (s *homescreenServiceImpl) GetToday(ctx context.Context, userID int64) (*co
 	// Calculate estimated minutes (~15 seconds per card as per product concept)
 	estimatedMinutes := int(math.Ceil(float64(dueCount) * 15.0 / 60.0))
 
+	userName := strings.TrimSpace(user.FirstName + " " + user.LastName.String)
+	if userName == "" {
+		if user.Username.Valid && user.Username.String != "" {
+			userName = user.Username.String
+		} else {
+			userName = fmt.Sprintf("User %d", user.ID)
+		}
+	}
+
 	return &contracts.TodayData{
-		UserName:         user.Name,
+		UserName:         userName,
 		ActiveDays:       int(activeDays),
 		DueCount:         int(dueCount),
 		EstimatedMinutes: estimatedMinutes,
@@ -80,7 +94,7 @@ func (s *homescreenServiceImpl) GetToday(ctx context.Context, userID int64) (*co
 }
 
 func (s *homescreenServiceImpl) GetFeedQuestions(ctx context.Context, userID int64) ([]contracts.Card, error) {
-	if err := EnsureUser(ctx, s.querier, userID, ""); err != nil {
+	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return nil, err
 	}
 
@@ -102,7 +116,7 @@ func (s *homescreenServiceImpl) GetFeedQuestions(ctx context.Context, userID int
 }
 
 func (s *homescreenServiceImpl) SendResults(ctx context.Context, userID int64, results []contracts.AnswerResult) error {
-	if err := EnsureUser(ctx, s.querier, userID, ""); err != nil {
+	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return err
 	}
 

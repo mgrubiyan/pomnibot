@@ -15,6 +15,7 @@ type SetService interface {
 	GetSetShareCode(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.CardSet, error)
 	GetSetPlan(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.SetPlanItem, error)
 	JoinSetByShareCode(ctx context.Context, userID int64, code string) (*contracts.CardSet, error)
+	GenerateMockSet(ctx context.Context, userID int64, title string) (*contracts.CardSet, error)
 }
 
 // CardService defines domain operations on individual cards.
@@ -30,4 +31,19 @@ type HomescreenService interface {
 	GetToday(ctx context.Context, userID int64) (*contracts.TodayData, error)
 	GetFeedQuestions(ctx context.Context, userID int64) ([]contracts.Card, error)
 	SendResults(ctx context.Context, userID int64, results []contracts.AnswerResult) error
+}
+
+// UpsertUserParams defines fields required to upsert a user into the system.
+type UpsertUserParams struct {
+	ID        int64
+	FirstName string
+	LastName  *string
+	Username  *string
+	IsBot     bool
+}
+
+// UserService defines user domain operations.
+type UserService interface {
+	UpsertUser(ctx context.Context, params UpsertUserParams) error
+	EnsureUser(ctx context.Context, userID int64) error
 }

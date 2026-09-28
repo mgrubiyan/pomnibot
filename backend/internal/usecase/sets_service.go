@@ -11,16 +11,21 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
+	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 )
 
 type setServiceImpl struct {
-	querier db.Querier
+	querier     db.Querier
+	userService UserService
 }
 
 // NewSetService creates a new SetService implementation backed by db.Querier.
-func NewSetService(querier db.Querier) SetService {
-	return &setServiceImpl{querier: querier}
+func NewSetService(querier db.Querier, userService UserService) SetService {
+	return &setServiceImpl{
+		querier:     querier,
+		userService: userService,
+	}
 }
 
 func (s *setServiceImpl) GetSet(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.CardSet, error) {
@@ -40,7 +45,7 @@ func (s *setServiceImpl) GetSet(ctx context.Context, userID int64, setID uuid.UU
 		return nil, fmt.Errorf("get set by id: %w", err)
 	}
 
-	return mapSetRowToContract(row.ID, row.Title, row.AuthorName, row.ShareCode, row.CardsTotal, row.CardsDue)
+	return mapSetRowToContract(row.ID, row.Title, row.AuthorName.String, row.ShareCode, row.CardsTotal, row.CardsDue)
 }
 
 func (s *setServiceImpl) DeleteSet(ctx context.Context, userID int64, setID uuid.UUID) error {
@@ -168,7 +173,7 @@ func (s *setServiceImpl) JoinSetByShareCode(ctx context.Context, userID int64, c
 		return nil, fmt.Errorf("%w: share code is required", ErrValidation)
 	}
 
-	if err := EnsureUser(ctx, s.querier, userID, ""); err != nil {
+	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return nil, err
 	}
 
@@ -197,7 +202,34 @@ func (s *setServiceImpl) JoinSetByShareCode(ctx context.Context, userID int64, c
 		return nil, fmt.Errorf("init user fact progress: %w", err)
 	}
 
-	return mapSetRowToContract(row.ID, row.Title, row.AuthorName, row.ShareCode, row.CardsTotal, row.CardsDue)
+	return mapSetRowToContract(row.ID, row.Title, row.AuthorName.String, row.ShareCode, row.CardsTotal, row.CardsDue)
+}
+
+func (s *setServiceImpl) GenerateMockSet(ctx context.Context, userID int64, title string) (*contracts.CardSet, error) {
+	if err := s.userService.EnsureUser(ctx, userID); err != nil {
+		return nil, err
+	}
+
+	set, cardsCount, err := repository.GenerateSetForUser(ctx, s.querier, userID, title)
+	if err != nil {
+		return nil, fmt.Errorf("generate set for user: %w", err)
+	}
+
+	setUUID, err := uuid.FromBytes(set.ID.Bytes[:])
+	if err != nil {
+		return nil, fmt.Errorf("parse set uuid: %w", err)
+	}
+
+	res := &contracts.CardSet{
+		ID:         setUUID,
+		Title:      set.Title,
+		CardsTotal: cardsCount,
+		CardsDue:   cardsCount,
+	}
+	if set.ShareCode != "" {
+		res.ShareCode.SetTo(set.ShareCode)
+	}
+	return res, nil
 }
 
 func (s *setServiceImpl) buildCard(

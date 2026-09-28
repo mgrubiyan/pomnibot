@@ -52,6 +52,7 @@ func main() {
 	}
 
 	var (
+		userService       usecase.UserService
 		setService        usecase.SetService
 		cardService       usecase.CardService
 		homescreenService usecase.HomescreenService
@@ -81,9 +82,10 @@ func main() {
 			slog.Warn("mock data seeder encountered an issue", "error", err)
 		}
 
-		setService = usecase.NewSetService(queries)
-		cardService = usecase.NewCardService(queries)
-		homescreenService = usecase.NewHomescreenService(queries)
+		userService = usecase.NewUserService(queries)
+		setService = usecase.NewSetService(queries, userService)
+		cardService = usecase.NewCardService(queries, userService)
+		homescreenService = usecase.NewHomescreenService(queries, userService)
 		slog.Info("persistence layer and usecase services wired successfully")
 	} else {
 		slog.Warn("DATABASE_URL is not set; running in static SPA mode with unimplemented handlers")
@@ -106,6 +108,11 @@ func main() {
 
 	// Initialize MAX Bot if BOT_TOKEN is provided
 	if botToken := os.Getenv("BOT_TOKEN"); botToken != "" {
+		if userService == nil || setService == nil {
+			slog.Error("cannot start MAX bot without database and usecase services")
+			os.Exit(1)
+		}
+
 		appURL := os.Getenv("APP_URL")
 		if appURL == "" {
 			if domain := os.Getenv("DOMAIN"); domain != "" {
@@ -119,11 +126,17 @@ func main() {
 		botClient, err := bot.NewClient(botToken, apiURL)
 		if err != nil {
 			slog.Error("failed to create bot client", "error", err)
-		} else {
-			maxBot := bot.NewBot(botClient, appURL)
-			if err := maxBot.Start(ctx); err != nil {
-				slog.Error("failed to start MAX bot", "error", err)
-			}
+			os.Exit(1)
+		}
+
+		maxBot, err := bot.NewBot(botClient, appURL, userService, setService)
+		if err != nil {
+			slog.Error("failed to create MAX bot", "error", err)
+			os.Exit(1)
+		}
+
+		if err := maxBot.Start(ctx); err != nil {
+			slog.Error("failed to start MAX bot", "error", err)
 		}
 	} else {
 		slog.Warn("BOT_TOKEN not provided, running in static SPA mode only")

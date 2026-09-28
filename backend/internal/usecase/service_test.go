@@ -26,7 +26,7 @@ func TestSetService_GetSet(t *testing.T) {
 					ID:         pgUUID,
 					Title:      "Test Set",
 					AuthorID:   100,
-					AuthorName: "Alice",
+					AuthorName: pgtype.Text{String: "Alice", Valid: true},
 					ShareCode:  "123456",
 					CardsTotal: 10,
 					CardsDue:   5,
@@ -36,7 +36,7 @@ func TestSetService_GetSet(t *testing.T) {
 		},
 	}
 
-	svc := usecase.NewSetService(mock)
+	svc := usecase.NewSetService(mock, usecase.NewUserService(mock))
 
 	// Success
 	res, err := svc.GetSet(context.Background(), 100, setUUID)
@@ -66,7 +66,7 @@ func TestSetService_JoinSetByShareCode(t *testing.T) {
 					ID:         pgUUID,
 					Title:      "Course Set",
 					AuthorID:   200,
-					AuthorName: "Bob",
+					AuthorName: pgtype.Text{String: "Bob", Valid: true},
 					ShareCode:  "101101",
 					CardsTotal: 20,
 					CardsDue:   20,
@@ -82,7 +82,7 @@ func TestSetService_JoinSetByShareCode(t *testing.T) {
 		},
 	}
 
-	svc := usecase.NewSetService(mock)
+	svc := usecase.NewSetService(mock, usecase.NewUserService(mock))
 
 	res, err := svc.JoinSetByShareCode(context.Background(), 100, "101101")
 	if err != nil {
@@ -121,7 +121,7 @@ func TestSetService_DeleteSet(t *testing.T) {
 		},
 	}
 
-	svc := usecase.NewSetService(mock)
+	svc := usecase.NewSetService(mock, usecase.NewUserService(mock))
 
 	// Author deletes
 	if err := svc.DeleteSet(context.Background(), 100, setUUID); err != nil {
@@ -176,7 +176,7 @@ func TestCardService_AnswerQuestion(t *testing.T) {
 		},
 	}
 
-	svc := usecase.NewCardService(mock)
+	svc := usecase.NewCardService(mock, usecase.NewUserService(mock))
 
 	res, err := svc.AnswerQuestion(context.Background(), 100, cardUUID, "A programming language")
 	if err != nil {
@@ -193,7 +193,7 @@ func TestCardService_AnswerQuestion(t *testing.T) {
 func TestHomescreenService_GetToday(t *testing.T) {
 	mock := &mockQuerier{
 		getUserByIDFunc: func(_ context.Context, id int64) (db.User, error) {
-			return db.User{ID: id, Name: "Tester"}, nil
+			return db.User{ID: id, FirstName: "Tester"}, nil
 		},
 		countUserActiveDaysFunc: func(_ context.Context, _ int64) (int32, error) {
 			return 4, nil
@@ -205,7 +205,7 @@ func TestHomescreenService_GetToday(t *testing.T) {
 			return []db.GetUserSetsRow{
 				{
 					Title:      "Set 1",
-					AuthorName: "Alice",
+					AuthorName: pgtype.Text{String: "Alice", Valid: true},
 					CardsTotal: 10,
 					CardsDue:   5,
 				},
@@ -213,7 +213,7 @@ func TestHomescreenService_GetToday(t *testing.T) {
 		},
 	}
 
-	svc := usecase.NewHomescreenService(mock)
+	svc := usecase.NewHomescreenService(mock, usecase.NewUserService(mock))
 
 	today, err := svc.GetToday(context.Background(), 100)
 	if err != nil {
@@ -253,7 +253,7 @@ func TestHomescreenService_SendResults(t *testing.T) {
 		},
 	}
 
-	svc := usecase.NewHomescreenService(mock)
+	svc := usecase.NewHomescreenService(mock, usecase.NewUserService(mock))
 
 	results := []contracts.AnswerResult{
 		{
@@ -309,7 +309,7 @@ func TestCardService_UpdateCard_Authorization(t *testing.T) {
 		},
 	}
 
-	svc := usecase.NewCardService(mock)
+	svc := usecase.NewCardService(mock, usecase.NewUserService(mock))
 
 	// Author succeeds
 	req := &contracts.UpdateCardRequest{
@@ -344,7 +344,7 @@ func TestCardService_DeleteCard_Authorization(t *testing.T) {
 		},
 	}
 
-	svc := usecase.NewCardService(mock)
+	svc := usecase.NewCardService(mock, usecase.NewUserService(mock))
 
 	// Author succeeds
 	if err := svc.DeleteCard(context.Background(), authorID, cardUUID); err != nil {
@@ -388,7 +388,7 @@ func TestSetService_GetCardsBySetID_Authorization(t *testing.T) {
 		},
 	}
 
-	svc := usecase.NewSetService(mock)
+	svc := usecase.NewSetService(mock, usecase.NewUserService(mock))
 
 	// Member succeeds
 	cards, err := svc.GetCardsBySetID(context.Background(), memberID, setUUID)
@@ -419,10 +419,73 @@ func TestSetService_DeleteSet_NonMember(t *testing.T) {
 		},
 	}
 
-	svc := usecase.NewSetService(mock)
+	svc := usecase.NewSetService(mock, usecase.NewUserService(mock))
 
 	err := svc.DeleteSet(context.Background(), nonMemberID, setUUID)
 	if !errors.Is(err, usecase.ErrNotFound) {
 		t.Fatalf("expected ErrNotFound when leaving unenrolled set, got %v", err)
 	}
 }
+
+func TestSetService_GenerateMockSet(t *testing.T) {
+	ctx := context.Background()
+	const userID = int64(123)
+	const title = "Конспект по биологии"
+
+	mock := &mockQuerier{
+		ensureUserFunc: func(_ context.Context, id int64) (db.User, error) {
+			return db.User{ID: id}, nil
+		},
+		getSetByShareCodeFunc: func(_ context.Context, _ db.GetSetByShareCodeParams) (db.GetSetByShareCodeRow, error) {
+			return db.GetSetByShareCodeRow{}, pgx.ErrNoRows
+		},
+		createSetFunc: func(_ context.Context, arg db.CreateSetParams) (db.Set, error) {
+			var setUUID pgtype.UUID
+			_ = setUUID.Scan("11111111-1111-1111-1111-111111111111")
+			return db.Set{
+				ID:        setUUID,
+				Title:     arg.Title,
+				AuthorID:  arg.AuthorID,
+				ShareCode: arg.ShareCode,
+			}, nil
+		},
+		joinSetFunc: func(_ context.Context, arg db.JoinSetParams) (db.UserSet, error) {
+			return db.UserSet{UserID: arg.UserID, SetID: arg.SetID}, nil
+		},
+		initUserFactProgressFunc: func(_ context.Context, _ db.InitUserFactProgressParams) error {
+			return nil
+		},
+	}
+
+	svc := usecase.NewSetService(mock, usecase.NewUserService(mock))
+
+	t.Run("success generates card set", func(t *testing.T) {
+		res, err := svc.GenerateMockSet(ctx, userID, title)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if res.Title != title {
+			t.Errorf("expected title %q, got %q", title, res.Title)
+		}
+		if res.CardsTotal == 0 {
+			t.Errorf("expected cards total > 0, got %d", res.CardsTotal)
+		}
+		if !res.ShareCode.IsSet() || len(res.ShareCode.Value) != 6 {
+			t.Errorf("expected 6-char share code, got %v", res.ShareCode)
+		}
+	})
+
+	t.Run("ensure user error propagates", func(t *testing.T) {
+		mockErr := &mockQuerier{
+			ensureUserFunc: func(_ context.Context, _ int64) (db.User, error) {
+				return db.User{}, errors.New("db unavailable")
+			},
+		}
+		svcErr := usecase.NewSetService(mockErr, usecase.NewUserService(mockErr))
+		_, err := svcErr.GenerateMockSet(ctx, userID, title)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+}
+

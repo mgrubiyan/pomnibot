@@ -21,13 +21,14 @@ import (
 
 const defaultAPIBaseURL = "https://platform-api2.max.ru"
 
-// User represents a MAX user or bot profile.
+// User represents a MAX user or bot profile according to MAX Bot API sender schema.
 type User struct {
-	UserID    int64  `json:"user_id"`
-	FirstName string `json:"first_name"`
-	Username  string `json:"username"`
-	IsBot     bool   `json:"is_bot"`
-	Name      string `json:"name"`
+	UserID    int64   `json:"user_id"`
+	FirstName string  `json:"first_name"`
+	LastName  *string `json:"last_name,omitempty"`
+	Username  *string `json:"username,omitempty"`
+	IsBot     bool    `json:"is_bot"`
+	Name      string  `json:"name,omitempty"`
 }
 
 // UpdateResponse represents response from GET /updates.
@@ -47,9 +48,10 @@ type Update struct {
 
 // Message represents incoming message.
 type Message struct {
-	Recipient MessageRecipient `json:"recipient"`
-	Sender    User             `json:"sender"`
-	Body      MessageBody      `json:"body"`
+	Recipient   MessageRecipient `json:"recipient"`
+	Sender      User             `json:"sender"`
+	Body        MessageBody      `json:"body"`
+	Attachments []Attachment     `json:"attachments,omitempty"`
 }
 
 // MessageRecipient describes who received the message.
@@ -61,8 +63,9 @@ type MessageRecipient struct {
 
 // MessageBody contains the message content.
 type MessageBody struct {
-	Mid  string `json:"mid"`
-	Text string `json:"text"`
+	Mid         string       `json:"mid"`
+	Text        string       `json:"text"`
+	Attachments []Attachment `json:"attachments,omitempty"`
 }
 
 // SendMessageRequest contains payload for POST /messages.

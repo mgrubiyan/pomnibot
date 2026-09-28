@@ -1,9 +1,19 @@
 -- name: UpsertUser :one
-INSERT INTO users (id, name, last_active_at)
-VALUES ($1, $2, CURRENT_TIMESTAMP)
+INSERT INTO users (id, first_name, last_name, username, is_bot, last_active_at)
+VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
 ON CONFLICT (id) DO UPDATE
-SET name = EXCLUDED.name,
+SET first_name = CASE WHEN EXCLUDED.first_name <> '' THEN EXCLUDED.first_name ELSE users.first_name END,
+    last_name = COALESCE(EXCLUDED.last_name, users.last_name),
+    username = COALESCE(EXCLUDED.username, users.username),
+    is_bot = EXCLUDED.is_bot,
     last_active_at = CURRENT_TIMESTAMP
+RETURNING *;
+
+-- name: EnsureUser :one
+INSERT INTO users (id, first_name, last_name, username, is_bot, last_active_at)
+VALUES ($1, '', NULL, NULL, FALSE, CURRENT_TIMESTAMP)
+ON CONFLICT (id) DO UPDATE
+SET last_active_at = CURRENT_TIMESTAMP
 RETURNING *;
 
 -- name: GetUserByID :one

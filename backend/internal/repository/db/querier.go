@@ -25,6 +25,7 @@ type Querier interface {
 	DeleteCardTableColumns(ctx context.Context, cardID pgtype.UUID) error
 	DeleteCardTableItems(ctx context.Context, cardID pgtype.UUID) error
 	DeleteSet(ctx context.Context, arg DeleteSetParams) (int64, error)
+	EnsureUser(ctx context.Context, id int64) (User, error)
 	GetCardByID(ctx context.Context, arg GetCardByIDParams) (GetCardByIDRow, error)
 	GetCardByIDForAuthor(ctx context.Context, arg GetCardByIDForAuthorParams) (GetCardByIDForAuthorRow, error)
 	GetCardOptions(ctx context.Context, cardID pgtype.UUID) ([]CardOption, error)
