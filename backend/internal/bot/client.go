@@ -209,19 +209,89 @@ func (c *Client) GetUpdates(ctx context.Context, marker *int64, timeout int) (*U
 	return &resp, nil
 }
 
-// SendMessage sends a message to chatID or userID.
-func (c *Client) SendMessage(ctx context.Context, chatID int64, userID int64, msg SendMessageRequest) error {
+// SendMessageResponse represents response payload from POST /messages.
+type SendMessageResponse struct {
+	Message *Message     `json:"message,omitempty"`
+	Body    *MessageBody `json:"body,omitempty"`
+}
+
+// SendMessage sends a message to chatID or userID and returns the created message ID (mid) if available.
+func (c *Client) SendMessage(ctx context.Context, chatID int64, userID int64, msg SendMessageRequest) (string, error) {
 	params := url.Values{}
 	if chatID != 0 {
 		params.Set("chat_id", strconv.FormatInt(chatID, 10))
 	} else if userID != 0 {
 		params.Set("user_id", strconv.FormatInt(userID, 10))
 	} else {
-		return fmt.Errorf("either chatID or userID must be provided")
+		return "", fmt.Errorf("either chatID or userID must be provided")
 	}
 
 	endpoint := "/messages?" + params.Encode()
-	return c.doRequest(ctx, http.MethodPost, endpoint, msg, nil)
+	var resp SendMessageResponse
+	if err := c.doRequest(ctx, http.MethodPost, endpoint, msg, &resp); err != nil {
+		return "", err
+	}
+	if resp.Message != nil && resp.Message.Body.Mid != "" {
+		return resp.Message.Body.Mid, nil
+	}
+	if resp.Body != nil && resp.Body.Mid != "" {
+		return resp.Body.Mid, nil
+	}
+	return "", nil
+}
+
+// EditMessage edits an existing message by its messageID (mid).
+func (c *Client) EditMessage(ctx context.Context, messageID string, msg SendMessageRequest) error {
+	if messageID == "" {
+		return fmt.Errorf("messageID is required")
+	}
+	endpoint := "/messages?message_id=" + url.QueryEscape(messageID)
+	return c.doRequest(ctx, http.MethodPut, endpoint, msg, nil)
+}
+
+// SendAction notifies users in chat of bot activity (e.g. "typing_on").
+func (c *Client) SendAction(ctx context.Context, chatID int64, action string) error {
+	if chatID == 0 {
+		return nil
+	}
+	body := map[string]string{"action": action}
+	endpoint := fmt.Sprintf("/chats/%d/actions", chatID)
+	return c.doRequest(ctx, http.MethodPost, endpoint, body, nil)
+}
+
+// DownloadFile downloads file bytes from a given URL.
+func (c *Client) DownloadFile(ctx context.Context, fileURL string) ([]byte, error) {
+	if fileURL == "" {
+		return nil, fmt.Errorf("file URL is empty")
+	}
+	if !strings.HasPrefix(fileURL, "http://") && !strings.HasPrefix(fileURL, "https://") {
+		fileURL = c.baseURL + "/" + strings.TrimPrefix(fileURL, "/")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fileURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create download request: %w", err)
+	}
+
+	if strings.Contains(fileURL, "max.ru") {
+		req.Header.Set("Authorization", c.token)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("download file %s: %w", fileURL, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("download failed with status %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read file body: %w", err)
+	}
+	return data, nil
 }
 
 // GetSubscriptions returns all active webhook subscriptions.

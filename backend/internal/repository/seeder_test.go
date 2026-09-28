@@ -11,6 +11,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
+	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 )
@@ -280,5 +282,64 @@ func TestGenerateSetForUser_CreateSetError(t *testing.T) {
 	_, _, err := repository.GenerateSetForUser(ctx, tq, 1, "Error Set")
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestSaveGeneratedSet_Success(t *testing.T) {
+	ctx := context.Background()
+	tq := newTestQuerier()
+	const userID int64 = 999
+	const title = "Generated Set"
+
+	genResult := generator.Result{
+		Facts: []cards.Fact{
+			{ID: "fact-1", Name: "Fact One", Topic: "Biology"},
+			{ID: "fact-2", Name: "Fact Two", Topic: "Biology"},
+		},
+		Cards: []cards.Card{
+			{
+				FactID:      "fact-1",
+				Kind:        cards.KindChoice,
+				Question:    "What is fact one?",
+				Options:     []string{"A", "B", "C"},
+				Answer:      "A",
+				Explanation: "Because A",
+				SourceQuote: "Quote 1",
+				SourceRef:   "Page 1",
+			},
+			{
+				FactID:      "fact-2",
+				Kind:        cards.KindFlip,
+				Question:    "What is fact two?",
+				Answer:      "Answer 2",
+				Explanation: "Because 2",
+				SourceQuote: "Quote 2",
+				SourceRef:   "Page 2",
+			},
+		},
+	}
+
+	set, cardCount, err := repository.SaveGeneratedSet(ctx, tq, userID, title, genResult)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if set.Title != title {
+		t.Errorf("expected title %q, got %q", title, set.Title)
+	}
+	if set.AuthorID != userID {
+		t.Errorf("expected authorID %d, got %d", userID, set.AuthorID)
+	}
+	if cardCount != 2 {
+		t.Errorf("expected 2 cards, got %d", cardCount)
+	}
+	if len(tq.createdFacts) != 2 {
+		t.Errorf("expected 2 created facts, got %d", len(tq.createdFacts))
+	}
+	if len(tq.createdCards) != 2 {
+		t.Errorf("expected 2 created cards, got %d", len(tq.createdCards))
+	}
+	if len(tq.createdOptions) != 3 {
+		t.Errorf("expected 3 options for choice card, got %d", len(tq.createdOptions))
 	}
 }

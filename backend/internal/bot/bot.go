@@ -8,10 +8,46 @@ import (
 	"log/slog"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
+	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
+
+// FileExtractor defines interface for extracting text from files/images.
+type FileExtractor interface {
+	Extract(ctx context.Context, files []ingest.File) (ingest.Result, error)
+}
+
+// CardGenerator defines interface for generating cards from lecture notes.
+type CardGenerator interface {
+	Generate(ctx context.Context, doc generator.Document, onBatch func(generator.Batch)) (generator.Result, error)
+}
+
+type generatorAdapter struct {
+	gen *generator.Generator
+}
+
+func (a *generatorAdapter) Generate(ctx context.Context, doc generator.Document, onBatch func(generator.Batch)) (generator.Result, error) {
+	if a == nil || a.gen == nil {
+		return generator.Result{}, errors.New("generator is nil")
+	}
+	g := a.gen
+	if onBatch != nil {
+		g = g.WithOnBatch(onBatch)
+	}
+	return g.Generate(ctx, doc)
+}
+
+// NewGeneratorAdapter creates a CardGenerator adapter for *generator.Generator.
+func NewGeneratorAdapter(g *generator.Generator) CardGenerator {
+	if g == nil {
+		return nil
+	}
+	return &generatorAdapter{gen: g}
+}
 
 // Bot represents the Pomnibot MAX bot runner.
 type Bot struct {
@@ -19,11 +55,20 @@ type Bot struct {
 	appURL      string
 	userService usecase.UserService
 	setService  usecase.SetService
+	extractor   FileExtractor
+	generator   CardGenerator
 	botUser     *User
 }
 
 // NewBot creates a new Bot instance.
-func NewBot(client *Client, appURL string, userService usecase.UserService, setService usecase.SetService) (*Bot, error) {
+func NewBot(
+	client *Client,
+	appURL string,
+	userService usecase.UserService,
+	setService usecase.SetService,
+	extractor FileExtractor,
+	generator CardGenerator,
+) (*Bot, error) {
 	if client == nil {
 		return nil, errors.New("bot client is required")
 	}
@@ -41,6 +86,8 @@ func NewBot(client *Client, appURL string, userService usecase.UserService, setS
 		appURL:      strings.TrimSuffix(appURL, "/"),
 		userService: userService,
 		setService:  setService,
+		extractor:   extractor,
+		generator:   generator,
 	}, nil
 }
 
@@ -140,8 +187,8 @@ func (b *Bot) handleUpdate(ctx context.Context, u Update) {
 		userID = u.Message.Sender.UserID
 		b.upsertUser(ctx, u.Message.Sender)
 
-		if _, filename, isFile := b.getFileAttachment(u.Message); isFile {
-			b.handleFileMessage(ctx, chatID, userID, u.Message.Body.Text, filename)
+		if atts := b.getAllFileAttachments(u.Message); len(atts) > 0 {
+			b.handleFileMessage(ctx, chatID, userID, u.Message.Body.Text, atts)
 			return
 		}
 	default:
@@ -156,18 +203,146 @@ func (b *Bot) handleUpdate(ctx context.Context, u Update) {
 	b.sendWelcomeMessage(ctx, chatID, userID)
 }
 
-func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64, caption, filename string) {
-	title := resolveSetTitle(caption, filename)
-	cardSet, err := b.setService.GenerateMockSet(ctx, userID, title)
+type attachmentInfo struct {
+	filename string
+	url      string
+	data     []byte
+}
+
+func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64, caption string, atts []attachmentInfo) {
+	firstFilename := ""
+	if len(atts) > 0 {
+		firstFilename = atts[0].filename
+	}
+	title := resolveSetTitle(caption, firstFilename)
+
+	count := len(atts)
+	plural := "файлов"
+	if count == 1 {
+		plural = "файл"
+	} else if count >= 2 && count <= 4 {
+		plural = "файла"
+	}
+	statusText := fmt.Sprintf("📸 Получил %d %s. Распознаю текст... ⏳", count, plural)
+
+	mid, err := b.client.SendMessage(ctx, chatID, userID, SendMessageRequest{
+		Text: statusText,
+	})
 	if err != nil {
-		slog.Error("failed to generate mock set for user",
-			"user_id", userID,
-			"title", title,
-			"error", err,
-		)
-		_ = b.client.SendMessage(ctx, chatID, userID, SendMessageRequest{
-			Text: "К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.",
+		slog.Error("failed to send initial status message", "error", err)
+	}
+
+	if chatID != 0 {
+		go func() {
+			_ = b.client.SendAction(context.Background(), chatID, "typing_on")
+		}()
+	}
+
+	updateStatus := func(text string) {
+		if mid != "" {
+			if editErr := b.client.EditMessage(ctx, mid, SendMessageRequest{Text: text}); editErr == nil {
+				return
+			}
+		}
+		_, _ = b.client.SendMessage(ctx, chatID, userID, SendMessageRequest{Text: text})
+	}
+
+	if b.extractor == nil || b.generator == nil {
+		slog.Error("extractor or generator not configured on bot")
+		updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
+		return
+	}
+
+	files := make([]ingest.File, 0, len(atts))
+	for _, att := range atts {
+		var data []byte
+		if len(att.data) > 0 {
+			data = att.data
+		} else if att.url != "" {
+			d, err := b.client.DownloadFile(ctx, att.url)
+			if err != nil {
+				slog.Error("failed to download attachment", "url", att.url, "error", err)
+				updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
+				return
+			}
+			data = d
+		} else {
+			slog.Error("attachment has neither data nor url", "filename", att.filename)
+			updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
+			return
+		}
+
+		files = append(files, ingest.File{
+			Name: att.filename,
+			Data: data,
 		})
+	}
+
+	if len(files) == 0 {
+		updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
+		return
+	}
+
+	extracted, err := b.extractor.Extract(ctx, files)
+	if err != nil {
+		slog.Error("failed to extract text from files", "error", err)
+		updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
+		return
+	}
+
+	if strings.TrimSpace(extracted.Text) == "" {
+		slog.Warn("no text found in files", "files_count", len(files))
+		updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
+		return
+	}
+
+	updateStatus("🧠 Анализирую конспект и создаю карточки... ⏳")
+
+	doc := generator.Document{
+		Text:  extracted.Text,
+		Title: title,
+	}
+	for _, p := range extracted.Pages {
+		doc.PageStarts = append(doc.PageStarts, p.Start)
+	}
+
+	var (
+		mu         sync.Mutex
+		lastEdit   time.Time
+		totalCards int
+	)
+	onBatch := func(bCount generator.Batch) {
+		mu.Lock()
+		defer mu.Unlock()
+		totalCards += len(bCount.Cards)
+		if time.Since(lastEdit) < 1500*time.Millisecond {
+			return
+		}
+		lastEdit = time.Now()
+		if mid != "" {
+			_ = b.client.EditMessage(ctx, mid, SendMessageRequest{
+				Text: fmt.Sprintf("🧠 Создаю карточки... Уже готово: %d ⏳", totalCards),
+			})
+		}
+	}
+
+	genResult, err := b.generator.Generate(ctx, doc, onBatch)
+	if err != nil {
+		slog.Error("failed to generate cards from document", "error", err)
+		updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
+		return
+	}
+
+	if len(genResult.Cards) == 0 {
+		slog.Warn("no cards generated from document")
+		updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
+		return
+	}
+
+	cardSet, err := b.setService.SaveGeneratedSet(ctx, userID, title, genResult)
+	if err != nil {
+		slog.Error("failed to save generated set to database", "error", err)
+		updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
 		return
 	}
 
@@ -176,13 +351,13 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 		shareCode = cardSet.ShareCode.Value
 	}
 
-	text := fmt.Sprintf("🎉 Набор «%s» успешно создан!\nКод для совместного доступа: %s\n\nОткрой мини-приложение, чтобы начать тренировку:", cardSet.Title, shareCode)
-	b.sendMessageWithButtons(ctx, chatID, userID, text)
+	finalText := fmt.Sprintf("🎉 Набор «%s» успешно создан!\nКод для совместного доступа: %s\n\nОткрой мини-приложение, чтобы начать тренировку:", cardSet.Title, shareCode)
+	b.editOrSendMessageWithButtons(ctx, mid, chatID, userID, finalText)
 }
 
-func (b *Bot) getFileAttachment(m *Message) (*Attachment, string, bool) {
+func (b *Bot) getAllFileAttachments(m *Message) []attachmentInfo {
 	if m == nil {
-		return nil, "", false
+		return nil
 	}
 	var allAtts []Attachment
 	if len(m.Body.Attachments) > 0 {
@@ -192,21 +367,55 @@ func (b *Bot) getFileAttachment(m *Message) (*Attachment, string, bool) {
 		allAtts = append(allAtts, m.Attachments...)
 	}
 
-	for _, att := range allAtts {
+	var results []attachmentInfo
+	for idx, att := range allAtts {
 		filename := extractFilename(att)
-		t := strings.ToLower(att.Type)
-		if t == "file" || t == "image" || t == "photo" || t == "document" {
-			return &att, filename, true
+		url := extractURL(att)
+		var data []byte
+		if rawData, ok := att.Payload["data"].([]byte); ok {
+			data = rawData
+		} else if strData, ok := att.Payload["data"].(string); ok && strData != "" {
+			data = []byte(strData)
 		}
-		if filename != "" {
+
+		t := strings.ToLower(att.Type)
+		isDocOrImage := t == "file" || t == "image" || t == "photo" || t == "document"
+		if !isDocOrImage && filename != "" {
 			ext := strings.ToLower(filepath.Ext(filename))
 			switch ext {
 			case ".txt", ".pdf", ".png", ".jpg", ".jpeg", ".webp", ".doc", ".docx":
-				return &att, filename, true
+				isDocOrImage = true
 			}
 		}
+
+		if isDocOrImage {
+			if filename == "" {
+				if t == "image" || t == "photo" {
+					filename = fmt.Sprintf("photo_%d.jpg", idx+1)
+				} else {
+					filename = fmt.Sprintf("file_%d", idx+1)
+				}
+			}
+			results = append(results, attachmentInfo{
+				filename: filename,
+				url:      url,
+				data:     data,
+			})
+		}
 	}
-	return nil, "", false
+	return results
+}
+
+func extractURL(att Attachment) string {
+	if att.Payload == nil {
+		return ""
+	}
+	for _, key := range []string{"url", "download_url", "file_url", "token"} {
+		if v, ok := att.Payload[key].(string); ok && strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
 }
 
 func extractFilename(att Attachment) string {
@@ -288,7 +497,7 @@ func (b *Bot) buildAppButtons() [][]map[string]interface{} {
 	return buttons
 }
 
-func (b *Bot) sendMessageWithButtons(ctx context.Context, chatID int64, userID int64, text string) {
+func (b *Bot) editOrSendMessageWithButtons(ctx context.Context, mid string, chatID int64, userID int64, text string) {
 	buttons := b.buildAppButtons()
 
 	msg := SendMessageRequest{
@@ -303,7 +512,18 @@ func (b *Bot) sendMessageWithButtons(ctx context.Context, chatID int64, userID i
 		},
 	}
 
-	if err := b.client.SendMessage(ctx, chatID, userID, msg); err != nil {
+	if mid != "" {
+		if err := b.client.EditMessage(ctx, mid, msg); err == nil {
+			slog.Info("successfully edited message with buttons",
+				"chat_id", chatID,
+				"user_id", userID,
+				"mid", mid,
+			)
+			return
+		}
+	}
+
+	if _, err := b.client.SendMessage(ctx, chatID, userID, msg); err != nil {
 		slog.Error("failed to send message with buttons",
 			"chat_id", chatID,
 			"user_id", userID,
@@ -315,6 +535,10 @@ func (b *Bot) sendMessageWithButtons(ctx context.Context, chatID int64, userID i
 			"user_id", userID,
 		)
 	}
+}
+
+func (b *Bot) sendMessageWithButtons(ctx context.Context, chatID int64, userID int64, text string) {
+	b.editOrSendMessageWithButtons(ctx, "", chatID, userID, text)
 }
 
 func (b *Bot) sendWelcomeMessage(ctx context.Context, chatID int64, userID int64) {

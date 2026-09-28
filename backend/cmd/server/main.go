@@ -15,6 +15,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mgrubiyan/pomnibot/backend/internal/bot"
+	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
+	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
+	"github.com/mgrubiyan/pomnibot/backend/internal/ingest/yandex"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 	httptransport "github.com/mgrubiyan/pomnibot/backend/internal/transport/http"
@@ -131,7 +135,38 @@ func main() {
 			os.Exit(1)
 		}
 
-		maxBot, err := bot.NewBot(botClient, appURL, userService, setService)
+		var ocr ingest.OCR
+		if yandexCfg := yandex.ConfigFromEnv(); yandexCfg.APIKey != "" {
+			yandexClient, err := yandex.New(yandexCfg)
+			if err != nil {
+				slog.Warn("failed to initialize yandex OCR client", "error", err)
+			} else {
+				ocr = yandexClient
+				slog.Info("yandex OCR client initialized")
+			}
+		}
+
+		extractor, err := ingest.NewExtractor(ocr, ingest.Options{})
+		if err != nil {
+			slog.Warn("extractor initialized with PDF disabled", "error", err)
+			extractor, _ = ingest.NewExtractor(ocr, ingest.Options{DisablePDF: true})
+		}
+
+		var cardGen bot.CardGenerator
+		if gigachatCfg, err := gigachat.ConfigFromEnv(); err == nil {
+			gigachatClient, err := gigachat.New(gigachatCfg)
+			if err != nil {
+				slog.Warn("failed to initialize gigachat client", "error", err)
+			} else {
+				gen := generator.NewGenerator(gigachatClient, generator.Options{})
+				cardGen = bot.NewGeneratorAdapter(gen)
+				slog.Info("gigachat card generator initialized")
+			}
+		} else {
+			slog.Warn("gigachat configuration not found in environment", "error", err)
+		}
+
+		maxBot, err := bot.NewBot(botClient, appURL, userService, setService, extractor, cardGen)
 		if err != nil {
 			slog.Error("failed to create MAX bot", "error", err)
 			os.Exit(1)
