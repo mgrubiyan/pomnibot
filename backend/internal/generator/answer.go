@@ -2,6 +2,8 @@ package generator
 
 import (
 	"slices"
+	"strings"
+	"unicode"
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 )
@@ -39,7 +41,46 @@ func answerChecked(k cards.Kind) bool {
 // answerSupported reports whether a choice or input answer passes both
 // checks against its quote and question.
 func answerSupported(c modelCard, quote string) bool {
+	if isCode(c.Answer) {
+		return codeWithin(c.Answer, quote) && !codeWithin(c.Answer, c.Question)
+	}
 	return stemsWithin(c.Answer, quote) && !stemsWithin(c.Answer, c.Question)
+}
+
+// isCode reports an answer that is code: ASCII with symbols of code in it
+// ("::", "(x) * (x)", "hello.h") or one identifier of three or more
+// characters ("imbue"). Such an answer is compared as a whole string, since
+// "::" has no words at all and a command may be made of words from its own
+// question.
+func isCode(s string) bool {
+	s = strings.TrimSpace(s)
+	symbol, space := false, false
+	for _, r := range s {
+		switch {
+		case r > unicode.MaxASCII:
+			return false
+		case r == ' ':
+			space = true
+		case strings.ContainsRune(codeSymbols, r):
+			symbol = true
+		}
+	}
+	return symbol || !space && len(s) >= 3 && strings.IndexFunc(s, unicode.IsLetter) >= 0
+}
+
+// codeSymbols mark an ASCII answer as code. Commas and hyphens do not: "G1,
+// S, G2" and "x-ray" are words.
+const codeSymbols = "():;<>=*+#/\\[]{}&|!%^~._"
+
+// codeWithin reports whether code occurs in text with all whitespace
+// ignored: pdftotext spaces out the letters of listings, "c o u t".
+func codeWithin(code, text string) bool {
+	code, text = squeeze(code), squeeze(text)
+	return code != "" && strings.Contains(text, code)
+}
+
+func squeeze(s string) string {
+	return strings.Join(strings.Fields(fold(s).s), "")
 }
 
 // stemsWithin reports whether every content word of s occurs in text, up to

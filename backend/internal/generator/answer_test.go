@@ -63,3 +63,32 @@ func TestSameWord(t *testing.T) {
 		}
 	}
 }
+
+// Code answers are checked as whole strings: "::" has no words, a command
+// may be made of words from its question, and pdftotext spaces out the
+// letters of listings ("c o u t . i m b u e").
+func TestAnswerSupportedForCode(t *testing.T) {
+	const quote = "Метод imbue назначает потоку новую локаль: c o u t . i m b u e ( l o c ) ; " +
+		"Оператор :: обращается к члену пространства имён: ns2::ns1::a. " +
+		"Компоновка: g++ ./main.obj ./hello.obj -o program.exe. Директива #define pi 4 заменяет pi на 4."
+	tests := []struct {
+		question, answer string
+		want             bool
+	}{
+		{"Какой метод назначает потоку новую локаль?", "imbue", true},
+		{"Какой оператор обращается к члену пространства имён?", "::", true},
+		{"Как обратиться к переменной a из ns1 внутри ns2?", "ns2::ns1::a", true},
+		{"Запиши команду компоновки main.obj и hello.obj в program.exe через g++.", "g++ ./main.obj ./hello.obj -o program.exe", true},
+		{"Как вывести значение через поток?", "cout.imbue(loc)", true},       // spaced out in the notes
+		{"Какой функцией задают локаль программы?", "setlocale", false},      // not in the quote
+		{"Что делает метод imbue с потоком?", "imbue", false},                // given in the question
+		{"На какое число заменится pi директивой #define pi 4?", "4", false}, // given in the question
+		{"Какой символ начинает директиву?", "s", false},                     // one letter is in any text
+	}
+	for _, tt := range tests {
+		c := modelCard{Kind: cards.KindChoice, Question: tt.question, Answer: tt.answer}
+		if got := answerSupported(c, quote); got != tt.want {
+			t.Errorf("answerSupported(%q → %q) = %v, want %v", tt.question, tt.answer, got, tt.want)
+		}
+	}
+}
