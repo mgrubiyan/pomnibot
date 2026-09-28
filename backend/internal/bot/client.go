@@ -51,9 +51,10 @@ type Update struct {
 
 // Message represents incoming message.
 type Message struct {
-	Recipient MessageRecipient `json:"recipient"`
-	Sender    User             `json:"sender"`
-	Body      MessageBody      `json:"body"`
+	Recipient   MessageRecipient `json:"recipient"`
+	Sender      User             `json:"sender"`
+	Body        MessageBody      `json:"body"`
+	Attachments []Attachment     `json:"attachments,omitempty"`
 }
 
 // MessageRecipient describes who received the message.
@@ -65,8 +66,9 @@ type MessageRecipient struct {
 
 // MessageBody contains the message content.
 type MessageBody struct {
-	Mid  string `json:"mid"`
-	Text string `json:"text"`
+	Mid         string       `json:"mid"`
+	Text        string       `json:"text"`
+	Attachments []Attachment `json:"attachments,omitempty"`
 }
 
 // SendMessageRequest contains payload for POST /messages.
