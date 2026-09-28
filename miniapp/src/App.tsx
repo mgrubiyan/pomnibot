@@ -18,6 +18,7 @@ type Screen =
     | {
           name: 'feed';
           setId?: string;
+          setTitle?: string;
           initialIndex?: number;
           initialResults?: AnswerResult[];
       }
@@ -106,6 +107,7 @@ function App() {
         reason?: CardIssueReason,
         fromFeed?: boolean,
         feedSetId?: string,
+        feedSetTitle?: string,
         feedIndex?: number,
         feedResults?: AnswerResult[],
     ) => {
@@ -131,6 +133,7 @@ function App() {
             setScreen({
                 name: 'feed',
                 setId: feedSetId,
+                setTitle: feedSetTitle,
                 initialIndex: feedIndex,
                 initialResults: feedResults,
             });
@@ -146,6 +149,7 @@ function App() {
         setId: string,
         fromFeed?: boolean,
         feedSetId?: string,
+        feedSetTitle?: string,
         feedIndex?: number,
         feedResults?: AnswerResult[],
     ) => {
@@ -165,6 +169,7 @@ function App() {
             setScreen({
                 name: 'feed',
                 setId: feedSetId,
+                setTitle: feedSetTitle,
                 initialIndex: feedIndex,
                 initialResults: feedResults,
             });
@@ -180,6 +185,7 @@ function App() {
         patch: CardPatch,
         fromFeed?: boolean,
         feedSetId?: string,
+        feedSetTitle?: string,
         feedIndex?: number,
         feedResults?: AnswerResult[],
     ) => {
@@ -207,6 +213,7 @@ function App() {
             setScreen({
                 name: 'feed',
                 setId: feedSetId,
+                setTitle: feedSetTitle,
                 initialIndex: feedIndex,
                 initialResults: feedResults,
             });
@@ -219,16 +226,19 @@ function App() {
     const openCardIssueFromFeed = async (
         card: Card,
         feedSetId?: string,
+        feedSetTitle?: string,
         feedIndex?: number,
         feedResults?: AnswerResult[],
     ) => {
         let isOwner = false;
-        let setTitle: string | undefined;
+        let setTitle: string | undefined = feedSetTitle;
         try {
             const { data } = await api.GET('/sets/{setId}', {
                 params: { path: { setId: card.setId } },
             });
-            setTitle = data?.title;
+            if (data?.title) {
+                setTitle = data.title;
+            }
             if (data?.author && currentUser && data.author.id === currentUser.id) {
                 isOwner = true;
             }
@@ -288,6 +298,7 @@ function App() {
                             go({
                                 name: 'feed',
                                 setId: feedSetId,
+                                setTitle: feedSetId ? setTitle : undefined,
                                 initialIndex: feedIndex,
                                 initialResults: feedResults,
                             });
@@ -317,6 +328,7 @@ function App() {
                             reason,
                             fromFeed,
                             feedSetId,
+                            setTitle,
                             feedIndex,
                             feedResults,
                         )
@@ -328,6 +340,7 @@ function App() {
                             card.setId,
                             fromFeed,
                             feedSetId,
+                            setTitle,
                             feedIndex,
                             feedResults,
                         )
@@ -341,6 +354,7 @@ function App() {
                 go({
                     name: 'feed',
                     setId: feedSetId,
+                    setTitle: feedSetId ? setTitle : undefined,
                     initialIndex: feedIndex,
                     initialResults: feedResults,
                 });
@@ -373,6 +387,7 @@ function App() {
                         patch,
                         fromFeed,
                         feedSetId,
+                        setTitle,
                         feedIndex,
                         feedResults,
                     )
@@ -384,6 +399,7 @@ function App() {
                         undefined,
                         fromFeed,
                         feedSetId,
+                        setTitle,
                         feedIndex,
                         feedResults,
                     )
@@ -393,19 +409,20 @@ function App() {
     }
 
     if (screen.name === 'feed') {
-        const { setId, initialIndex, initialResults } = screen;
+        const { setId, setTitle, initialIndex, initialResults } = screen;
         return (
             <Feed
                 key={setId ?? 'all'}
                 setId={setId}
+                setTitle={setTitle}
                 initialIndex={initialIndex}
                 initialResults={initialResults}
                 removedCardIds={removedCardIds}
                 cardPatches={cardPatches}
-                onExit={goHome}
+                onExit={setId ? () => openSet(setId) : goHome}
                 onBack={setId ? () => openSet(setId) : goHome}
                 onReportCard={(card, idx, res) =>
-                    openCardIssueFromFeed(card, setId, idx, res)
+                    openCardIssueFromFeed(card, setId, setTitle, idx, res)
                 }
                 onShare={setId ? () => go({ name: 'share', setId }) : undefined}
             />
@@ -430,7 +447,7 @@ function App() {
                 toast={toast}
                 currentUser={currentUser}
                 onBack={goHome}
-                onStart={(setId) => go({ name: 'feed', setId })}
+                onStart={(setId, setTitle) => go({ name: 'feed', setId, setTitle })}
                 onRemove={removeSet}
                 onOpenCard={(card, isOwner, setTitle) =>
                     go({

@@ -88,7 +88,7 @@ export function Result({ setTitle, cards, results, onExit, onShare }: ResultProp
                     stretched
                     onClick={onExit}
                 >
-                    На главную
+                    {setTitle ? 'К набору' : 'На главную'}
                 </Button>
             </Flex>
         </Screen>
