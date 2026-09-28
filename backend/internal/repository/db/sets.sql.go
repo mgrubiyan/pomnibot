@@ -74,7 +74,7 @@ SELECT
     s.id,
     s.title,
     s.author_id,
-    u.name AS author_name,
+    COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), u.username, 'User ' || u.id::TEXT) AS author_name,
     s.share_code,
     s.created_at,
     s.updated_at,
@@ -99,7 +99,7 @@ type GetSetByIDRow struct {
 	ID         pgtype.UUID        `json:"id"`
 	Title      string             `json:"title"`
 	AuthorID   int64              `json:"author_id"`
-	AuthorName string             `json:"author_name"`
+	AuthorName pgtype.Text        `json:"author_name"`
 	ShareCode  string             `json:"share_code"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
@@ -129,7 +129,7 @@ SELECT
     s.id,
     s.title,
     s.author_id,
-    u.name AS author_name,
+    COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), u.username, 'User ' || u.id::TEXT) AS author_name,
     s.share_code,
     s.created_at,
     s.updated_at,
@@ -153,7 +153,7 @@ type GetSetByShareCodeRow struct {
 	ID         pgtype.UUID        `json:"id"`
 	Title      string             `json:"title"`
 	AuthorID   int64              `json:"author_id"`
-	AuthorName string             `json:"author_name"`
+	AuthorName pgtype.Text        `json:"author_name"`
 	ShareCode  string             `json:"share_code"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
@@ -183,7 +183,7 @@ SELECT
     s.id,
     s.title,
     s.author_id,
-    u.name AS author_name,
+    COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), u.username, 'User ' || u.id::TEXT) AS author_name,
     s.share_code,
     s.created_at,
     s.updated_at,
@@ -204,7 +204,7 @@ type GetUserSetsRow struct {
 	ID         pgtype.UUID        `json:"id"`
 	Title      string             `json:"title"`
 	AuthorID   int64              `json:"author_id"`
-	AuthorName string             `json:"author_name"`
+	AuthorName pgtype.Text        `json:"author_name"`
 	ShareCode  string             `json:"share_code"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`

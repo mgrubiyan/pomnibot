@@ -15,12 +15,16 @@ import (
 )
 
 type setServiceImpl struct {
-	querier db.Querier
+	querier     db.Querier
+	userService UserService
 }
 
 // NewSetService creates a new SetService implementation backed by db.Querier.
-func NewSetService(querier db.Querier) SetService {
-	return &setServiceImpl{querier: querier}
+func NewSetService(querier db.Querier, userService UserService) SetService {
+	return &setServiceImpl{
+		querier:     querier,
+		userService: userService,
+	}
 }
 
 func (s *setServiceImpl) GetSet(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.CardSet, error) {
@@ -40,7 +44,7 @@ func (s *setServiceImpl) GetSet(ctx context.Context, userID int64, setID uuid.UU
 		return nil, fmt.Errorf("get set by id: %w", err)
 	}
 
-	return mapSetRowToContract(row.ID, row.Title, row.AuthorName, row.ShareCode, row.CardsTotal, row.CardsDue)
+	return mapSetRowToContract(row.ID, row.Title, row.AuthorName.String, row.ShareCode, row.CardsTotal, row.CardsDue)
 }
 
 func (s *setServiceImpl) DeleteSet(ctx context.Context, userID int64, setID uuid.UUID) error {
@@ -168,7 +172,7 @@ func (s *setServiceImpl) JoinSetByShareCode(ctx context.Context, userID int64, c
 		return nil, fmt.Errorf("%w: share code is required", ErrValidation)
 	}
 
-	if err := EnsureUser(ctx, s.querier, userID, ""); err != nil {
+	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return nil, err
 	}
 
@@ -197,7 +201,7 @@ func (s *setServiceImpl) JoinSetByShareCode(ctx context.Context, userID int64, c
 		return nil, fmt.Errorf("init user fact progress: %w", err)
 	}
 
-	return mapSetRowToContract(row.ID, row.Title, row.AuthorName, row.ShareCode, row.CardsTotal, row.CardsDue)
+	return mapSetRowToContract(row.ID, row.Title, row.AuthorName.String, row.ShareCode, row.CardsTotal, row.CardsDue)
 }
 
 func (s *setServiceImpl) buildCard(

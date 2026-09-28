@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const countUserActiveDays = `-- name: CountUserActiveDays :one
@@ -22,8 +24,31 @@ func (q *Queries) CountUserActiveDays(ctx context.Context, userID int64) (int32,
 	return active_days, err
 }
 
+const ensureUser = `-- name: EnsureUser :one
+INSERT INTO users (id, first_name, last_name, username, is_bot, last_active_at)
+VALUES ($1, '', NULL, NULL, FALSE, CURRENT_TIMESTAMP)
+ON CONFLICT (id) DO UPDATE
+SET last_active_at = CURRENT_TIMESTAMP
+RETURNING id, created_at, last_active_at, first_name, last_name, username, is_bot
+`
+
+func (q *Queries) EnsureUser(ctx context.Context, id int64) (User, error) {
+	row := q.db.QueryRow(ctx, ensureUser, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.LastActiveAt,
+		&i.FirstName,
+		&i.LastName,
+		&i.Username,
+		&i.IsBot,
+	)
+	return i, err
+}
+
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, name, created_at, last_active_at FROM users WHERE id = $1
+SELECT id, created_at, last_active_at, first_name, last_name, username, is_bot FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -31,35 +56,53 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.Name,
 		&i.CreatedAt,
 		&i.LastActiveAt,
+		&i.FirstName,
+		&i.LastName,
+		&i.Username,
+		&i.IsBot,
 	)
 	return i, err
 }
 
 const upsertUser = `-- name: UpsertUser :one
-INSERT INTO users (id, name, last_active_at)
-VALUES ($1, $2, CURRENT_TIMESTAMP)
+INSERT INTO users (id, first_name, last_name, username, is_bot, last_active_at)
+VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
 ON CONFLICT (id) DO UPDATE
-SET name = EXCLUDED.name,
+SET first_name = CASE WHEN EXCLUDED.first_name <> '' THEN EXCLUDED.first_name ELSE users.first_name END,
+    last_name = COALESCE(EXCLUDED.last_name, users.last_name),
+    username = COALESCE(EXCLUDED.username, users.username),
+    is_bot = EXCLUDED.is_bot,
     last_active_at = CURRENT_TIMESTAMP
-RETURNING id, name, created_at, last_active_at
+RETURNING id, created_at, last_active_at, first_name, last_name, username, is_bot
 `
 
 type UpsertUserParams struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
+	ID        int64       `json:"id"`
+	FirstName string      `json:"first_name"`
+	LastName  pgtype.Text `json:"last_name"`
+	Username  pgtype.Text `json:"username"`
+	IsBot     bool        `json:"is_bot"`
 }
 
 func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, upsertUser, arg.ID, arg.Name)
+	row := q.db.QueryRow(ctx, upsertUser,
+		arg.ID,
+		arg.FirstName,
+		arg.LastName,
+		arg.Username,
+		arg.IsBot,
+	)
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.Name,
 		&i.CreatedAt,
 		&i.LastActiveAt,
+		&i.FirstName,
+		&i.LastName,
+		&i.Username,
+		&i.IsBot,
 	)
 	return i, err
 }

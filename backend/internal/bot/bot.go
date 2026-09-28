@@ -7,24 +7,34 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+
+	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
 // Bot represents the Pomnibot MAX bot runner.
 type Bot struct {
-	client  *Client
-	appURL  string
-	botUser *User
+	client      *Client
+	appURL      string
+	userService usecase.UserService
+	botUser     *User
 }
 
 // NewBot creates a new Bot instance.
-func NewBot(client *Client, appURL string) *Bot {
+func NewBot(client *Client, appURL string, userService usecase.UserService) (*Bot, error) {
+	if client == nil {
+		return nil, errors.New("bot client is required")
+	}
+	if userService == nil {
+		return nil, errors.New("user service is required")
+	}
 	if appURL == "" {
 		appURL = "https://pomnibot.steins.ru"
 	}
 	return &Bot{
-		client: client,
-		appURL: strings.TrimSuffix(appURL, "/"),
-	}
+		client:      client,
+		appURL:      strings.TrimSuffix(appURL, "/"),
+		userService: userService,
+	}, nil
 }
 
 // Start initializes the bot and starts the polling loop.
@@ -35,9 +45,13 @@ func (b *Bot) Start(ctx context.Context) error {
 		return err
 	}
 	b.botUser = me
+	username := ""
+	if me.Username != nil {
+		username = *me.Username
+	}
 	slog.Info("connected to MAX Bot API",
 		"bot_user_id", me.UserID,
-		"username", me.Username,
+		"username", username,
 		"name", me.Name,
 	)
 
@@ -105,6 +119,7 @@ func (b *Bot) handleUpdate(ctx context.Context, u Update) {
 		chatID = u.ChatID
 		if u.User != nil {
 			userID = u.User.UserID
+			b.upsertUser(ctx, *u.User)
 		}
 	case "message_created":
 		if u.Message == nil {
@@ -116,6 +131,7 @@ func (b *Bot) handleUpdate(ctx context.Context, u Update) {
 		}
 		chatID = u.Message.Recipient.ChatID
 		userID = u.Message.Sender.UserID
+		b.upsertUser(ctx, u.Message.Sender)
 	default:
 		// Other events can be ignored or handled later
 		return
@@ -128,10 +144,29 @@ func (b *Bot) handleUpdate(ctx context.Context, u Update) {
 	b.sendWelcomeMessage(ctx, chatID, userID)
 }
 
+func (b *Bot) upsertUser(ctx context.Context, u User) {
+	if b.userService == nil {
+		return
+	}
+	err := b.userService.UpsertUser(ctx, usecase.UpsertUserParams{
+		ID:        u.UserID,
+		FirstName: u.FirstName,
+		LastName:  u.LastName,
+		Username:  u.Username,
+		IsBot:     u.IsBot,
+	})
+	if err != nil {
+		slog.Error("failed to upsert user on bot update",
+			"user_id", u.UserID,
+			"error", err,
+		)
+	}
+}
+
 func (b *Bot) sendWelcomeMessage(ctx context.Context, chatID int64, userID int64) {
 	username := ""
-	if b.botUser != nil {
-		username = b.botUser.Username
+	if b.botUser != nil && b.botUser.Username != nil {
+		username = *b.botUser.Username
 	}
 
 	buttons := [][]map[string]interface{}{}
