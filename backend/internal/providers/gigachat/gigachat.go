@@ -229,11 +229,21 @@ func (e transportError) Unwrap() error { return e.err }
 // model gets the request. The answer is returned as is: with or without
 // structured output, the caller validates it.
 func (c *Client) Complete(ctx context.Context, req providers.Request) (providers.Response, error) {
+	var fileID string
+	if req.Image != nil {
+		id, err := c.upload(ctx, req.Image)
+		if err != nil {
+			return providers.Response{}, err
+		}
+		fileID = id
+		defer c.deleteFile(id)
+	}
+
 	models := c.models()
 	var err error
 	for i, model := range models {
 		var resp providers.Response
-		resp, err = c.completeWith(ctx, model, req)
+		resp, err = c.completeWith(ctx, model, req, fileID)
 		if err == nil {
 			return resp, nil
 		}
@@ -292,11 +302,11 @@ func (c *Client) setStrictOff(model string) {
 // model. If the API rejects it with 400 or 422, the same request goes again
 // without it, the schema moved into the system prompt; when that works, the
 // model is remembered and later calls skip straight to the plain form.
-func (c *Client) completeWith(ctx context.Context, model string, req providers.Request) (providers.Response, error) {
+func (c *Client) completeWith(ctx context.Context, model string, req providers.Request, fileID string) (providers.Response, error) {
 	strict := len(req.Schema) > 0 && !c.strictOff(model)
 	droppedStrict := false
 	for attempt := 1; ; attempt++ {
-		resp, err := c.call(ctx, model, req, strict)
+		resp, err := c.call(ctx, model, req, strict, fileID)
 		if err == nil {
 			if droppedStrict {
 				c.setStrictOff(model)
@@ -328,8 +338,9 @@ func (c *Client) completeWith(ctx context.Context, model string, req providers.R
 }
 
 type chatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role        string   `json:"role"`
+	Content     string   `json:"content"`
+	Attachments []string `json:"attachments,omitempty"` // ids of uploaded files
 }
 
 // responseFormat is structured output. On /v1/chat/completions it is a
@@ -365,7 +376,7 @@ type chatResponse struct {
 
 const schemaPromptNote = "\n\nОтвет — только JSON, соответствующий этой JSON Schema:\n"
 
-func (c *Client) call(ctx context.Context, model string, req providers.Request, strict bool) (providers.Response, error) {
+func (c *Client) call(ctx context.Context, model string, req providers.Request, strict bool, fileID string) (providers.Response, error) {
 	system := req.System
 	var format *responseFormat
 	switch {
@@ -374,13 +385,14 @@ func (c *Client) call(ctx context.Context, model string, req providers.Request, 
 	case len(req.Schema) > 0:
 		system += schemaPromptNote + string(req.Schema)
 	}
+	user := chatMessage{Role: "user", Content: req.User}
+	if fileID != "" {
+		user.Attachments = []string{fileID}
+	}
 
 	body, err := json.Marshal(chatRequest{
-		Model: model,
-		Messages: []chatMessage{
-			{Role: "system", Content: system},
-			{Role: "user", Content: req.User},
-		},
+		Model:    model,
+		Messages: []chatMessage{{Role: "system", Content: system}, user},
 		// The API wants temperature > 0; values up to 0.001 switch it to the
 		// most deterministic mode, which is what temperature 0 means.
 		Temperature:    max(req.Temperature, minTemperature),

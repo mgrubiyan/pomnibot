@@ -26,6 +26,13 @@ type Request struct {
 	User        string
 	Schema      json.RawMessage
 	Temperature float64
+	Image       *Image // shown to the model with the user message; nil for text only
+}
+
+// Image is a picture the model reads, such as a photo of a page of notes.
+type Image struct {
+	Data     []byte
+	MimeType string // image/jpeg or image/png
 }
 
 // Usage is the token count reported by the provider.

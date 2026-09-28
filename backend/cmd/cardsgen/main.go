@@ -4,8 +4,10 @@
 //
 // It takes text files, PDFs and photos of pages, told apart by content.
 // Several files are pages of one set of notes, in the order given. PDFs need
-// pdftotext (poppler-utils); photos and scanned pages need Yandex Vision OCR
-// (YC_API_KEY, and YC_FOLDER_ID unless the key is a service account's).
+// pdftotext and pdftoppm (poppler-utils). Photos and scanned pages are read
+// by GigaChat and checked by Yandex Vision OCR (YC_API_KEY, and YC_FOLDER_ID
+// unless the key is a service account's), which also turns them upright;
+// -ocr yandex reads them with Yandex alone.
 //
 //	task cardsgen -- notes.txt
 //	task cardsgen -- -model GigaChat-2-Max -chunk 2000 -limit 30 -json lecture.pdf page2.pdf > run.json
@@ -33,6 +35,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest/yandex"
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
 )
 
@@ -54,7 +57,8 @@ func run() error {
 		perChunk    = flag.Int("per-chunk", generator.DefaultMaxFactsPerChunk, "max facts per fragment, each with up to 4 cards")
 		concurrency = flag.Int("concurrency", generator.DefaultConcurrency, "parallel model calls; freemium allows 1")
 		timeout     = flag.Duration("call-timeout", generator.DefaultCallTimeout, "timeout per model call")
-		ocrModel    = flag.String("ocr-model", os.Getenv("YC_OCR_MODEL"), "OCR model for every page (handwritten, page...); default: handwritten for photos, page for scans")
+		ocrMode     = flag.String("ocr", "vision", "how photos and scans are read: vision (GigaChat, checked by Yandex OCR) or yandex (Yandex OCR alone)")
+		ocrModel    = flag.String("ocr-model", os.Getenv("YC_OCR_MODEL"), "Yandex OCR model for every page (handwritten, page...); default: handwritten for photos, page for scans")
 		extractOnly = flag.Bool("extract", false, "only extract the text of the notes and print it, no cards")
 		asJSON      = flag.Bool("json", false, "print the result as JSON to stdout")
 		verbose     = flag.Bool("v", false, "debug logs")
@@ -78,7 +82,32 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	notes, err := extract(ctx, paths, *ocrModel)
+	if *ocrMode != "vision" && *ocrMode != "yandex" {
+		return fmt.Errorf("-ocr %q: want vision or yandex", *ocrMode)
+	}
+	// GigaChat writes the cards and, unless -ocr yandex, reads the photos.
+	var client *gigachat.Client
+	modelName := gigachat.DefaultModel
+	if !*extractOnly || *ocrMode == "vision" {
+		cfg, err := gigachat.ConfigFromEnv()
+		if err != nil {
+			return err
+		}
+		if *model != "" {
+			cfg.Model = *model
+		}
+		modelName = or(cfg.Model, modelName)
+		if client, err = gigachat.New(cfg); err != nil {
+			return err
+		}
+		defer client.Close()
+	}
+
+	var vision providers.Provider
+	if *ocrMode == "vision" {
+		vision = client
+	}
+	notes, err := extract(ctx, paths, *ocrModel, vision)
 	if err != nil {
 		return err
 	}
@@ -95,19 +124,6 @@ func run() error {
 		fmt.Println(notes.Text)
 		return nil
 	}
-
-	cfg, err := gigachat.ConfigFromEnv()
-	if err != nil {
-		return err
-	}
-	if *model != "" {
-		cfg.Model = *model
-	}
-	client, err := gigachat.New(cfg)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
 
 	began := time.Now()
 	delivered := 0
@@ -129,7 +145,7 @@ func run() error {
 		},
 	})
 
-	fmt.Fprintf(os.Stderr, "%s: %d символов, модель %s\n", strings.Join(paths, ", "), len([]rune(notes.Text)), or(cfg.Model, gigachat.DefaultModel))
+	fmt.Fprintf(os.Stderr, "%s: %d символов, модель %s\n", strings.Join(paths, ", "), len([]rune(notes.Text)), modelName)
 	doc := generator.Document{Text: notes.Text, Title: *title}
 	for _, p := range notes.Pages {
 		doc.PageStarts = append(doc.PageStarts, p.Start)
@@ -159,7 +175,7 @@ func run() error {
 
 // extract reads the files and pulls the text out of them. pdftotext is
 // required only when one of them is a PDF.
-func extract(ctx context.Context, paths []string, ocrModel string) (ingest.Result, error) {
+func extract(ctx context.Context, paths []string, ocrModel string, vision providers.Provider) (ingest.Result, error) {
 	files := make([]ingest.File, 0, len(paths))
 	hasPDF := false
 	for _, path := range paths {
@@ -171,7 +187,8 @@ func extract(ctx context.Context, paths []string, ocrModel string) (ingest.Resul
 		hasPDF = hasPDF || ingest.DetectKind(data) == ingest.KindPDF
 	}
 
-	// OCR only with credentials: without them text and typed PDFs still work.
+	// Yandex OCR only with credentials: without them text and typed PDFs
+	// still work, and GigaChat reads photos unchecked.
 	var ocr ingest.OCR
 	if cfg := yandex.ConfigFromEnv(); cfg.APIKey != "" {
 		client, err := yandex.New(cfg)
@@ -179,6 +196,12 @@ func extract(ctx context.Context, paths []string, ocrModel string) (ingest.Resul
 			return ingest.Result{}, err
 		}
 		ocr = client
+	}
+	if vision != nil {
+		if ocr == nil {
+			slog.Warn("photos and scans are read by GigaChat unchecked and not turned upright: set YC_API_KEY for Yandex OCR")
+		}
+		ocr = &ingest.VisionOCR{Model: vision, Checker: ocr}
 	}
 	ext, err := ingest.NewExtractor(ocr, ingest.Options{DisablePDF: !hasPDF, OCRModel: ocrModel})
 	if err != nil {
