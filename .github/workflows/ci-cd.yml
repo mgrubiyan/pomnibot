@@ -169,97 +169,123 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Generate .env file from secrets
+      - name: Generate .env file from secrets and variables
         env:
-          DOMAIN: ${{ secrets.DOMAIN }}
-          PORT: ${{ secrets.PORT }}
+          # Configuration variables (GitHub Actions Variables)
+          DOMAIN: ${{ vars.DOMAIN || secrets.DOMAIN }}
+          PORT: ${{ vars.PORT || secrets.PORT }}
+          DOCKER_IMAGE: ${{ vars.DOCKER_IMAGE || secrets.DOCKER_IMAGE }}
+          IMAGE_TAG: ${{ vars.IMAGE_TAG || secrets.IMAGE_TAG }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH || secrets.DEPLOY_PATH }}
+          POSTGRES_USER: ${{ vars.POSTGRES_USER || secrets.POSTGRES_USER }}
+          POSTGRES_DB: ${{ vars.POSTGRES_DB || secrets.POSTGRES_DB }}
+          POSTGRES_PORT: ${{ vars.POSTGRES_PORT || secrets.POSTGRES_PORT }}
+          GIGACHAT_CLIENT_ID: ${{ vars.GIGACHAT_CLIENT_ID || secrets.GIGACHAT_CLIENT_ID }}
+          GIGACHAT_SCOPE: ${{ vars.GIGACHAT_SCOPE || secrets.GIGACHAT_SCOPE }}
+          GIGACHAT_MODEL: ${{ vars.GIGACHAT_MODEL || secrets.GIGACHAT_MODEL }}
+          GIGACHAT_FALLBACK_MODEL: ${{ vars.GIGACHAT_FALLBACK_MODEL || secrets.GIGACHAT_FALLBACK_MODEL }}
+          GIGACHAT_BASE_URL: ${{ vars.GIGACHAT_BASE_URL || secrets.GIGACHAT_BASE_URL }}
+          GIGACHAT_AUTH_URL: ${{ vars.GIGACHAT_AUTH_URL || secrets.GIGACHAT_AUTH_URL }}
+          GIGACHAT_MAX_TOKENS: ${{ vars.GIGACHAT_MAX_TOKENS || secrets.GIGACHAT_MAX_TOKENS }}
+          YC_FOLDER_ID: ${{ vars.YC_FOLDER_ID || secrets.YC_FOLDER_ID }}
+          YC_OCR_MODEL: ${{ vars.YC_OCR_MODEL || secrets.YC_OCR_MODEL }}
+          APP_URL: ${{ vars.APP_URL || secrets.APP_URL }}
+          MAX_API_URL: ${{ vars.MAX_API_URL || secrets.MAX_API_URL }}
+          MAX_INSECURE_SKIP_VERIFY: ${{ vars.MAX_INSECURE_SKIP_VERIFY || secrets.MAX_INSECURE_SKIP_VERIFY }}
+
+          # Sensitive credentials (GitHub Actions Secrets)
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
-          IMAGE_TAG: ${{ secrets.IMAGE_TAG }}
-          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-          POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           GIGACHAT_AUTH_KEY: ${{ secrets.GIGACHAT_AUTH_KEY }}
-          GIGACHAT_CLIENT_ID: ${{ secrets.GIGACHAT_CLIENT_ID }}
           GIGACHAT_CLIENT_SECRET: ${{ secrets.GIGACHAT_CLIENT_SECRET }}
-          GIGACHAT_SCOPE: ${{ secrets.GIGACHAT_SCOPE }}
-          GIGACHAT_MODEL: ${{ secrets.GIGACHAT_MODEL }}
-          GIGACHAT_FALLBACK_MODEL: ${{ secrets.GIGACHAT_FALLBACK_MODEL }}
-          GIGACHAT_BASE_URL: ${{ secrets.GIGACHAT_BASE_URL }}
-          GIGACHAT_AUTH_URL: ${{ secrets.GIGACHAT_AUTH_URL }}
-          GIGACHAT_MAX_TOKENS: ${{ secrets.GIGACHAT_MAX_TOKENS }}
           YC_API_KEY: ${{ secrets.YC_API_KEY }}
-          YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
-          YC_OCR_MODEL: ${{ secrets.YC_OCR_MODEL }}
-          APP_URL: ${{ secrets.APP_URL }}
-          MAX_API_URL: ${{ secrets.MAX_API_URL }}
-          MAX_INSECURE_SKIP_VERIFY: ${{ secrets.MAX_INSECURE_SKIP_VERIFY }}
         run: |
           touch .env
-          chmod 600 .env
-          SECRETS=(
+          chmod 644 .env
+
+          CONFIG_VARS=(
             DOMAIN
             PORT
-            BOT_TOKEN
             DOCKER_IMAGE
             IMAGE_TAG
+            DEPLOY_PATH
             POSTGRES_USER
-            POSTGRES_PASSWORD
             POSTGRES_DB
             POSTGRES_PORT
-            DATABASE_URL
-            GIGACHAT_AUTH_KEY
             GIGACHAT_CLIENT_ID
-            GIGACHAT_CLIENT_SECRET
             GIGACHAT_SCOPE
             GIGACHAT_MODEL
             GIGACHAT_FALLBACK_MODEL
             GIGACHAT_BASE_URL
             GIGACHAT_AUTH_URL
             GIGACHAT_MAX_TOKENS
-            YC_API_KEY
             YC_FOLDER_ID
             YC_OCR_MODEL
             APP_URL
             MAX_API_URL
             MAX_INSECURE_SKIP_VERIFY
           )
-          POPULATED=()
-          for key in "${SECRETS[@]}"; do
+
+          SECRET_VARS=(
+            BOT_TOKEN
+            POSTGRES_PASSWORD
+            DATABASE_URL
+            GIGACHAT_AUTH_KEY
+            GIGACHAT_CLIENT_SECRET
+            YC_API_KEY
+          )
+
+          POPULATED_VARS=()
+          for key in "${CONFIG_VARS[@]}"; do
             val="${!key}"
             if [ -n "$val" ]; then
               printf '%s=%s\n' "$key" "$val" >> .env
-              POPULATED+=("$key")
+              POPULATED_VARS+=("$key")
             fi
           done
-          if [ ${#POPULATED[@]} -gt 0 ]; then
-            echo "Populated .env with secrets: ${POPULATED[*]}"
+
+          POPULATED_SECRETS=()
+          for key in "${SECRET_VARS[@]}"; do
+            val="${!key}"
+            if [ -n "$val" ]; then
+              printf '%s=%s\n' "$key" "$val" >> .env
+              POPULATED_SECRETS+=("$key")
+            fi
+          done
+
+          if [ ${#POPULATED_VARS[@]} -gt 0 ]; then
+            echo "Populated variables: ${POPULATED_VARS[*]}"
           else
-            echo "No secrets provided; .env created empty."
+            echo "No variables configured."
+          fi
+
+          if [ ${#POPULATED_SECRETS[@]} -gt 0 ]; then
+            echo "Populated secrets: ${POPULATED_SECRETS[*]}"
+          else
+            echo "No secrets configured."
           fi
 
       - name: Copy Compose and .env files to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST || secrets.SSH_HOST }}
-          username: ${{ secrets.VPS_USER || secrets.SSH_USER || 'deployer' }}
+          username: ${{ secrets.VPS_USER || vars.VPS_USER || secrets.SSH_USER || vars.SSH_USER || 'deployer' }}
           key: ${{ secrets.VPS_SSH_KEY || secrets.SSH_KEY }}
-          port: ${{ secrets.VPS_PORT || secrets.SSH_PORT || 22 }}
+          port: ${{ vars.VPS_PORT || secrets.VPS_PORT || vars.SSH_PORT || secrets.SSH_PORT || 22 }}
           source: 'docker-compose.yaml,docker-compose.prod.yaml,.env'
-          target: ${{ secrets.DEPLOY_PATH || '/home/deployer/pomnibot' }}
+          target: ${{ secrets.DEPLOY_PATH || vars.DEPLOY_PATH || '/home/deployer/pomnibot' }}
 
       - name: Pull and restart containers via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST || secrets.SSH_HOST }}
-          username: ${{ secrets.VPS_USER || secrets.SSH_USER || 'deployer' }}
+          username: ${{ secrets.VPS_USER || vars.VPS_USER || secrets.SSH_USER || vars.SSH_USER || 'deployer' }}
           key: ${{ secrets.VPS_SSH_KEY || secrets.SSH_KEY }}
-          port: ${{ secrets.VPS_PORT || secrets.SSH_PORT || 22 }}
+          port: ${{ vars.VPS_PORT || secrets.VPS_PORT || vars.SSH_PORT || secrets.SSH_PORT || 22 }}
           script: |
             set -e
-            DEPLOY_DIR="${{ secrets.DEPLOY_PATH || '/home/deployer/pomnibot' }}"
+            DEPLOY_DIR="${{ secrets.DEPLOY_PATH || vars.DEPLOY_PATH || '/home/deployer/pomnibot' }}"
             mkdir -p "$DEPLOY_DIR"
             cd "$DEPLOY_DIR"
 
