@@ -750,6 +750,35 @@ func TestGenerateFactVariantsShareFactID(t *testing.T) {
 	}
 }
 
+// facts.id is a primary key across all sets: the same notes uploaded twice,
+// by one student or two, must not reuse fact ids.
+func TestGenerateFactIDsDifferBetweenDocuments(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[0])
+	factIDOf := func(id string) string {
+		p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+			return answerJSON(mc{kind: cards.KindFlip, q: "Что такое митоз?", a: "Деление клеток.", quote: firstSentence(frag)}), nil
+		}}
+		d := doc
+		d.ID = id
+		res := generate(t, p, d, opts)
+		if len(res.Cards) != 1 || res.Cards[0].FactID == "" {
+			t.Fatalf("cards = %+v, want one with a factId", res.Cards)
+		}
+		return res.Cards[0].FactID
+	}
+
+	first, again, other := factIDOf("set-1"), factIDOf("set-1"), factIDOf("set-2")
+	if first != again {
+		t.Error("the same document got different fact ids")
+	}
+	if first == other {
+		t.Error("two documents with the same text share a fact id")
+	}
+	if noID, noIDAgain := factIDOf(""), factIDOf(""); noID == noIDAgain {
+		t.Error("two documents without an id share a fact id")
+	}
+}
+
 func TestGenerateFactWithoutQuoteLosesAllCards(t *testing.T) {
 	doc, opts := testDoc(t, paragraphs[0])
 	p := &fakeProvider{answer: func(int, string, providers.Request) (string, error) {

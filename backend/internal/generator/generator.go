@@ -13,11 +13,12 @@
 //	cfg, err := gigachat.ConfigFromEnv()
 //	llm, err := gigachat.New(cfg)
 //	gen := generator.NewGenerator(llm, generator.Options{OnCards: save})
-//	res, err := gen.Generate(ctx, generator.Document{Text: text, Title: title})
+//	res, err := gen.Generate(ctx, generator.Document{Text: text, Title: title, ID: setID})
 package generator
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -75,6 +76,9 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (Result, error) 
 	began := time.Now()
 	log := slog.Default()
 
+	if doc.ID == "" {
+		doc.ID = rand.Text()
+	}
 	text := normalizeText(doc.Text)
 	all := splitChunks(text, g.opts.ChunkSize, g.opts.ChunkOverlap)
 	stats := Stats{
@@ -102,7 +106,7 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (Result, error) 
 
 	slots := make(chan struct{}, g.opts.Concurrency)
 	results := make(chan chunkResult, len(work))
-	go g.dispatch(runCtx, doc.Title, len(all), work, asm, slots, results)
+	go g.dispatch(runCtx, doc, len(all), work, asm, slots, results)
 
 	deliver := func(cards []cards.Card) {
 		if len(cards) == 0 {
@@ -179,7 +183,7 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (Result, error) 
 // dispatch starts fragments in document order, at most Concurrency at a time.
 // Every fragment gets exactly one result, so the ordered assembly never
 // waits for a gap. Slots are released by the assembler, not by the worker.
-func (g *Generator) dispatch(ctx context.Context, title string, total int, work []chunk,
+func (g *Generator) dispatch(ctx context.Context, doc Document, total int, work []chunk,
 	asm *assembler, slots chan struct{}, results chan<- chunkResult) {
 	var wg sync.WaitGroup
 	defer func() {
@@ -207,14 +211,14 @@ func (g *Generator) dispatch(ctx context.Context, title string, total int, work 
 		}
 		r.holdsSlot = true
 		wg.Go(func() {
-			results <- g.processChunk(ctx, title, total, r)
+			results <- g.processChunk(ctx, doc, total, r)
 		})
 	}
 }
 
 // processChunk makes the model call for one fragment, retries once on an
 // unparseable answer and checks every quote against the fragment.
-func (g *Generator) processChunk(ctx context.Context, title string, total int, r chunkResult) chunkResult {
+func (g *Generator) processChunk(ctx context.Context, doc Document, total int, r chunkResult) chunkResult {
 	began := time.Now()
 	log := slog.With("fragment", r.chunk.Index+1)
 	r.models = map[string]int{}
@@ -227,7 +231,7 @@ func (g *Generator) processChunk(ctx context.Context, title string, total int, r
 	var parsed []modelFact
 	answered := false
 	for attempt := range answerAttempts {
-		req.User = buildUserPrompt(title, r.chunk, total, attempt > 0)
+		req.User = buildUserPrompt(doc.Title, r.chunk, total, attempt > 0)
 		callCtx, cancel := context.WithTimeout(ctx, g.opts.CallTimeout)
 		resp, err := g.provider.Complete(callCtx, req)
 		cancel()
@@ -273,7 +277,7 @@ func (g *Generator) processChunk(ctx context.Context, title string, total int, r
 			continue
 		}
 		f.Quote = quote
-		f.ID = factID(quote)
+		f.ID = factID(doc.ID, quote)
 
 		kept := f.Cards[:0]
 		for _, c := range f.Cards {
@@ -307,10 +311,13 @@ func (g *Generator) notify(cards []cards.Card) {
 	g.opts.OnCards(slices.Clone(cards))
 }
 
-// factID derives a fact's id from its verified quote, so the same fact met
-// again in an overlapping fragment gets the same id.
-func factID(quote string) string {
+// factID derives a fact's id from the document and the verified quote, so the
+// same fact met again in an overlapping fragment gets the same id, and the
+// same quote in another document does not.
+func factID(docID, quote string) string {
 	h := fnv.New64a()
+	_, _ = h.Write([]byte(docID))
+	_, _ = h.Write([]byte{0})
 	_, _ = h.Write([]byte(fold(quote).s))
 	return fmt.Sprintf("%016x", h.Sum64())
 }

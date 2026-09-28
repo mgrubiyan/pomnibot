@@ -27,7 +27,7 @@ const (
 // boolean, flip) and share the quote and FactName. The feed is meant to show
 // one of them at a time and rotate the form between repetitions.
 type Card struct {
-	FactID      string   `json:"factId"`   // stable within a document: derived from the quote
+	FactID      string   `json:"factId"`   // derived from the document id and the quote
 	FactName    string   `json:"factName"` // short name of the fact, narrower than Topic
 	Kind        Kind     `json:"kind"`
 	Question    string   `json:"question"`

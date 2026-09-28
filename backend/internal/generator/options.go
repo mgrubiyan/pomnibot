@@ -7,9 +7,15 @@ import (
 )
 
 // Document is the input: plain text of the notes and their title.
+//
+// ID identifies the stored document, such as its set id. Fact ids are
+// derived from it and the quote: the same notes uploaded twice must not share
+// fact ids, which the storage keeps unique across all sets. Without an ID
+// every Generate call picks a random one.
 type Document struct {
 	Text  string
 	Title string
+	ID    string
 }
 
 // Result is what Generate returns: accepted cards in document order and stats.
