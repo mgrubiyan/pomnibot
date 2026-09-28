@@ -78,7 +78,8 @@ type OCRRequest struct {
 	Data     []byte
 	MimeType string // image/jpeg, image/png or application/pdf
 	Model    string
-	Pages    int // pages in a PDF, 1 for an image
+	Pages    int   // pages in a PDF, 1 for an image
+	Only     []int // 0-based pages of a PDF worth reading, nil for all; an OCR may read all anyway
 }
 
 // OCRPage is the text of one page. Confidence is the mean over the page when
@@ -292,6 +293,7 @@ func (e *Extractor) recognizePDF(ctx context.Context, res *Result, f File, pages
 		MimeType: "application/pdf",
 		Model:    e.model(ModelScan),
 		Pages:    len(pages),
+		Only:     scanned,
 	})
 	if err != nil {
 		return e.ocrError(ctx, f, err)

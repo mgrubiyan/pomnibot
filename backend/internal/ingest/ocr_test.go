@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -95,6 +96,10 @@ func TestExtractMixedPDF(t *testing.T) {
 	}
 	if strings.Index(res.Text, "Страница 1.") > strings.Index(res.Text, "Распознанная страница 2") {
 		t.Error("pages out of order")
+	}
+	// A reader that goes page by page reads only the scanned one.
+	if len(ocr.reqs) != 1 || !slices.Equal(ocr.reqs[0].Only, []int{1}) {
+		t.Errorf("OCR requests %+v, want the scanned page named", ocr.reqs)
 	}
 }
 
