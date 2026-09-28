@@ -138,7 +138,7 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (Result, error) 
 
 			ready := asm.add(r)
 			switch {
-			case r.skipped || r.cancelled:
+			case r.skipped || r.cancelled || r.refused:
 			case r.err != nil:
 				failures++
 				log.Warn("cards: fragment failed", "fragment", r.chunk.Index+1, "err", r.err)
@@ -237,6 +237,13 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, total int, r
 		resp, err := g.provider.Complete(callCtx, req)
 		cancel()
 		r.calls++
+		if errors.Is(err, providers.ErrRefused) {
+			// About this text only: asking again gets the same, and the
+			// rest of the document may pass.
+			r.refused = true
+			log.Warn("cards: fragment refused by the content filter", "err", err)
+			break
+		}
 		if err != nil {
 			r.cancelled = ctx.Err() != nil
 			r.err = fmt.Errorf("fragment %d: %w", r.chunk.Index+1, err)
@@ -261,7 +268,7 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, total int, r
 		parsed, r.droppedInvalid, answered = facts, invalid, true
 		break
 	}
-	r.invalid = r.err == nil && !answered
+	r.invalid = r.err == nil && !r.refused && !answered
 	r.factsFromModel = len(parsed)
 	r.cardsFromModel = r.droppedInvalid
 	for _, f := range parsed {

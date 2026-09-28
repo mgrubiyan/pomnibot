@@ -429,7 +429,12 @@ func (c *Client) call(ctx context.Context, model string, req providers.Request, 
 		return providers.Response{}, fmt.Errorf("gigachat: chat response has no choices: %s", clip(respBody))
 	}
 	choice := cr.Choices[0]
-	if choice.FinishReason == "blacklist" || choice.FinishReason == "length" {
+	switch choice.FinishReason {
+	case "blacklist":
+		// The content filter answered instead of the model: history and
+		// politics trip it now and then. Another model may pass the text.
+		return providers.Response{}, fmt.Errorf("gigachat: %s: %w", model, providers.ErrRefused)
+	case "length":
 		// Passed on anyway: the caller sees an unusable answer and handles it
 		// like any other.
 		slog.Warn("gigachat: answer cut short", "model", model, "finish_reason", choice.FinishReason)
@@ -473,10 +478,14 @@ func isQuotaOrAccess(err error) bool {
 }
 
 // shouldFallback: another model may succeed where this one failed, because
-// this one is out of quota, not available, or keeps failing on the server.
-// Not for rate limits (the one-request limit is per account), network trouble
-// (same host), token errors (same token) or bad requests.
+// this one is out of quota, not available, keeps failing on the server, or
+// its content filter blocked the text. Not for rate limits (the one-request
+// limit is per account), network trouble (same host), token errors (same
+// token) or bad requests.
 func shouldFallback(err error) bool {
+	if errors.Is(err, providers.ErrRefused) {
+		return true
+	}
 	apiErr := chatError(err)
 	return apiErr != nil && (isQuotaOrAccess(err) || apiErr.Status >= 500)
 }

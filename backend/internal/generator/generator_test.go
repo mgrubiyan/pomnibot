@@ -508,6 +508,26 @@ func TestGenerateDeliversCardsProgressively(t *testing.T) {
 	}
 }
 
+// A content filter refusing a fragment is about that text: the fragment is
+// not asked again, and the rest of the document goes on however many
+// fragments in a row it hits.
+func TestGenerateSkipsFragmentsTheContentFilterRefuses(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[:5]...)
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		if word := firstWord(frag); word != "Митоз" && word != "Кроссинговер" {
+			return "", fmt.Errorf("gigachat: GigaChat-3-Ultra: %w", providers.ErrRefused)
+		}
+		return answerJSON(mc{kind: cards.KindFlip, q: "Что такое " + strings.ToLower(firstWord(frag)) + "?", a: "Ответ из текста.", quote: firstSentence(frag)}), nil
+	}}
+	res, err := NewGenerator(p, opts).Generate(context.Background(), doc)
+	if err != nil {
+		t.Fatalf("Generate() error = %v, want the refusals skipped", err)
+	}
+	if len(res.Cards) != 2 || res.Stats.ChunksRefused != 3 || res.Stats.ChunksFailed != 0 || res.Stats.ModelCalls != 5 {
+		t.Errorf("%d cards, stats %+v; want 2 cards, 3 refused fragments asked once each", len(res.Cards), res.Stats)
+	}
+}
+
 func TestGenerateSurvivesPanickingCallback(t *testing.T) {
 	doc, opts := testDoc(t, paragraphs[:2]...)
 	opts.OnBatch = func(Batch) { panic("storage is down") }

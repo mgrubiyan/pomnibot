@@ -49,6 +49,7 @@ type Stats struct {
 	ChunksSkipped  int            `json:"chunksSkipped"`  // not sent: MaxFactsPerDoc already used up
 	ChunksFailed   int            `json:"chunksFailed"`   // provider error after its retries and fallback
 	ChunksInvalid  int            `json:"chunksInvalid"`  // no valid JSON after the retry, fragment skipped
+	ChunksRefused  int            `json:"chunksRefused"`  // the content filter of every model blocked it
 
 	ModelCalls       int            `json:"modelCalls"`       // including retries
 	InvalidResponses int            `json:"invalidResponses"` // responses that failed JSON/schema parsing

@@ -301,6 +301,60 @@ func TestFallsBackWhenModelKeepsFailing(t *testing.T) {
 	}
 }
 
+func blacklisted() chatReply {
+	b, _ := json.Marshal(map[string]any{
+		"model": "GigaChat-3-Ultra:3.0.1",
+		"choices": []map[string]any{{
+			"message":       map[string]string{"role": "assistant", "content": "Как и любая языковая модель, GigaChat не обладает собственным мнением."},
+			"finish_reason": "blacklist",
+		}},
+		"usage": map[string]int{"prompt_tokens": 120, "completion_tokens": 20, "total_tokens": 140},
+	})
+	return chatReply{status: http.StatusOK, body: string(b)}
+}
+
+// The content filter of one model blocks history lectures now and then; the
+// other model may pass the same text. The filter is about the text, not the
+// model, so the next request still goes to the main model first.
+func TestFallsBackWhenContentFilterBlocks(t *testing.T) {
+	api := &fakeAPI{chat: func(_ int, req chatRequest) chatReply {
+		if req.Model == "GigaChat-3-Ultra" {
+			return blacklisted()
+		}
+		return ok(`{"cards":[]}`)
+	}}
+	c := newTestClient(t, api)
+
+	for range 2 {
+		resp, err := c.Complete(context.Background(), request())
+		if err != nil || string(resp.Content) != `{"cards":[]}` {
+			t.Fatalf("Complete() = %q, %v; want the fallback's answer", resp.Content, err)
+		}
+	}
+	reqs, _ := api.requests()
+	var models []string
+	for _, r := range reqs {
+		models = append(models, r.Model)
+	}
+	want := []string{"GigaChat-3-Ultra", "GigaChat-2-Max", "GigaChat-3-Ultra", "GigaChat-2-Max"}
+	if strings.Join(models, ",") != strings.Join(want, ",") {
+		t.Errorf("models = %v, want %v", models, want)
+	}
+}
+
+func TestReportsContentFilterOfEveryModel(t *testing.T) {
+	api := &fakeAPI{chat: func(int, chatRequest) chatReply { return blacklisted() }}
+	c := newTestClient(t, api)
+
+	_, err := c.Complete(context.Background(), request())
+	if !errors.Is(err, providers.ErrRefused) {
+		t.Errorf("Complete() error = %v, want providers.ErrRefused", err)
+	}
+	if reqs, _ := api.requests(); len(reqs) != 2 {
+		t.Errorf("%d requests, want one per model: a filter does not pass with retries", len(reqs))
+	}
+}
+
 func TestDropsStructuredOutputWhenRejected(t *testing.T) {
 	api := &fakeAPI{chat: func(_ int, req chatRequest) chatReply {
 		if req.ResponseFormat != nil {

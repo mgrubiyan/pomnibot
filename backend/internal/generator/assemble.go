@@ -21,6 +21,7 @@ type chunkResult struct {
 	skipped   bool        // budget used up before the call
 	cancelled bool
 	invalid   bool // no parseable answer after the retry
+	refused   bool // the content filter blocked it, see providers.ErrRefused
 	err       error
 
 	calls              int
@@ -316,6 +317,8 @@ func (a *assembler) count(r chunkResult) {
 		s.ChunksFailed++
 	case r.invalid:
 		s.ChunksInvalid++
+	case r.refused:
+		s.ChunksRefused++
 	}
 	s.ModelCalls += r.calls
 	s.InvalidResponses += r.invalidResponses

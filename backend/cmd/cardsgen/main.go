@@ -261,6 +261,7 @@ func formatStats(s generator.Stats) string {
 	fmt.Fprintf(&w, "  пропущено по лимиту: %d\n", s.ChunksSkipped)
 	fmt.Fprintf(&w, "  ошибка провайдера:   %d\n", s.ChunksFailed)
 	fmt.Fprintf(&w, "  без валидного JSON:  %d\n", s.ChunksInvalid)
+	fmt.Fprintf(&w, "  отказ цензора:       %d\n", s.ChunksRefused)
 	fmt.Fprintf(&w, "Вызовов модели:        %d (невалидных ответов %d) %s\n", s.ModelCalls, s.InvalidResponses, formatCounts(s.CallsByModel))
 	fmt.Fprintf(&w, "Токены:                prompt %d, completion %d\n", s.PromptTokens, s.CompletionTokens)
 	fmt.Fprintf(&w, "Фактов:                %d от модели, %d в итоге\n", s.FactsFromModel, s.Facts)
