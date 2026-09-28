@@ -87,6 +87,7 @@ type OCRPage struct {
 	Text          string
 	Confidence    float64
 	HasConfidence bool
+	Rotate        int // clockwise turn in degrees that sets the page upright, when the service tells
 }
 
 // Options configure an Extractor.

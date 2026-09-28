@@ -135,6 +135,19 @@ func TestRecognizeImage(t *testing.T) {
 	}
 }
 
+// A notebook photographed sideways: the service tells how the text lies,
+// and the page reports the clockwise turn that makes it upright.
+func TestRecognizeReportsRotation(t *testing.T) {
+	for angle, want := range map[string]int{"ANGLE_0": 0, "ANGLE_90": 270, "ANGLE_180": 180, "ANGLE_270": 90, "": 0} {
+		f := &fakeVision{syncReply: `{"result":{"textAnnotation":{"fullText":"текст","rotate":"` + angle + `"}}}`}
+		c := newTestClient(t, f)
+		pages, err := c.Recognize(context.Background(), ingest.OCRRequest{Data: []byte("\xff\xd8"), MimeType: "image/jpeg", Model: "handwritten", Pages: 1})
+		if err != nil || len(pages) != 1 || pages[0].Rotate != want {
+			t.Errorf("rotate %q: pages %+v, err %v; want a turn of %d", angle, pages, err, want)
+		}
+	}
+}
+
 func TestRecognizeMultipagePDFAsync(t *testing.T) {
 	// Pages come out of order; page zero has no "page" field, as int64 zero
 	// is omitted in JSON; there is a blank line.
