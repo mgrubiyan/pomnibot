@@ -400,6 +400,45 @@ func TestGenerateChoiceTakesDistractorsFromModel(t *testing.T) {
 	}
 }
 
+// A wrong option the quote or the question names is likely right too: the
+// weight "давит на опору или растягивает подвес", so "К подвесу" is no wrong
+// answer to "К чему приложен вес тела?".
+func TestGenerateDropsDistractorsNamedInQuoteOrQuestion(t *testing.T) {
+	para := "Вес тела — сила, с которой тело давит на опору или растягивает подвес. Вес приложен к опоре, а сила тяжести — к самому телу. " +
+		"Подворное обложение заменили подушной податью, и налог платило каждое лицо мужского пола податного сословия."
+	doc, opts := testDoc(t, para)
+	p := &fakeProvider{answer: func(int, string, providers.Request) (string, error) {
+		return factsJSON(
+			fx{quote: "Вес тела — сила, с которой тело давит на опору или растягивает подвес", cards: []mc{{
+				kind: cards.KindChoice, q: "К чему приложен вес тела?", a: "К опоре",
+				distractors: []string{"К подвесу", "К Земле", "К центру масс", "К воздуху"},
+			}}},
+			fx{quote: "Подворное обложение заменили подушной податью", cards: []mc{{
+				kind: cards.KindChoice, q: "Какой налог ввели вместо подворного обложения?", a: "Подушная подать",
+				distractors: []string{"Подворное обложение", "Промысловый налог", "Оброк"},
+			}}},
+		), nil
+	}}
+
+	res := generate(t, p, doc, opts)
+	if len(res.Cards) != 2 {
+		t.Fatalf("got %d cards, want 2", len(res.Cards))
+	}
+	for _, c := range res.Cards {
+		for _, bad := range []string{"К подвесу", "Подворное обложение"} {
+			if slices.Contains(c.Options, bad) {
+				t.Errorf("%q: option %q is named in the quote or the question", c.Question, bad)
+			}
+		}
+		if len(c.Options) < 3 {
+			t.Errorf("%q: options %q, want the answer and the other distractors", c.Question, c.Options)
+		}
+	}
+	if res.Stats.DroppedDistractors != 2 {
+		t.Errorf("DroppedDistractors = %d, want 2", res.Stats.DroppedDistractors)
+	}
+}
+
 func TestGenerateChoiceWithFewModelDistractorsUsesPool(t *testing.T) {
 	doc, opts := testDoc(t, paragraphs[:5]...)
 	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {

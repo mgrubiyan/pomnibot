@@ -175,7 +175,9 @@ func (a *assembler) acceptFact(f modelFact, pos, index int) (ready []cards.Card,
 		a.seq++
 		switch {
 		case card.Kind == cards.KindChoice:
-			if options, ok := modelOptions(card, mc.Distractors); ok {
+			options, named, ok := modelOptions(card, mc.Distractors)
+			a.stats.DroppedDistractors += named
+			if ok {
 				card.Answer = optionForm(card.Answer)
 				card.Options = options
 				break

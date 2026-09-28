@@ -53,6 +53,7 @@ type Stats struct {
 	DroppedByLimit     int `json:"droppedByLimit"`     // its fact is over MaxFactsPerDoc
 	DroppedVariants    int `json:"droppedVariants"`    // could not keep its kind, other cards cover the fact
 	DowngradedToFlip   int `json:"downgradedToFlip"`   // choice without enough distractors, the fact's only card
+	DroppedDistractors int `json:"droppedDistractors"` // wrong options the quote or the question names: likely right too
 	InputToFlip        int `json:"inputToFlip"`        // input with an answer too long to type, the fact's only card
 	Cards              int `json:"cards"`              // cards returned
 

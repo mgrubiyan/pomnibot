@@ -13,8 +13,10 @@ import (
 
 // Distractors for choice cards are written by the model with the card: wrong
 // but plausible answers of the answer's kind. The prompt asks for options
-// wrong in fact, not only absent from the notes; the code only drops those
-// that repeat the answer or each other.
+// wrong in fact, not only absent from the notes; the code drops those that
+// repeat the answer or each other, and those the quote or the question
+// names: the weight "давит на опору или растягивает подвес", so "К подвесу"
+// is likely a right answer too.
 //
 // When the model gives fewer than minDistractors, answers to cards from
 // other fragments of the same document stand in. Progressive delivery makes
@@ -196,9 +198,10 @@ func upperFirst(s string) string {
 // from the question: the same card always looks the same, and the right
 // answer is not always first.
 // modelOptions builds a choice card's options from the model's distractors,
-// dropping those that repeat the answer or an earlier option. ok is false
-// with fewer than minDistractors left: the pool then fills in.
-func modelOptions(c cards.Card, distractors []string) ([]string, bool) {
+// dropping those that repeat the answer or an earlier option and counting
+// those named in the quote or the question. ok is false with fewer than
+// minDistractors left: the pool then fills in.
+func modelOptions(c cards.Card, distractors []string) (options []string, named int, ok bool) {
 	answer := optionForm(c.Answer)
 	seen := map[string]bool{answerKey(answer): true}
 	var picked []string
@@ -208,6 +211,10 @@ func modelOptions(c cards.Card, distractors []string) ([]string, bool) {
 		if key == "" || seen[key] {
 			continue
 		}
+		if stemsWithin(d, c.SourceQuote) || stemsWithin(d, c.Question) {
+			named++
+			continue
+		}
 		seen[key] = true
 		picked = append(picked, d)
 		if len(picked) == wantDistractors {
@@ -215,9 +222,9 @@ func modelOptions(c cards.Card, distractors []string) ([]string, bool) {
 		}
 	}
 	if len(picked) < minDistractors {
-		return nil, false
+		return nil, named, false
 	}
-	return shuffleOptions(c.Question, answer, picked), true
+	return shuffleOptions(c.Question, answer, picked), named, true
 }
 
 func shuffleOptions(question, answer string, distractors []string) []string {

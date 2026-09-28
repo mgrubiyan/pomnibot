@@ -263,6 +263,7 @@ func formatStats(s generator.Stats) string {
 	fmt.Fprintf(&w, "  сверх лимита:        %d (%s)\n", s.DroppedByLimit, pct(s.DroppedByLimit))
 	fmt.Fprintf(&w, "  вариант не удержал вид: %d (%s; факт покрыт другими)\n", s.DroppedVariants, pct(s.DroppedVariants))
 	fmt.Fprintf(&w, "  choice → flip:       %d (мало дистракторов)\n", s.DowngradedToFlip)
+	fmt.Fprintf(&w, "Отброшено вариантов:   %d (есть в цитате или вопросе)\n", s.DroppedDistractors)
 	fmt.Fprintf(&w, "  input → flip:        %d (длинный ответ)\n", s.InputToFlip)
 	fmt.Fprintf(&w, "Итого карточек:        %d\n", s.Cards)
 	fmt.Fprintf(&w, "Время на фрагмент:     среднее %s, максимум %s\n", sec(s.ChunkTimeAvg), sec(s.ChunkTimeMax))
