@@ -87,7 +87,7 @@ ON CONFLICT (user_id, fact_id) DO UPDATE SET
     END,
     ease_factor = CASE
         WHEN NOT $3::BOOLEAN THEN GREATEST(1.30, user_fact_progress.ease_factor - 0.20)
-        ELSE user_fact_progress.ease_factor
+        ELSE LEAST(2.50, user_fact_progress.ease_factor + 0.20)
     END,
     interval_days = CASE
         WHEN $3::BOOLEAN AND NOT (NOT $3::BOOLEAN OR user_fact_progress.ceiling_found OR (user_fact_progress.elo + 201 >= 1400)) THEN 0
