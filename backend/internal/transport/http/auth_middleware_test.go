@@ -42,6 +42,10 @@ func (m *mockUserService) EnsureUser(ctx context.Context, userID int64) error {
 	return nil
 }
 
+func (m *mockUserService) GetUsersWithDueFacts(_ context.Context, _ time.Time, _ string) ([]int64, error) {
+	return nil, nil
+}
+
 func generateValidInitData(params map[string]string, botToken string) string {
 	var keys []string
 	for k := range params {
