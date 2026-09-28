@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
@@ -681,6 +682,7 @@ func TestBot_FileAttachment_GeneratesSet(t *testing.T) {
 		cardGen.generateFunc = func(_ context.Context, _ generator.Document, _ func(generator.Batch)) (generator.Result, error) {
 			return generator.Result{}, errors.New("generation error")
 		}
+		defer func() { cardGen.generateFunc = nil }()
 
 		bot.handleUpdate(ctx, Update{
 			UpdateType: "message_created",
@@ -708,6 +710,297 @@ func TestBot_FileAttachment_GeneratesSet(t *testing.T) {
 		lastMsg := getLastMessage()
 		if !strings.Contains(lastMsg.Text, "ошибка при создании конспекта") {
 			t.Errorf("expected error message sent to user, got: %s", lastMsg.Text)
+		}
+	})
+
+	t.Run("root-level russian filename on attachment used for title", func(t *testing.T) {
+		sentMessage = SendMessageRequest{}
+		editedMessage = SendMessageRequest{}
+		capturedTitle = ""
+
+		bot.handleUpdate(ctx, Update{
+			UpdateType: "message_created",
+			Message: &Message{
+				Recipient: MessageRecipient{ChatID: 300},
+				Sender: User{
+					UserID:    12345,
+					FirstName: "Alice",
+					IsBot:     false,
+				},
+				Body: MessageBody{
+					Text: "",
+					Attachments: []Attachment{
+						{
+							Type:     "file",
+							Filename: "лекция_биология.pdf",
+							Payload: map[string]interface{}{
+								"data": []byte("text content"),
+							},
+						},
+					},
+				},
+			},
+		})
+
+		if capturedTitle != "лекция_биология" {
+			t.Errorf("expected title 'лекция_биология', got %q", capturedTitle)
+		}
+		lastMsg := getLastMessage()
+		if !strings.Contains(lastMsg.Text, "🎉 Набор «лекция_биология» успешно создан!") {
+			t.Errorf("expected confirmation text with title, got: %s", lastMsg.Text)
+		}
+	})
+
+	t.Run("single and double percent-encoded russian filename properly decoded", func(t *testing.T) {
+		// Single URL-encoded
+		sentMessage = SendMessageRequest{}
+		editedMessage = SendMessageRequest{}
+		capturedTitle = ""
+
+		bot.handleUpdate(ctx, Update{
+			UpdateType: "message_created",
+			Message: &Message{
+				Recipient: MessageRecipient{ChatID: 300},
+				Sender: User{
+					UserID:    12345,
+					FirstName: "Alice",
+					IsBot:     false,
+				},
+				Body: MessageBody{
+					Text: "",
+					Attachments: []Attachment{
+						{
+							Type:     "file",
+							Filename: "%D0%BB%D0%B5%D0%BA%D1%86%D0%B8%D1%8F_%D0%B1%D0%B8%D0%BE%D0%BB%D0%BE%D0%B3%D0%B8%D1%8F.pdf",
+							Payload: map[string]interface{}{
+								"data": []byte("text content"),
+							},
+						},
+					},
+				},
+			},
+		})
+
+		if capturedTitle != "лекция_биология" {
+			t.Errorf("expected title 'лекция_биология', got %q", capturedTitle)
+		}
+
+		// Double URL-encoded
+		sentMessage = SendMessageRequest{}
+		editedMessage = SendMessageRequest{}
+		capturedTitle = ""
+
+		bot.handleUpdate(ctx, Update{
+			UpdateType: "message_created",
+			Message: &Message{
+				Recipient: MessageRecipient{ChatID: 300},
+				Sender: User{
+					UserID:    12345,
+					FirstName: "Alice",
+					IsBot:     false,
+				},
+				Body: MessageBody{
+					Text: "",
+					Attachments: []Attachment{
+						{
+							Type:     "file",
+							Filename: "%25D0%25BB%25D0%25B5%25D0%25BA%25D1%2586%25D0%25B8%25D1%258F.pdf",
+							Payload: map[string]interface{}{
+								"data": []byte("text content"),
+							},
+						},
+					},
+				},
+			},
+		})
+
+		if capturedTitle != "лекция" {
+			t.Errorf("expected title 'лекция', got %q", capturedTitle)
+		}
+	})
+
+	t.Run("title updated from file_1 to downloaded filename when discovered via DownloadFile", func(t *testing.T) {
+		fileServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''%D0%B0%D0%BD%D0%B0%D1%82%D0%BE%D0%BC%D0%B8%D1%8F.pdf")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("content of anatomy lecture"))
+		}))
+		defer fileServer.Close()
+
+		sentMessage = SendMessageRequest{}
+		editedMessage = SendMessageRequest{}
+		capturedTitle = ""
+
+		bot.handleUpdate(ctx, Update{
+			UpdateType: "message_created",
+			Message: &Message{
+				Recipient: MessageRecipient{ChatID: 300},
+				Sender: User{
+					UserID:    12345,
+					FirstName: "Alice",
+					IsBot:     false,
+				},
+				Body: MessageBody{
+					Text: "",
+					Attachments: []Attachment{
+						{
+							Type: "file",
+							// No filename provided initially; only URL
+							URL: fileServer.URL + "/download",
+						},
+					},
+				},
+			},
+		})
+
+		if capturedTitle != "анатомия" {
+			t.Errorf("expected title 'анатомия' discovered during download, got %q", capturedTitle)
+		}
+		lastMsg := getLastMessage()
+		if !strings.Contains(lastMsg.Text, "🎉 Набор «анатомия» успешно создан!") {
+			t.Errorf("expected confirmation text with title 'анатомия', got: %s", lastMsg.Text)
+		}
+	})
+
+	t.Run("rune-safe truncation of long cyrillic title", func(t *testing.T) {
+		sentMessage = SendMessageRequest{}
+		editedMessage = SendMessageRequest{}
+		capturedTitle = ""
+
+		longRussianName := strings.Repeat("конспект", 15) + ".pdf" // 15 * 8 = 120 runes
+		bot.handleUpdate(ctx, Update{
+			UpdateType: "message_created",
+			Message: &Message{
+				Recipient: MessageRecipient{ChatID: 300},
+				Sender: User{
+					UserID:    12345,
+					FirstName: "Alice",
+					IsBot:     false,
+				},
+				Body: MessageBody{
+					Text: "",
+					Attachments: []Attachment{
+						{
+							Type:     "file",
+							Filename: longRussianName,
+							Payload: map[string]interface{}{
+								"data": []byte("text content"),
+							},
+						},
+					},
+				},
+			},
+		})
+
+		if !utf8.ValidString(capturedTitle) {
+			t.Fatalf("capturedTitle is not valid UTF-8: %q", capturedTitle)
+		}
+		if !strings.HasSuffix(capturedTitle, "...") {
+			t.Errorf("expected title to end with '...', got: %q", capturedTitle)
+		}
+		runes := []rune(capturedTitle)
+		if len(runes) != 83 {
+			t.Errorf("expected 83 runes (80 + '...'), got %d runes", len(runes))
+		}
+	})
+}
+
+func TestCleanFilename(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"", ""},
+		{"   ", ""},
+		{"лекция.pdf", "лекция.pdf"},
+		{"%D0%BB%D0%B5%D0%BA%D1%86%D0%B8%D1%8F.pdf", "лекция.pdf"},
+		{"%25D0%25BB%25D0%25B5%25D0%25BA%25D1%2586%25D0%25B8%25D1%258F.pdf", "лекция.pdf"},
+		{"/path/to/some/file.txt", "file.txt"},
+		{"..\\..\\secret.pdf", "secret.pdf"},
+		{"\"quoted_file.pdf\"", "quoted_file.pdf"},
+		{"'quoted_file.docx'", "quoted_file.docx"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			actual := cleanFilename(tt.input)
+			if actual != tt.expected {
+				t.Errorf("cleanFilename(%q) = %q, expected %q", tt.input, actual, tt.expected)
+			}
+		})
+	}
+}
+
+func TestClient_DownloadFile(t *testing.T) {
+	t.Run("extracts filename from RFC 5987 filename*", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''%D0%BB%D0%B5%D0%BA%D1%86%D0%B8%D1%8F.pdf")
+			w.Header().Set("Content-Type", "application/pdf")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("dummy pdf content"))
+		}))
+		defer ts.Close()
+
+		client, err := NewClient("token", ts.URL)
+		if err != nil {
+			t.Fatalf("failed to create client: %v", err)
+		}
+
+		res, err := client.DownloadFile(context.Background(), ts.URL+"/file")
+		if err != nil {
+			t.Fatalf("DownloadFile failed: %v", err)
+		}
+		if res.Filename != "лекция.pdf" {
+			t.Errorf("expected Filename 'лекция.pdf', got %q", res.Filename)
+		}
+		if string(res.Data) != "dummy pdf content" {
+			t.Errorf("unexpected Data: %s", string(res.Data))
+		}
+		if res.ContentType != "application/pdf" {
+			t.Errorf("unexpected ContentType: %s", res.ContentType)
+		}
+	})
+
+	t.Run("extracts filename from standard filename parameter", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Disposition", "attachment; filename=\"document.docx\"")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("dummy docx content"))
+		}))
+		defer ts.Close()
+
+		client, err := NewClient("token", ts.URL)
+		if err != nil {
+			t.Fatalf("failed to create client: %v", err)
+		}
+
+		res, err := client.DownloadFile(context.Background(), ts.URL+"/download")
+		if err != nil {
+			t.Fatalf("DownloadFile failed: %v", err)
+		}
+		if res.Filename != "document.docx" {
+			t.Errorf("expected Filename 'document.docx', got %q", res.Filename)
+		}
+	})
+
+	t.Run("falls back to URL path if Content-Disposition missing", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("plain text"))
+		}))
+		defer ts.Close()
+
+		client, err := NewClient("token", ts.URL)
+		if err != nil {
+			t.Fatalf("failed to create client: %v", err)
+		}
+
+		res, err := client.DownloadFile(context.Background(), ts.URL+"/notes/биология.txt")
+		if err != nil {
+			t.Fatalf("DownloadFile failed: %v", err)
+		}
+		if res.Filename != "биология.txt" {
+			t.Errorf("expected Filename 'биология.txt', got %q", res.Filename)
 		}
 	})
 }

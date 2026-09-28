@@ -9,9 +9,12 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
+	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -74,10 +77,23 @@ type SendMessageRequest struct {
 	Attachments []Attachment `json:"attachments,omitempty"`
 }
 
-// Attachment represents attachment (e.g. inline keyboard).
+// Attachment represents attachment (e.g. inline keyboard, file, image).
 type Attachment struct {
-	Type    string                 `json:"type"`
-	Payload map[string]interface{} `json:"payload"`
+	Type     string                 `json:"type"`
+	Filename string                 `json:"filename,omitempty"`
+	Name     string                 `json:"name,omitempty"`
+	Title    string                 `json:"title,omitempty"`
+	URL      string                 `json:"url,omitempty"`
+	Token    string                 `json:"token,omitempty"`
+	Size     *int64                 `json:"size,omitempty"`
+	Payload  map[string]interface{} `json:"payload,omitempty"`
+}
+
+// DownloadedFile represents downloaded file contents and metadata.
+type DownloadedFile struct {
+	Data        []byte
+	Filename    string
+	ContentType string
 }
 
 // SubscriptionsResponse represents response from GET /subscriptions.
@@ -259,8 +275,37 @@ func (c *Client) SendAction(ctx context.Context, chatID int64, action string) er
 	return c.doRequest(ctx, http.MethodPost, endpoint, body, nil)
 }
 
-// DownloadFile downloads file bytes from a given URL.
-func (c *Client) DownloadFile(ctx context.Context, fileURL string) ([]byte, error) {
+var percentHexRegex = regexp.MustCompile(`%[0-9a-fA-F]{2}`)
+
+// cleanFilename cleans, unescapes, and strips path components from a filename.
+func cleanFilename(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+
+	// Repeatedly URL unescape if percent-encoded tokens are present (up to 3 iterations)
+	for i := 0; i < 3 && percentHexRegex.MatchString(name); i++ {
+		if unescaped, err := url.QueryUnescape(name); err == nil && unescaped != name {
+			name = unescaped
+		} else {
+			break
+		}
+	}
+
+	// Strip surrounding quotes if present
+	name = strings.Trim(name, "\"'")
+
+	// Normalize both Windows and Unix path separators and strip directory components
+	name = path.Base(strings.ReplaceAll(name, "\\", "/"))
+	if name == "." || name == "/" {
+		return ""
+	}
+	return strings.TrimSpace(name)
+}
+
+// DownloadFile downloads file bytes and metadata from a given URL.
+func (c *Client) DownloadFile(ctx context.Context, fileURL string) (*DownloadedFile, error) {
 	if fileURL == "" {
 		return nil, fmt.Errorf("file URL is empty")
 	}
@@ -291,7 +336,36 @@ func (c *Client) DownloadFile(ctx context.Context, fileURL string) ([]byte, erro
 	if err != nil {
 		return nil, fmt.Errorf("read file body: %w", err)
 	}
-	return data, nil
+
+	filename := ""
+	if cd := resp.Header.Get("Content-Disposition"); cd != "" {
+		if _, params, err := mime.ParseMediaType(cd); err == nil {
+			if fn, ok := params["filename*"]; ok && strings.TrimSpace(fn) != "" {
+				parts := strings.SplitN(fn, "''", 2)
+				if len(parts) == 2 {
+					filename = parts[1]
+				} else {
+					filename = fn
+				}
+			} else if fn, ok := params["filename"]; ok && strings.TrimSpace(fn) != "" {
+				filename = fn
+			}
+		}
+	}
+	if filename == "" {
+		if u, err := url.Parse(fileURL); err == nil {
+			base := path.Base(u.Path)
+			if base != "" && base != "." && base != "/" {
+				filename = base
+			}
+		}
+	}
+
+	return &DownloadedFile{
+		Data:        data,
+		Filename:    cleanFilename(filename),
+		ContentType: resp.Header.Get("Content-Type"),
+	}, nil
 }
 
 // GetSubscriptions returns all active webhook subscriptions.
