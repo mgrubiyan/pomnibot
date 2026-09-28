@@ -322,89 +322,55 @@ func spanOf(source string, f folded, i, j int) (start, end int) {
 }
 
 // normalizedPageStarts maps page starts, byte offsets in the original text,
-// to offsets in its normalized form. Normalization only drops and squeezes
-// whitespace and glues hyphenated words and broken lines, so each page is
-// found again by its first letters, whitespace ignored, after the page
-// before it. A page with no text starts where the next one does, so that no
-// quote is cited from it; one not found starts where the search stands.
+// to offsets in its normalized form. Normalization only drops whitespace,
+// invisible and control characters and the hyphens of words broken over
+// lines; every other character stays, in order. So a page starts in the
+// normalized text at the counted character that has as many counted ones
+// before it as the page's start has in the original. Dashes are not counted
+// at all: whether a hyphen goes depends on the line break after it. A page
+// with no text starts where the next one does, so no quote is cited from it.
+//
+// Starts must be in order, as ingest gives them.
 func normalizedPageStarts(orig string, starts []int, norm string) []int {
 	if len(starts) == 0 {
 		return nil
 	}
-	var sq strings.Builder
-	var at []int // offset in norm of each byte of sq
-	for i, r := range norm {
-		if unicode.IsSpace(r) {
-			continue
+	before := make([]int, len(starts)) // counted characters of orig before each start
+	n, i := 0, 0
+	for off, r := range orig {
+		for i < len(starts) && starts[i] <= off {
+			before[i] = n
+			i++
 		}
-		n, _ := sq.WriteRune(r)
-		for range n {
-			at = append(at, i)
+		if countedInPages(r) {
+			n++
 		}
 	}
-	squeezed := sq.String()
+	for ; i < len(starts); i++ {
+		before[i] = n
+	}
 
 	out := make([]int, len(starts))
-	var blank []int // pages with no text, waiting for the next page's start
-	from := 0
-	for i, start := range starts {
-		end := len(orig)
-		if i+1 < len(starts) {
-			end = starts[i+1]
-		}
-		start, end = min(max(start, 0), len(orig)), min(max(end, 0), len(orig))
-		page := ""
-		if start < end {
-			page = orig[start:end]
-		}
-		if pageAnchor(page, 1) == "" {
-			blank = append(blank, i)
+	n, i = 0, 0
+	for off, r := range norm {
+		if !countedInPages(r) {
 			continue
 		}
-		// A short page may end in a hyphen that normalization removed: try
-		// shorter beginnings before giving up. The next page is looked for
-		// past this one's beginning: Beamer repeats a title on every slide.
-		found := from
-		for n := pageAnchorRunes; n >= pageAnchorRunes/4; n /= 2 {
-			anchor := pageAnchor(page, n)
-			if j := strings.Index(squeezed[from:], anchor); j >= 0 {
-				found = from + j
-				from = found + len(anchor)
-				break
-			}
+		for i < len(starts) && before[i] <= n {
+			out[i] = off
+			i++
 		}
-		pos := len(norm)
-		if found < len(at) {
-			pos = at[found]
-		}
-		for _, b := range append(blank, i) {
-			out[b] = pos
-		}
-		blank = blank[:0]
+		n++
 	}
-	for _, b := range blank {
-		out[b] = len(norm)
+	for ; i < len(starts); i++ {
+		out[i] = len(norm)
 	}
 	return out
 }
 
-// pageAnchorRunes letters are enough to find a page's beginning.
-const pageAnchorRunes = 24
-
-// pageAnchor is the first n letters of a page's normalized text, whitespace
-// dropped.
-func pageAnchor(page string, n int) string {
-	var b strings.Builder
-	for _, r := range normalizeText(page) {
-		if unicode.IsSpace(r) {
-			continue
-		}
-		b.WriteRune(r)
-		if n--; n == 0 {
-			break
-		}
-	}
-	return b.String()
+// countedInPages: the characters normalization never drops.
+func countedInPages(r rune) bool {
+	return !unicode.IsSpace(r) && !unicode.IsControl(r) && !isInvisible(r) && !isDash(r)
 }
 
 // indexPhrase is strings.Index from byte from that only accepts a match not

@@ -259,6 +259,7 @@ func (c *Client) send(ctx context.Context, method, target string, body []byte, o
 type recognition struct {
 	TextAnnotation struct {
 		FullText string `json:"fullText"`
+		Rotate   string `json:"rotate"` // ANGLE_0, ANGLE_90, ANGLE_180 or ANGLE_270
 		Blocks   []struct {
 			Lines []struct {
 				Words []struct {
@@ -342,7 +343,7 @@ func pageNumber(raw json.RawMessage) (int, error) {
 // toPage takes the full text and, if the service reports word confidences,
 // their mean.
 func toPage(rec *recognition) ingest.OCRPage {
-	p := ingest.OCRPage{Text: rec.TextAnnotation.FullText}
+	p := ingest.OCRPage{Text: rec.TextAnnotation.FullText, Rotate: uprightTurn(rec.TextAnnotation.Rotate)}
 	var sum float64
 	var n int
 	for _, b := range rec.TextAnnotation.Blocks {
@@ -359,6 +360,21 @@ func toPage(rec *recognition) ingest.OCRPage {
 		p.Confidence, p.HasConfidence = sum/float64(n), true
 	}
 	return p
+}
+
+// uprightTurn converts the service's rotate, the angle the text lies at, to
+// the clockwise turn that sets it upright: a photo reported as ANGLE_270 is
+// read after a quarter turn clockwise.
+func uprightTurn(rotate string) int {
+	switch rotate {
+	case "ANGLE_90":
+		return 270
+	case "ANGLE_180":
+		return 180
+	case "ANGLE_270":
+		return 90
+	}
+	return 0
 }
 
 func clip(b []byte) string {
