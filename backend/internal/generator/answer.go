@@ -41,10 +41,16 @@ func answerChecked(k cards.Kind) bool {
 // answerSupported reports whether a choice or input answer passes both
 // checks against its quote and question.
 func answerSupported(c modelCard, quote string) bool {
-	if isCode(c.Answer) {
-		return codeWithin(c.Answer, quote) && !codeWithin(c.Answer, c.Question)
+	return namedIn(c.Answer, quote) && !namedIn(c.Answer, c.Question)
+}
+
+// namedIn reports whether text names s: code as a whole string, other
+// answers word by word up to endings.
+func namedIn(s, text string) bool {
+	if isCode(s) {
+		return codeWithin(s, text)
 	}
-	return stemsWithin(c.Answer, quote) && !stemsWithin(c.Answer, c.Question)
+	return stemsWithin(s, text)
 }
 
 // isCode reports an answer that is code: ASCII with symbols of code in it

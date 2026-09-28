@@ -175,43 +175,57 @@ func answerKey(s string) string {
 // optionForm trims trailing punctuation and capitalizes the first letter, so
 // that every option, the right one included, has one form: "митоз" next to
 // "Мейоз." and "Цитокинез." gives itself away. Nothing is ever lowercased:
-// "S-период", "Na" and "Гольджи" stay as written, and so do "мРНК" and "pH",
-// whose second letter is a capital.
+// "S-период", "Na" and "Гольджи" stay as written, and so does "мРНК", whose
+// second letter is a capital.
+//
+// Code and formulas are left as written, but for a final period: in "::" the
+// colons are no punctuation, and "Std" or "A = F/m" is another thing.
 func optionForm(s string) string {
-	return upperFirst(strings.TrimRightFunc(strings.TrimSpace(s), func(r rune) bool {
+	s = strings.TrimSpace(s)
+	if code := strings.TrimRight(s, " .,"); isCode(code) {
+		return code
+	}
+	return upperFirst(strings.TrimRightFunc(s, func(r rune) bool {
 		return unicode.IsSpace(r) || strings.ContainsRune(".,;:", r)
 	}))
 }
 
+// optionKey compares options: code as a whole string, other answers as
+// answerKey does.
+func optionKey(s string) string {
+	if isCode(s) {
+		return squeeze(s)
+	}
+	return answerKey(s)
+}
+
 // upperFirst capitalizes the first letter of an ordinary word, leaving
-// "мРНК" and "pH" alone.
+// "мРНК" alone. Latin is never capitalized: "pH", "nm" and "std" would turn
+// into other words.
 func upperFirst(s string) string {
 	first, size := utf8.DecodeRuneInString(s)
 	second, _ := utf8.DecodeRuneInString(s[size:])
-	if !unicode.IsLower(first) || unicode.IsUpper(second) {
+	if first <= unicode.MaxASCII || !unicode.IsLower(first) || unicode.IsUpper(second) {
 		return s
 	}
 	return string(unicode.ToUpper(first)) + s[size:]
 }
 
-// shuffleOptions puts the answer among the distractors in an order derived
-// from the question: the same card always looks the same, and the right
-// answer is not always first.
 // modelOptions builds a choice card's options from the model's distractors,
 // dropping those that repeat the answer or an earlier option and counting
 // those named in the quote or the question. ok is false with fewer than
 // minDistractors left: the pool then fills in.
 func modelOptions(c cards.Card, distractors []string) (options []string, named int, ok bool) {
 	answer := optionForm(c.Answer)
-	seen := map[string]bool{answerKey(answer): true}
+	seen := map[string]bool{optionKey(answer): true}
 	var picked []string
 	for _, d := range distractors {
 		d = optionForm(d)
-		key := answerKey(d)
+		key := optionKey(d)
 		if key == "" || seen[key] {
 			continue
 		}
-		if stemsWithin(d, c.SourceQuote) || stemsWithin(d, c.Question) {
+		if namedIn(d, c.SourceQuote) || namedIn(d, c.Question) {
 			named++
 			continue
 		}
@@ -227,6 +241,9 @@ func modelOptions(c cards.Card, distractors []string) (options []string, named i
 	return shuffleOptions(c.Question, answer, picked), named, true
 }
 
+// shuffleOptions puts the answer among the distractors in an order derived
+// from the question: the same card always looks the same, and the right
+// answer is not always first.
 func shuffleOptions(question, answer string, distractors []string) []string {
 	options := append([]string{answer}, distractors...)
 	h := fnv.New64a()

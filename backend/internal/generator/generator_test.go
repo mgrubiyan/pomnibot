@@ -444,6 +444,28 @@ func TestGenerateDropsDistractorsNamedInQuoteOrQuestion(t *testing.T) {
 	}
 }
 
+// Seen live: the right option "::" came out empty, cut as punctuation.
+func TestGenerateKeepsCodeOptionsAsWritten(t *testing.T) {
+	para := "Глобальное пространство имён можно указать явно с помощью оператора :: перед именем. " +
+		"Оно не является безымянным пространством имён, и в нём объявлена функция main."
+	doc, opts := testDoc(t, para)
+	p := &fakeProvider{answer: func(int, string, providers.Request) (string, error) {
+		return factsJSON(fx{quote: firstSentence(para), cards: []mc{{
+			kind: cards.KindChoice, q: "С помощью какого оператора явно ссылаются на глобальное пространство имён?", a: "::",
+			distractors: []string{"->", "#", "std"},
+		}}}), nil
+	}}
+	res := generate(t, p, doc, opts)
+	if len(res.Cards) != 1 {
+		t.Fatalf("got %d cards, want 1", len(res.Cards))
+	}
+	c := res.Cards[0]
+	options := slices.Sorted(slices.Values(c.Options))
+	if c.Answer != "::" || !slices.Equal(options, []string{"#", "->", "::", "std"}) {
+		t.Errorf("answer %q, options %q; want the code as written", c.Answer, c.Options)
+	}
+}
+
 func TestGenerateChoiceWithFewModelDistractorsUsesPool(t *testing.T) {
 	doc, opts := testDoc(t, paragraphs[:5]...)
 	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {

@@ -125,6 +125,16 @@ func TestOptionForm(t *testing.T) {
 		"мРНК":               "мРНК",
 		"pH":                 "pH",
 		"метафазная пластинка": "Метафазная пластинка",
+		// Code and formulas stay as written: "::" is no trailing
+		// punctuation, and "Std" or "A = F/m" is another thing.
+		"::":         "::",
+		"std::cout;": "std::cout;",
+		"#include":   "#include",
+		"a = F/m":    "a = F/m",
+		"std":        "std",
+		"imbue":      "imbue",
+		"nm":         "nm",
+		"nm.":        "nm",
 	} {
 		if got := optionForm(in); got != want {
 			t.Errorf("optionForm(%q) = %q, want %q", in, got, want)
