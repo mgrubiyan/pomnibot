@@ -91,8 +91,10 @@ func main() {
 		slog.Warn("DATABASE_URL is not set; running in static SPA mode with unimplemented handlers")
 	}
 
+	botToken := os.Getenv("BOT_TOKEN")
+
 	apiHandler := httptransport.NewAPIHandler(setService, cardService, homescreenService)
-	router, err := httptransport.NewRouter(apiHandler, staticFS)
+	router, err := httptransport.NewRouter(apiHandler, staticFS, botToken, userService)
 	if err != nil {
 		slog.Error("failed to initialize router", "error", err)
 		os.Exit(1)
@@ -107,7 +109,7 @@ func main() {
 	}
 
 	// Initialize MAX Bot if BOT_TOKEN is provided
-	if botToken := os.Getenv("BOT_TOKEN"); botToken != "" {
+	if botToken != "" {
 		if userService == nil {
 			slog.Error("cannot start MAX bot without database and user service")
 			os.Exit(1)
