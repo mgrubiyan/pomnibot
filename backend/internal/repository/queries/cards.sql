@@ -113,17 +113,18 @@ WHERE card_id = $1;
 -- name: UpdateCard :one
 UPDATE cards
 SET
-    question = COALESCE($2, question),
-    answer_text = COALESCE($3, answer_text),
-    explanation = COALESCE($4, explanation),
-    source_quote = COALESCE($5, source_quote),
-    source_ref = COALESCE($6, source_ref),
+    kind = COALESCE($2, kind),
+    question = COALESCE($3, question),
+    answer_text = COALESCE($4, answer_text),
+    explanation = COALESCE($5, explanation),
+    source_quote = COALESCE($6, source_quote),
+    source_ref = COALESCE($7, source_ref),
     updated_at = CURRENT_TIMESTAMP
 FROM facts f
 JOIN sets s ON f.set_id = s.id
 WHERE cards.id = $1
   AND cards.fact_id = f.id
-  AND s.author_id = $7
+  AND s.author_id = $8
 RETURNING cards.id, cards.fact_id, cards.kind, cards.question, cards.answer_text, cards.explanation, cards.source_quote, cards.source_ref, cards.created_at, cards.updated_at;
 
 -- name: DeleteCard :execrows

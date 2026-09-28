@@ -491,6 +491,8 @@ components:
     UpdateCardRequest:
       type: object
       properties:
+        kind:
+          $ref: '#/components/schemas/CardKind'
         question:
           type: string
         options:

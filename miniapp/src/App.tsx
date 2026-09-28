@@ -8,14 +8,19 @@ import JoinSet from './screens/JoinSet';
 import SetScreen from './screens/SetScreen';
 import Share from './screens/Share';
 import { api } from './api';
-import type { Card, CardIssueReason, TodayData, User } from './types';
+import type { AnswerResult, Card, CardIssueReason, TodayData, User } from './types';
 import type { CardPatch } from './utils/cards';
 
 /** No router yet: browser history is not used. */
 type Screen =
     | { name: 'home' }
     | { name: 'set'; setId: string }
-    | { name: 'feed'; setId?: string }
+    | {
+          name: 'feed';
+          setId?: string;
+          initialIndex?: number;
+          initialResults?: AnswerResult[];
+      }
     | { name: 'share'; setId: string; setTitle?: string }
     | { name: 'add' }
     | { name: 'join' }
@@ -26,6 +31,8 @@ type Screen =
           isOwner?: boolean;
           fromFeed?: boolean;
           feedSetId?: string;
+          feedIndex?: number;
+          feedResults?: AnswerResult[];
       }
     | {
           name: 'card-edit';
@@ -34,10 +41,15 @@ type Screen =
           isOwner?: boolean;
           fromFeed?: boolean;
           feedSetId?: string;
+          feedIndex?: number;
+          feedResults?: AnswerResult[];
       };
 
 /** What to report on the set screen after an action on a card. */
-type Toast = { kind: 'removed'; cardId: string } | { kind: 'edited' };
+type Toast =
+    | { kind: 'removed'; cardId: string }
+    | { kind: 'edited' }
+    | { kind: 'reported' };
 
 function App() {
     const [screen, setScreen] = useState<Screen>({ name: 'home' });
@@ -45,6 +57,13 @@ function App() {
 
     useEffect(() => {
         window.WebApp?.ready?.();
+        api.GET('/').then(({ data }) => {
+            if (data?.user) {
+                setCurrentUser(data.user);
+            }
+        }).catch(() => {
+            // fallback
+        });
     }, []);
 
     const [removedSetIds, setRemovedSetIds] = useState<string[]>([]);
@@ -87,6 +106,8 @@ function App() {
         reason?: CardIssueReason,
         fromFeed?: boolean,
         feedSetId?: string,
+        feedIndex?: number,
+        feedResults?: AnswerResult[],
     ) => {
         try {
             if (reason) {
@@ -107,7 +128,12 @@ function App() {
         );
 
         if (fromFeed) {
-            setScreen({ name: 'feed', setId: feedSetId });
+            setScreen({
+                name: 'feed',
+                setId: feedSetId,
+                initialIndex: feedIndex,
+                initialResults: feedResults,
+            });
         } else {
             setScreen({ name: 'set', setId });
             setToast({ kind: 'removed', cardId });
@@ -120,6 +146,8 @@ function App() {
         setId: string,
         fromFeed?: boolean,
         feedSetId?: string,
+        feedIndex?: number,
+        feedResults?: AnswerResult[],
     ) => {
         try {
             await api.POST('/cards/{cardId}/issue', {
@@ -131,9 +159,18 @@ function App() {
         }
 
         if (fromFeed) {
-            setScreen({ name: 'feed', setId: feedSetId });
+            setRemovedCardIds((current) =>
+                current.includes(cardId) ? current : [...current, cardId],
+            );
+            setScreen({
+                name: 'feed',
+                setId: feedSetId,
+                initialIndex: feedIndex,
+                initialResults: feedResults,
+            });
         } else {
             setScreen({ name: 'set', setId });
+            setToast({ kind: 'reported' });
         }
     };
 
@@ -143,14 +180,22 @@ function App() {
         patch: CardPatch,
         fromFeed?: boolean,
         feedSetId?: string,
+        feedIndex?: number,
+        feedResults?: AnswerResult[],
     ) => {
         try {
             await api.PUT('/cards/{cardId}', {
                 params: { path: { cardId } },
                 body: {
+                    kind: patch.kind,
                     question: patch.question,
                     answer: patch.answer,
                     options: patch.options,
+                    table: patch.table,
+                    explanation: patch.explanation,
+                    topic: patch.topic,
+                    sourceQuote: patch.sourceQuote,
+                    sourceRef: patch.sourceRef,
                 },
             });
         } catch (err) {
@@ -159,21 +204,33 @@ function App() {
 
         setCardPatches((current) => ({ ...current, [cardId]: patch }));
         if (fromFeed) {
-            setScreen({ name: 'feed', setId: feedSetId });
+            setScreen({
+                name: 'feed',
+                setId: feedSetId,
+                initialIndex: feedIndex,
+                initialResults: feedResults,
+            });
         } else {
             setScreen({ name: 'set', setId });
             setToast({ kind: 'edited' });
         }
     };
 
-    const openCardIssueFromFeed = async (card: Card, feedSetId?: string) => {
-        let isOwner = true;
+    const openCardIssueFromFeed = async (
+        card: Card,
+        feedSetId?: string,
+        feedIndex?: number,
+        feedResults?: AnswerResult[],
+    ) => {
+        let isOwner = false;
+        let setTitle: string | undefined;
         try {
             const { data } = await api.GET('/sets/{setId}', {
                 params: { path: { setId: card.setId } },
             });
-            if (data?.author && currentUser && data.author.id !== currentUser.id) {
-                isOwner = false;
+            setTitle = data?.title;
+            if (data?.author && currentUser && data.author.id === currentUser.id) {
+                isOwner = true;
             }
         } catch {
             // fallback
@@ -181,9 +238,12 @@ function App() {
         go({
             name: 'card-issue',
             card,
+            setTitle,
             isOwner,
             fromFeed: true,
             feedSetId,
+            feedIndex,
+            feedResults,
         });
     };
 
@@ -207,7 +267,15 @@ function App() {
     }
 
     if (screen.name === 'card-issue' || screen.name === 'card-edit') {
-        const { card, setTitle, isOwner, fromFeed, feedSetId } = screen;
+        const {
+            card,
+            setTitle,
+            isOwner = false,
+            fromFeed,
+            feedSetId,
+            feedIndex,
+            feedResults,
+        } = screen;
 
         if (screen.name === 'card-issue') {
             return (
@@ -217,28 +285,69 @@ function App() {
                     isOwner={isOwner}
                     onBack={() => {
                         if (fromFeed) {
-                            go({ name: 'feed', setId: feedSetId });
+                            go({
+                                name: 'feed',
+                                setId: feedSetId,
+                                initialIndex: feedIndex,
+                                initialResults: feedResults,
+                            });
                         } else {
                             openSet(card.setId);
                         }
                     }}
-                    onEdit={() =>
+                    onEdit={() => {
+                        if (!isOwner) {
+                            return;
+                        }
                         go({
                             name: 'card-edit',
                             card,
                             setTitle,
+                            isOwner: true,
                             fromFeed,
                             feedSetId,
-                        })
-                    }
+                            feedIndex,
+                            feedResults,
+                        });
+                    }}
                     onRemove={(reason) =>
-                        removeCard(card.id, card.setId, reason, fromFeed, feedSetId)
+                        removeCard(
+                            card.id,
+                            card.setId,
+                            reason,
+                            fromFeed,
+                            feedSetId,
+                            feedIndex,
+                            feedResults,
+                        )
                     }
                     onReport={(reason) =>
-                        reportCardIssue(card.id, reason, card.setId, fromFeed, feedSetId)
+                        reportCardIssue(
+                            card.id,
+                            reason,
+                            card.setId,
+                            fromFeed,
+                            feedSetId,
+                            feedIndex,
+                            feedResults,
+                        )
                     }
                 />
             );
+        }
+
+        if (!isOwner) {
+            if (fromFeed) {
+                go({
+                    name: 'feed',
+                    setId: feedSetId,
+                    initialIndex: feedIndex,
+                    initialResults: feedResults,
+                });
+            } else {
+                openSet(card.setId);
+            }
+            return null;
         }
 
         return (
@@ -253,29 +362,51 @@ function App() {
                         isOwner: true,
                         fromFeed,
                         feedSetId,
+                        feedIndex,
+                        feedResults,
                     })
                 }
                 onSave={(patch) =>
-                    saveCardEdit(card.id, card.setId, patch, fromFeed, feedSetId)
+                    saveCardEdit(
+                        card.id,
+                        card.setId,
+                        patch,
+                        fromFeed,
+                        feedSetId,
+                        feedIndex,
+                        feedResults,
+                    )
                 }
                 onRemove={() =>
-                    removeCard(card.id, card.setId, undefined, fromFeed, feedSetId)
+                    removeCard(
+                        card.id,
+                        card.setId,
+                        undefined,
+                        fromFeed,
+                        feedSetId,
+                        feedIndex,
+                        feedResults,
+                    )
                 }
             />
         );
     }
 
     if (screen.name === 'feed') {
-        const { setId } = screen;
+        const { setId, initialIndex, initialResults } = screen;
         return (
             <Feed
                 key={setId ?? 'all'}
                 setId={setId}
+                initialIndex={initialIndex}
+                initialResults={initialResults}
                 removedCardIds={removedCardIds}
                 cardPatches={cardPatches}
                 onExit={goHome}
                 onBack={setId ? () => openSet(setId) : goHome}
-                onReportCard={(card) => openCardIssueFromFeed(card, setId)}
+                onReportCard={(card, idx, res) =>
+                    openCardIssueFromFeed(card, setId, idx, res)
+                }
                 onShare={setId ? () => go({ name: 'share', setId }) : undefined}
             />
         );
@@ -301,10 +432,12 @@ function App() {
                 onBack={goHome}
                 onStart={(setId) => go({ name: 'feed', setId })}
                 onRemove={removeSet}
-                onOpenCard={(card) =>
+                onOpenCard={(card, isOwner, setTitle) =>
                     go({
                         name: 'card-issue',
                         card,
+                        setTitle,
+                        isOwner,
                         fromFeed: false,
                         feedSetId: undefined,
                     })

@@ -724,6 +724,52 @@ func (o OptCardAnswer) Or(d CardAnswer) CardAnswer {
 	return d
 }
 
+// NewOptCardKind returns new OptCardKind with value set to v.
+func NewOptCardKind(v CardKind) OptCardKind {
+	return OptCardKind{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptCardKind is optional CardKind.
+type OptCardKind struct {
+	Value CardKind
+	Set   bool
+}
+
+// IsSet returns true if OptCardKind was set.
+func (o OptCardKind) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptCardKind) Reset() {
+	var v CardKind
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptCardKind) SetTo(v CardKind) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptCardKind) Get() (v CardKind, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptCardKind) Or(d CardKind) CardKind {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptString returns new OptString with value set to v.
 func NewOptString(v string) OptString {
 	return OptString{
@@ -1023,7 +1069,8 @@ func (*UpdateCardNotFound) updateCardRes() {}
 
 // Ref: #/components/schemas/UpdateCardRequest
 type UpdateCardRequest struct {
-	Question OptString `json:"question"`
+	Kind     OptCardKind `json:"kind"`
+	Question OptString   `json:"question"`
 	// Choice only.
 	Options []string       `json:"options"`
 	Table   OptTableLayout `json:"table"`
@@ -1036,6 +1083,11 @@ type UpdateCardRequest struct {
 	SourceRef OptString `json:"sourceRef"`
 	// Topic, used for stats.
 	Topic OptString `json:"topic"`
+}
+
+// GetKind returns the value of Kind.
+func (s *UpdateCardRequest) GetKind() OptCardKind {
+	return s.Kind
 }
 
 // GetQuestion returns the value of Question.
@@ -1076,6 +1128,11 @@ func (s *UpdateCardRequest) GetSourceRef() OptString {
 // GetTopic returns the value of Topic.
 func (s *UpdateCardRequest) GetTopic() OptString {
 	return s.Topic
+}
+
+// SetKind sets the value of Kind.
+func (s *UpdateCardRequest) SetKind(val OptCardKind) {
+	s.Kind = val
 }
 
 // SetQuestion sets the value of Question.

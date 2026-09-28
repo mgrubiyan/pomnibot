@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Flex, IconButton, Input, Spinner, Typography } from '@maxhub/max-ui';
 import type { AnswerResult, Card } from '../types';
 import { api } from '../api';
@@ -52,12 +52,23 @@ const motionAllowed = () => !window.matchMedia('(prefers-reduced-motion: reduce)
 /** Answers are compared loosely: case, extra spaces and ё do not matter. */
 const norm = (value: string) => value.trim().toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ');
 
+function shuffle<T>(items: readonly T[]): T[] {
+    const next = [...items];
+    for (let i = next.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [next[i], next[j]] = [next[j], next[i]];
+    }
+    return next;
+}
+
 function optionsOf(card: Card): Option[] {
     if (card.kind === 'boolean') {
         return BOOLEAN_OPTIONS;
     }
     if (card.kind === 'choice') {
-        return (card.options ?? []).map((option) => ({ label: option, value: option }));
+        return shuffle(
+            (card.options ?? []).map((option) => ({ label: option, value: option })),
+        );
     }
     return [];
 }
@@ -113,8 +124,7 @@ function mockTranscript(card: Card): string {
 }
 
 /** Maps the recognized phrase onto an answer option when one matches. */
-function matchTranscript(card: Card, phrase: string): string {
-    const options = optionsOf(card);
+function matchTranscript(options: Option[], phrase: string): string {
     if (options.length === 0) {
         return phrase;
     }
@@ -130,9 +140,11 @@ export interface FeedProps {
     /** Cards deleted and edited during this session. */
     removedCardIds: string[];
     cardPatches: Record<string, CardPatch>;
+    initialIndex?: number;
+    initialResults?: AnswerResult[];
     onExit: () => void;
     onBack?: () => void;
-    onReportCard: (card: Card) => void;
+    onReportCard: (card: Card, currentIndex: number, currentResults: AnswerResult[]) => void;
     /** Opens sharing from the result screen; absent for the daily mix. */
     onShare?: () => void;
 }
@@ -142,6 +154,8 @@ export function Feed({
     setTitle,
     removedCardIds,
     cardPatches,
+    initialIndex = 0,
+    initialResults = [],
     onExit,
     onBack,
     onReportCard,
@@ -149,7 +163,8 @@ export function Feed({
 }: FeedProps) {
     const [status, setStatus] = useState<Status>('loading');
     const [cards, setCards] = useState<Card[]>([]);
-    const [index, setIndex] = useState(0);
+    const [index, setIndex] = useState(initialIndex);
+    const [results, setResults] = useState<AnswerResult[]>(initialResults);
 
     const [given, setGiven] = useState<string | null>(null);
     const [verdict, setVerdict] = useState<Verdict | null>(null);
@@ -170,11 +185,11 @@ export function Feed({
     const [leaving, setLeaving] = useState(false);
     // One entry per card the user moved on from — the result screen
     // is built from it, and later the backend will save each one.
-    const [results, setResults] = useState<AnswerResult[]>([]);
 
     const [attempt, setAttempt] = useState(0);
 
     const card = cards[index];
+    const options = useMemo(() => (card ? optionsOf(card) : []), [card]);
 
     // Reloading goes through an attempt counter: the button handler flips
     // the status, the effect only fetches the data.
@@ -237,14 +252,14 @@ export function Feed({
         const showPhrase = window.setTimeout(() => setTranscript(phrase), VOICE_DELAY);
         const answer = window.setTimeout(() => {
             setListening(false);
-            submit(matchTranscript(card, phrase));
+            submit(matchTranscript(options, phrase));
         }, VOICE_DELAY + VOICE_SUBMIT_DELAY);
 
         return () => {
             window.clearTimeout(showPhrase);
             window.clearTimeout(answer);
         };
-    }, [listening, card, submit]);
+    }, [listening, card, options, submit]);
 
     const reset = useCallback(() => {
         setGiven(null);
@@ -408,7 +423,6 @@ export function Feed({
         );
     }
 
-    const options = optionsOf(card);
     const showAnswer = given !== null || revealed;
     const canVoice = card.kind !== 'flip';
     // A flip card has no answer of its own, so the right one is always
@@ -652,7 +666,7 @@ export function Feed({
                         stretched
                         disabled={busy}
                         iconBefore={<IconFlag size={16} tone="muted" />}
-                        onClick={() => onReportCard(card)}
+                        onClick={() => onReportCard(card, index, results)}
                     >
                         <Typography.Text variant="description" color="tertiary">
                             Карточка неверная
