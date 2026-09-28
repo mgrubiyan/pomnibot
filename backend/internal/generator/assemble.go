@@ -175,6 +175,11 @@ func (a *assembler) acceptFact(f modelFact, pos, index int) (ready []cards.Card,
 		a.seq++
 		switch {
 		case card.Kind == cards.KindChoice:
+			if options, ok := modelOptions(card, mc.Distractors); ok {
+				card.Answer = optionForm(card.Answer)
+				card.Options = options
+				break
+			}
 			choices = append(choices, pendingChoice{card: card, pos: pos, seq: a.seq})
 			continue
 		case card.Kind == cards.KindInput && len(strings.Fields(card.Answer)) > maxInputWords:

@@ -84,6 +84,7 @@ type mc struct {
 	kind        cards.Kind
 	q, a, quote string
 	topic       string
+	distractors []string // factsJSON only
 }
 
 func answerJSON(cards ...mc) string {
@@ -369,6 +370,56 @@ func TestGenerateChoiceTakesDistractorsFromOtherFragments(t *testing.T) {
 	}
 }
 
+func TestGenerateChoiceTakesDistractorsFromModel(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[:2]...)
+	var batches [][]cards.Card
+	opts.OnCards = func(batch []cards.Card) { batches = append(batches, batch) }
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		if firstWord(frag) != "Митоз" {
+			return `{"facts":[]}`, nil
+		}
+		return factsJSON(fx{quote: firstSentence(frag), cards: []mc{{
+			kind: cards.KindChoice, q: "Как называется непрямое деление соматических клеток?", a: "митоз",
+			// The answer again, a repeat and an empty one are dropped.
+			distractors: []string{"мейоз.", "Амитоз", "МИТОЗ", "Мейоз", " ", "Шизогония"},
+		}}}), nil
+	}}
+
+	res := generate(t, p, doc, opts)
+	if len(res.Cards) != 1 {
+		t.Fatalf("got %d cards, want 1", len(res.Cards))
+	}
+	c := res.Cards[0]
+	options := slices.Sorted(slices.Values(c.Options))
+	if c.Kind != cards.KindChoice || c.Answer != "Митоз" || !slices.Equal(options, []string{"Амитоз", "Мейоз", "Митоз", "Шизогония"}) {
+		t.Errorf("card = %+v, want the model's distractors in the answer's form", c)
+	}
+	// No waiting for other fragments: the card goes out with its own.
+	if len(batches) == 0 || len(batches[0]) != 1 || batches[0][0].Kind != cards.KindChoice {
+		t.Errorf("batches = %+v, want the choice card in the first one", batches)
+	}
+}
+
+func TestGenerateChoiceWithFewModelDistractorsUsesPool(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[:5]...)
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		word := firstWord(frag)
+		if word == "Митоз" {
+			return factsJSON(fx{quote: firstSentence(frag), cards: []mc{{
+				kind: cards.KindChoice, q: "Как называется непрямое деление соматических клеток?", a: "Митоз",
+				distractors: []string{"Митоз", "Амитоз"}, // one left: not enough
+			}}}), nil
+		}
+		return answerJSON(mc{kind: cards.KindInput, q: fmt.Sprintf("Какой термин определён в абзаце номер %d?", len(word)), a: word, quote: firstSentence(frag)}), nil
+	}}
+
+	res := generate(t, p, doc, opts)
+	i := slices.IndexFunc(res.Cards, func(c cards.Card) bool { return c.Kind == cards.KindChoice })
+	if i < 0 || slices.Contains(res.Cards[i].Options, "Амитоз") || len(res.Cards[i].Options) != 4 {
+		t.Errorf("cards = %+v, want a choice card with 4 options from the pool", res.Cards)
+	}
+}
+
 func TestGenerateInputWithLongAnswerBecomesFlip(t *testing.T) {
 	doc, opts := testDoc(t, paragraphs[0])
 	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
@@ -607,12 +658,16 @@ type fx struct {
 func factsJSON(facts ...fx) string {
 	items := make([]map[string]any, 0, len(facts))
 	for _, f := range facts {
-		factCards := make([]map[string]string, 0, len(f.cards))
+		factCards := make([]map[string]any, 0, len(f.cards))
 		for _, c := range f.cards {
-			factCards = append(factCards, map[string]string{
+			card := map[string]any{
 				"kind": string(c.kind), "question": c.q, "answer": c.a,
 				"explanation": "Так устроен процесс. Это следует из материала.",
-			})
+			}
+			if c.distractors != nil {
+				card["distractors"] = c.distractors
+			}
+			factCards = append(factCards, card)
 		}
 		topic := f.topic
 		if topic == "" {

@@ -3,6 +3,7 @@ package generator
 import (
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -68,6 +69,21 @@ func TestParseAnswer(t *testing.T) {
 		}
 		if f.Cards[2].Kind != cards.KindBoolean || f.Cards[2].Answer != cards.AnswerFalse {
 			t.Errorf("boolean card = %+v", f.Cards[2])
+		}
+	})
+
+	t.Run("choice distractors", func(t *testing.T) {
+		answer := `{"facts":[{"quote":"Q","topic":"T","cards":[` +
+			`{"kind":"choice","question":"1","answer":"A","distractors":["B"," ",7,"C"],"explanation":"E"},` +
+			`{"kind":"choice","question":"2","answer":"A","explanation":"E"},` +
+			`{"kind":"flip","question":"3","answer":"A","distractors":["B"],"explanation":"E"}]}]}`
+		facts, invalid, err := parseAnswer([]byte(answer), 3)
+		if err != nil || invalid != 0 || cardCount(facts) != 3 {
+			t.Fatalf("got %+v, %d invalid, err %v", facts, invalid, err)
+		}
+		got := facts[0].Cards
+		if !slices.Equal(got[0].Distractors, []string{"B", "C"}) || got[1].Distractors != nil || got[2].Distractors != nil {
+			t.Errorf("distractors = %q, %q, %q; want [B C], none, none", got[0].Distractors, got[1].Distractors, got[2].Distractors)
 		}
 	})
 

@@ -28,6 +28,7 @@ type modelCard struct {
 	Question    string
 	Answer      string
 	Explanation string
+	Distractors []string // choice only; may be missing, the pool then fills in
 }
 
 // maxCardsPerFact is one card of each kind.
@@ -239,7 +240,9 @@ func parseCard(fields map[string]json.RawMessage) (modelCard, bool) {
 
 	c.Kind = cards.Kind(strings.ToLower(kind))
 	switch c.Kind {
-	case cards.KindChoice, cards.KindFlip, cards.KindInput:
+	case cards.KindChoice:
+		c.Distractors = stringList(fields, fieldDistractors)
+	case cards.KindFlip, cards.KindInput:
 	case cards.KindBoolean:
 		answer, ok := parseBool(c.Answer)
 		if !ok {
@@ -259,6 +262,26 @@ func parseCard(fields map[string]json.RawMessage) (modelCard, bool) {
 // stringField reads a non-empty field. Numbers and booleans are taken as
 // their text: without strict structured output models write "answer": true
 // or "answer": 1961 as often as strings.
+// stringList reads an optional array of strings, skipping empty and
+// non-string items. A missing or broken field is an empty list, not an
+// invalid card.
+func stringList(fields map[string]json.RawMessage, name string) []string {
+	var items []json.RawMessage
+	if raw, ok := fields[name]; !ok || json.Unmarshal(raw, &items) != nil {
+		return nil
+	}
+	var out []string
+	for _, item := range items {
+		var s string
+		if json.Unmarshal(item, &s) == nil {
+			if s = strings.TrimSpace(s); s != "" {
+				out = append(out, s)
+			}
+		}
+	}
+	return out
+}
+
 func stringField(fields map[string]json.RawMessage, name string) (string, bool) {
 	raw, ok := fields[name]
 	if !ok {

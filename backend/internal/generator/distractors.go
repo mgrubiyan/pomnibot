@@ -11,18 +11,20 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 )
 
-// Distractors for choice cards are answers to cards from other fragments of
-// the same document. The model never writes wrong options: an invented one
-// could turn out true, or teach something that is not in the notes.
+// Distractors for choice cards are written by the model with the card: wrong
+// but plausible answers of the answer's kind. The prompt asks for options
+// wrong in fact, not only absent from the notes; the code only drops those
+// that repeat the answer or each other.
 //
-// Progressive delivery makes this a waiting game: the first fragment has no
-// neighbours yet. A choice card therefore waits in a pending queue while new
-// fragments add answers to the pool, and is released as soon as it gets
-// wantDistractors options. After maxPendingWait more fragments it settles for
-// minDistractors, and with fewer it becomes a flip card instead of being
-// dropped. At the end of the document everything still pending is settled
-// the same way. So cards from the first fragments arrive a few fragments
-// late, and the rest of the feed is not held back by them.
+// When the model gives fewer than minDistractors, answers to cards from
+// other fragments of the same document stand in. Progressive delivery makes
+// this a waiting game: the first fragment has no neighbours yet. Such a card
+// waits in a pending queue while new fragments add answers to the pool, and
+// is released as soon as it gets wantDistractors options. After
+// maxPendingWait more fragments it settles for minDistractors, and with fewer
+// it becomes a flip card instead of being dropped. At the end of the document
+// everything still pending is settled the same way. So these cards arrive a
+// few fragments late, and the rest of the feed is not held back by them.
 const (
 	wantDistractors = 3
 	minDistractors  = 2
@@ -193,6 +195,31 @@ func upperFirst(s string) string {
 // shuffleOptions puts the answer among the distractors in an order derived
 // from the question: the same card always looks the same, and the right
 // answer is not always first.
+// modelOptions builds a choice card's options from the model's distractors,
+// dropping those that repeat the answer or an earlier option. ok is false
+// with fewer than minDistractors left: the pool then fills in.
+func modelOptions(c cards.Card, distractors []string) ([]string, bool) {
+	answer := optionForm(c.Answer)
+	seen := map[string]bool{answerKey(answer): true}
+	var picked []string
+	for _, d := range distractors {
+		d = optionForm(d)
+		key := answerKey(d)
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		picked = append(picked, d)
+		if len(picked) == wantDistractors {
+			break
+		}
+	}
+	if len(picked) < minDistractors {
+		return nil, false
+	}
+	return shuffleOptions(c.Question, answer, picked), true
+}
+
 func shuffleOptions(question, answer string, distractors []string) []string {
 	options := append([]string{answer}, distractors...)
 	h := fnv.New64a()
