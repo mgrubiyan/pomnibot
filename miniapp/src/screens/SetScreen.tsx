@@ -57,6 +57,14 @@ async function loadCards(setId: string): Promise<Card[]> {
     return data;
 }
 
+async function loadFeed(): Promise<Card[]> {
+    const { data, error } = await api.GET('/feed');
+    if (error || !data) {
+        throw new Error(error?.message ?? 'Failed to load feed');
+    }
+    return data;
+}
+
 export interface SetScreenProps {
     setId: string;
     /** Cards of the set, optional if fetched internally */
@@ -65,7 +73,7 @@ export interface SetScreenProps {
     toast?: { kind: 'removed' | 'edited' | 'reported' } | null;
     currentUser?: User | null;
     onBack: () => void;
-    onStart: (setId: string) => void;
+    onStart: (setId: string, setTitle?: string) => void;
     onRemove: (setId: string) => void;
     onOpenCard: (card: Card, isOwner: boolean, setTitle: string) => void;
     onUndoRemoveCard?: () => void;
@@ -85,19 +93,21 @@ export function SetScreen({
     const [status, setStatus] = useState<Status>('loading');
     const [set, setSet] = useState<CardSet | null>(null);
     const [cards, setCards] = useState<Card[]>(initialCards ?? []);
+    const [feedCards, setFeedCards] = useState<Card[]>([]);
     const [attempt, setAttempt] = useState(0);
     const [confirmingRemove, setConfirmingRemove] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
 
-        Promise.all([loadSet(setId), loadCards(setId)])
-            .then(([nextSet, nextCards]) => {
+        Promise.all([loadSet(setId), loadCards(setId), loadFeed()])
+            .then(([nextSet, nextCards, nextFeed]) => {
                 if (cancelled) {
                     return;
                 }
                 setSet(nextSet);
                 setCards(nextCards);
+                setFeedCards(nextFeed.filter((c) => c.setId === setId));
                 setStatus('ready');
             })
             .catch(() => {
@@ -146,7 +156,8 @@ export function SetScreen({
         );
     }
 
-    const hasDue = set.cardsDue > 0;
+    const dueCount = feedCards.length;
+    const hasDue = dueCount > 0;
     // Only the author can manage the set and its cards; members have shared access.
     const isOwner = Boolean(currentUser && set.author && set.author.id === currentUser.id);
     const shared = !isOwner;
@@ -163,7 +174,7 @@ export function SetScreen({
                     </Typography.Text>
                     <Typography.Text variant="description" color="secondary">
                         {cardsLabel(cards.length)}
-                        {hasDue ? ` · ${set.cardsDue} на повтор` : ''}
+                        {hasDue ? ` · ${dueCount} на повтор` : ''}
                         {shared && set.author ? ` · автор: ${formatAuthorName(set.author)}` : ''}
                     </Typography.Text>
                 </Flex>
@@ -279,14 +290,12 @@ export function SetScreen({
                 ) : (
                     <>
                         {hasDue ? (
-                            <Button size="medium" variant="primary" stretched onClick={() => onStart(set.id)}>
-                                Повторить {cardsLabel(set.cardsDue)} · {aboutMinutesLabel(estimateMinutes(set.cardsDue))}
+                            <Button size="medium" variant="primary" stretched onClick={() => onStart(set.id, set.title)}>
+                                Повторить {cardsLabel(dueCount)} · {aboutMinutesLabel(estimateMinutes(dueCount))}
                             </Button>
                         ) : (
-                            // The mockup has no such case: when nothing is due,
-                            // we offer to go through the whole set.
-                            <Button size="medium" variant="secondary" stretched onClick={() => onStart(set.id)}>
-                                Пройти набор целиком
+                            <Button size="medium" variant="secondary" stretched disabled>
+                                Все карточки повторены
                             </Button>
                         )}
 

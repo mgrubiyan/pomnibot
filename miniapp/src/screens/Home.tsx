@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button, CellHeader, CellList, CellSimple, Flex, Spinner, Typography } from '@maxhub/max-ui';
-import type { CardSet, TodayData } from '../types';
+import type { Card, CardSet, TodayData } from '../types';
 import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
@@ -20,10 +20,19 @@ async function loadToday(): Promise<TodayData> {
     return data;
 }
 
+async function loadFeed(): Promise<Card[]> {
+    const { data, error } = await api.GET('/feed');
+    if (error || !data) {
+        throw new Error(error?.message ?? 'Failed to load feed');
+    }
+    return data;
+}
+
 /** «24 карточки · 8 на повтор», without the tail when nothing is due. */
-function setSummary(set: CardSet): string {
+function setSummary(set: CardSet, feedDueCount?: number): string {
     const total = cardsLabel(set.cardsTotal);
-    return set.cardsDue > 0 ? `${total} · ${set.cardsDue} на повтор` : total;
+    const due = feedDueCount !== undefined ? feedDueCount : set.cardsDue;
+    return due > 0 ? `${total} · ${due} на повтор` : total;
 }
 
 export interface HomeProps {
@@ -42,18 +51,20 @@ export interface HomeProps {
 export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, onTodayLoaded }: HomeProps) {
     const [status, setStatus] = useState<Status>('loading');
     const [today, setToday] = useState<TodayData | null>(null);
+    const [feedCards, setFeedCards] = useState<Card[]>([]);
     const [attempt, setAttempt] = useState(0);
 
     useEffect(() => {
         let cancelled = false;
 
-        loadToday()
-            .then((next) => {
+        Promise.all([loadToday(), loadFeed()])
+            .then(([nextToday, nextFeed]) => {
                 if (cancelled) {
                     return;
                 }
-                setToday(next);
-                onTodayLoaded?.(next);
+                setToday(nextToday);
+                setFeedCards(nextFeed);
+                onTodayLoaded?.(nextToday);
                 setStatus('ready');
             })
             .catch(() => {
@@ -99,9 +110,11 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
 
     const sets = today.sets.filter((set) => !removedSetIds.includes(set.id));
     const hasSets = sets.length > 0;
-    // The counters are summed over the remaining sets: otherwise «на сегодня»
-    // would keep promising cards that a deletion has already taken away.
-    const dueCount = sets.reduce((total, set) => total + set.cardsDue, 0);
+    const setDueMap = new Map<string, number>();
+    for (const card of feedCards) {
+        setDueMap.set(card.setId, (setDueMap.get(card.setId) ?? 0) + 1);
+    }
+    const dueCount = feedCards.filter((card) => !removedSetIds.includes(card.setId)).length;
 
     const bottomActions = (
         <Flex direction="column" align="stretch" gap={8}>
@@ -171,7 +184,7 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
                                         subtitle={
                                             <Flex direction="column" align="stretch">
                                                 <Typography.Text variant="description" color="secondary">
-                                                    {setSummary(set)}
+                                                    {setSummary(set, setDueMap.get(set.id))}
                                                 </Typography.Text>
                                                 {set.author && set.author.id !== today.user.id ? (
                                                     <Typography.Text variant="label" color="tertiary">

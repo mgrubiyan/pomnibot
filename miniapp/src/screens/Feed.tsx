@@ -95,18 +95,12 @@ function labelOf(card: Card, value: string): string {
 }
 
 async function loadCards(setId?: string): Promise<Card[]> {
-    if (setId) {
-        const { data, error } = await api.GET('/sets/{setId}/cards', {
-            params: { path: { setId } },
-        });
-        if (error || !data) {
-            throw new Error(error?.message ?? 'Failed to load cards');
-        }
-        return data;
-    }
     const { data, error } = await api.GET('/feed');
     if (error || !data) {
         throw new Error(error?.message ?? 'Failed to load feed');
+    }
+    if (setId) {
+        return data.filter((card) => card.setId === setId);
     }
     return data;
 }
@@ -201,7 +195,7 @@ export function Feed({
                 if (cancelled) {
                     return;
                 }
-                setCards(visibleCards(next, undefined, removedCardIds, cardPatches));
+                setCards(visibleCards(next, setId, removedCardIds, cardPatches));
                 setStatus('ready');
             })
             .catch(() => {
@@ -343,27 +337,83 @@ export function Feed({
         return () => window.clearTimeout(timer);
     }, [leaving, showNext]);
 
-    const submittedRef = useRef(false);
+    const submittedCardIdsRef = useRef<Set<string>>(new Set());
+    const inFlightRef = useRef<Promise<void> | null>(null);
+    const [isLeaving, setIsLeaving] = useState(false);
 
-    const handleBack = () => {
-        submittedRef.current = true;
-        if (onBack) {
-            onBack();
-        } else {
-            onExit();
+    const submitResults = useCallback(
+        async (currentResults: AnswerResult[]): Promise<void> => {
+            if (inFlightRef.current) {
+                try {
+                    await inFlightRef.current;
+                } catch {
+                    // ignore
+                }
+            }
+            const unsubmitted = currentResults.filter(
+                (r) => !submittedCardIdsRef.current.has(r.cardId),
+            );
+            if (unsubmitted.length === 0) {
+                return;
+            }
+            const validResults = setId
+                ? unsubmitted.filter((r) => cards.some((c) => c.id === r.cardId))
+                : unsubmitted;
+            if (validResults.length === 0) {
+                return;
+            }
+            for (const r of validResults) {
+                submittedCardIdsRef.current.add(r.cardId);
+            }
+            const promise = api
+                .POST('/results', {
+                    body: validResults,
+                })
+                .then(() => {})
+                .catch((err: unknown) => {
+                    console.error('Failed to submit results:', err);
+                })
+                .finally(() => {
+                    inFlightRef.current = null;
+                });
+            inFlightRef.current = promise;
+            await promise;
+        },
+        [cards, setId],
+    );
+
+    const handleBack = async () => {
+        if (isLeaving) {
+            return;
+        }
+        setIsLeaving(true);
+        try {
+            await submitResults(results);
+        } finally {
+            if (onBack) {
+                onBack();
+            } else {
+                onExit();
+            }
         }
     };
 
-    useEffect(() => {
-        if (!card && results.length > 0 && !submittedRef.current) {
-            submittedRef.current = true;
-            api.POST('/results', {
-                body: results,
-            }).catch((err: unknown) => {
-                console.error('Failed to submit results:', err);
-            });
+    const handleExit = async () => {
+        if (inFlightRef.current) {
+            try {
+                await inFlightRef.current;
+            } catch {
+                // ignore
+            }
         }
-    }, [card, results]);
+        onExit();
+    };
+
+    useEffect(() => {
+        if (!card && results.length > 0) {
+            void submitResults(results);
+        }
+    }, [card, results, submitResults]);
 
     if (status === 'loading') {
         return (
@@ -404,7 +454,7 @@ export function Feed({
                     setTitle={setTitle}
                     cards={cards}
                     results={results}
-                    onExit={onExit}
+                    onExit={handleExit}
                     onShare={onShare}
                 />
             );
@@ -415,8 +465,8 @@ export function Feed({
                 title="На сегодня всё"
                 text="Сложные карточки вернутся через 2 дня"
                 action={
-                    <Button size="medium" variant="secondary" stretched onClick={onExit}>
-                        На главную
+                    <Button size="medium" variant="secondary" stretched onClick={handleExit}>
+                        {setId ? 'К набору' : 'На главную'}
                     </Button>
                 }
             />
@@ -444,6 +494,7 @@ export function Feed({
                             size="small"
                             variant="ghost"
                             aria-label="Назад"
+                            disabled={isLeaving}
                             onClick={handleBack}
                         >
                             <IconChevronLeft size={20} />
