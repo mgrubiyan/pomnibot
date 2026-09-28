@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Flex, IconButton, Input, Spinner, Typography } from '@maxhub/max-ui';
 import type { AnswerResult, Card } from '../types';
 import { api } from '../api';
@@ -52,12 +52,23 @@ const motionAllowed = () => !window.matchMedia('(prefers-reduced-motion: reduce)
 /** Answers are compared loosely: case, extra spaces and ё do not matter. */
 const norm = (value: string) => value.trim().toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ');
 
+function shuffle<T>(items: readonly T[]): T[] {
+    const next = [...items];
+    for (let i = next.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [next[i], next[j]] = [next[j], next[i]];
+    }
+    return next;
+}
+
 function optionsOf(card: Card): Option[] {
     if (card.kind === 'boolean') {
         return BOOLEAN_OPTIONS;
     }
     if (card.kind === 'choice') {
-        return (card.options ?? []).map((option) => ({ label: option, value: option }));
+        return shuffle(
+            (card.options ?? []).map((option) => ({ label: option, value: option })),
+        );
     }
     return [];
 }
@@ -113,8 +124,7 @@ function mockTranscript(card: Card): string {
 }
 
 /** Maps the recognized phrase onto an answer option when one matches. */
-function matchTranscript(card: Card, phrase: string): string {
-    const options = optionsOf(card);
+function matchTranscript(options: Option[], phrase: string): string {
     if (options.length === 0) {
         return phrase;
     }
@@ -179,6 +189,7 @@ export function Feed({
     const [attempt, setAttempt] = useState(0);
 
     const card = cards[index];
+    const options = useMemo(() => (card ? optionsOf(card) : []), [card]);
 
     // Reloading goes through an attempt counter: the button handler flips
     // the status, the effect only fetches the data.
@@ -241,14 +252,14 @@ export function Feed({
         const showPhrase = window.setTimeout(() => setTranscript(phrase), VOICE_DELAY);
         const answer = window.setTimeout(() => {
             setListening(false);
-            submit(matchTranscript(card, phrase));
+            submit(matchTranscript(options, phrase));
         }, VOICE_DELAY + VOICE_SUBMIT_DELAY);
 
         return () => {
             window.clearTimeout(showPhrase);
             window.clearTimeout(answer);
         };
-    }, [listening, card, submit]);
+    }, [listening, card, options, submit]);
 
     const reset = useCallback(() => {
         setGiven(null);
@@ -412,7 +423,6 @@ export function Feed({
         );
     }
 
-    const options = optionsOf(card);
     const showAnswer = given !== null || revealed;
     const canVoice = card.kind !== 'flip';
     // A flip card has no answer of its own, so the right one is always
