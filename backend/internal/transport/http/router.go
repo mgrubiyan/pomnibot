@@ -20,5 +20,5 @@ func NewRouter(handler contracts.Handler, staticFS fs.FS) (http.Handler, error) 
 		return nil, err
 	}
 
-	return LoggingMiddleware(apiServer), nil
+	return LoggingMiddleware(AuthMiddleware(apiServer)), nil
 }

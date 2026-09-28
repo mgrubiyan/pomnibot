@@ -2,6 +2,638 @@
 
 package contracts
 
+import (
+	"time"
+
+	"github.com/go-faster/errors"
+	"github.com/google/uuid"
+)
+
+type AnswerQuestionBadRequest ErrorResponse
+
+func (*AnswerQuestionBadRequest) answerQuestionRes() {}
+
+type AnswerQuestionInternalServerError ErrorResponse
+
+func (*AnswerQuestionInternalServerError) answerQuestionRes() {}
+
+type AnswerQuestionNotFound ErrorResponse
+
+func (*AnswerQuestionNotFound) answerQuestionRes() {}
+
+// Ref: #/components/schemas/AnswerQuestionRequest
+type AnswerQuestionRequest struct {
+	Answer string `json:"answer"`
+}
+
+// GetAnswer returns the value of Answer.
+func (s *AnswerQuestionRequest) GetAnswer() string {
+	return s.Answer
+}
+
+// SetAnswer sets the value of Answer.
+func (s *AnswerQuestionRequest) SetAnswer(val string) {
+	s.Answer = val
+}
+
+// Ref: #/components/schemas/AnswerQuestionResponse
+type AnswerQuestionResponse struct {
+	IsCorrect  bool   `json:"isCorrect"`
+	UserAnswer string `json:"userAnswer"`
+}
+
+// GetIsCorrect returns the value of IsCorrect.
+func (s *AnswerQuestionResponse) GetIsCorrect() bool {
+	return s.IsCorrect
+}
+
+// GetUserAnswer returns the value of UserAnswer.
+func (s *AnswerQuestionResponse) GetUserAnswer() string {
+	return s.UserAnswer
+}
+
+// SetIsCorrect sets the value of IsCorrect.
+func (s *AnswerQuestionResponse) SetIsCorrect(val bool) {
+	s.IsCorrect = val
+}
+
+// SetUserAnswer sets the value of UserAnswer.
+func (s *AnswerQuestionResponse) SetUserAnswer(val string) {
+	s.UserAnswer = val
+}
+
+func (*AnswerQuestionResponse) answerQuestionRes() {}
+
+// Ref: #/components/schemas/AnswerResult
+type AnswerResult struct {
+	CardId     uuid.UUID `json:"cardId"`
+	Correct    bool      `json:"correct"`
+	AnsweredAt time.Time `json:"answeredAt"`
+}
+
+// GetCardId returns the value of CardId.
+func (s *AnswerResult) GetCardId() uuid.UUID {
+	return s.CardId
+}
+
+// GetCorrect returns the value of Correct.
+func (s *AnswerResult) GetCorrect() bool {
+	return s.Correct
+}
+
+// GetAnsweredAt returns the value of AnsweredAt.
+func (s *AnswerResult) GetAnsweredAt() time.Time {
+	return s.AnsweredAt
+}
+
+// SetCardId sets the value of CardId.
+func (s *AnswerResult) SetCardId(val uuid.UUID) {
+	s.CardId = val
+}
+
+// SetCorrect sets the value of Correct.
+func (s *AnswerResult) SetCorrect(val bool) {
+	s.Correct = val
+}
+
+// SetAnsweredAt sets the value of AnsweredAt.
+func (s *AnswerResult) SetAnsweredAt(val time.Time) {
+	s.AnsweredAt = val
+}
+
+// Ref: #/components/schemas/Card
+type Card struct {
+	ID       uuid.UUID `json:"id"`
+	SetId    uuid.UUID `json:"setId"`
+	Kind     CardKind  `json:"kind"`
+	Question string    `json:"question"`
+	// Choice only.
+	Options []string       `json:"options"`
+	Table   OptTableLayout `json:"table"`
+	Answer  CardAnswer     `json:"answer"`
+	// 2-3 sentences.
+	Explanation string `json:"explanation"`
+	// Quote from the notes.
+	SourceQuote string `json:"sourceQuote"`
+	// Where the quote is from: «Лекция 3, стр. 2».
+	SourceRef OptString `json:"sourceRef"`
+	// Topic, used for stats.
+	Topic string `json:"topic"`
+}
+
+// GetID returns the value of ID.
+func (s *Card) GetID() uuid.UUID {
+	return s.ID
+}
+
+// GetSetId returns the value of SetId.
+func (s *Card) GetSetId() uuid.UUID {
+	return s.SetId
+}
+
+// GetKind returns the value of Kind.
+func (s *Card) GetKind() CardKind {
+	return s.Kind
+}
+
+// GetQuestion returns the value of Question.
+func (s *Card) GetQuestion() string {
+	return s.Question
+}
+
+// GetOptions returns the value of Options.
+func (s *Card) GetOptions() []string {
+	return s.Options
+}
+
+// GetTable returns the value of Table.
+func (s *Card) GetTable() OptTableLayout {
+	return s.Table
+}
+
+// GetAnswer returns the value of Answer.
+func (s *Card) GetAnswer() CardAnswer {
+	return s.Answer
+}
+
+// GetExplanation returns the value of Explanation.
+func (s *Card) GetExplanation() string {
+	return s.Explanation
+}
+
+// GetSourceQuote returns the value of SourceQuote.
+func (s *Card) GetSourceQuote() string {
+	return s.SourceQuote
+}
+
+// GetSourceRef returns the value of SourceRef.
+func (s *Card) GetSourceRef() OptString {
+	return s.SourceRef
+}
+
+// GetTopic returns the value of Topic.
+func (s *Card) GetTopic() string {
+	return s.Topic
+}
+
+// SetID sets the value of ID.
+func (s *Card) SetID(val uuid.UUID) {
+	s.ID = val
+}
+
+// SetSetId sets the value of SetId.
+func (s *Card) SetSetId(val uuid.UUID) {
+	s.SetId = val
+}
+
+// SetKind sets the value of Kind.
+func (s *Card) SetKind(val CardKind) {
+	s.Kind = val
+}
+
+// SetQuestion sets the value of Question.
+func (s *Card) SetQuestion(val string) {
+	s.Question = val
+}
+
+// SetOptions sets the value of Options.
+func (s *Card) SetOptions(val []string) {
+	s.Options = val
+}
+
+// SetTable sets the value of Table.
+func (s *Card) SetTable(val OptTableLayout) {
+	s.Table = val
+}
+
+// SetAnswer sets the value of Answer.
+func (s *Card) SetAnswer(val CardAnswer) {
+	s.Answer = val
+}
+
+// SetExplanation sets the value of Explanation.
+func (s *Card) SetExplanation(val string) {
+	s.Explanation = val
+}
+
+// SetSourceQuote sets the value of SourceQuote.
+func (s *Card) SetSourceQuote(val string) {
+	s.SourceQuote = val
+}
+
+// SetSourceRef sets the value of SourceRef.
+func (s *Card) SetSourceRef(val OptString) {
+	s.SourceRef = val
+}
+
+// SetTopic sets the value of Topic.
+func (s *Card) SetTopic(val string) {
+	s.Topic = val
+}
+
+func (*Card) updateCardRes() {}
+
+// Choice - integer input - string boolean - boolean table - #/components/schemas/TableLayout.
+// Ref: #/components/schemas/CardAnswer
+// CardAnswer represents sum type.
+type CardAnswer struct {
+	// Type selects the active sum variant, switch on this field.
+	Type        CardAnswerType
+	Int         int
+	String      string
+	Bool        bool
+	TableLayout TableLayout
+}
+
+// CardAnswerType is oneOf type of CardAnswer.
+type CardAnswerType string
+
+// Possible values for CardAnswerType.
+const (
+	IntCardAnswer         CardAnswerType = "int"
+	StringCardAnswer      CardAnswerType = "string"
+	BoolCardAnswer        CardAnswerType = "bool"
+	TableLayoutCardAnswer CardAnswerType = "TableLayout"
+)
+
+// IsInt reports whether CardAnswer is int.
+func (s CardAnswer) IsInt() bool { return s.Type == IntCardAnswer }
+
+// IsString reports whether CardAnswer is string.
+func (s CardAnswer) IsString() bool { return s.Type == StringCardAnswer }
+
+// IsBool reports whether CardAnswer is bool.
+func (s CardAnswer) IsBool() bool { return s.Type == BoolCardAnswer }
+
+// IsTableLayout reports whether CardAnswer is TableLayout.
+func (s CardAnswer) IsTableLayout() bool { return s.Type == TableLayoutCardAnswer }
+
+// SetInt sets CardAnswer to int.
+func (s *CardAnswer) SetInt(v int) {
+	s.Type = IntCardAnswer
+	s.Int = v
+}
+
+// GetInt returns int and true boolean if CardAnswer is int.
+func (s CardAnswer) GetInt() (v int, ok bool) {
+	if !s.IsInt() {
+		return v, false
+	}
+	return s.Int, true
+}
+
+// NewIntCardAnswer returns new CardAnswer from int.
+func NewIntCardAnswer(v int) CardAnswer {
+	var s CardAnswer
+	s.SetInt(v)
+	return s
+}
+
+// SetString sets CardAnswer to string.
+func (s *CardAnswer) SetString(v string) {
+	s.Type = StringCardAnswer
+	s.String = v
+}
+
+// GetString returns string and true boolean if CardAnswer is string.
+func (s CardAnswer) GetString() (v string, ok bool) {
+	if !s.IsString() {
+		return v, false
+	}
+	return s.String, true
+}
+
+// NewStringCardAnswer returns new CardAnswer from string.
+func NewStringCardAnswer(v string) CardAnswer {
+	var s CardAnswer
+	s.SetString(v)
+	return s
+}
+
+// SetBool sets CardAnswer to bool.
+func (s *CardAnswer) SetBool(v bool) {
+	s.Type = BoolCardAnswer
+	s.Bool = v
+}
+
+// GetBool returns bool and true boolean if CardAnswer is bool.
+func (s CardAnswer) GetBool() (v bool, ok bool) {
+	if !s.IsBool() {
+		return v, false
+	}
+	return s.Bool, true
+}
+
+// NewBoolCardAnswer returns new CardAnswer from bool.
+func NewBoolCardAnswer(v bool) CardAnswer {
+	var s CardAnswer
+	s.SetBool(v)
+	return s
+}
+
+// SetTableLayout sets CardAnswer to TableLayout.
+func (s *CardAnswer) SetTableLayout(v TableLayout) {
+	s.Type = TableLayoutCardAnswer
+	s.TableLayout = v
+}
+
+// GetTableLayout returns TableLayout and true boolean if CardAnswer is TableLayout.
+func (s CardAnswer) GetTableLayout() (v TableLayout, ok bool) {
+	if !s.IsTableLayout() {
+		return v, false
+	}
+	return s.TableLayout, true
+}
+
+// NewTableLayoutCardAnswer returns new CardAnswer from TableLayout.
+func NewTableLayoutCardAnswer(v TableLayout) CardAnswer {
+	var s CardAnswer
+	s.SetTableLayout(v)
+	return s
+}
+
+// What is wrong with a card — asked before editing or deleting it.
+// Ref: #/components/schemas/CardIssueReason
+type CardIssueReason string
+
+const (
+	CardIssueReasonAnswer     CardIssueReason = "answer"
+	CardIssueReasonWording    CardIssueReason = "wording"
+	CardIssueReasonNotInNotes CardIssueReason = "not-in-notes"
+	CardIssueReasonOther      CardIssueReason = "other"
+)
+
+// AllValues returns all CardIssueReason values.
+func (CardIssueReason) AllValues() []CardIssueReason {
+	return []CardIssueReason{
+		CardIssueReasonAnswer,
+		CardIssueReasonWording,
+		CardIssueReasonNotInNotes,
+		CardIssueReasonOther,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s CardIssueReason) MarshalText() ([]byte, error) {
+	switch s {
+	case CardIssueReasonAnswer:
+		return []byte(s), nil
+	case CardIssueReasonWording:
+		return []byte(s), nil
+	case CardIssueReasonNotInNotes:
+		return []byte(s), nil
+	case CardIssueReasonOther:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *CardIssueReason) UnmarshalText(data []byte) error {
+	switch CardIssueReason(data) {
+	case CardIssueReasonAnswer:
+		*s = CardIssueReasonAnswer
+		return nil
+	case CardIssueReasonWording:
+		*s = CardIssueReasonWording
+		return nil
+	case CardIssueReasonNotInNotes:
+		*s = CardIssueReasonNotInNotes
+		return nil
+	case CardIssueReasonOther:
+		*s = CardIssueReasonOther
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+// Ref: #/components/schemas/CardKind
+type CardKind string
+
+const (
+	CardKindChoice  CardKind = "choice"
+	CardKindFlip    CardKind = "flip"
+	CardKindInput   CardKind = "input"
+	CardKindBoolean CardKind = "boolean"
+	CardKindTable   CardKind = "table"
+)
+
+// AllValues returns all CardKind values.
+func (CardKind) AllValues() []CardKind {
+	return []CardKind{
+		CardKindChoice,
+		CardKindFlip,
+		CardKindInput,
+		CardKindBoolean,
+		CardKindTable,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s CardKind) MarshalText() ([]byte, error) {
+	switch s {
+	case CardKindChoice:
+		return []byte(s), nil
+	case CardKindFlip:
+		return []byte(s), nil
+	case CardKindInput:
+		return []byte(s), nil
+	case CardKindBoolean:
+		return []byte(s), nil
+	case CardKindTable:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *CardKind) UnmarshalText(data []byte) error {
+	switch CardKind(data) {
+	case CardKindChoice:
+		*s = CardKindChoice
+		return nil
+	case CardKindFlip:
+		*s = CardKindFlip
+		return nil
+	case CardKindInput:
+		*s = CardKindInput
+		return nil
+	case CardKindBoolean:
+		*s = CardKindBoolean
+		return nil
+	case CardKindTable:
+		*s = CardKindTable
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+// Ref: #/components/schemas/CardSet
+type CardSet struct {
+	ID uuid.UUID `json:"id"`
+	// «Матанализ, лекция 3».
+	Title      string `json:"title"`
+	CardsTotal int    `json:"cardsTotal"`
+	// How many are due for review.
+	CardsDue int `json:"cardsDue"`
+	// Set when the set came in by share code.
+	AuthorName OptString `json:"authorName"`
+	ShareCode  OptString `json:"shareCode"`
+}
+
+// GetID returns the value of ID.
+func (s *CardSet) GetID() uuid.UUID {
+	return s.ID
+}
+
+// GetTitle returns the value of Title.
+func (s *CardSet) GetTitle() string {
+	return s.Title
+}
+
+// GetCardsTotal returns the value of CardsTotal.
+func (s *CardSet) GetCardsTotal() int {
+	return s.CardsTotal
+}
+
+// GetCardsDue returns the value of CardsDue.
+func (s *CardSet) GetCardsDue() int {
+	return s.CardsDue
+}
+
+// GetAuthorName returns the value of AuthorName.
+func (s *CardSet) GetAuthorName() OptString {
+	return s.AuthorName
+}
+
+// GetShareCode returns the value of ShareCode.
+func (s *CardSet) GetShareCode() OptString {
+	return s.ShareCode
+}
+
+// SetID sets the value of ID.
+func (s *CardSet) SetID(val uuid.UUID) {
+	s.ID = val
+}
+
+// SetTitle sets the value of Title.
+func (s *CardSet) SetTitle(val string) {
+	s.Title = val
+}
+
+// SetCardsTotal sets the value of CardsTotal.
+func (s *CardSet) SetCardsTotal(val int) {
+	s.CardsTotal = val
+}
+
+// SetCardsDue sets the value of CardsDue.
+func (s *CardSet) SetCardsDue(val int) {
+	s.CardsDue = val
+}
+
+// SetAuthorName sets the value of AuthorName.
+func (s *CardSet) SetAuthorName(val OptString) {
+	s.AuthorName = val
+}
+
+// SetShareCode sets the value of ShareCode.
+func (s *CardSet) SetShareCode(val OptString) {
+	s.ShareCode = val
+}
+
+func (*CardSet) getSetRes()             {}
+func (*CardSet) getSetShareCodeRes()    {}
+func (*CardSet) joinSetByShareCodeRes() {}
+
+type DeleteCardInternalServerError ErrorResponse
+
+func (*DeleteCardInternalServerError) deleteCardRes() {}
+
+// DeleteCardNoContent is response for DeleteCard operation.
+type DeleteCardNoContent struct{}
+
+func (*DeleteCardNoContent) deleteCardRes() {}
+
+type DeleteCardNotFound ErrorResponse
+
+func (*DeleteCardNotFound) deleteCardRes() {}
+
+type DeleteSetInternalServerError ErrorResponse
+
+func (*DeleteSetInternalServerError) deleteSetRes() {}
+
+// DeleteSetNoContent is response for DeleteSet operation.
+type DeleteSetNoContent struct{}
+
+func (*DeleteSetNoContent) deleteSetRes() {}
+
+type DeleteSetNotFound ErrorResponse
+
+func (*DeleteSetNotFound) deleteSetRes() {}
+
+// Ref: #/components/schemas/ErrorResponse
+type ErrorResponse struct {
+	Message string `json:"message"`
+}
+
+// GetMessage returns the value of Message.
+func (s *ErrorResponse) GetMessage() string {
+	return s.Message
+}
+
+// SetMessage sets the value of Message.
+func (s *ErrorResponse) SetMessage(val string) {
+	s.Message = val
+}
+
+func (*ErrorResponse) getFeedQuestionsRes() {}
+func (*ErrorResponse) getHealthRes()        {}
+func (*ErrorResponse) getTodayRes()         {}
+
+type GetCardsBySetIDInternalServerError ErrorResponse
+
+func (*GetCardsBySetIDInternalServerError) getCardsBySetIDRes() {}
+
+type GetCardsBySetIDNotFound ErrorResponse
+
+func (*GetCardsBySetIDNotFound) getCardsBySetIDRes() {}
+
+type GetCardsBySetIDOKApplicationJSON []Card
+
+func (*GetCardsBySetIDOKApplicationJSON) getCardsBySetIDRes() {}
+
+type GetFeedQuestionsOKApplicationJSON []Card
+
+func (*GetFeedQuestionsOKApplicationJSON) getFeedQuestionsRes() {}
+
+type GetSetInternalServerError ErrorResponse
+
+func (*GetSetInternalServerError) getSetRes() {}
+
+type GetSetNotFound ErrorResponse
+
+func (*GetSetNotFound) getSetRes() {}
+
+type GetSetPlanInternalServerError ErrorResponse
+
+func (*GetSetPlanInternalServerError) getSetPlanRes() {}
+
+type GetSetPlanNotFound ErrorResponse
+
+func (*GetSetPlanNotFound) getSetPlanRes() {}
+
+type GetSetShareCodeInternalServerError ErrorResponse
+
+func (*GetSetShareCodeInternalServerError) getSetShareCodeRes() {}
+
+type GetSetShareCodeNotFound ErrorResponse
+
+func (*GetSetShareCodeNotFound) getSetShareCodeRes() {}
+
 // Ref: #/components/schemas/HealthResponse
 type HealthResponse struct {
 	Status string `json:"status"`
@@ -15,4 +647,474 @@ func (s *HealthResponse) GetStatus() string {
 // SetStatus sets the value of Status.
 func (s *HealthResponse) SetStatus(val string) {
 	s.Status = val
+}
+
+func (*HealthResponse) getHealthRes() {}
+
+type JoinSetByShareCodeBadRequest ErrorResponse
+
+func (*JoinSetByShareCodeBadRequest) joinSetByShareCodeRes() {}
+
+type JoinSetByShareCodeInternalServerError ErrorResponse
+
+func (*JoinSetByShareCodeInternalServerError) joinSetByShareCodeRes() {}
+
+type JoinSetByShareCodeNotFound ErrorResponse
+
+func (*JoinSetByShareCodeNotFound) joinSetByShareCodeRes() {}
+
+// Ref: #/components/schemas/JoinSetRequest
+type JoinSetRequest struct {
+	// The 6-digit share code of the set.
+	Code string `json:"code"`
+}
+
+// GetCode returns the value of Code.
+func (s *JoinSetRequest) GetCode() string {
+	return s.Code
+}
+
+// SetCode sets the value of Code.
+func (s *JoinSetRequest) SetCode(val string) {
+	s.Code = val
+}
+
+// NewOptCardAnswer returns new OptCardAnswer with value set to v.
+func NewOptCardAnswer(v CardAnswer) OptCardAnswer {
+	return OptCardAnswer{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptCardAnswer is optional CardAnswer.
+type OptCardAnswer struct {
+	Value CardAnswer
+	Set   bool
+}
+
+// IsSet returns true if OptCardAnswer was set.
+func (o OptCardAnswer) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptCardAnswer) Reset() {
+	var v CardAnswer
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptCardAnswer) SetTo(v CardAnswer) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptCardAnswer) Get() (v CardAnswer, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptCardAnswer) Or(d CardAnswer) CardAnswer {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptString returns new OptString with value set to v.
+func NewOptString(v string) OptString {
+	return OptString{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptString is optional string.
+type OptString struct {
+	Value string
+	Set   bool
+}
+
+// IsSet returns true if OptString was set.
+func (o OptString) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptString) Reset() {
+	var v string
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptString) SetTo(v string) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptString) Get() (v string, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptString) Or(d string) string {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptTableLayout returns new OptTableLayout with value set to v.
+func NewOptTableLayout(v TableLayout) OptTableLayout {
+	return OptTableLayout{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptTableLayout is optional TableLayout.
+type OptTableLayout struct {
+	Value TableLayout
+	Set   bool
+}
+
+// IsSet returns true if OptTableLayout was set.
+func (o OptTableLayout) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptTableLayout) Reset() {
+	var v TableLayout
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptTableLayout) SetTo(v TableLayout) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptTableLayout) Get() (v TableLayout, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptTableLayout) Or(d TableLayout) TableLayout {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+type ReportCardIssueBadRequest ErrorResponse
+
+func (*ReportCardIssueBadRequest) reportCardIssueRes() {}
+
+type ReportCardIssueInternalServerError ErrorResponse
+
+func (*ReportCardIssueInternalServerError) reportCardIssueRes() {}
+
+// ReportCardIssueNoContent is response for ReportCardIssue operation.
+type ReportCardIssueNoContent struct{}
+
+func (*ReportCardIssueNoContent) reportCardIssueRes() {}
+
+type ReportCardIssueNotFound ErrorResponse
+
+func (*ReportCardIssueNotFound) reportCardIssueRes() {}
+
+// Ref: #/components/schemas/ReportCardIssueRequest
+type ReportCardIssueRequest struct {
+	Reason CardIssueReason `json:"reason"`
+}
+
+// GetReason returns the value of Reason.
+func (s *ReportCardIssueRequest) GetReason() CardIssueReason {
+	return s.Reason
+}
+
+// SetReason sets the value of Reason.
+func (s *ReportCardIssueRequest) SetReason(val CardIssueReason) {
+	s.Reason = val
+}
+
+type SendResultsBadRequest ErrorResponse
+
+func (*SendResultsBadRequest) sendResultsRes() {}
+
+type SendResultsInternalServerError ErrorResponse
+
+func (*SendResultsInternalServerError) sendResultsRes() {}
+
+// SendResultsNoContent is response for SendResults operation.
+type SendResultsNoContent struct{}
+
+func (*SendResultsNoContent) sendResultsRes() {}
+
+type SendResultsRequest []AnswerResult
+
+// Ref: #/components/schemas/SetPlanItem
+type SetPlanItem struct {
+	FactName string    `json:"factName"`
+	Date     time.Time `json:"date"`
+}
+
+// GetFactName returns the value of FactName.
+func (s *SetPlanItem) GetFactName() string {
+	return s.FactName
+}
+
+// GetDate returns the value of Date.
+func (s *SetPlanItem) GetDate() time.Time {
+	return s.Date
+}
+
+// SetFactName sets the value of FactName.
+func (s *SetPlanItem) SetFactName(val string) {
+	s.FactName = val
+}
+
+// SetDate sets the value of Date.
+func (s *SetPlanItem) SetDate(val time.Time) {
+	s.Date = val
+}
+
+type SetPlanResponse []SetPlanItem
+
+func (*SetPlanResponse) getSetPlanRes() {}
+
+// A term of the table and the column it belongs to.
+// Ref: #/components/schemas/TableItem
+type TableItem struct {
+	Text   string `json:"text"`
+	Column string `json:"column"`
+}
+
+// GetText returns the value of Text.
+func (s *TableItem) GetText() string {
+	return s.Text
+}
+
+// GetColumn returns the value of Column.
+func (s *TableItem) GetColumn() string {
+	return s.Column
+}
+
+// SetText sets the value of Text.
+func (s *TableItem) SetText(val string) {
+	s.Text = val
+}
+
+// SetColumn sets the value of Column.
+func (s *TableItem) SetColumn(val string) {
+	s.Column = val
+}
+
+// Sorting card: lay the terms out across the columns.
+// Ref: #/components/schemas/TableLayout
+type TableLayout struct {
+	Columns []string    `json:"columns"`
+	Items   []TableItem `json:"items"`
+}
+
+// GetColumns returns the value of Columns.
+func (s *TableLayout) GetColumns() []string {
+	return s.Columns
+}
+
+// GetItems returns the value of Items.
+func (s *TableLayout) GetItems() []TableItem {
+	return s.Items
+}
+
+// SetColumns sets the value of Columns.
+func (s *TableLayout) SetColumns(val []string) {
+	s.Columns = val
+}
+
+// SetItems sets the value of Items.
+func (s *TableLayout) SetItems(val []TableItem) {
+	s.Items = val
+}
+
+// Ref: #/components/schemas/TodayData
+type TodayData struct {
+	UserName string `json:"userName"`
+	// As in «4 дня из 7».
+	ActiveDays       int       `json:"activeDays"`
+	DueCount         int       `json:"dueCount"`
+	EstimatedMinutes int       `json:"estimatedMinutes"`
+	Sets             []CardSet `json:"sets"`
+}
+
+// GetUserName returns the value of UserName.
+func (s *TodayData) GetUserName() string {
+	return s.UserName
+}
+
+// GetActiveDays returns the value of ActiveDays.
+func (s *TodayData) GetActiveDays() int {
+	return s.ActiveDays
+}
+
+// GetDueCount returns the value of DueCount.
+func (s *TodayData) GetDueCount() int {
+	return s.DueCount
+}
+
+// GetEstimatedMinutes returns the value of EstimatedMinutes.
+func (s *TodayData) GetEstimatedMinutes() int {
+	return s.EstimatedMinutes
+}
+
+// GetSets returns the value of Sets.
+func (s *TodayData) GetSets() []CardSet {
+	return s.Sets
+}
+
+// SetUserName sets the value of UserName.
+func (s *TodayData) SetUserName(val string) {
+	s.UserName = val
+}
+
+// SetActiveDays sets the value of ActiveDays.
+func (s *TodayData) SetActiveDays(val int) {
+	s.ActiveDays = val
+}
+
+// SetDueCount sets the value of DueCount.
+func (s *TodayData) SetDueCount(val int) {
+	s.DueCount = val
+}
+
+// SetEstimatedMinutes sets the value of EstimatedMinutes.
+func (s *TodayData) SetEstimatedMinutes(val int) {
+	s.EstimatedMinutes = val
+}
+
+// SetSets sets the value of Sets.
+func (s *TodayData) SetSets(val []CardSet) {
+	s.Sets = val
+}
+
+func (*TodayData) getTodayRes() {}
+
+type UpdateCardBadRequest ErrorResponse
+
+func (*UpdateCardBadRequest) updateCardRes() {}
+
+type UpdateCardInternalServerError ErrorResponse
+
+func (*UpdateCardInternalServerError) updateCardRes() {}
+
+type UpdateCardNotFound ErrorResponse
+
+func (*UpdateCardNotFound) updateCardRes() {}
+
+// Ref: #/components/schemas/UpdateCardRequest
+type UpdateCardRequest struct {
+	Question OptString `json:"question"`
+	// Choice only.
+	Options []string       `json:"options"`
+	Table   OptTableLayout `json:"table"`
+	Answer  OptCardAnswer  `json:"answer"`
+	// 2-3 sentences.
+	Explanation OptString `json:"explanation"`
+	// Quote from the notes.
+	SourceQuote OptString `json:"sourceQuote"`
+	// Where the quote is from: «Лекция 3, стр. 2».
+	SourceRef OptString `json:"sourceRef"`
+	// Topic, used for stats.
+	Topic OptString `json:"topic"`
+}
+
+// GetQuestion returns the value of Question.
+func (s *UpdateCardRequest) GetQuestion() OptString {
+	return s.Question
+}
+
+// GetOptions returns the value of Options.
+func (s *UpdateCardRequest) GetOptions() []string {
+	return s.Options
+}
+
+// GetTable returns the value of Table.
+func (s *UpdateCardRequest) GetTable() OptTableLayout {
+	return s.Table
+}
+
+// GetAnswer returns the value of Answer.
+func (s *UpdateCardRequest) GetAnswer() OptCardAnswer {
+	return s.Answer
+}
+
+// GetExplanation returns the value of Explanation.
+func (s *UpdateCardRequest) GetExplanation() OptString {
+	return s.Explanation
+}
+
+// GetSourceQuote returns the value of SourceQuote.
+func (s *UpdateCardRequest) GetSourceQuote() OptString {
+	return s.SourceQuote
+}
+
+// GetSourceRef returns the value of SourceRef.
+func (s *UpdateCardRequest) GetSourceRef() OptString {
+	return s.SourceRef
+}
+
+// GetTopic returns the value of Topic.
+func (s *UpdateCardRequest) GetTopic() OptString {
+	return s.Topic
+}
+
+// SetQuestion sets the value of Question.
+func (s *UpdateCardRequest) SetQuestion(val OptString) {
+	s.Question = val
+}
+
+// SetOptions sets the value of Options.
+func (s *UpdateCardRequest) SetOptions(val []string) {
+	s.Options = val
+}
+
+// SetTable sets the value of Table.
+func (s *UpdateCardRequest) SetTable(val OptTableLayout) {
+	s.Table = val
+}
+
+// SetAnswer sets the value of Answer.
+func (s *UpdateCardRequest) SetAnswer(val OptCardAnswer) {
+	s.Answer = val
+}
+
+// SetExplanation sets the value of Explanation.
+func (s *UpdateCardRequest) SetExplanation(val OptString) {
+	s.Explanation = val
+}
+
+// SetSourceQuote sets the value of SourceQuote.
+func (s *UpdateCardRequest) SetSourceQuote(val OptString) {
+	s.SourceQuote = val
+}
+
+// SetSourceRef sets the value of SourceRef.
+func (s *UpdateCardRequest) SetSourceRef(val OptString) {
+	s.SourceRef = val
+}
+
+// SetTopic sets the value of Topic.
+func (s *UpdateCardRequest) SetTopic(val OptString) {
+	s.Topic = val
 }

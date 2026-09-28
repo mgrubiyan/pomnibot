@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button, CellHeader, CellList, CellSimple, Flex, IconButton, Spinner, Typography } from '@maxhub/max-ui';
 import type { Card, CardSet } from '../types';
-import { mockToday } from '../mocks';
+import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
 import { IconChevronLeft, IconOffline, IconTrash } from '../components/Icons';
@@ -10,8 +10,6 @@ import { aboutMinutesLabel, cardsLabel } from '../utils/plural';
 import s from './SetScreen.module.css';
 
 type Status = 'loading' | 'error' | 'ready';
-
-const LOAD_DELAY = 700;
 
 interface Fact {
     title: string;
@@ -38,44 +36,42 @@ const FACTS: Fact[] = [
     },
 ];
 
-/**
- * Mocks instead of a request; the real endpoint comes later.
- * Error screen — ?fail
- */
-function loadSet(setId: string): Promise<CardSet> {
-    return new Promise((resolve, reject) => {
-        window.setTimeout(() => {
-            if (new URLSearchParams(window.location.search).has('fail')) {
-                reject(new Error('network'));
-                return;
-            }
-
-            const found = mockToday.sets.find((item) => item.id === setId);
-            if (!found) {
-                reject(new Error('not found'));
-                return;
-            }
-            resolve(found);
-        }, LOAD_DELAY);
+async function loadSet(setId: string): Promise<CardSet> {
+    const { data, error } = await api.GET('/sets/{setId}', {
+        params: { path: { setId } },
     });
+    if (error || !data) {
+        throw new Error(error?.message ?? 'not found');
+    }
+    return data;
+}
+
+async function loadCards(setId: string): Promise<Card[]> {
+    const { data, error } = await api.GET('/sets/{setId}/cards', {
+        params: { path: { setId } },
+    });
+    if (error || !data) {
+        throw new Error(error?.message ?? 'not found');
+    }
+    return data;
 }
 
 export interface SetScreenProps {
     setId: string;
-    /** Cards of the set with this session's edits and deletions applied. */
-    cards: Card[];
-    /** Outcome of the last action on a card; only a deletion can be undone. */
-    toast: { kind: 'removed' | 'edited' } | null;
+    /** Cards of the set, optional if fetched internally */
+    cards?: Card[];
+    /** Outcome of the last action on a card */
+    toast?: { kind: 'removed' | 'edited' } | null;
     onBack: () => void;
     onStart: (setId: string) => void;
     onRemove: (setId: string) => void;
-    onOpenCard: (cardId: string) => void;
-    onUndoRemoveCard: () => void;
+    onOpenCard: (card: Card) => void;
+    onUndoRemoveCard?: () => void;
 }
 
 export function SetScreen({
     setId,
-    cards,
+    cards: initialCards,
     toast,
     onBack,
     onStart,
@@ -85,18 +81,20 @@ export function SetScreen({
 }: SetScreenProps) {
     const [status, setStatus] = useState<Status>('loading');
     const [set, setSet] = useState<CardSet | null>(null);
+    const [cards, setCards] = useState<Card[]>(initialCards ?? []);
     const [attempt, setAttempt] = useState(0);
     const [confirmingRemove, setConfirmingRemove] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
 
-        loadSet(setId)
-            .then((next) => {
+        Promise.all([loadSet(setId), loadCards(setId)])
+            .then(([nextSet, nextCards]) => {
                 if (cancelled) {
                     return;
                 }
-                setSet(next);
+                setSet(nextSet);
+                setCards(nextCards);
                 setStatus('ready');
             })
             .catch(() => {
@@ -194,7 +192,7 @@ export function SetScreen({
                                 as="button"
                                 separator={index > 0}
                                 showChevron
-                                onClick={() => onOpenCard(card.id)}
+                                onClick={() => onOpenCard(card)}
                                 title={<span className={s.cardTitle}>{card.question}</span>}
                                 subtitle={card.topic}
                             />
@@ -236,7 +234,7 @@ export function SetScreen({
                         <Typography.Text variant="detail">
                             {toast.kind === 'removed' ? 'Карточка удалена' : 'Карточка исправлена'}
                         </Typography.Text>
-                        {toast.kind === 'removed' ? (
+                        {toast.kind === 'removed' && onUndoRemoveCard ? (
                             <button type="button" className={s.undoButton} onClick={onUndoRemoveCard}>
                                 <Typography.Text variant="detail">Вернуть</Typography.Text>
                             </button>

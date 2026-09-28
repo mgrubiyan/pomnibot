@@ -3,7 +3,8 @@
 .env
 *.local
 *.log
-
+node_modules/
+.venv/
 .task/
 
 # Go binaries

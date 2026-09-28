@@ -15,3 +15,25 @@ tasks:
     desc: 'Сборка бинарника бэкенда'
     cmds:
       - go build -o server ./cmd/server
+
+  sqlc:
+    desc: 'Генерация Go-кода по SQL-запросам (sqlc)'
+    aliases:
+      - gen
+      - gen:sql
+    sources:
+      - sqlc.yaml
+      - internal/repository/migrations/*.sql
+      - internal/repository/migrations/**/*.sql
+      - internal/repository/queries/*.sql
+      - internal/repository/queries/**/*.sql
+    generates:
+      - internal/repository/db/*.go
+      - internal/repository/db/**/*.go
+    cmds:
+      - sqlc generate
+
+  seed:
+    desc: 'Запуск сидера моковых данных'
+    cmds:
+      - go run ./cmd/seeder

@@ -13,11 +13,128 @@ type UnimplementedHandler struct{}
 
 var _ Handler = UnimplementedHandler{}
 
+// AnswerQuestion implements AnswerQuestion operation.
+//
+// Send answer's text for input kind of questions.
+//
+// POST /cards/{cardId}/answer
+func (UnimplementedHandler) AnswerQuestion(ctx context.Context, req *AnswerQuestionRequest, params AnswerQuestionParams) (r AnswerQuestionRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// DeleteCard implements DeleteCard operation.
+//
+// Delete a card.
+//
+// DELETE /cards/{cardId}
+func (UnimplementedHandler) DeleteCard(ctx context.Context, params DeleteCardParams) (r DeleteCardRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// DeleteSet implements DeleteSet operation.
+//
+// Delete a card set.
+//
+// DELETE /sets/{setId}
+func (UnimplementedHandler) DeleteSet(ctx context.Context, params DeleteSetParams) (r DeleteSetRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// GetCardsBySetID implements GetCardsBySetID operation.
+//
+// Get cards.
+//
+// GET /sets/{setId}/cards
+func (UnimplementedHandler) GetCardsBySetID(ctx context.Context, params GetCardsBySetIDParams) (r GetCardsBySetIDRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// GetFeedQuestions implements GetFeedQuestions operation.
+//
+// Get questions of current feed.
+//
+// GET /feed
+func (UnimplementedHandler) GetFeedQuestions(ctx context.Context) (r GetFeedQuestionsRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // GetHealth implements getHealth operation.
 //
 // Health check endpoint.
 //
 // GET /health
-func (UnimplementedHandler) GetHealth(ctx context.Context) (r *HealthResponse, _ error) {
+func (UnimplementedHandler) GetHealth(ctx context.Context) (r GetHealthRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// GetSet implements GetSet operation.
+//
+// Get a card set.
+//
+// GET /sets/{setId}
+func (UnimplementedHandler) GetSet(ctx context.Context, params GetSetParams) (r GetSetRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// GetSetPlan implements GetSetPlan operation.
+//
+// Get set's facts plan.
+//
+// GET /sets/{setId}/plan
+func (UnimplementedHandler) GetSetPlan(ctx context.Context, params GetSetPlanParams) (r GetSetPlanRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// GetSetShareCode implements GetSetShareCode operation.
+//
+// Get share code for a set.
+//
+// GET /sets/{setId}/share
+func (UnimplementedHandler) GetSetShareCode(ctx context.Context, params GetSetShareCodeParams) (r GetSetShareCodeRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// GetToday implements GetToday operation.
+//
+// Get today overview data.
+//
+// GET /
+func (UnimplementedHandler) GetToday(ctx context.Context) (r GetTodayRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// JoinSetByShareCode implements JoinSetByShareCode operation.
+//
+// Join a card set by code.
+//
+// POST /sets/join
+func (UnimplementedHandler) JoinSetByShareCode(ctx context.Context, req *JoinSetRequest) (r JoinSetByShareCodeRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// ReportCardIssue implements ReportCardIssue operation.
+//
+// Report an issue with a card.
+//
+// POST /cards/{cardId}/issue
+func (UnimplementedHandler) ReportCardIssue(ctx context.Context, req *ReportCardIssueRequest, params ReportCardIssueParams) (r ReportCardIssueRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// SendResults implements SendResults operation.
+//
+// Send set/feed results.
+//
+// POST /results
+func (UnimplementedHandler) SendResults(ctx context.Context, req SendResultsRequest) (r SendResultsRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// UpdateCard implements UpdateCard operation.
+//
+// Update a card.
+//
+// PUT /cards/{cardId}
+func (UnimplementedHandler) UpdateCard(ctx context.Context, req *UpdateCardRequest, params UpdateCardParams) (r UpdateCardRes, _ error) {
 	return r, ht.ErrNotImplemented
 }

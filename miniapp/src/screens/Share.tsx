@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button, Flex, IconButton, Spinner, Typography } from '@maxhub/max-ui';
-import { mockToday } from '../mocks';
+import type { CardSet } from '../types';
+import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
 import { IconCheck, IconChevronLeft, IconCopy, IconOffline } from '../components/Icons';
@@ -12,30 +13,19 @@ import s from './Share.module.css';
 type Status = 'loading' | 'error' | 'ready';
 type CopyState = 'idle' | 'copied' | 'failed';
 
-const LOAD_DELAY = 700;
 /** How long the button reports the outcome before it resets. */
 const COPY_NOTICE_MS = 2000;
 
-/**
- * Mocks instead of a request; the real endpoint comes later.
- * Error screen — ?fail
- */
-function loadShareCode(setId: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-        window.setTimeout(() => {
-            if (new URLSearchParams(window.location.search).has('fail')) {
-                reject(new Error('network'));
-                return;
-            }
-
-            const code = mockToday.sets.find((set) => set.id === setId)?.shareCode;
-            if (!code) {
-                reject(new Error('no code'));
-                return;
-            }
-            resolve(code);
-        }, LOAD_DELAY);
+async function loadShare(setId: string): Promise<CardSet> {
+    const { data, error } = await api.GET('/sets/{setId}/share', {
+        params: {
+            path: { setId },
+        },
     });
+    if (error || !data?.shareCode) {
+        throw new Error(error?.message ?? 'no code');
+    }
+    return data;
 }
 
 /**
@@ -48,26 +38,30 @@ const inviteText = (title: string, code: string) =>
 
 export interface ShareProps {
     setId: string;
-    setTitle: string;
-    cardsCount: number;
+    setTitle?: string;
+    cardsCount?: number;
     onBack: () => void;
 }
 
-export function Share({ setId, setTitle, cardsCount, onBack }: ShareProps) {
+export function Share({ setId, setTitle: initialTitle, cardsCount: initialCardsCount, onBack }: ShareProps) {
     const [status, setStatus] = useState<Status>('loading');
-    const [code, setCode] = useState('');
+    const [set, setSet] = useState<CardSet | null>(null);
     const [attempt, setAttempt] = useState(0);
     const [copyState, setCopyState] = useState<CopyState>('idle');
+
+    const code = set?.shareCode ?? '';
+    const title = set?.title ?? initialTitle ?? 'Набор';
+    const cardsCount = set?.cardsTotal ?? initialCardsCount ?? 0;
 
     useEffect(() => {
         let cancelled = false;
 
-        loadShareCode(setId)
+        loadShare(setId)
             .then((next) => {
                 if (cancelled) {
                     return;
                 }
-                setCode(next);
+                setSet(next);
                 setStatus('ready');
             })
             .catch(() => {
@@ -96,7 +90,7 @@ export function Share({ setId, setTitle, cardsCount, onBack }: ShareProps) {
     };
 
     const copyInvite = () => {
-        copyText(inviteText(setTitle, code)).then((copied) =>
+        copyText(inviteText(title, code)).then((copied) =>
             setCopyState(copied ? 'copied' : 'failed'),
         );
     };
@@ -148,7 +142,7 @@ export function Share({ setId, setTitle, cardsCount, onBack }: ShareProps) {
                         <p className={s.code}>{formatCode(code)}</p>
                     </Typography.Text>
                     <Typography.Text variant="description" color="tertiary" className={s.meta}>
-                        {setTitle} · {cardsLabel(cardsCount)}
+                        {title} · {cardsLabel(cardsCount)}
                     </Typography.Text>
                 </Flex>
             </Flex>

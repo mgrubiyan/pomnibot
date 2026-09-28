@@ -15,11 +15,12 @@ export interface CardEditProps {
 }
 
 export function CardEdit({ card, setTitle, onBack, onSave, onRemove }: CardEditProps) {
+    const initialAnswer = typeof card.answer === 'string' ? card.answer : String(card.answer ?? '');
     const [question, setQuestion] = useState(card.question);
-    const [answer, setAnswer] = useState(card.answer);
+    const [answer, setAnswer] = useState(initialAnswer);
     // The wrong options are everything except the right answer.
     const [wrongOptions, setWrongOptions] = useState<string[]>(
-        (card.options ?? []).filter((option) => option !== card.answer),
+        (card.options ?? []).filter((option) => option !== initialAnswer),
     );
 
     // Only a choice card has options.
