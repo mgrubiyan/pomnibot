@@ -14,6 +14,10 @@ type mockQuerier struct {
 	createCardFunc                 func(ctx context.Context, arg db.CreateCardParams) (db.Card, error)
 	createCardIssueFunc            func(ctx context.Context, arg db.CreateCardIssueParams) (db.CardIssue, error)
 	createCardOptionFunc           func(ctx context.Context, arg db.CreateCardOptionParams) (db.CardOption, error)
+	createFactFunc                 func(ctx context.Context, arg db.CreateFactParams) (db.Fact, error)
+	upsertTopicFunc                func(ctx context.Context, name string) (db.Topic, error)
+	createCardTableColumnFunc      func(ctx context.Context, arg db.CreateCardTableColumnParams) (db.CardTableColumn, error)
+	createCardTableItemFunc        func(ctx context.Context, arg db.CreateCardTableItemParams) (db.CardTableItem, error)
 	createSetFunc                  func(ctx context.Context, arg db.CreateSetParams) (db.Set, error)
 	deleteCardFunc                 func(ctx context.Context, arg db.DeleteCardParams) (int64, error)
 	deleteSetFunc                  func(ctx context.Context, arg db.DeleteSetParams) (int64, error)
@@ -66,6 +70,36 @@ func (m *mockQuerier) CreateCardOption(ctx context.Context, arg db.CreateCardOpt
 		return m.createCardOptionFunc(ctx, arg)
 	}
 	return db.CardOption{}, nil
+}
+
+func (m *mockQuerier) CreateFact(ctx context.Context, arg db.CreateFactParams) (db.Fact, error) {
+	if m.createFactFunc != nil {
+		return m.createFactFunc(ctx, arg)
+	}
+	return db.Fact{ID: arg.ID, SetID: arg.SetID, TopicID: arg.TopicID, Name: arg.Name}, nil
+}
+
+func (m *mockQuerier) UpsertTopic(ctx context.Context, name string) (db.Topic, error) {
+	if m.upsertTopicFunc != nil {
+		return m.upsertTopicFunc(ctx, name)
+	}
+	var topicUUID pgtype.UUID
+	_ = topicUUID.Scan("00000000-0000-0000-0000-000000000001")
+	return db.Topic{ID: topicUUID, Name: name}, nil
+}
+
+func (m *mockQuerier) CreateCardTableColumn(ctx context.Context, arg db.CreateCardTableColumnParams) (db.CardTableColumn, error) {
+	if m.createCardTableColumnFunc != nil {
+		return m.createCardTableColumnFunc(ctx, arg)
+	}
+	return db.CardTableColumn{}, nil
+}
+
+func (m *mockQuerier) CreateCardTableItem(ctx context.Context, arg db.CreateCardTableItemParams) (db.CardTableItem, error) {
+	if m.createCardTableItemFunc != nil {
+		return m.createCardTableItemFunc(ctx, arg)
+	}
+	return db.CardTableItem{}, nil
 }
 
 func (m *mockQuerier) CreateSet(ctx context.Context, arg db.CreateSetParams) (db.Set, error) {

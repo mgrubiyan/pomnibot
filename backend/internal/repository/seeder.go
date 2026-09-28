@@ -2,10 +2,13 @@ package repository
 
 import (
 	"context"
+	"crypto/rand"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"math/big"
 	"strings"
 
 	"github.com/google/uuid"
@@ -46,7 +49,7 @@ type mockData struct {
 
 // SeedIfEmpty checks whether the sets table contains any card sets.
 // If the database is empty, it populates the default card set and mock cards from seeds/res.json.
-func SeedIfEmpty(ctx context.Context, dbtx db.DBTX, queries *db.Queries) error {
+func SeedIfEmpty(ctx context.Context, dbtx db.DBTX, queries db.Querier) error {
 	var count int64
 	row := dbtx.QueryRow(ctx, "SELECT COUNT(*) FROM sets")
 	if err := row.Scan(&count); err != nil {
@@ -62,8 +65,8 @@ func SeedIfEmpty(ctx context.Context, dbtx db.DBTX, queries *db.Queries) error {
 	return SeedFromData(ctx, queries, defaultSeedData)
 }
 
-// SeedFromData populates the database with cards and sets from raw JSON bytes.
-func SeedFromData(ctx context.Context, queries *db.Queries, dataBytes []byte) error {
+// SeedFromData populates the database with cards and sets from raw JSON bytes for the default course.
+func SeedFromData(ctx context.Context, queries db.Querier, dataBytes []byte) error {
 	var data mockData
 	if err := json.Unmarshal(dataBytes, &data); err != nil {
 		return fmt.Errorf("parse mock data json: %w", err)
@@ -111,43 +114,150 @@ func SeedFromData(ctx context.Context, queries *db.Queries, dataBytes []byte) er
 		SetID:  setID,
 	})
 
+	factsInserted, cardsInserted, err := populateCards(ctx, queries, setID, data.Cards, false)
+	if err != nil {
+		return fmt.Errorf("populate default cards: %w", err)
+	}
+
+	slog.InfoContext(ctx, "mock data seeding completed successfully",
+		"factsInserted", factsInserted,
+		"cardsInserted", cardsInserted,
+	)
+	return nil
+}
+
+// GenerateSetForUser creates a new study set for a user based on template cards.
+// Each call generates a collision-safe 6-digit share code and unique UUIDs for facts and cards.
+func GenerateSetForUser(ctx context.Context, q db.Querier, userID int64, title string) (*db.Set, int, error) {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		title = "Новый конспект"
+	}
+
+	var data mockData
+	if err := json.Unmarshal(defaultSeedData, &data); err != nil {
+		return nil, 0, fmt.Errorf("parse default seed data: %w", err)
+	}
+
+	shareCode, err := generateUniqueShareCode(ctx, q)
+	if err != nil {
+		return nil, 0, fmt.Errorf("generate unique share code: %w", err)
+	}
+
+	newSet, err := q.CreateSet(ctx, db.CreateSetParams{
+		Title:     title,
+		AuthorID:  userID,
+		ShareCode: shareCode,
+	})
+	if err != nil {
+		return nil, 0, fmt.Errorf("create user set: %w", err)
+	}
+
+	if _, err := q.JoinSet(ctx, db.JoinSetParams{
+		UserID: userID,
+		SetID:  newSet.ID,
+	}); err != nil {
+		return nil, 0, fmt.Errorf("enroll user in set: %w", err)
+	}
+
+	factsInserted, cardsInserted, err := populateCards(ctx, q, newSet.ID, data.Cards, true)
+	if err != nil {
+		return nil, 0, fmt.Errorf("populate user cards: %w", err)
+	}
+
+	// Initialize user fact progress so cards appear in feed & today
+	if err := q.InitUserFactProgress(ctx, db.InitUserFactProgressParams{
+		UserID: userID,
+		SetID:  newSet.ID,
+	}); err != nil {
+		slog.WarnContext(ctx, "failed to initialize user fact progress", "error", err, "userID", userID)
+	}
+
+	slog.InfoContext(ctx, "generated mock set for user",
+		"userID", userID,
+		"setID", newSet.ID,
+		"title", newSet.Title,
+		"shareCode", newSet.ShareCode,
+		"factsCount", factsInserted,
+		"cardsCount", cardsInserted,
+	)
+
+	return &newSet, cardsInserted, nil
+}
+
+func generateUniqueShareCode(ctx context.Context, q db.Querier) (string, error) {
+	for attempt := 0; attempt < 20; attempt++ {
+		n, err := rand.Int(rand.Reader, big.NewInt(900000))
+		if err != nil {
+			return "", fmt.Errorf("generate random share code: %w", err)
+		}
+		code := fmt.Sprintf("%06d", 100000+n.Int64())
+
+		// Avoid reserved default course code
+		if code == "101101" {
+			continue
+		}
+
+		_, err = q.GetSetByShareCode(ctx, db.GetSetByShareCodeParams{
+			ShareCode: code,
+			UserID:    0,
+		})
+		if err != nil {
+			// Not found means it is available
+			return code, nil
+		}
+	}
+	return "", errors.New("failed to generate unique share code after multiple attempts")
+}
+
+func populateCards(ctx context.Context, q db.Querier, setID pgtype.UUID, cards []rawCard, randomizeFactIDs bool) (int, int, error) {
 	topicCache := make(map[string]pgtype.UUID)
+	factIDMap := make(map[string]string)
 	factsInserted := 0
 	cardsInserted := 0
 
-	for _, rc := range data.Cards {
-		// 3. Upsert Topic
+	for _, rc := range cards {
 		topicID, ok := topicCache[rc.Topic]
 		if !ok && rc.Topic != "" {
-			t, err := queries.UpsertTopic(ctx, rc.Topic)
+			t, err := q.UpsertTopic(ctx, rc.Topic)
 			if err != nil {
 				slog.ErrorContext(ctx, "failed to upsert topic", "topic", rc.Topic, "error", err)
-				continue
+			} else {
+				topicID = t.ID
+				topicCache[rc.Topic] = topicID
 			}
-			topicID = t.ID
-			topicCache[rc.Topic] = topicID
 		}
 
-		// 4. Create Fact if not present
-		_, err := queries.CreateFact(ctx, db.CreateFactParams{
-			ID:      rc.FactID,
-			SetID:   setID,
-			TopicID: topicID,
-			Name:    rc.FactName,
-		})
-		if err == nil {
-			factsInserted++
+		factID := rc.FactID
+		if mapped, exists := factIDMap[rc.FactID]; exists {
+			factID = mapped
+		} else {
+			if randomizeFactIDs {
+				factID = uuid.New().String()
+			}
+			factIDMap[rc.FactID] = factID
+
+			_, err := q.CreateFact(ctx, db.CreateFactParams{
+				ID:      factID,
+				SetID:   setID,
+				TopicID: topicID,
+				Name:    rc.FactName,
+			})
+			if err == nil {
+				factsInserted++
+			} else {
+				slog.WarnContext(ctx, "failed to create fact", "factID", factID, "error", err)
+			}
 		}
 
-		// 5. Create Card
 		answerStr := formatAnswerString(rc.Answer)
 		cardUUID := uuid.New()
 		var cardID pgtype.UUID
 		_ = cardID.Scan(cardUUID.String())
 
-		createdCard, err := queries.CreateCard(ctx, db.CreateCardParams{
+		createdCard, err := q.CreateCard(ctx, db.CreateCardParams{
 			ID:       cardID,
-			FactID:   rc.FactID,
+			FactID:   factID,
 			Kind:     rc.Kind,
 			Question: rc.Question,
 			AnswerText: pgtype.Text{
@@ -167,11 +277,10 @@ func SeedFromData(ctx context.Context, queries *db.Queries, dataBytes []byte) er
 		}
 		cardsInserted++
 
-		// 6. Choice options
 		if rc.Kind == "choice" && len(rc.Options) > 0 {
 			for idx, opt := range rc.Options {
 				isCorrect := strings.TrimSpace(opt) == strings.TrimSpace(answerStr)
-				_, err := queries.CreateCardOption(ctx, db.CreateCardOptionParams{
+				_, err := q.CreateCardOption(ctx, db.CreateCardOptionParams{
 					CardID:    createdCard.ID,
 					Position:  int32(idx),
 					Text:      opt,
@@ -183,17 +292,16 @@ func SeedFromData(ctx context.Context, queries *db.Queries, dataBytes []byte) er
 			}
 		}
 
-		// 7. Table columns and items
 		if rc.Kind == "table" && rc.Table != nil {
 			for idx, col := range rc.Table.Columns {
-				_, _ = queries.CreateCardTableColumn(ctx, db.CreateCardTableColumnParams{
+				_, _ = q.CreateCardTableColumn(ctx, db.CreateCardTableColumnParams{
 					CardID:   createdCard.ID,
 					Position: int32(idx),
 					Name:     col,
 				})
 			}
 			for _, item := range rc.Table.Items {
-				_, _ = queries.CreateCardTableItem(ctx, db.CreateCardTableItemParams{
+				_, _ = q.CreateCardTableItem(ctx, db.CreateCardTableItemParams{
 					CardID:     createdCard.ID,
 					ItemText:   item.Text,
 					ColumnName: item.Column,
@@ -202,12 +310,7 @@ func SeedFromData(ctx context.Context, queries *db.Queries, dataBytes []byte) er
 		}
 	}
 
-	slog.InfoContext(ctx, "mock data seeding completed successfully",
-		"topics", len(topicCache),
-		"factsInserted", factsInserted,
-		"cardsInserted", cardsInserted,
-	)
-	return nil
+	return factsInserted, cardsInserted, nil
 }
 
 func formatAnswerString(ans any) string {
