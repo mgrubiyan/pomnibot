@@ -285,6 +285,10 @@ func TestRouter_E2E_Integration(t *testing.T) {
 			return &contracts.CardSet{
 				ID:    setID,
 				Title: "E2E Sets",
+				Author: contracts.User{
+					ID:        testUserID,
+					FirstName: "Tester",
+				},
 			}, nil
 		},
 		getCardsBySetIDFunc: func(_ context.Context, userID int64, setID uuid.UUID) ([]contracts.Card, error) {
@@ -328,7 +332,10 @@ func TestRouter_E2E_Integration(t *testing.T) {
 				t.Errorf("expected userID %d, got %d", testUserID, userID)
 			}
 			return &contracts.TodayData{
-				UserName:   "Tester",
+				User: contracts.User{
+					ID:        testUserID,
+					FirstName: "Tester",
+				},
 				ActiveDays: 3,
 				DueCount:   7,
 			}, nil
@@ -452,7 +459,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 			t.Fatalf("failed to parse json: %v", err)
 		}
-		if resp.UserName != "Tester" || resp.DueCount != 7 {
+		if resp.User.FirstName != "Tester" || resp.DueCount != 7 {
 			t.Errorf("unexpected today data: %+v", resp)
 		}
 	})

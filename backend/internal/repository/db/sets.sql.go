@@ -74,7 +74,9 @@ SELECT
     s.id,
     s.title,
     s.author_id,
-    COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), u.username, 'User ' || u.id::TEXT) AS author_name,
+    u.first_name AS author_first_name,
+    u.last_name AS author_last_name,
+    u.username AS author_username,
     s.share_code,
     s.created_at,
     s.updated_at,
@@ -96,15 +98,17 @@ type GetSetByIDParams struct {
 }
 
 type GetSetByIDRow struct {
-	ID         pgtype.UUID        `json:"id"`
-	Title      string             `json:"title"`
-	AuthorID   int64              `json:"author_id"`
-	AuthorName pgtype.Text        `json:"author_name"`
-	ShareCode  string             `json:"share_code"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
-	CardsTotal int32              `json:"cards_total"`
-	CardsDue   int32              `json:"cards_due"`
+	ID              pgtype.UUID        `json:"id"`
+	Title           string             `json:"title"`
+	AuthorID        int64              `json:"author_id"`
+	AuthorFirstName string             `json:"author_first_name"`
+	AuthorLastName  pgtype.Text        `json:"author_last_name"`
+	AuthorUsername  pgtype.Text        `json:"author_username"`
+	ShareCode       string             `json:"share_code"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	CardsTotal      int32              `json:"cards_total"`
+	CardsDue        int32              `json:"cards_due"`
 }
 
 func (q *Queries) GetSetByID(ctx context.Context, arg GetSetByIDParams) (GetSetByIDRow, error) {
@@ -114,7 +118,9 @@ func (q *Queries) GetSetByID(ctx context.Context, arg GetSetByIDParams) (GetSetB
 		&i.ID,
 		&i.Title,
 		&i.AuthorID,
-		&i.AuthorName,
+		&i.AuthorFirstName,
+		&i.AuthorLastName,
+		&i.AuthorUsername,
 		&i.ShareCode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -129,7 +135,9 @@ SELECT
     s.id,
     s.title,
     s.author_id,
-    COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), u.username, 'User ' || u.id::TEXT) AS author_name,
+    u.first_name AS author_first_name,
+    u.last_name AS author_last_name,
+    u.username AS author_username,
     s.share_code,
     s.created_at,
     s.updated_at,
@@ -150,15 +158,17 @@ type GetSetByShareCodeParams struct {
 }
 
 type GetSetByShareCodeRow struct {
-	ID         pgtype.UUID        `json:"id"`
-	Title      string             `json:"title"`
-	AuthorID   int64              `json:"author_id"`
-	AuthorName pgtype.Text        `json:"author_name"`
-	ShareCode  string             `json:"share_code"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
-	CardsTotal int32              `json:"cards_total"`
-	CardsDue   int32              `json:"cards_due"`
+	ID              pgtype.UUID        `json:"id"`
+	Title           string             `json:"title"`
+	AuthorID        int64              `json:"author_id"`
+	AuthorFirstName string             `json:"author_first_name"`
+	AuthorLastName  pgtype.Text        `json:"author_last_name"`
+	AuthorUsername  pgtype.Text        `json:"author_username"`
+	ShareCode       string             `json:"share_code"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	CardsTotal      int32              `json:"cards_total"`
+	CardsDue        int32              `json:"cards_due"`
 }
 
 func (q *Queries) GetSetByShareCode(ctx context.Context, arg GetSetByShareCodeParams) (GetSetByShareCodeRow, error) {
@@ -168,7 +178,9 @@ func (q *Queries) GetSetByShareCode(ctx context.Context, arg GetSetByShareCodePa
 		&i.ID,
 		&i.Title,
 		&i.AuthorID,
-		&i.AuthorName,
+		&i.AuthorFirstName,
+		&i.AuthorLastName,
+		&i.AuthorUsername,
 		&i.ShareCode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -183,7 +195,9 @@ SELECT
     s.id,
     s.title,
     s.author_id,
-    COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), u.username, 'User ' || u.id::TEXT) AS author_name,
+    u.first_name AS author_first_name,
+    u.last_name AS author_last_name,
+    u.username AS author_username,
     s.share_code,
     s.created_at,
     s.updated_at,
@@ -201,15 +215,17 @@ ORDER BY us.joined_at DESC
 `
 
 type GetUserSetsRow struct {
-	ID         pgtype.UUID        `json:"id"`
-	Title      string             `json:"title"`
-	AuthorID   int64              `json:"author_id"`
-	AuthorName pgtype.Text        `json:"author_name"`
-	ShareCode  string             `json:"share_code"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
-	CardsTotal int32              `json:"cards_total"`
-	CardsDue   int32              `json:"cards_due"`
+	ID              pgtype.UUID        `json:"id"`
+	Title           string             `json:"title"`
+	AuthorID        int64              `json:"author_id"`
+	AuthorFirstName string             `json:"author_first_name"`
+	AuthorLastName  pgtype.Text        `json:"author_last_name"`
+	AuthorUsername  pgtype.Text        `json:"author_username"`
+	ShareCode       string             `json:"share_code"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	CardsTotal      int32              `json:"cards_total"`
+	CardsDue        int32              `json:"cards_due"`
 }
 
 func (q *Queries) GetUserSets(ctx context.Context, userID int64) ([]GetUserSetsRow, error) {
@@ -225,7 +241,9 @@ func (q *Queries) GetUserSets(ctx context.Context, userID int64) ([]GetUserSetsR
 			&i.ID,
 			&i.Title,
 			&i.AuthorID,
-			&i.AuthorName,
+			&i.AuthorFirstName,
+			&i.AuthorLastName,
+			&i.AuthorUsername,
 			&i.ShareCode,
 			&i.CreatedAt,
 			&i.UpdatedAt,

@@ -35,6 +35,7 @@ tasks:
     cmds:
       - task: contracts:gen-openapi
       - task: backend:sqlc
+      - task: contracts:gen-openapi
 
   gen:openapi:
     desc: 'Генерация кода по контрактам OpenAPI (Go и TypeScript)'

@@ -923,10 +923,8 @@ func (s *CardSet) encodeFields(e *jx.Encoder) {
 		e.Int(s.CardsDue)
 	}
 	{
-		if s.AuthorName.Set {
-			e.FieldStart("authorName")
-			s.AuthorName.Encode(e)
-		}
+		e.FieldStart("author")
+		s.Author.Encode(e)
 	}
 	{
 		if s.ShareCode.Set {
@@ -941,7 +939,7 @@ var jsonFieldsNameOfCardSet = [6]string{
 	1: "title",
 	2: "cardsTotal",
 	3: "cardsDue",
-	4: "authorName",
+	4: "author",
 	5: "shareCode",
 }
 
@@ -1002,15 +1000,15 @@ func (s *CardSet) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"cardsDue\"")
 			}
-		case "authorName":
+		case "author":
+			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
-				s.AuthorName.Reset()
-				if err := s.AuthorName.Decode(d); err != nil {
+				if err := s.Author.Decode(d); err != nil {
 					return err
 				}
 				return nil
 			}(); err != nil {
-				return errors.Wrap(err, "decode field \"authorName\"")
+				return errors.Wrap(err, "decode field \"author\"")
 			}
 		case "shareCode":
 			if err := func() error {
@@ -1032,7 +1030,7 @@ func (s *CardSet) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b00001111,
+		0b00011111,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -2892,8 +2890,8 @@ func (s *TodayData) Encode(e *jx.Encoder) {
 // encodeFields encodes fields.
 func (s *TodayData) encodeFields(e *jx.Encoder) {
 	{
-		e.FieldStart("userName")
-		e.Str(s.UserName)
+		e.FieldStart("user")
+		s.User.Encode(e)
 	}
 	{
 		e.FieldStart("activeDays")
@@ -2918,7 +2916,7 @@ func (s *TodayData) encodeFields(e *jx.Encoder) {
 }
 
 var jsonFieldsNameOfTodayData = [5]string{
-	0: "userName",
+	0: "user",
 	1: "activeDays",
 	2: "dueCount",
 	3: "estimatedMinutes",
@@ -2934,17 +2932,15 @@ func (s *TodayData) Decode(d *jx.Decoder) error {
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
-		case "userName":
+		case "user":
 			requiredBitSet[0] |= 1 << 0
 			if err := func() error {
-				v, err := d.Str()
-				s.UserName = string(v)
-				if err != nil {
+				if err := s.User.Decode(d); err != nil {
 					return err
 				}
 				return nil
 			}(); err != nil {
-				return errors.Wrap(err, "decode field \"userName\"")
+				return errors.Wrap(err, "decode field \"user\"")
 			}
 		case "activeDays":
 			requiredBitSet[0] |= 1 << 1
@@ -3361,6 +3357,153 @@ func (s *UpdateCardRequest) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *UpdateCardRequest) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode implements json.Marshaler.
+func (s *User) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s *User) encodeFields(e *jx.Encoder) {
+	{
+		e.FieldStart("id")
+		e.Int64(s.ID)
+	}
+	{
+		e.FieldStart("firstName")
+		e.Str(s.FirstName)
+	}
+	{
+		if s.LastName.Set {
+			e.FieldStart("lastName")
+			s.LastName.Encode(e)
+		}
+	}
+	{
+		if s.Username.Set {
+			e.FieldStart("username")
+			s.Username.Encode(e)
+		}
+	}
+}
+
+var jsonFieldsNameOfUser = [4]string{
+	0: "id",
+	1: "firstName",
+	2: "lastName",
+	3: "username",
+}
+
+// Decode decodes User from json.
+func (s *User) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode User to nil")
+	}
+	var requiredBitSet [1]uint8
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "id":
+			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				v, err := d.Int64()
+				s.ID = int64(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"id\"")
+			}
+		case "firstName":
+			requiredBitSet[0] |= 1 << 1
+			if err := func() error {
+				v, err := d.Str()
+				s.FirstName = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"firstName\"")
+			}
+		case "lastName":
+			if err := func() error {
+				s.LastName.Reset()
+				if err := s.LastName.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"lastName\"")
+			}
+		case "username":
+			if err := func() error {
+				s.Username.Reset()
+				if err := s.Username.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"username\"")
+			}
+		default:
+			return d.Skip()
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode User")
+	}
+	// Validate required fields.
+	var failures []validate.FieldError
+	for i, mask := range [1]uint8{
+		0b00000011,
+	} {
+		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
+			// Mask only required fields and check equality to mask using XOR.
+			//
+			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
+			// Bits of fields which would be set are actually bits of missed fields.
+			missed := bits.OnesCount8(result)
+			for bitN := 0; bitN < missed; bitN++ {
+				bitIdx := bits.TrailingZeros8(result)
+				fieldIdx := i*8 + bitIdx
+				var name string
+				if fieldIdx < len(jsonFieldsNameOfUser) {
+					name = jsonFieldsNameOfUser[fieldIdx]
+				} else {
+					name = strconv.Itoa(fieldIdx)
+				}
+				failures = append(failures, validate.FieldError{
+					Name:  name,
+					Error: validate.ErrFieldRequired,
+				})
+				// Reset bit.
+				result &^= 1 << bitIdx
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *User) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *User) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }

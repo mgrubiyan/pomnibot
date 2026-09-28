@@ -532,6 +532,22 @@ components:
         reason:
           $ref: '#/components/schemas/CardIssueReason'
 
+    User:
+      type: object
+      required:
+        - id
+        - firstName
+      properties:
+        id:
+          type: integer
+          format: int64
+        firstName:
+          type: string
+        lastName:
+          type: string
+        username:
+          type: string
+
     CardSet:
       type: object
       required:
@@ -539,6 +555,7 @@ components:
         - title
         - cardsTotal
         - cardsDue
+        - author
       properties:
         id:
           type: string
@@ -551,9 +568,8 @@ components:
         cardsDue:
           type: integer
           description: how many are due for review
-        authorName:
-          type: string
-          description: set when the set came in by share code
+        author:
+          $ref: '#/components/schemas/User'
         shareCode:
           type: string
           pattern: '\d{6}'
@@ -590,14 +606,14 @@ components:
     TodayData:
       type: object
       required:
-        - userName
+        - user
         - activeDays
         - dueCount
         - estimatedMinutes
         - sets
       properties:
-        userName:
-          type: string
+        user:
+          $ref: '#/components/schemas/User'
         activeDays:
           type: integer
           description: "as in «4 дня из 7»"

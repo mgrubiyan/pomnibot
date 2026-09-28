@@ -479,10 +479,9 @@ type CardSet struct {
 	Title      string `json:"title"`
 	CardsTotal int    `json:"cardsTotal"`
 	// How many are due for review.
-	CardsDue int `json:"cardsDue"`
-	// Set when the set came in by share code.
-	AuthorName OptString `json:"authorName"`
-	ShareCode  OptString `json:"shareCode"`
+	CardsDue  int       `json:"cardsDue"`
+	Author    User      `json:"author"`
+	ShareCode OptString `json:"shareCode"`
 }
 
 // GetID returns the value of ID.
@@ -505,9 +504,9 @@ func (s *CardSet) GetCardsDue() int {
 	return s.CardsDue
 }
 
-// GetAuthorName returns the value of AuthorName.
-func (s *CardSet) GetAuthorName() OptString {
-	return s.AuthorName
+// GetAuthor returns the value of Author.
+func (s *CardSet) GetAuthor() User {
+	return s.Author
 }
 
 // GetShareCode returns the value of ShareCode.
@@ -535,9 +534,9 @@ func (s *CardSet) SetCardsDue(val int) {
 	s.CardsDue = val
 }
 
-// SetAuthorName sets the value of AuthorName.
-func (s *CardSet) SetAuthorName(val OptString) {
-	s.AuthorName = val
+// SetAuthor sets the value of Author.
+func (s *CardSet) SetAuthor(val User) {
+	s.Author = val
 }
 
 // SetShareCode sets the value of ShareCode.
@@ -950,7 +949,7 @@ func (s *TableLayout) SetItems(val []TableItem) {
 
 // Ref: #/components/schemas/TodayData
 type TodayData struct {
-	UserName string `json:"userName"`
+	User User `json:"user"`
 	// As in «4 дня из 7».
 	ActiveDays       int       `json:"activeDays"`
 	DueCount         int       `json:"dueCount"`
@@ -958,9 +957,9 @@ type TodayData struct {
 	Sets             []CardSet `json:"sets"`
 }
 
-// GetUserName returns the value of UserName.
-func (s *TodayData) GetUserName() string {
-	return s.UserName
+// GetUser returns the value of User.
+func (s *TodayData) GetUser() User {
+	return s.User
 }
 
 // GetActiveDays returns the value of ActiveDays.
@@ -983,9 +982,9 @@ func (s *TodayData) GetSets() []CardSet {
 	return s.Sets
 }
 
-// SetUserName sets the value of UserName.
-func (s *TodayData) SetUserName(val string) {
-	s.UserName = val
+// SetUser sets the value of User.
+func (s *TodayData) SetUser(val User) {
+	s.User = val
 }
 
 // SetActiveDays sets the value of ActiveDays.
@@ -1117,4 +1116,52 @@ func (s *UpdateCardRequest) SetSourceRef(val OptString) {
 // SetTopic sets the value of Topic.
 func (s *UpdateCardRequest) SetTopic(val OptString) {
 	s.Topic = val
+}
+
+// Ref: #/components/schemas/User
+type User struct {
+	ID        int64     `json:"id"`
+	FirstName string    `json:"firstName"`
+	LastName  OptString `json:"lastName"`
+	Username  OptString `json:"username"`
+}
+
+// GetID returns the value of ID.
+func (s *User) GetID() int64 {
+	return s.ID
+}
+
+// GetFirstName returns the value of FirstName.
+func (s *User) GetFirstName() string {
+	return s.FirstName
+}
+
+// GetLastName returns the value of LastName.
+func (s *User) GetLastName() OptString {
+	return s.LastName
+}
+
+// GetUsername returns the value of Username.
+func (s *User) GetUsername() OptString {
+	return s.Username
+}
+
+// SetID sets the value of ID.
+func (s *User) SetID(val int64) {
+	s.ID = val
+}
+
+// SetFirstName sets the value of FirstName.
+func (s *User) SetFirstName(val string) {
+	s.FirstName = val
+}
+
+// SetLastName sets the value of LastName.
+func (s *User) SetLastName(val OptString) {
+	s.LastName = val
+}
+
+// SetUsername sets the value of Username.
+func (s *User) SetUsername(val OptString) {
+	s.Username = val
 }

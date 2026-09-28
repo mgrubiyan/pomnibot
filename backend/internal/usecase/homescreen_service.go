@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -57,14 +56,13 @@ func (s *homescreenServiceImpl) GetToday(ctx context.Context, userID int64) (*co
 		if err != nil {
 			return nil, fmt.Errorf("parse set uuid: %w", err)
 		}
+		author := buildUserContract(r.AuthorID, r.AuthorFirstName, r.AuthorLastName, r.AuthorUsername)
 		item := contracts.CardSet{
 			ID:         setUUID,
 			Title:      r.Title,
 			CardsTotal: int(r.CardsTotal),
 			CardsDue:   int(r.CardsDue),
-		}
-		if r.AuthorName.Valid && r.AuthorName.String != "" {
-			item.AuthorName.SetTo(r.AuthorName.String)
+			Author:     author,
 		}
 		if r.ShareCode != "" {
 			item.ShareCode.SetTo(r.ShareCode)
@@ -75,17 +73,10 @@ func (s *homescreenServiceImpl) GetToday(ctx context.Context, userID int64) (*co
 	// Calculate estimated minutes (~15 seconds per card as per product concept)
 	estimatedMinutes := int(math.Ceil(float64(dueCount) * 15.0 / 60.0))
 
-	userName := strings.TrimSpace(user.FirstName + " " + user.LastName.String)
-	if userName == "" {
-		if user.Username.Valid && user.Username.String != "" {
-			userName = user.Username.String
-		} else {
-			userName = fmt.Sprintf("User %d", user.ID)
-		}
-	}
+	todayUser := buildUserContract(user.ID, user.FirstName, user.LastName, user.Username)
 
 	return &contracts.TodayData{
-		UserName:         userName,
+		User:             todayUser,
 		ActiveDays:       int(activeDays),
 		DueCount:         int(dueCount),
 		EstimatedMinutes: estimatedMinutes,
