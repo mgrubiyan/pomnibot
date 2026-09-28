@@ -109,9 +109,9 @@ func main() {
 	}
 
 	// Initialize MAX Bot if BOT_TOKEN is provided
-	if botToken != "" {
-		if userService == nil {
-			slog.Error("cannot start MAX bot without database and user service")
+	if botToken := os.Getenv("BOT_TOKEN"); botToken != "" {
+		if userService == nil || setService == nil {
+			slog.Error("cannot start MAX bot without database and usecase services")
 			os.Exit(1)
 		}
 
@@ -131,7 +131,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		maxBot, err := bot.NewBot(botClient, appURL, userService)
+		maxBot, err := bot.NewBot(botClient, appURL, userService, setService)
 		if err != nil {
 			slog.Error("failed to create MAX bot", "error", err)
 			os.Exit(1)

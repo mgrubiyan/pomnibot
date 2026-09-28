@@ -5,8 +5,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"crypto/x509"
-	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,10 +15,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
-)
 
-//go:embed certs/rootca.pem
-var rootCAPEM []byte
+	"github.com/mgrubiyan/pomnibot/backend/internal/tlsroot"
+)
 
 const defaultAPIBaseURL = "https://platform-api2.max.ru"
 
@@ -51,9 +48,10 @@ type Update struct {
 
 // Message represents incoming message.
 type Message struct {
-	Recipient MessageRecipient `json:"recipient"`
-	Sender    User             `json:"sender"`
-	Body      MessageBody      `json:"body"`
+	Recipient   MessageRecipient `json:"recipient"`
+	Sender      User             `json:"sender"`
+	Body        MessageBody      `json:"body"`
+	Attachments []Attachment     `json:"attachments,omitempty"`
 }
 
 // MessageRecipient describes who received the message.
@@ -65,8 +63,9 @@ type MessageRecipient struct {
 
 // MessageBody contains the message content.
 type MessageBody struct {
-	Mid  string `json:"mid"`
-	Text string `json:"text"`
+	Mid         string       `json:"mid"`
+	Text        string       `json:"text"`
+	Attachments []Attachment `json:"attachments,omitempty"`
 }
 
 // SendMessageRequest contains payload for POST /messages.
@@ -105,15 +104,8 @@ func NewClient(token string, baseURL string) (*Client, error) {
 	}
 	baseURL = strings.TrimSuffix(baseURL, "/")
 
-	// Create root CA pool including system CAs and bundled Russian Root CA
-	certPool, err := x509.SystemCertPool()
-	if err != nil || certPool == nil {
-		certPool = x509.NewCertPool()
-	}
-
-	if len(rootCAPEM) > 0 {
-		certPool.AppendCertsFromPEM(rootCAPEM)
-	}
+	// Root CA pool including system CAs and bundled Russian Root CA
+	certPool := tlsroot.Pool()
 
 	insecureSkipVerify := os.Getenv("MAX_INSECURE_SKIP_VERIFY") == "true"
 

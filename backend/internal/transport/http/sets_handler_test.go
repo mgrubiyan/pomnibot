@@ -18,6 +18,7 @@ type mockSetService struct {
 	getSetShareCodeFunc    func(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.CardSet, error)
 	getSetPlanFunc         func(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.SetPlanItem, error)
 	joinSetByShareCodeFunc func(ctx context.Context, userID int64, code string) (*contracts.CardSet, error)
+	generateMockSetFunc    func(ctx context.Context, userID int64, title string) (*contracts.CardSet, error)
 }
 
 func (m *mockSetService) GetSet(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.CardSet, error) {
@@ -58,6 +59,13 @@ func (m *mockSetService) GetSetPlan(ctx context.Context, userID int64, setID uui
 func (m *mockSetService) JoinSetByShareCode(ctx context.Context, userID int64, code string) (*contracts.CardSet, error) {
 	if m.joinSetByShareCodeFunc != nil {
 		return m.joinSetByShareCodeFunc(ctx, userID, code)
+	}
+	return nil, nil
+}
+
+func (m *mockSetService) GenerateMockSet(ctx context.Context, userID int64, title string) (*contracts.CardSet, error) {
+	if m.generateMockSetFunc != nil {
+		return m.generateMockSetFunc(ctx, userID, title)
 	}
 	return nil, nil
 }
