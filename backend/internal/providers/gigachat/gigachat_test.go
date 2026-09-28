@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -62,6 +63,13 @@ type fakeAPI struct {
 	oauthForms []string
 	chatReqs   []chatRequest
 	chatAuth   []string
+	uploads    []upload // files sent to /files
+	deleted    []string // ids deleted
+}
+
+type upload struct {
+	purpose, filename, mime string
+	data                    []byte
 }
 
 func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -100,7 +108,29 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		w.WriteHeader(reply.status)
 		_, _ = io.WriteString(w, reply.body)
+	case "/v1/files":
+		file, header, err := r.FormFile("file")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		data, _ := io.ReadAll(file)
+		f.mu.Lock()
+		f.uploads = append(f.uploads, upload{
+			purpose: r.FormValue("purpose"), filename: header.Filename,
+			mime: header.Header.Get("Content-Type"), data: data,
+		})
+		id := fmt.Sprintf("file-%d", len(f.uploads))
+		f.mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": id, "object": "file", "purpose": "general"})
 	default:
+		if id, ok := strings.CutSuffix(strings.TrimPrefix(r.URL.Path, "/v1/files/"), "/delete"); ok && r.Method == http.MethodPost {
+			f.mu.Lock()
+			f.deleted = append(f.deleted, id)
+			f.mu.Unlock()
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": id, "deleted": true})
+			return
+		}
 		http.NotFound(w, r)
 	}
 }
@@ -298,6 +328,48 @@ func TestFallsBackWhenModelKeepsFailing(t *testing.T) {
 	reqs, _ := api.requests()
 	if len(reqs) != maxAttempts+1 || reqs[len(reqs)-1].Model != "GigaChat-2-Max" {
 		t.Errorf("%d requests, last to %q; want %d retries then the fallback", len(reqs), reqs[len(reqs)-1].Model, maxAttempts)
+	}
+}
+
+// An image goes up to the file storage, the user message refers to it, and
+// the file is deleted once the answer is in: students' notes are not kept.
+func TestCompleteSendsImage(t *testing.T) {
+	api := &fakeAPI{chat: func(int, chatRequest) chatReply { return ok("Текст страницы.") }}
+	c := newTestClient(t, api)
+
+	req := providers.Request{System: "Перепиши страницу.", User: "Страница.",
+		Image: &providers.Image{Data: []byte("jpeg bytes"), MimeType: "image/jpeg"}}
+	resp, err := c.Complete(context.Background(), req)
+	if err != nil || string(resp.Content) != "Текст страницы." {
+		t.Fatalf("Complete() = %q, %v", resp.Content, err)
+	}
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	if len(api.uploads) != 1 || string(api.uploads[0].data) != "jpeg bytes" ||
+		api.uploads[0].mime != "image/jpeg" || api.uploads[0].purpose != "general" {
+		t.Fatalf("uploads = %+v, want the image once, purpose general", api.uploads)
+	}
+	msgs := api.chatReqs[0].Messages
+	if user := msgs[len(msgs)-1]; user.Role != "user" || !slices.Equal(user.Attachments, []string{"file-1"}) {
+		t.Errorf("user message = %+v, want the file attached", user)
+	}
+	if !slices.Equal(api.deleted, []string{"file-1"}) {
+		t.Errorf("deleted = %v, want the uploaded file", api.deleted)
+	}
+}
+
+func TestCompleteDeletesImageWhenModelFails(t *testing.T) {
+	api := &fakeAPI{chat: func(int, chatRequest) chatReply { return fail(http.StatusBadRequest) }}
+	c := newTestClient(t, api)
+
+	req := providers.Request{User: "Страница.", Image: &providers.Image{Data: []byte("png"), MimeType: "image/png"}}
+	if _, err := c.Complete(context.Background(), req); err == nil {
+		t.Fatal("Complete() succeeded, want the model's error")
+	}
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	if !slices.Equal(api.deleted, []string{"file-1"}) {
+		t.Errorf("deleted = %v, want the file deleted despite the error", api.deleted)
 	}
 }
 
