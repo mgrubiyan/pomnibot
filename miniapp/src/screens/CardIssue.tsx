@@ -25,7 +25,7 @@ export interface CardIssueProps {
 export function CardIssue({
     card,
     setTitle,
-    isOwner = true,
+    isOwner = false,
     onBack,
     onEdit,
     onRemove,

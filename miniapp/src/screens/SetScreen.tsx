@@ -62,12 +62,12 @@ export interface SetScreenProps {
     /** Cards of the set, optional if fetched internally */
     cards?: Card[];
     /** Outcome of the last action on a card */
-    toast?: { kind: 'removed' | 'edited' } | null;
+    toast?: { kind: 'removed' | 'edited' | 'reported' } | null;
     currentUser?: User | null;
     onBack: () => void;
     onStart: (setId: string) => void;
     onRemove: (setId: string) => void;
-    onOpenCard: (card: Card) => void;
+    onOpenCard: (card: Card, isOwner: boolean, setTitle: string) => void;
     onUndoRemoveCard?: () => void;
 }
 
@@ -147,8 +147,9 @@ export function SetScreen({
     }
 
     const hasDue = set.cardsDue > 0;
-    // Someone else's set is removed from the list, your own goes with its cards.
-    const shared = Boolean(currentUser && set.author && set.author.id !== currentUser.id);
+    // Only the author can manage the set and its cards; members have shared access.
+    const isOwner = Boolean(currentUser && set.author && set.author.id === currentUser.id);
+    const shared = !isOwner;
 
     return (
         <Screen>
@@ -195,7 +196,7 @@ export function SetScreen({
                                 as="button"
                                 separator={index > 0}
                                 showChevron
-                                onClick={() => onOpenCard(card)}
+                                onClick={() => onOpenCard(card, isOwner, set.title)}
                                 title={<span className={s.cardTitle}>{card.question}</span>}
                                 subtitle={card.topic}
                             />
@@ -235,7 +236,11 @@ export function SetScreen({
                 {toast ? (
                     <div className={s.undo} role="status">
                         <Typography.Text variant="detail">
-                            {toast.kind === 'removed' ? 'Карточка удалена' : 'Карточка исправлена'}
+                            {toast.kind === 'removed'
+                                ? 'Карточка удалена'
+                                : toast.kind === 'edited'
+                                  ? 'Карточка исправлена'
+                                  : 'Сообщение отправлено'}
                         </Typography.Text>
                         {toast.kind === 'removed' && onUndoRemoveCard ? (
                             <button type="button" className={s.undoButton} onClick={onUndoRemoveCard}>

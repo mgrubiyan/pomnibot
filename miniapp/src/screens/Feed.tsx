@@ -130,9 +130,11 @@ export interface FeedProps {
     /** Cards deleted and edited during this session. */
     removedCardIds: string[];
     cardPatches: Record<string, CardPatch>;
+    initialIndex?: number;
+    initialResults?: AnswerResult[];
     onExit: () => void;
     onBack?: () => void;
-    onReportCard: (card: Card) => void;
+    onReportCard: (card: Card, currentIndex: number, currentResults: AnswerResult[]) => void;
     /** Opens sharing from the result screen; absent for the daily mix. */
     onShare?: () => void;
 }
@@ -142,6 +144,8 @@ export function Feed({
     setTitle,
     removedCardIds,
     cardPatches,
+    initialIndex = 0,
+    initialResults = [],
     onExit,
     onBack,
     onReportCard,
@@ -149,7 +153,8 @@ export function Feed({
 }: FeedProps) {
     const [status, setStatus] = useState<Status>('loading');
     const [cards, setCards] = useState<Card[]>([]);
-    const [index, setIndex] = useState(0);
+    const [index, setIndex] = useState(initialIndex);
+    const [results, setResults] = useState<AnswerResult[]>(initialResults);
 
     const [given, setGiven] = useState<string | null>(null);
     const [verdict, setVerdict] = useState<Verdict | null>(null);
@@ -170,7 +175,6 @@ export function Feed({
     const [leaving, setLeaving] = useState(false);
     // One entry per card the user moved on from — the result screen
     // is built from it, and later the backend will save each one.
-    const [results, setResults] = useState<AnswerResult[]>([]);
 
     const [attempt, setAttempt] = useState(0);
 
@@ -652,7 +656,7 @@ export function Feed({
                         stretched
                         disabled={busy}
                         iconBefore={<IconFlag size={16} tone="muted" />}
-                        onClick={() => onReportCard(card)}
+                        onClick={() => onReportCard(card, index, results)}
                     >
                         <Typography.Text variant="description" color="tertiary">
                             Карточка неверная
