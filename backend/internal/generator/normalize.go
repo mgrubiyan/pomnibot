@@ -215,30 +215,98 @@ const minQuoteRunes = 20
 // The match must start and end on word boundaries: "верно, что…" inside
 // "неверно, что…" or "митозом" inside "амитозом" would pass as verbatim
 // while saying the opposite.
+//
+// The model sometimes glues a quote from sentences that are not adjacent in
+// the notes, with "..." or silently. Such a quote is accepted when each of
+// its sentences is verbatim, in order and close to the previous one; the
+// card then shows the whole passage, what was left out included.
 func findQuote(fragment, quote string) (string, bool) {
 	q := trimQuote(fold(quote).s)
 	if utf8.RuneCountInString(q) < minQuoteRunes {
 		return "", false
 	}
 	f := fold(fragment)
-	i := indexPhrase(f.s, q)
-	if i < 0 {
+	if i := indexPhrase(f.s, q, 0); i >= 0 {
+		return spanOf(fragment, f, i, i+len(q)), true
+	}
+
+	pieces := quotePieces(q)
+	if len(pieces) < 2 {
 		return "", false
 	}
-	span := fragment[f.start[i]:f.end[i+len(q)-1]]
-	return strings.TrimSpace(span), true
+	start, end := -1, 0
+	for _, p := range pieces {
+		i := indexPhrase(f.s, p, end)
+		if i < 0 {
+			return "", false
+		}
+		if start < 0 {
+			start = i
+		} else if utf8.RuneCountInString(f.s[end:i]) > maxQuoteGap {
+			return "", false
+		}
+		end = i + len(p)
+	}
+	if utf8.RuneCountInString(f.s[start:end]) > maxQuoteSpan {
+		return "", false
+	}
+	return spanOf(fragment, f, start, end), true
 }
 
-// indexPhrase is strings.Index that only accepts a match not glued to the
-// letters or digits around it: "ион" is not in "функционирование". An edge
-// of the phrase that is itself punctuation needs no boundary.
-func indexPhrase(s, phrase string) int {
+const (
+	// maxQuoteGap is how much of the notes may be left out between two
+	// sentences of a quote: a sentence or two, not a page.
+	maxQuoteGap = 400
+	// maxQuoteSpan bounds the passage a quote in pieces stands for.
+	maxQuoteSpan = 800
+)
+
+// reQuoteBreak splits a folded quote into sentences: at "..." and at the
+// end of a sentence.
+var reQuoteBreak = regexp.MustCompile(`\.\.\.|[.!?]\s`)
+
+// quotePieces splits a folded quote into sentences to look up one by one. A
+// piece shorter than minQuoteRunes is kept with its neighbour, as written:
+// "т. е." does not split a sentence, and "... до её гибели" is too little to
+// find on its own.
+func quotePieces(q string) []string {
+	var pieces []string
+	var starts []int
+	from := 0 // start of the piece being grown
+	for _, m := range append(reQuoteBreak.FindAllStringIndex(q, -1), []int{len(q), len(q)}) {
+		piece := trimQuote(q[from:m[0]])
+		if utf8.RuneCountInString(piece) < minQuoteRunes {
+			continue // grows up to the next break
+		}
+		pieces, starts = append(pieces, piece), append(starts, from)
+		from = m[1]
+	}
+	if tail := trimQuote(q[from:]); tail != "" {
+		if len(pieces) == 0 {
+			return nil
+		}
+		last := len(pieces) - 1
+		pieces[last] = trimQuote(q[starts[last]:])
+	}
+	return pieces
+}
+
+// spanOf returns the source text behind f.s[i:j].
+func spanOf(source string, f folded, i, j int) string {
+	return strings.TrimSpace(source[f.start[i]:f.end[j-1]])
+}
+
+// indexPhrase is strings.Index from byte from that only accepts a match not
+// glued to the letters or digits around it: "ион" is not in
+// "функционирование". An edge of the phrase that is itself punctuation needs
+// no boundary.
+func indexPhrase(s, phrase string, from int) int {
 	if phrase == "" {
 		return -1
 	}
 	first, _ := utf8.DecodeRuneInString(phrase)
 	last, _ := utf8.DecodeLastRuneInString(phrase)
-	for from := 0; from <= len(s)-len(phrase); {
+	for from <= len(s)-len(phrase) {
 		i := strings.Index(s[from:], phrase)
 		if i < 0 {
 			return -1

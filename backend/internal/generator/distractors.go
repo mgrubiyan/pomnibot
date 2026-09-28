@@ -163,7 +163,7 @@ func overlapsAny(key string, keys []string) bool {
 
 // containsPhrase is strings.Contains on word boundaries, see indexPhrase.
 func containsPhrase(s, phrase string) bool {
-	return indexPhrase(s, phrase) >= 0
+	return indexPhrase(s, phrase, 0) >= 0
 }
 
 func answerKey(s string) string {

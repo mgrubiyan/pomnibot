@@ -1,6 +1,9 @@
 package generator
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestNormalizeText(t *testing.T) {
 	tests := []struct {
@@ -50,6 +53,16 @@ func TestNormalizeText(t *testing.T) {
 				t.Errorf("normalizeText()\n got: %q\nwant: %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestFindQuoteLimitsTheGap(t *testing.T) {
+	filler := strings.Repeat("Эта фраза нужна только для объёма и ни о чём не говорит. ", 10)
+	fragment := "Ядро окружено ядерной оболочкой из двух мембран. " + filler +
+		"Клетки печени делятся амитозом при повреждении ткани."
+	quote := "Ядро окружено ядерной оболочкой из двух мембран... Клетки печени делятся амитозом при повреждении ткани."
+	if got, ok := findQuote(fragment, quote); ok {
+		t.Errorf("findQuote() accepted pieces %d characters apart as %q", len([]rune(filler)), got)
 	}
 }
 
@@ -109,8 +122,30 @@ func TestFindQuote(t *testing.T) {
 			quote: "Клеточный цикл — это время жизни клетки между двумя делениями",
 		},
 		{
-			name:  "ellipsis in the middle",
+			name:  "ellipsis cutting a sentence short",
 			quote: "Клеточный цикл — это период … до её гибели",
+		},
+		{
+			name:  "sentences joined with an ellipsis: the whole passage",
+			quote: "Ядро окружено «ядерной оболочкой» из двух мембран... Считать, что клетка растёт всегда, неверно",
+			want: "Ядро окружено «ядерной оболочкой» из двух мембран. " +
+				"Интерфаза делится на пресинтетический (G1) и синтетический (S) периоды. " +
+				"Считать, что клетка растёт всегда, неверно",
+		},
+		{
+			name:  "a sentence left out silently: the whole passage",
+			quote: "Ядро окружено «ядерной оболочкой» из двух мембран. Считать, что клетка растёт всегда, неверно, что бы ни говорили.",
+			want: "Ядро окружено «ядерной оболочкой» из двух мембран. " +
+				"Интерфаза делится на пресинтетический (G1) и синтетический (S) периоды. " +
+				"Считать, что клетка растёт всегда, неверно, что бы ни говорили",
+		},
+		{
+			name:  "pieces out of order",
+			quote: "Клетки печени делятся амитозом при повреждении ткани... Ядро окружено «ядерной оболочкой» из двух мембран",
+		},
+		{
+			name:  "one of the pieces is a paraphrase",
+			quote: "Ядро окружено «ядерной оболочкой» из двух мембран. Клетки печени делятся митозом при повреждении ткани.",
 		},
 		{
 			name:  "too short to prove anything",
