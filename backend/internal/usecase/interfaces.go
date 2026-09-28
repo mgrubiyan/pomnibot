@@ -15,6 +15,7 @@ type SetService interface {
 	GetCardsBySetID(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.Card, error)
 	GetSetShareCode(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.CardSet, error)
 	GetSetPlan(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.SetPlanItem, error)
+	GetSetLeaderboard(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error)
 	JoinSetByShareCode(ctx context.Context, userID int64, code string) (*contracts.CardSet, error)
 	GenerateMockSet(ctx context.Context, userID int64, title string) (*contracts.CardSet, error)
 	SaveGeneratedSet(ctx context.Context, userID int64, title string, genResult generator.Result) (*contracts.CardSet, error)

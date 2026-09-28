@@ -93,6 +93,14 @@ func (h *APIHandler) GetSetPlan(ctx context.Context, params contracts.GetSetPlan
 	return h.UnimplementedHandler.GetSetPlan(ctx, params)
 }
 
+// GetSetLeaderboard implements contracts.Handler.GetSetLeaderboard.
+func (h *APIHandler) GetSetLeaderboard(ctx context.Context, params contracts.GetSetLeaderboardParams) (contracts.GetSetLeaderboardRes, error) {
+	if h.sets != nil {
+		return h.sets.GetSetLeaderboard(ctx, params)
+	}
+	return h.UnimplementedHandler.GetSetLeaderboard(ctx, params)
+}
+
 // JoinSetByShareCode implements contracts.Handler.JoinSetByShareCode.
 func (h *APIHandler) JoinSetByShareCode(ctx context.Context, req *contracts.JoinSetRequest) (contracts.JoinSetByShareCodeRes, error) {
 	if h.sets != nil {

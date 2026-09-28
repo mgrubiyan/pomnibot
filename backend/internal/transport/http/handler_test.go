@@ -68,6 +68,12 @@ func TestAPIHandler_SetsDelegation(t *testing.T) {
 			}
 			return &contracts.CardSet{ID: setID, Title: "Joined"}, nil
 		},
+		getSetLeaderboardFunc: func(_ context.Context, userID int64, id uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
+			if userID != 123 || id != setID {
+				t.Errorf("unexpected args: userID=%d, id=%s", userID, id)
+			}
+			return &contracts.SetLeaderboardResponse{SetId: id}, nil
+		},
 	}
 
 	h := NewAPIHandler(mockSet, nil, nil)
@@ -130,6 +136,16 @@ func TestAPIHandler_SetsDelegation(t *testing.T) {
 		}
 		if _, ok := res.(*contracts.CardSet); !ok {
 			t.Fatalf("expected *contracts.CardSet, got %T", res)
+		}
+	})
+
+	t.Run("GetSetLeaderboard delegates to setsHandler", func(t *testing.T) {
+		res, err := h.GetSetLeaderboard(ctx, contracts.GetSetLeaderboardParams{SetId: setID})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if _, ok := res.(*contracts.SetLeaderboardResponse); !ok {
+			t.Fatalf("expected *contracts.SetLeaderboardResponse, got %T", res)
 		}
 	})
 }

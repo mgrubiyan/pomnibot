@@ -50,6 +50,12 @@ type Handler interface {
 	//
 	// GET /sets/{setId}
 	GetSet(ctx context.Context, params GetSetParams) (GetSetRes, error)
+	// GetSetLeaderboard implements GetSetLeaderboard operation.
+	//
+	// Get set leaderboard for author.
+	//
+	// GET /sets/{setId}/leaderboard
+	GetSetLeaderboard(ctx context.Context, params GetSetLeaderboardParams) (GetSetLeaderboardRes, error)
 	// GetSetPlan implements GetSetPlan operation.
 	//
 	// Get set's facts plan.

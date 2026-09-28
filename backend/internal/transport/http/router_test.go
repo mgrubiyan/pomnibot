@@ -323,6 +323,27 @@ func TestRouter_E2E_Integration(t *testing.T) {
 				},
 			}, nil
 		},
+		getSetLeaderboardFunc: func(_ context.Context, userID int64, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
+			if userID != testUserID {
+				t.Errorf("expected userID %d, got %d", testUserID, userID)
+			}
+			if setID != testSetID {
+				return nil, usecase.ErrNotFound
+			}
+			return &contracts.SetLeaderboardResponse{
+				SetId: setID,
+				Items: []contracts.LeaderboardEntry{
+					{
+						User: contracts.User{
+							ID:        testUserID,
+							FirstName: "Tester",
+						},
+						Rank:       1,
+						Percentile: 95,
+					},
+				},
+			}, nil
+		},
 	}
 
 	mockCard := &mockCardService{
@@ -424,6 +445,24 @@ func TestRouter_E2E_Integration(t *testing.T) {
 			t.Fatalf("failed to parse json: %v", err)
 		}
 		if resp.ID != testSetID || resp.Title != "E2E Sets" {
+			t.Errorf("unexpected response: %+v", resp)
+		}
+	})
+
+	t.Run("GET /api/sets/{setId}/leaderboard with auth returns 200 SetLeaderboardResponse", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/sets/"+testSetID.String()+"/leaderboard", nil)
+		req.Header.Set("X-Init-Data", authHeader)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var resp contracts.SetLeaderboardResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse json: %v", err)
+		}
+		if resp.SetId != testSetID || len(resp.Items) != 1 || resp.Items[0].Percentile != 95 {
 			t.Errorf("unexpected response: %+v", resp)
 		}
 	})

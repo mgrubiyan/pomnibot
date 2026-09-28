@@ -190,6 +190,152 @@ func (q *Queries) GetSetByShareCode(ctx context.Context, arg GetSetByShareCodePa
 	return i, err
 }
 
+const getSetLeaderboard = `-- name: GetSetLeaderboard :many
+WITH set_facts AS (
+    SELECT f.id FROM facts f WHERE f.set_id = $1::UUID
+),
+facts_count AS (
+    SELECT COUNT(*)::INT AS total FROM set_facts
+),
+participants AS (
+    SELECT us.user_id FROM user_sets us WHERE us.set_id = $1::UUID
+    UNION
+    SELECT s.author_id AS user_id FROM sets s WHERE s.id = $1::UUID
+),
+user_scores AS (
+    SELECT
+        p.user_id,
+        fc.total AS facts_count,
+        CASE
+            WHEN fc.total = 0 THEN 0::FLOAT
+            ELSE COALESCE(SUM(COALESCE(ufp.elo, 700)), 0)::FLOAT / fc.total
+        END AS avg_elo
+    FROM participants p
+    CROSS JOIN facts_count fc
+    LEFT JOIN set_facts sf ON TRUE
+    LEFT JOIN user_fact_progress ufp ON ufp.user_id = p.user_id AND ufp.fact_id = sf.id
+    GROUP BY p.user_id, fc.total
+),
+ranked AS (
+    SELECT
+        us.user_id,
+        u.first_name,
+        u.last_name,
+        u.username,
+        CASE
+            WHEN us.facts_count = 0 THEN 0
+            WHEN us.avg_elo <= 800 THEN 0
+            WHEN us.avg_elo >= 1400 THEN 100
+            ELSE ROUND(((us.avg_elo - 800.0) / 600.0) * 100)::INT
+        END AS percentile,
+        RANK() OVER (ORDER BY us.avg_elo DESC)::INT AS rank
+    FROM user_scores us
+    JOIN users u ON u.id = us.user_id
+)
+SELECT user_id, first_name, last_name, username, percentile, rank
+FROM ranked
+ORDER BY rank ASC, user_id ASC
+`
+
+type GetSetLeaderboardRow struct {
+	UserID     int64       `json:"user_id"`
+	FirstName  string      `json:"first_name"`
+	LastName   pgtype.Text `json:"last_name"`
+	Username   pgtype.Text `json:"username"`
+	Percentile int32       `json:"percentile"`
+	Rank       int32       `json:"rank"`
+}
+
+func (q *Queries) GetSetLeaderboard(ctx context.Context, setID pgtype.UUID) ([]GetSetLeaderboardRow, error) {
+	rows, err := q.db.Query(ctx, getSetLeaderboard, setID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetSetLeaderboardRow
+	for rows.Next() {
+		var i GetSetLeaderboardRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.FirstName,
+			&i.LastName,
+			&i.Username,
+			&i.Percentile,
+			&i.Rank,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserSetRating = `-- name: GetUserSetRating :one
+WITH set_facts AS (
+    SELECT f.id FROM facts f WHERE f.set_id = $2::UUID
+),
+facts_count AS (
+    SELECT COUNT(*)::INT AS total FROM set_facts
+),
+participants AS (
+    SELECT us.user_id FROM user_sets us WHERE us.set_id = $2::UUID
+    UNION
+    SELECT s.author_id AS user_id FROM sets s WHERE s.id = $2::UUID
+    UNION
+    SELECT $1::BIGINT AS user_id
+),
+user_scores AS (
+    SELECT
+        p.user_id,
+        fc.total AS facts_count,
+        CASE
+            WHEN fc.total = 0 THEN 0::FLOAT
+            ELSE COALESCE(SUM(COALESCE(ufp.elo, 700)), 0)::FLOAT / fc.total
+        END AS avg_elo
+    FROM participants p
+    CROSS JOIN facts_count fc
+    LEFT JOIN set_facts sf ON TRUE
+    LEFT JOIN user_fact_progress ufp ON ufp.user_id = p.user_id AND ufp.fact_id = sf.id
+    GROUP BY p.user_id, fc.total
+),
+ranked AS (
+    SELECT
+        us.user_id,
+        CASE
+            WHEN us.facts_count = 0 THEN 0
+            WHEN us.avg_elo <= 800 THEN 0
+            WHEN us.avg_elo >= 1400 THEN 100
+            ELSE ROUND(((us.avg_elo - 800.0) / 600.0) * 100)::INT
+        END AS percentile,
+        RANK() OVER (ORDER BY us.avg_elo DESC)::INT AS rank
+    FROM user_scores us
+    JOIN users u ON u.id = us.user_id
+)
+SELECT percentile, rank
+FROM ranked
+WHERE user_id = $1::BIGINT
+`
+
+type GetUserSetRatingParams struct {
+	UserID int64       `json:"user_id"`
+	SetID  pgtype.UUID `json:"set_id"`
+}
+
+type GetUserSetRatingRow struct {
+	Percentile int32 `json:"percentile"`
+	Rank       int32 `json:"rank"`
+}
+
+func (q *Queries) GetUserSetRating(ctx context.Context, arg GetUserSetRatingParams) (GetUserSetRatingRow, error) {
+	row := q.db.QueryRow(ctx, getUserSetRating, arg.UserID, arg.SetID)
+	var i GetUserSetRatingRow
+	err := row.Scan(&i.Percentile, &i.Rank)
+	return i, err
+}
+
 const getUserSets = `-- name: GetUserSets :many
 SELECT
     s.id,

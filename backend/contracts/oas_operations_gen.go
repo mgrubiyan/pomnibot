@@ -13,6 +13,7 @@ const (
 	GetFeedQuestionsOperation   OperationName = "GetFeedQuestions"
 	GetHealthOperation          OperationName = "GetHealth"
 	GetSetOperation             OperationName = "GetSet"
+	GetSetLeaderboardOperation  OperationName = "GetSetLeaderboard"
 	GetSetPlanOperation         OperationName = "GetSetPlan"
 	GetSetShareCodeOperation    OperationName = "GetSetShareCode"
 	GetTodayOperation           OperationName = "GetToday"

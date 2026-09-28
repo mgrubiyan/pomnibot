@@ -88,6 +88,22 @@ func (h *SetsHandler) GetSetPlan(ctx context.Context, params contracts.GetSetPla
 	return &planRes, nil
 }
 
+// GetSetLeaderboard implements contracts.Handler.GetSetLeaderboard.
+func (h *SetsHandler) GetSetLeaderboard(ctx context.Context, params contracts.GetSetLeaderboardParams) (contracts.GetSetLeaderboardRes, error) {
+	userID, _ := UserIDFromContext(ctx)
+	res, err := h.setService.GetSetLeaderboard(ctx, userID, params.SetId)
+	if err != nil {
+		if errors.Is(err, usecase.ErrForbidden) {
+			return &contracts.GetSetLeaderboardForbidden{Message: err.Error()}, nil
+		}
+		if errors.Is(err, usecase.ErrNotFound) {
+			return &contracts.GetSetLeaderboardNotFound{Message: err.Error()}, nil
+		}
+		return &contracts.GetSetLeaderboardInternalServerError{Message: err.Error()}, nil
+	}
+	return res, nil
+}
+
 // JoinSetByShareCode implements contracts.Handler.JoinSetByShareCode.
 func (h *SetsHandler) JoinSetByShareCode(ctx context.Context, req *contracts.JoinSetRequest) (contracts.JoinSetByShareCodeRes, error) {
 	if req == nil || strings.TrimSpace(req.Code) == "" {

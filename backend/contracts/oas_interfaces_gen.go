@@ -25,6 +25,10 @@ type GetHealthRes interface {
 	getHealthRes()
 }
 
+type GetSetLeaderboardRes interface {
+	getSetLeaderboardRes()
+}
+
 type GetSetPlanRes interface {
 	getSetPlanRes()
 }

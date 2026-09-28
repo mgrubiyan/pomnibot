@@ -19,6 +19,7 @@ type mockSetService struct {
 	getSetShareCodeFunc    func(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.CardSet, error)
 	getSetPlanFunc         func(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.SetPlanItem, error)
 	joinSetByShareCodeFunc func(ctx context.Context, userID int64, code string) (*contracts.CardSet, error)
+	getSetLeaderboardFunc  func(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error)
 	generateMockSetFunc    func(ctx context.Context, userID int64, title string) (*contracts.CardSet, error)
 }
 
@@ -60,6 +61,13 @@ func (m *mockSetService) GetSetPlan(ctx context.Context, userID int64, setID uui
 func (m *mockSetService) JoinSetByShareCode(ctx context.Context, userID int64, code string) (*contracts.CardSet, error) {
 	if m.joinSetByShareCodeFunc != nil {
 		return m.joinSetByShareCodeFunc(ctx, userID, code)
+	}
+	return nil, nil
+}
+
+func (m *mockSetService) GetSetLeaderboard(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
+	if m.getSetLeaderboardFunc != nil {
+		return m.getSetLeaderboardFunc(ctx, userID, setID)
 	}
 	return nil, nil
 }
@@ -685,3 +693,100 @@ func TestSetsHandler_JoinSetByShareCode(t *testing.T) {
 		}
 	})
 }
+
+func TestSetsHandler_GetSetLeaderboard(t *testing.T) {
+	targetSetID := uuid.New()
+	expectedLeaderboard := &contracts.SetLeaderboardResponse{
+		SetId: targetSetID,
+		Items: []contracts.LeaderboardEntry{
+			{
+				User: contracts.User{
+					ID:        123,
+					FirstName: "Alice",
+				},
+				Rank:       1,
+				Percentile: 90,
+			},
+			{
+				User: contracts.User{
+					ID:        456,
+					FirstName: "Bob",
+				},
+				Rank:       2,
+				Percentile: 65,
+			},
+		},
+	}
+
+	t.Run("Success returns SetLeaderboardResponse for set owner", func(t *testing.T) {
+		svc := &mockSetService{
+			getSetLeaderboardFunc: func(_ context.Context, userID int64, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
+				if userID != 123 || setID != targetSetID {
+					t.Fatalf("unexpected call args: userID=%d, setID=%s", userID, setID)
+				}
+				return expectedLeaderboard, nil
+			},
+		}
+		h := NewSetsHandler(svc)
+		res, err := h.GetSetLeaderboard(WithUserID(context.Background(), 123), contracts.GetSetLeaderboardParams{SetId: targetSetID})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		leaderboardRes, ok := res.(*contracts.SetLeaderboardResponse)
+		if !ok {
+			t.Fatalf("expected *contracts.SetLeaderboardResponse, got %T", res)
+		}
+		if len(leaderboardRes.Items) != 2 || leaderboardRes.Items[0].User.FirstName != "Alice" {
+			t.Errorf("unexpected leaderboard response: %+v", leaderboardRes)
+		}
+	})
+
+	t.Run("Forbidden returns GetSetLeaderboardForbidden for non-owners", func(t *testing.T) {
+		svc := &mockSetService{
+			getSetLeaderboardFunc: func(_ context.Context, _ int64, _ uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
+				return nil, usecase.ErrForbidden
+			},
+		}
+		h := NewSetsHandler(svc)
+		res, err := h.GetSetLeaderboard(WithUserID(context.Background(), 999), contracts.GetSetLeaderboardParams{SetId: targetSetID})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if _, ok := res.(*contracts.GetSetLeaderboardForbidden); !ok {
+			t.Fatalf("expected *contracts.GetSetLeaderboardForbidden, got %T", res)
+		}
+	})
+
+	t.Run("Not Found returns GetSetLeaderboardNotFound", func(t *testing.T) {
+		svc := &mockSetService{
+			getSetLeaderboardFunc: func(_ context.Context, _ int64, _ uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
+				return nil, usecase.ErrNotFound
+			},
+		}
+		h := NewSetsHandler(svc)
+		res, err := h.GetSetLeaderboard(context.Background(), contracts.GetSetLeaderboardParams{SetId: targetSetID})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if _, ok := res.(*contracts.GetSetLeaderboardNotFound); !ok {
+			t.Fatalf("expected *contracts.GetSetLeaderboardNotFound, got %T", res)
+		}
+	})
+
+	t.Run("Internal error returns 500", func(t *testing.T) {
+		svc := &mockSetService{
+			getSetLeaderboardFunc: func(_ context.Context, _ int64, _ uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
+				return nil, errors.New("db error")
+			},
+		}
+		h := NewSetsHandler(svc)
+		res, err := h.GetSetLeaderboard(context.Background(), contracts.GetSetLeaderboardParams{SetId: targetSetID})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if _, ok := res.(*contracts.GetSetLeaderboardInternalServerError); !ok {
+			t.Fatalf("expected *contracts.GetSetLeaderboardInternalServerError, got %T", res)
+		}
+	})
+}
+

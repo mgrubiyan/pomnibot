@@ -48,12 +48,101 @@ func TestSetService_GetSet(t *testing.T) {
 	if res.ID != setUUID || res.Title != "Test Set" || res.CardsTotal != 10 || res.CardsDue != 5 || res.Author.FirstName != "Alice" {
 		t.Fatalf("unexpected result: %+v", res)
 	}
+	if !res.UserRank.IsSet() || res.UserRank.Value != 1 {
+		t.Errorf("expected UserRank 1, got %+v", res.UserRank)
+	}
+	if !res.UserPercentile.IsSet() || res.UserPercentile.Value != 0 {
+		t.Errorf("expected UserPercentile 0, got %+v", res.UserPercentile)
+	}
 
 	// Not found
 	_, err = svc.GetSet(context.Background(), 100, uuid.New())
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
+}
+
+func TestSetService_GetSetLeaderboard(t *testing.T) {
+	setUUID := uuid.New()
+	var pgUUID pgtype.UUID
+	_ = pgUUID.Scan(setUUID.String())
+
+	authorID := int64(100)
+	memberID := int64(200)
+
+	mock := &mockQuerier{
+		getSetByIDFunc: func(_ context.Context, arg db.GetSetByIDParams) (db.GetSetByIDRow, error) {
+			if arg.ID == pgUUID {
+				return db.GetSetByIDRow{
+					ID:              pgUUID,
+					Title:           "Math Set",
+					AuthorID:        authorID,
+					AuthorFirstName: "Alice",
+				}, nil
+			}
+			return db.GetSetByIDRow{}, pgx.ErrNoRows
+		},
+		isSetAuthorFunc: func(_ context.Context, arg db.IsSetAuthorParams) (bool, error) {
+			if arg.ID == pgUUID && arg.AuthorID == authorID {
+				return true, nil
+			}
+			return false, nil
+		},
+		getSetLeaderboardFunc: func(_ context.Context, setID pgtype.UUID) ([]db.GetSetLeaderboardRow, error) {
+			if setID == pgUUID {
+				return []db.GetSetLeaderboardRow{
+					{
+						UserID:     authorID,
+						FirstName:  "Alice",
+						Percentile: 100,
+						Rank:       1,
+					},
+					{
+						UserID:     memberID,
+						FirstName:  "Bob",
+						Percentile: 50,
+						Rank:       2,
+					},
+				}, nil
+			}
+			return nil, nil
+		},
+	}
+
+	svc := usecase.NewSetService(mock, usecase.NewUserService(mock))
+
+	t.Run("Author gets leaderboard successfully", func(t *testing.T) {
+		res, err := svc.GetSetLeaderboard(context.Background(), authorID, setUUID)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if res.SetId != setUUID {
+			t.Errorf("expected set ID %s, got %s", setUUID, res.SetId)
+		}
+		if len(res.Items) != 2 {
+			t.Fatalf("expected 2 items, got %d", len(res.Items))
+		}
+		if res.Items[0].User.ID != authorID || res.Items[0].Rank != 1 || res.Items[0].Percentile != 100 {
+			t.Errorf("unexpected item 0: %+v", res.Items[0])
+		}
+		if res.Items[1].User.ID != memberID || res.Items[1].Rank != 2 || res.Items[1].Percentile != 50 {
+			t.Errorf("unexpected item 1: %+v", res.Items[1])
+		}
+	})
+
+	t.Run("Non-author is forbidden", func(t *testing.T) {
+		_, err := svc.GetSetLeaderboard(context.Background(), memberID, setUUID)
+		if !errors.Is(err, usecase.ErrForbidden) {
+			t.Fatalf("expected ErrForbidden, got %v", err)
+		}
+	})
+
+	t.Run("Non-existent set returns ErrNotFound", func(t *testing.T) {
+		_, err := svc.GetSetLeaderboard(context.Background(), authorID, uuid.New())
+		if !errors.Is(err, usecase.ErrNotFound) {
+			t.Fatalf("expected ErrNotFound, got %v", err)
+		}
+	})
 }
 
 func TestSetService_JoinSetByShareCode(t *testing.T) {
