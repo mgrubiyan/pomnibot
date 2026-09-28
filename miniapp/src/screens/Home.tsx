@@ -7,6 +7,7 @@ import { StatusScreen } from '../components/StatusScreen';
 import { IconDoc, IconOffline } from '../components/Icons';
 import { estimateMinutes } from '../utils/estimate';
 import { aboutMinutesLabel, cardsLabel, daysLabel } from '../utils/plural';
+import { formatAuthorName, formatGreetingName } from '../utils/user';
 import s from './Home.module.css';
 
 type Status = 'loading' | 'error' | 'ready';
@@ -34,9 +35,11 @@ export interface HomeProps {
     onJoinSet: () => void;
     /** Sets deleted during this session: no backend yet, App remembers them. */
     removedSetIds: string[];
+    /** Notify parent when today data (including current user) is loaded */
+    onTodayLoaded?: (today: TodayData) => void;
 }
 
-export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds }: HomeProps) {
+export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, onTodayLoaded }: HomeProps) {
     const [status, setStatus] = useState<Status>('loading');
     const [today, setToday] = useState<TodayData | null>(null);
     const [attempt, setAttempt] = useState(0);
@@ -50,6 +53,7 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds }
                     return;
                 }
                 setToday(next);
+                onTodayLoaded?.(next);
                 setStatus('ready');
             })
             .catch(() => {
@@ -61,7 +65,7 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds }
         return () => {
             cancelled = true;
         };
-    }, [attempt]);
+    }, [attempt, onTodayLoaded]);
 
     const retry = () => {
         setStatus('loading');
@@ -114,7 +118,7 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds }
         <Screen>
             <Flex justify="space-between" align="baseline" gap={12} className={s.header}>
                 <Typography.Text variant="subheader" asChild>
-                    <h1 className={s.greeting}>Привет, {today.userName}</h1>
+                    <h1 className={s.greeting}>Привет, {formatGreetingName(today.user)}</h1>
                 </Typography.Text>
                 {/* «0 дней из 7» on the very first day reads as a reproach,
                     so the counter waits for the first session. */}
@@ -169,9 +173,9 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds }
                                                 <Typography.Text variant="description" color="secondary">
                                                     {setSummary(set)}
                                                 </Typography.Text>
-                                                {set.authorName ? (
+                                                {set.author && set.author.id !== today.user.id ? (
                                                     <Typography.Text variant="label" color="tertiary">
-                                                        Автор: {set.authorName}
+                                                        Автор: {formatAuthorName(set.author)}
                                                     </Typography.Text>
                                                 ) : null}
                                             </Flex>

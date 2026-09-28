@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import AddNote from './screens/AddNote';
 import CardEdit from './screens/CardEdit';
 import CardIssue from './screens/CardIssue';
@@ -8,7 +8,7 @@ import JoinSet from './screens/JoinSet';
 import SetScreen from './screens/SetScreen';
 import Share from './screens/Share';
 import { api } from './api';
-import type { Card, CardIssueReason } from './types';
+import type { Card, CardIssueReason, TodayData, User } from './types';
 import type { CardPatch } from './utils/cards';
 
 /** No router yet: browser history is not used. */
@@ -41,6 +41,7 @@ type Toast = { kind: 'removed'; cardId: string } | { kind: 'edited' };
 
 function App() {
     const [screen, setScreen] = useState<Screen>({ name: 'home' });
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
 
     useEffect(() => {
         window.WebApp?.ready?.();
@@ -50,6 +51,10 @@ function App() {
     const [removedCardIds, setRemovedCardIds] = useState<string[]>([]);
     const [cardPatches, setCardPatches] = useState<Record<string, CardPatch>>({});
     const [toast, setToast] = useState<Toast | null>(null);
+
+    const handleTodayLoaded = useCallback((today: TodayData) => {
+        setCurrentUser(today.user);
+    }, []);
 
     // The notice belongs to a single action, so any navigation clears it;
     // only deleting and saving raise it.
@@ -167,7 +172,7 @@ function App() {
             const { data } = await api.GET('/sets/{setId}', {
                 params: { path: { setId: card.setId } },
             });
-            if (data?.authorName) {
+            if (data?.author && currentUser && data.author.id !== currentUser.id) {
                 isOwner = false;
             }
         } catch {
@@ -189,6 +194,7 @@ function App() {
             onAddNote={() => go({ name: 'add' })}
             onJoinSet={() => go({ name: 'join' })}
             removedSetIds={removedSetIds}
+            onTodayLoaded={handleTodayLoaded}
         />
     );
 
@@ -291,6 +297,7 @@ function App() {
                 key={screen.setId}
                 setId={screen.setId}
                 toast={toast}
+                currentUser={currentUser}
                 onBack={goHome}
                 onStart={(setId) => go({ name: 'feed', setId })}
                 onRemove={removeSet}

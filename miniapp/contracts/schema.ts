@@ -278,6 +278,13 @@ export interface components {
         ReportCardIssueRequest: {
             reason: components["schemas"]["CardIssueReason"];
         };
+        User: {
+            /** Format: int64 */
+            id: number;
+            firstName: string;
+            lastName?: string;
+            username?: string;
+        };
         CardSet: {
             /** Format: uuid */
             id: string;
@@ -286,8 +293,7 @@ export interface components {
             cardsTotal: number;
             /** @description how many are due for review */
             cardsDue: number;
-            /** @description set when the set came in by share code */
-            authorName?: string;
+            author: components["schemas"]["User"];
             /** @example 123456 */
             shareCode?: string;
         };
@@ -305,7 +311,7 @@ export interface components {
         };
         SetPlanResponse: components["schemas"]["SetPlanItem"][];
         TodayData: {
-            userName: string;
+            user: components["schemas"]["User"];
             /** @description as in «4 дня из 7» */
             activeDays: number;
             dueCount: number;

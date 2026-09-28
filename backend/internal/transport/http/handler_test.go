@@ -213,7 +213,7 @@ func TestAPIHandler_HomescreenDelegation(t *testing.T) {
 			if userID != 789 {
 				t.Errorf("unexpected userID: %d", userID)
 			}
-			return &contracts.TodayData{UserName: "Alex", ActiveDays: 5, DueCount: 10, EstimatedMinutes: 15}, nil
+			return &contracts.TodayData{User: contracts.User{ID: 789, FirstName: "Alex"}, ActiveDays: 5, DueCount: 10, EstimatedMinutes: 15}, nil
 		},
 		getFeedQuestionsFunc: func(_ context.Context, userID int64) ([]contracts.Card, error) {
 			if userID != 789 {

@@ -45,7 +45,8 @@ func (s *setServiceImpl) GetSet(ctx context.Context, userID int64, setID uuid.UU
 		return nil, fmt.Errorf("get set by id: %w", err)
 	}
 
-	return mapSetRowToContract(row.ID, row.Title, row.AuthorName.String, row.ShareCode, row.CardsTotal, row.CardsDue)
+	author := buildUserContract(row.AuthorID, row.AuthorFirstName, row.AuthorLastName, row.AuthorUsername)
+	return mapSetRowToContract(row.ID, row.Title, author, row.ShareCode, row.CardsTotal, row.CardsDue)
 }
 
 func (s *setServiceImpl) DeleteSet(ctx context.Context, userID int64, setID uuid.UUID) error {
@@ -202,7 +203,8 @@ func (s *setServiceImpl) JoinSetByShareCode(ctx context.Context, userID int64, c
 		return nil, fmt.Errorf("init user fact progress: %w", err)
 	}
 
-	return mapSetRowToContract(row.ID, row.Title, row.AuthorName.String, row.ShareCode, row.CardsTotal, row.CardsDue)
+	author := buildUserContract(row.AuthorID, row.AuthorFirstName, row.AuthorLastName, row.AuthorUsername)
+	return mapSetRowToContract(row.ID, row.Title, author, row.ShareCode, row.CardsTotal, row.CardsDue)
 }
 
 func (s *setServiceImpl) GenerateMockSet(ctx context.Context, userID int64, title string) (*contracts.CardSet, error) {
@@ -333,7 +335,7 @@ func (s *setServiceImpl) buildCard(
 	return card, nil
 }
 
-func mapSetRowToContract(id pgtype.UUID, title, authorName, shareCode string, cardsTotal, cardsDue int32) (*contracts.CardSet, error) {
+func mapSetRowToContract(id pgtype.UUID, title string, author contracts.User, shareCode string, cardsTotal, cardsDue int32) (*contracts.CardSet, error) {
 	setUUID, err := uuid.FromBytes(id.Bytes[:])
 	if err != nil {
 		return nil, fmt.Errorf("parse set uuid: %w", err)
@@ -344,12 +346,33 @@ func mapSetRowToContract(id pgtype.UUID, title, authorName, shareCode string, ca
 		Title:      title,
 		CardsTotal: int(cardsTotal),
 		CardsDue:   int(cardsDue),
-	}
-	if authorName != "" {
-		res.AuthorName.SetTo(authorName)
+		Author:     author,
 	}
 	if shareCode != "" {
 		res.ShareCode.SetTo(shareCode)
 	}
 	return res, nil
+}
+
+func buildUserContract(id int64, firstName string, lastName, username pgtype.Text) contracts.User {
+	effectiveFirstName := strings.TrimSpace(firstName)
+	if effectiveFirstName == "" {
+		if username.Valid && strings.TrimSpace(username.String) != "" {
+			effectiveFirstName = strings.TrimSpace(username.String)
+		} else {
+			effectiveFirstName = fmt.Sprintf("User %d", id)
+		}
+	}
+
+	u := contracts.User{
+		ID:        id,
+		FirstName: effectiveFirstName,
+	}
+	if lastName.Valid && strings.TrimSpace(lastName.String) != "" {
+		u.LastName.SetTo(strings.TrimSpace(lastName.String))
+	}
+	if username.Valid && strings.TrimSpace(username.String) != "" {
+		u.Username.SetTo(strings.TrimSpace(username.String))
+	}
+	return u
 }

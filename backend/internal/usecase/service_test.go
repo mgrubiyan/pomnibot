@@ -23,13 +23,13 @@ func TestSetService_GetSet(t *testing.T) {
 		getSetByIDFunc: func(_ context.Context, arg db.GetSetByIDParams) (db.GetSetByIDRow, error) {
 			if arg.ID == pgUUID {
 				return db.GetSetByIDRow{
-					ID:         pgUUID,
-					Title:      "Test Set",
-					AuthorID:   100,
-					AuthorName: pgtype.Text{String: "Alice", Valid: true},
-					ShareCode:  "123456",
-					CardsTotal: 10,
-					CardsDue:   5,
+					ID:              pgUUID,
+					Title:           "Test Set",
+					AuthorID:        100,
+					AuthorFirstName: "Alice",
+					ShareCode:       "123456",
+					CardsTotal:      10,
+					CardsDue:        5,
 				}, nil
 			}
 			return db.GetSetByIDRow{}, pgx.ErrNoRows
@@ -43,7 +43,7 @@ func TestSetService_GetSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if res.ID != setUUID || res.Title != "Test Set" || res.CardsTotal != 10 || res.CardsDue != 5 {
+	if res.ID != setUUID || res.Title != "Test Set" || res.CardsTotal != 10 || res.CardsDue != 5 || res.Author.FirstName != "Alice" {
 		t.Fatalf("unexpected result: %+v", res)
 	}
 
@@ -63,13 +63,13 @@ func TestSetService_JoinSetByShareCode(t *testing.T) {
 		getSetByShareCodeFunc: func(_ context.Context, arg db.GetSetByShareCodeParams) (db.GetSetByShareCodeRow, error) {
 			if arg.ShareCode == "101101" {
 				return db.GetSetByShareCodeRow{
-					ID:         pgUUID,
-					Title:      "Course Set",
-					AuthorID:   200,
-					AuthorName: pgtype.Text{String: "Bob", Valid: true},
-					ShareCode:  "101101",
-					CardsTotal: 20,
-					CardsDue:   20,
+					ID:              pgUUID,
+					Title:           "Course Set",
+					AuthorID:        200,
+					AuthorFirstName: "Bob",
+					ShareCode:       "101101",
+					CardsTotal:      20,
+					CardsDue:        20,
 				}, nil
 			}
 			return db.GetSetByShareCodeRow{}, pgx.ErrNoRows
@@ -204,10 +204,11 @@ func TestHomescreenService_GetToday(t *testing.T) {
 		getUserSetsFunc: func(_ context.Context, _ int64) ([]db.GetUserSetsRow, error) {
 			return []db.GetUserSetsRow{
 				{
-					Title:      "Set 1",
-					AuthorName: pgtype.Text{String: "Alice", Valid: true},
-					CardsTotal: 10,
-					CardsDue:   5,
+					Title:           "Set 1",
+					AuthorID:        300,
+					AuthorFirstName: "Alice",
+					CardsTotal:      10,
+					CardsDue:        5,
 				},
 			}, nil
 		},
@@ -219,7 +220,7 @@ func TestHomescreenService_GetToday(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if today.UserName != "Tester" || today.ActiveDays != 4 || today.DueCount != 12 {
+	if today.User.ID != 100 || today.User.FirstName != "Tester" || today.ActiveDays != 4 || today.DueCount != 12 {
 		t.Fatalf("unexpected today data: %+v", today)
 	}
 	if today.EstimatedMinutes <= 0 {

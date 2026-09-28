@@ -77,6 +77,10 @@ func TestSetsHandler_GetSet(t *testing.T) {
 		Title:      "Math 101",
 		CardsTotal: 10,
 		CardsDue:   3,
+		Author: contracts.User{
+			ID:        12345,
+			FirstName: "Author",
+		},
 	}
 
 	tests := []struct {
@@ -393,8 +397,12 @@ func TestSetsHandler_GetCardsBySetID(t *testing.T) {
 func TestSetsHandler_GetSetShareCode(t *testing.T) {
 	setID := uuid.New()
 	expectedSet := &contracts.CardSet{
-		ID:        setID,
-		Title:     "Shared Set",
+		ID:    setID,
+		Title: "Shared Set",
+		Author: contracts.User{
+			ID:        777,
+			FirstName: "Author",
+		},
 		ShareCode: contracts.NewOptString("XYZ123"),
 	}
 
@@ -567,6 +575,10 @@ func TestSetsHandler_JoinSetByShareCode(t *testing.T) {
 		Title:      "Joined Chemistry",
 		CardsTotal: 15,
 		CardsDue:   5,
+		Author: contracts.User{
+			ID:        555,
+			FirstName: "Author",
+		},
 	}
 
 	t.Run("Success joins set with code", func(t *testing.T) {

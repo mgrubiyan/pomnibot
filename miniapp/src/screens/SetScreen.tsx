@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Button, CellHeader, CellList, CellSimple, Flex, IconButton, Spinner, Typography } from '@maxhub/max-ui';
-import type { Card, CardSet } from '../types';
+import type { Card, CardSet, User } from '../types';
 import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
 import { IconChevronLeft, IconOffline, IconTrash } from '../components/Icons';
 import { estimateMinutes } from '../utils/estimate';
 import { aboutMinutesLabel, cardsLabel } from '../utils/plural';
+import { formatAuthorName } from '../utils/user';
 import s from './SetScreen.module.css';
 
 type Status = 'loading' | 'error' | 'ready';
@@ -62,6 +63,7 @@ export interface SetScreenProps {
     cards?: Card[];
     /** Outcome of the last action on a card */
     toast?: { kind: 'removed' | 'edited' } | null;
+    currentUser?: User | null;
     onBack: () => void;
     onStart: (setId: string) => void;
     onRemove: (setId: string) => void;
@@ -73,6 +75,7 @@ export function SetScreen({
     setId,
     cards: initialCards,
     toast,
+    currentUser,
     onBack,
     onStart,
     onRemove,
@@ -145,7 +148,7 @@ export function SetScreen({
 
     const hasDue = set.cardsDue > 0;
     // Someone else's set is removed from the list, your own goes with its cards.
-    const shared = Boolean(set.authorName);
+    const shared = Boolean(currentUser && set.author && set.author.id !== currentUser.id);
 
     return (
         <Screen>
@@ -160,7 +163,7 @@ export function SetScreen({
                     <Typography.Text variant="description" color="secondary">
                         {cardsLabel(cards.length)}
                         {hasDue ? ` · ${set.cardsDue} на повтор` : ''}
-                        {set.authorName ? ` · автор: ${set.authorName}` : ''}
+                        {shared && set.author ? ` · автор: ${formatAuthorName(set.author)}` : ''}
                     </Typography.Text>
                 </Flex>
             </Flex>

@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
@@ -20,7 +22,7 @@ func TestHealthEndpoint(t *testing.T) {
 		"index.html": &fstest.MapFile{Data: []byte("<!DOCTYPE html><html><body>Test</body></html>")},
 	}
 
-	router, err := NewRouter(NewAPIHandler(nil, nil, nil), mockFS)
+	router, err := NewRouter(NewAPIHandler(nil, nil, nil), mockFS, "", nil)
 	if err != nil {
 		t.Fatalf("failed to setup router: %v", err)
 	}
@@ -54,7 +56,7 @@ func TestStaticAndReactRouter(t *testing.T) {
 		},
 	}
 
-	router, err := NewRouter(NewAPIHandler(nil, nil, nil), mockFS)
+	router, err := NewRouter(NewAPIHandler(nil, nil, nil), mockFS, "", nil)
 	if err != nil {
 		t.Fatalf("failed to setup router: %v", err)
 	}
@@ -201,15 +203,24 @@ func (h *authTestHandler) GetHealth(ctx context.Context) (contracts.GetHealthRes
 }
 
 func TestRouter_AuthMiddlewareIntegration(t *testing.T) {
+	testBotToken := "secret-bot-token"
+
 	t.Run("propagates valid user from X-Init-Data header", func(t *testing.T) {
 		h := &authTestHandler{}
-		router, err := NewRouter(h, fstest.MapFS{})
+		mockUserSvc := &mockUserService{}
+		router, err := NewRouter(h, fstest.MapFS{}, testBotToken, mockUserSvc)
 		if err != nil {
 			t.Fatalf("failed to create router: %v", err)
 		}
 
+		now := time.Now().Unix()
+		initDataStr := generateValidInitData(map[string]string{
+			"auth_date": strconv.FormatInt(now, 10),
+			"user":      `{"id":424242,"first_name":"AuthTest"}`,
+		}, testBotToken)
+
 		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
-		req.Header.Set("X-Init-Data", `user={"id":424242}`)
+		req.Header.Set("X-Init-Data", initDataStr)
 		rec := httptest.NewRecorder()
 
 		router.ServeHTTP(rec, req)
@@ -223,11 +234,14 @@ func TestRouter_AuthMiddlewareIntegration(t *testing.T) {
 		if h.capturedUserID != 424242 {
 			t.Fatalf("expected userID 424242, got %d", h.capturedUserID)
 		}
+		if len(mockUserSvc.upsertCalls) != 1 || mockUserSvc.upsertCalls[0].ID != 424242 {
+			t.Fatalf("expected UpsertUser to be called for 424242, got %+v", mockUserSvc.upsertCalls)
+		}
 	})
 
 	t.Run("falls back to 0 when X-Init-Data is absent", func(t *testing.T) {
 		h := &authTestHandler{}
-		router, err := NewRouter(h, fstest.MapFS{})
+		router, err := NewRouter(h, fstest.MapFS{}, testBotToken, nil)
 		if err != nil {
 			t.Fatalf("failed to create router: %v", err)
 		}
@@ -285,6 +299,10 @@ func TestRouter_E2E_Integration(t *testing.T) {
 			return &contracts.CardSet{
 				ID:    setID,
 				Title: "E2E Sets",
+				Author: contracts.User{
+					ID:        testUserID,
+					FirstName: "Tester",
+				},
 			}, nil
 		},
 		getCardsBySetIDFunc: func(_ context.Context, userID int64, setID uuid.UUID) ([]contracts.Card, error) {
@@ -328,7 +346,10 @@ func TestRouter_E2E_Integration(t *testing.T) {
 				t.Errorf("expected userID %d, got %d", testUserID, userID)
 			}
 			return &contracts.TodayData{
-				UserName:   "Tester",
+				User: contracts.User{
+					ID:        testUserID,
+					FirstName: "Tester",
+				},
 				ActiveDays: 3,
 				DueCount:   7,
 			}, nil
@@ -358,13 +379,19 @@ func TestRouter_E2E_Integration(t *testing.T) {
 		},
 	}
 
+	testBotToken := "e2e-token"
+	mockUserSvc := &mockUserService{}
 	handler := NewAPIHandler(mockSet, mockCard, mockHome)
-	router, err := NewRouter(handler, mockFS)
+	router, err := NewRouter(handler, mockFS, testBotToken, mockUserSvc)
 	if err != nil {
 		t.Fatalf("failed to create router: %v", err)
 	}
 
-	authHeader := fmt.Sprintf(`user={"id":%d}`, testUserID)
+	now := time.Now().Unix()
+	authHeader := generateValidInitData(map[string]string{
+		"auth_date": strconv.FormatInt(now, 10),
+		"user":      fmt.Sprintf(`{"id":%d,"first_name":"Tester"}`, testUserID),
+	}, testBotToken)
 
 	t.Run("GET /api/health returns 200 OK", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
@@ -452,7 +479,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 			t.Fatalf("failed to parse json: %v", err)
 		}
-		if resp.UserName != "Tester" || resp.DueCount != 7 {
+		if resp.User.FirstName != "Tester" || resp.DueCount != 7 {
 			t.Errorf("unexpected today data: %+v", resp)
 		}
 	})

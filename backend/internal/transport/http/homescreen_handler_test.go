@@ -41,7 +41,10 @@ func (m *mockHomescreenService) SendResults(ctx context.Context, userID int64, r
 func TestHomescreenHandler_GetToday(t *testing.T) {
 	setID := uuid.New()
 	expectedToday := &contracts.TodayData{
-		UserName:         "Alex",
+		User: contracts.User{
+			ID:        12345,
+			FirstName: "Alex",
+		},
 		ActiveDays:       4,
 		DueCount:         15,
 		EstimatedMinutes: 20,
@@ -51,6 +54,10 @@ func TestHomescreenHandler_GetToday(t *testing.T) {
 				Title:      "Go Concurrency",
 				CardsTotal: 30,
 				CardsDue:   15,
+				Author: contracts.User{
+					ID:        12345,
+					FirstName: "Alex",
+				},
 			},
 		},
 	}
@@ -81,8 +88,8 @@ func TestHomescreenHandler_GetToday(t *testing.T) {
 				if !ok {
 					t.Fatalf("expected *contracts.TodayData, got %T", res)
 				}
-				if today.UserName != "Alex" {
-					t.Fatalf("expected UserName 'Alex', got %q", today.UserName)
+				if today.User.FirstName != "Alex" {
+					t.Fatalf("expected FirstName 'Alex', got %q", today.User.FirstName)
 				}
 				if today.ActiveDays != 4 {
 					t.Fatalf("expected ActiveDays 4, got %d", today.ActiveDays)
@@ -121,7 +128,10 @@ func TestHomescreenHandler_GetToday(t *testing.T) {
 						}
 						// User 99999 has separate empty stats and no enrolled sets
 						return &contracts.TodayData{
-							UserName:         "NewUser",
+							User: contracts.User{
+								ID:        99999,
+								FirstName: "NewUser",
+							},
 							ActiveDays:       0,
 							DueCount:         0,
 							EstimatedMinutes: 0,
