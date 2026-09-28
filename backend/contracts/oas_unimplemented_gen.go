@@ -76,6 +76,15 @@ func (UnimplementedHandler) GetSet(ctx context.Context, params GetSetParams) (r 
 	return r, ht.ErrNotImplemented
 }
 
+// GetSetLeaderboard implements GetSetLeaderboard operation.
+//
+// Get set leaderboard for author.
+//
+// GET /sets/{setId}/leaderboard
+func (UnimplementedHandler) GetSetLeaderboard(ctx context.Context, params GetSetLeaderboardParams) (r GetSetLeaderboardRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // GetSetPlan implements GetSetPlan operation.
 //
 // Get set's facts plan.

@@ -76,6 +76,7 @@ export interface SetScreenProps {
     onStart: (setId: string, setTitle?: string) => void;
     onRemove: (setId: string) => void;
     onOpenCard: (card: Card, isOwner: boolean, setTitle: string) => void;
+    onOpenLeaderboard?: (setId: string, setTitle: string) => void;
     onUndoRemoveCard?: () => void;
 }
 
@@ -88,6 +89,7 @@ export function SetScreen({
     onStart,
     onRemove,
     onOpenCard,
+    onOpenLeaderboard,
     onUndoRemoveCard,
 }: SetScreenProps) {
     const [status, setStatus] = useState<Status>('loading');
@@ -181,18 +183,42 @@ export function SetScreen({
             </Flex>
 
             <Flex direction="column" align="stretch" gap={16} className={s.body}>
-                {/* TODO: the review forecast goes here — retention in percent
-                    and the forgetting curve. No data for it yet, decided later. */}
-                <Flex
-                    direction="column"
-                    align="center"
-                    justify="center"
-                    className={s.forecastPlaceholder}
-                >
-                    <Typography.Text variant="description" color="tertiary">
-                        Прогноз повторений появится позже
-                    </Typography.Text>
+                <Flex direction="column" align="stretch" gap={12} className={s.ratingCard}>
+                    <Flex justify="space-between" align="baseline">
+                        <Typography.Text variant="body" color="secondary">
+                            Прогресс в наборе
+                        </Typography.Text>
+                        <Typography.Text variant="title">
+                            {set.userPercentile ?? 0}%
+                        </Typography.Text>
+                    </Flex>
+                    <div className={s.progressBarTrack}>
+                        <div
+                            className={s.progressBarFill}
+                            style={{ width: `${Math.min(100, Math.max(0, set.userPercentile ?? 0))}%` }}
+                        />
+                    </div>
+                    <Flex justify="space-between" align="center">
+                        <Typography.Text variant="description" color="secondary">
+                            Место в рейтинге
+                        </Typography.Text>
+                        <Typography.Text variant="label" color="primary">
+                            {set.userRank ? `${set.userRank} место` : '—'}
+                        </Typography.Text>
+                    </Flex>
                 </Flex>
+
+                {isOwner && onOpenLeaderboard ? (
+                    <CellList mode="island" filled className={s.factsList}>
+                        <CellSimple
+                            as="button"
+                            showChevron
+                            onClick={() => onOpenLeaderboard(set.id, set.title)}
+                            title="Таблица лидеров"
+                            subtitle="Рейтинг участников"
+                        />
+                    </CellList>
+                ) : null}
 
                 <Flex direction="column" align="stretch" gap={8}>
                     <Flex justify="space-between" align="baseline" gap={8} className={s.cardsHeader}>

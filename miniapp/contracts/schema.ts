@@ -90,6 +90,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sets/{setId}/leaderboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get set leaderboard for author */
+        get: operations["GetSetLeaderboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sets/join": {
         parameters: {
             query?: never;
@@ -297,6 +314,16 @@ export interface components {
             author: components["schemas"]["User"];
             /** @example 123456 */
             shareCode?: string;
+            /**
+             * @description User's rank place in the set rating (1-based)
+             * @example 1
+             */
+            userRank?: number;
+            /**
+             * @description User's progress mapped from ELO (0-100%)
+             * @example 85
+             */
+            userPercentile?: number;
         };
         JoinSetRequest: {
             /**
@@ -311,6 +338,18 @@ export interface components {
             date: string;
         };
         SetPlanResponse: components["schemas"]["SetPlanItem"][];
+        LeaderboardEntry: {
+            user: components["schemas"]["User"];
+            /** @example 1 */
+            rank: number;
+            /** @example 85 */
+            percentile: number;
+        };
+        SetLeaderboardResponse: {
+            /** Format: uuid */
+            setId: string;
+            items: components["schemas"]["LeaderboardEntry"][];
+        };
         TodayData: {
             user: components["schemas"]["User"];
             /** @description as in «4 дня из 7» */
@@ -347,6 +386,15 @@ export interface components {
         };
         /** @description Resource not found */
         NotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description Forbidden / insufficient permissions */
+        Forbidden: {
             headers: {
                 [name: string]: unknown;
             };
@@ -510,6 +558,32 @@ export interface operations {
                     "application/json": components["schemas"]["SetPlanResponse"];
                 };
             };
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    GetSetLeaderboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ID of the card set */
+                setId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Leaderboard retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetLeaderboardResponse"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };

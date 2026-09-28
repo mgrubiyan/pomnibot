@@ -482,6 +482,10 @@ type CardSet struct {
 	CardsDue  int       `json:"cardsDue"`
 	Author    User      `json:"author"`
 	ShareCode OptString `json:"shareCode"`
+	// User's rank place in the set rating (1-based).
+	UserRank OptInt `json:"userRank"`
+	// User's progress mapped from ELO (0-100%).
+	UserPercentile OptInt `json:"userPercentile"`
 }
 
 // GetID returns the value of ID.
@@ -514,6 +518,16 @@ func (s *CardSet) GetShareCode() OptString {
 	return s.ShareCode
 }
 
+// GetUserRank returns the value of UserRank.
+func (s *CardSet) GetUserRank() OptInt {
+	return s.UserRank
+}
+
+// GetUserPercentile returns the value of UserPercentile.
+func (s *CardSet) GetUserPercentile() OptInt {
+	return s.UserPercentile
+}
+
 // SetID sets the value of ID.
 func (s *CardSet) SetID(val uuid.UUID) {
 	s.ID = val
@@ -542,6 +556,16 @@ func (s *CardSet) SetAuthor(val User) {
 // SetShareCode sets the value of ShareCode.
 func (s *CardSet) SetShareCode(val OptString) {
 	s.ShareCode = val
+}
+
+// SetUserRank sets the value of UserRank.
+func (s *CardSet) SetUserRank(val OptInt) {
+	s.UserRank = val
+}
+
+// SetUserPercentile sets the value of UserPercentile.
+func (s *CardSet) SetUserPercentile(val OptInt) {
+	s.UserPercentile = val
 }
 
 func (*CardSet) getSetRes()             {}
@@ -613,6 +637,18 @@ type GetSetInternalServerError ErrorResponse
 
 func (*GetSetInternalServerError) getSetRes() {}
 
+type GetSetLeaderboardForbidden ErrorResponse
+
+func (*GetSetLeaderboardForbidden) getSetLeaderboardRes() {}
+
+type GetSetLeaderboardInternalServerError ErrorResponse
+
+func (*GetSetLeaderboardInternalServerError) getSetLeaderboardRes() {}
+
+type GetSetLeaderboardNotFound ErrorResponse
+
+func (*GetSetLeaderboardNotFound) getSetLeaderboardRes() {}
+
 type GetSetNotFound ErrorResponse
 
 func (*GetSetNotFound) getSetRes() {}
@@ -676,6 +712,43 @@ func (s *JoinSetRequest) GetCode() string {
 // SetCode sets the value of Code.
 func (s *JoinSetRequest) SetCode(val string) {
 	s.Code = val
+}
+
+// Ref: #/components/schemas/LeaderboardEntry
+type LeaderboardEntry struct {
+	User       User `json:"user"`
+	Rank       int  `json:"rank"`
+	Percentile int  `json:"percentile"`
+}
+
+// GetUser returns the value of User.
+func (s *LeaderboardEntry) GetUser() User {
+	return s.User
+}
+
+// GetRank returns the value of Rank.
+func (s *LeaderboardEntry) GetRank() int {
+	return s.Rank
+}
+
+// GetPercentile returns the value of Percentile.
+func (s *LeaderboardEntry) GetPercentile() int {
+	return s.Percentile
+}
+
+// SetUser sets the value of User.
+func (s *LeaderboardEntry) SetUser(val User) {
+	s.User = val
+}
+
+// SetRank sets the value of Rank.
+func (s *LeaderboardEntry) SetRank(val int) {
+	s.Rank = val
+}
+
+// SetPercentile sets the value of Percentile.
+func (s *LeaderboardEntry) SetPercentile(val int) {
+	s.Percentile = val
 }
 
 // NewOptCardAnswer returns new OptCardAnswer with value set to v.
@@ -764,6 +837,52 @@ func (o OptCardKind) Get() (v CardKind, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptCardKind) Or(d CardKind) CardKind {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptInt returns new OptInt with value set to v.
+func NewOptInt(v int) OptInt {
+	return OptInt{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptInt is optional int.
+type OptInt struct {
+	Value int
+	Set   bool
+}
+
+// IsSet returns true if OptInt was set.
+func (o OptInt) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptInt) Reset() {
+	var v int
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptInt) SetTo(v int) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptInt) Get() (v int, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptInt) Or(d int) int {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -908,6 +1027,34 @@ type SendResultsNoContent struct{}
 func (*SendResultsNoContent) sendResultsRes() {}
 
 type SendResultsRequest []AnswerResult
+
+// Ref: #/components/schemas/SetLeaderboardResponse
+type SetLeaderboardResponse struct {
+	SetId uuid.UUID          `json:"setId"`
+	Items []LeaderboardEntry `json:"items"`
+}
+
+// GetSetId returns the value of SetId.
+func (s *SetLeaderboardResponse) GetSetId() uuid.UUID {
+	return s.SetId
+}
+
+// GetItems returns the value of Items.
+func (s *SetLeaderboardResponse) GetItems() []LeaderboardEntry {
+	return s.Items
+}
+
+// SetSetId sets the value of SetId.
+func (s *SetLeaderboardResponse) SetSetId(val uuid.UUID) {
+	s.SetId = val
+}
+
+// SetItems sets the value of Items.
+func (s *SetLeaderboardResponse) SetItems(val []LeaderboardEntry) {
+	s.Items = val
+}
+
+func (*SetLeaderboardResponse) getSetLeaderboardRes() {}
 
 // Ref: #/components/schemas/SetPlanItem
 type SetPlanItem struct {

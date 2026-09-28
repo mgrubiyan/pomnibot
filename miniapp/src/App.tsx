@@ -7,6 +7,7 @@ import Home from './screens/Home';
 import JoinSet from './screens/JoinSet';
 import SetScreen from './screens/SetScreen';
 import Share from './screens/Share';
+import Leaderboard from './screens/Leaderboard';
 import { api } from './api';
 import type { AnswerResult, Card, CardIssueReason, TodayData, User } from './types';
 import type { CardPatch } from './utils/cards';
@@ -23,6 +24,7 @@ type Screen =
           initialResults?: AnswerResult[];
       }
     | { name: 'share'; setId: string; setTitle?: string }
+    | { name: 'leaderboard'; setId: string; setTitle?: string }
     | { name: 'add' }
     | { name: 'join' }
     | {
@@ -439,6 +441,16 @@ function App() {
         );
     }
 
+    if (screen.name === 'leaderboard') {
+        return (
+            <Leaderboard
+                setId={screen.setId}
+                setTitle={screen.setTitle}
+                onBack={() => openSet(screen.setId)}
+            />
+        );
+    }
+
     if (screen.name === 'set') {
         return (
             <SetScreen
@@ -457,6 +469,13 @@ function App() {
                         isOwner,
                         fromFeed: false,
                         feedSetId: undefined,
+                    })
+                }
+                onOpenLeaderboard={(setId, setTitle) =>
+                    go({
+                        name: 'leaderboard',
+                        setId,
+                        setTitle,
                     })
                 }
             />

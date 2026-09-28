@@ -36,9 +36,11 @@ type Querier interface {
 	GetFeedCardsForUser(ctx context.Context, userID int64) ([]GetFeedCardsForUserRow, error)
 	GetSetByID(ctx context.Context, arg GetSetByIDParams) (GetSetByIDRow, error)
 	GetSetByShareCode(ctx context.Context, arg GetSetByShareCodeParams) (GetSetByShareCodeRow, error)
+	GetSetLeaderboard(ctx context.Context, setID pgtype.UUID) ([]GetSetLeaderboardRow, error)
 	GetSetPlan(ctx context.Context, arg GetSetPlanParams) ([]GetSetPlanRow, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserFactProgress(ctx context.Context, arg GetUserFactProgressParams) (UserFactProgress, error)
+	GetUserSetRating(ctx context.Context, arg GetUserSetRatingParams) (GetUserSetRatingRow, error)
 	GetUserSets(ctx context.Context, userID int64) ([]GetUserSetsRow, error)
 	InitUserFactProgress(ctx context.Context, arg InitUserFactProgressParams) error
 	IsSetAuthor(ctx context.Context, arg IsSetAuthorParams) (bool, error)

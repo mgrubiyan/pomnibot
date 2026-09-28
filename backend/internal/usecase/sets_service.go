@@ -47,7 +47,20 @@ func (s *setServiceImpl) GetSet(ctx context.Context, userID int64, setID uuid.UU
 	}
 
 	author := buildUserContract(row.AuthorID, row.AuthorFirstName, row.AuthorLastName, row.AuthorUsername)
-	return mapSetRowToContract(row.ID, row.Title, author, row.ShareCode, row.CardsTotal, row.CardsDue)
+	res, err := mapSetRowToContract(row.ID, row.Title, author, row.ShareCode, row.CardsTotal, row.CardsDue)
+	if err != nil {
+		return nil, err
+	}
+
+	if rating, err := s.querier.GetUserSetRating(ctx, db.GetUserSetRatingParams{
+		SetID:  pgUUID,
+		UserID: userID,
+	}); err == nil {
+		res.UserRank.SetTo(int(rating.Rank))
+		res.UserPercentile.SetTo(int(rating.Percentile))
+	}
+
+	return res, nil
 }
 
 func (s *setServiceImpl) DeleteSet(ctx context.Context, userID int64, setID uuid.UUID) error {
@@ -167,6 +180,56 @@ func (s *setServiceImpl) GetSetPlan(ctx context.Context, userID int64, setID uui
 		})
 	}
 	return plan, nil
+}
+
+func (s *setServiceImpl) GetSetLeaderboard(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
+	var pgUUID pgtype.UUID
+	if err := pgUUID.Scan(setID.String()); err != nil {
+		return nil, fmt.Errorf("%w: invalid set id", ErrValidation)
+	}
+
+	// Verify set exists and caller has access
+	if _, err := s.querier.GetSetByID(ctx, db.GetSetByIDParams{
+		ID:     pgUUID,
+		UserID: userID,
+	}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get set by id: %w", err)
+	}
+
+	// Verify user is author of the set
+	isAuthor, err := s.querier.IsSetAuthor(ctx, db.IsSetAuthorParams{
+		ID:       pgUUID,
+		AuthorID: userID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("check set author: %w", err)
+	}
+	if !isAuthor {
+		return nil, ErrForbidden
+	}
+
+	rows, err := s.querier.GetSetLeaderboard(ctx, pgUUID)
+	if err != nil {
+		return nil, fmt.Errorf("get set leaderboard: %w", err)
+	}
+
+	items := make([]contracts.LeaderboardEntry, 0, len(rows))
+	for _, r := range rows {
+		user := buildUserContract(r.UserID, r.FirstName, r.LastName, r.Username)
+		items = append(items, contracts.LeaderboardEntry{
+			User:       user,
+			Rank:       int(r.Rank),
+			Percentile: int(r.Percentile),
+		})
+	}
+
+	return &contracts.SetLeaderboardResponse{
+		SetId: setID,
+		Items: items,
+	}, nil
 }
 
 func (s *setServiceImpl) JoinSetByShareCode(ctx context.Context, userID int64, code string) (*contracts.CardSet, error) {
