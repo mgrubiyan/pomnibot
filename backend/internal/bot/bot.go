@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -254,26 +255,37 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 	}
 
 	files := make([]ingest.File, 0, len(atts))
-	for _, att := range atts {
+	for i, att := range atts {
 		var data []byte
+		var discoveredName string
 		if len(att.data) > 0 {
 			data = att.data
 		} else if att.url != "" {
-			d, err := b.client.DownloadFile(ctx, att.url)
+			downloaded, err := b.client.DownloadFile(ctx, att.url)
 			if err != nil {
 				slog.Error("failed to download attachment", "url", att.url, "error", err)
 				updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
 				return
 			}
-			data = d
+			data = downloaded.Data
+			discoveredName = downloaded.Filename
 		} else {
 			slog.Error("attachment has neither data nor url", "filename", att.filename)
 			updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
 			return
 		}
 
+		effectiveName := att.filename
+		if isGenericFilename(effectiveName) && !isGenericFilename(discoveredName) {
+			effectiveName = discoveredName
+			atts[i].filename = discoveredName
+			if i == 0 && caption == "" && isGenericTitle(title) {
+				title = resolveSetTitle("", discoveredName)
+			}
+		}
+
 		files = append(files, ingest.File{
-			Name: att.filename,
+			Name: effectiveName,
 			Data: data,
 		})
 	}
@@ -372,10 +384,12 @@ func (b *Bot) getAllFileAttachments(m *Message) []attachmentInfo {
 		filename := extractFilename(att)
 		url := extractURL(att)
 		var data []byte
-		if rawData, ok := att.Payload["data"].([]byte); ok {
-			data = rawData
-		} else if strData, ok := att.Payload["data"].(string); ok && strData != "" {
-			data = []byte(strData)
+		if att.Payload != nil {
+			if rawData, ok := att.Payload["data"].([]byte); ok {
+				data = rawData
+			} else if strData, ok := att.Payload["data"].(string); ok && strData != "" {
+				data = []byte(strData)
+			}
 		}
 
 		t := strings.ToLower(att.Type)
@@ -406,7 +420,31 @@ func (b *Bot) getAllFileAttachments(m *Message) []attachmentInfo {
 	return results
 }
 
+var genericFileRegex = regexp.MustCompile(`^(file_\d+|photo_\d+\.jpg)$`)
+
+func isGenericFilename(name string) bool {
+	name = strings.TrimSpace(name)
+	return name == "" || genericFileRegex.MatchString(name)
+}
+
+func isGenericTitle(title string) bool {
+	title = strings.TrimSpace(title)
+	if title == "" || genericFileRegex.MatchString(title) {
+		return true
+	}
+	if strings.HasPrefix(title, "Новый конспект (") {
+		return true
+	}
+	return false
+}
+
 func extractURL(att Attachment) string {
+	if strings.TrimSpace(att.URL) != "" {
+		return strings.TrimSpace(att.URL)
+	}
+	if strings.TrimSpace(att.Token) != "" {
+		return strings.TrimSpace(att.Token)
+	}
 	if att.Payload == nil {
 		return ""
 	}
@@ -419,12 +457,22 @@ func extractURL(att Attachment) string {
 }
 
 func extractFilename(att Attachment) string {
-	if att.Payload == nil {
-		return ""
+	candidates := []string{
+		att.Filename,
+		att.Name,
+		att.Title,
 	}
-	for _, key := range []string{"name", "filename", "title"} {
-		if v, ok := att.Payload[key].(string); ok && strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
+	if att.Payload != nil {
+		for _, key := range []string{"filename", "name", "title"} {
+			if v, ok := att.Payload[key].(string); ok {
+				candidates = append(candidates, v)
+			}
+		}
+	}
+	for _, cand := range candidates {
+		cleaned := cleanFilename(cand)
+		if cleaned != "" {
+			return cleaned
 		}
 	}
 	return ""
@@ -435,15 +483,21 @@ func resolveSetTitle(caption, filename string) string {
 	if caption != "" {
 		lines := strings.Split(caption, "\n")
 		title := strings.TrimSpace(lines[0])
-		if len(title) > 80 {
-			title = title[:80] + "..."
+		runes := []rune(title)
+		if len(runes) > 80 {
+			title = string(runes[:80]) + "..."
 		}
 		return title
 	}
 	if filename != "" {
 		base := strings.TrimSuffix(filename, filepath.Ext(filename))
-		if strings.TrimSpace(base) != "" {
-			return strings.TrimSpace(base)
+		base = strings.TrimSpace(base)
+		if base != "" {
+			runes := []rune(base)
+			if len(runes) > 80 {
+				base = string(runes[:80]) + "..."
+			}
+			return base
 		}
 	}
 	return fmt.Sprintf("Новый конспект (%s)", time.Now().Format("02.01 15:04"))
