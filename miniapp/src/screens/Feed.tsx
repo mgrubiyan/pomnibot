@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Button, Flex, Input, Spinner, Typography } from '@maxhub/max-ui';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Button, Flex, IconButton, Input, Spinner, Typography } from '@maxhub/max-ui';
 import type { AnswerResult, Card } from '../types';
-import { mockCards } from '../mocks';
+import { api } from '../api';
 import { TableColumns, TablePool } from '../components/TableCard';
 import { visibleCards, type CardPatch } from '../utils/cards';
 import {
@@ -16,6 +16,7 @@ import { Result } from './Result';
 import { cx } from '../utils/cx';
 import {
     IconCheck,
+    IconChevronLeft,
     IconCross,
     IconDoc,
     IconFlag,
@@ -38,7 +39,6 @@ const BOOLEAN_OPTIONS: Option[] = [
     { label: 'Неверно', value: 'false' },
 ];
 
-const LOAD_DELAY = 700;
 const VOICE_DELAY = 1500;
 const VOICE_SUBMIT_DELAY = 600;
 /** Matches the transform duration in Feed.module.css. */
@@ -62,6 +62,19 @@ function optionsOf(card: Card): Option[] {
     return [];
 }
 
+function answerTextOf(card: Card): string {
+    if (typeof card.answer === 'boolean') {
+        return card.answer ? 'true' : 'false';
+    }
+    if (typeof card.answer === 'number' && card.options) {
+        return card.options[card.answer] ?? String(card.answer);
+    }
+    if (typeof card.answer === 'object' && card.answer !== null) {
+        return '';
+    }
+    return String(card.answer ?? '');
+}
+
 /** Boolean cards store 'true' / 'false', which must never reach the screen. */
 function labelOf(card: Card, value: string): string {
     if (card.kind !== 'boolean') {
@@ -70,41 +83,33 @@ function labelOf(card: Card, value: string): string {
     return value === 'true' ? 'Верно' : 'Неверно';
 }
 
-/**
- * Mocks instead of a request; the real endpoint comes later.
- * Error screen — ?fail, a single card by kind or id — ?card=table, ?card=c9
- */
-function loadCards(setId?: string): Promise<Card[]> {
-    return new Promise((resolve, reject) => {
-        window.setTimeout(() => {
-            const params = new URLSearchParams(window.location.search);
-
-            if (params.has('fail')) {
-                reject(new Error('network'));
-                return;
-            }
-
-            let next = setId ? mockCards.filter((card) => card.setId === setId) : mockCards;
-
-            const only = params.get('card');
-            if (only) {
-                next = next.filter((card) => card.id === only || card.kind === only);
-            }
-
-            resolve(next);
-        }, LOAD_DELAY);
-    });
+async function loadCards(setId?: string): Promise<Card[]> {
+    if (setId) {
+        const { data, error } = await api.GET('/sets/{setId}/cards', {
+            params: { path: { setId } },
+        });
+        if (error || !data) {
+            throw new Error(error?.message ?? 'Failed to load cards');
+        }
+        return data;
+    }
+    const { data, error } = await api.GET('/feed');
+    if (error || !data) {
+        throw new Error(error?.message ?? 'Failed to load feed');
+    }
+    return data;
 }
 
 /** Recognition stub: no engine yet, so we always «hear» the right answer. */
 function mockTranscript(card: Card): string {
+    const ans = answerTextOf(card);
     if (card.kind === 'boolean') {
-        return card.answer === 'true' ? 'верно' : 'неверно';
+        return ans === 'true' ? 'верно' : 'неверно';
     }
     if (card.kind === 'choice') {
-        return card.answer.split(' ').slice(0, 4).join(' ').toLowerCase();
+        return ans.split(' ').slice(0, 4).join(' ').toLowerCase();
     }
-    return card.answer.toLowerCase();
+    return ans.toLowerCase();
 }
 
 /** Maps the recognized phrase onto an answer option when one matches. */
@@ -126,7 +131,8 @@ export interface FeedProps {
     removedCardIds: string[];
     cardPatches: Record<string, CardPatch>;
     onExit: () => void;
-    onReportCard: (cardId: string) => void;
+    onBack?: () => void;
+    onReportCard: (card: Card) => void;
     /** Opens sharing from the result screen; absent for the daily mix. */
     onShare?: () => void;
 }
@@ -137,6 +143,7 @@ export function Feed({
     removedCardIds,
     cardPatches,
     onExit,
+    onBack,
     onReportCard,
     onShare,
 }: FeedProps) {
@@ -215,7 +222,7 @@ export function Feed({
                 return;
             }
             setGiven(value);
-            setVerdict(norm(value) === norm(card.answer) ? 'correct' : 'wrong');
+            setVerdict(norm(value) === norm(answerTextOf(card)) ? 'correct' : 'wrong');
             startFlip();
         },
         [card, startFlip],
@@ -321,6 +328,28 @@ export function Feed({
         return () => window.clearTimeout(timer);
     }, [leaving, showNext]);
 
+    const submittedRef = useRef(false);
+
+    const handleBack = () => {
+        submittedRef.current = true;
+        if (onBack) {
+            onBack();
+        } else {
+            onExit();
+        }
+    };
+
+    useEffect(() => {
+        if (!card && results.length > 0 && !submittedRef.current) {
+            submittedRef.current = true;
+            api.POST('/results', {
+                body: results,
+            }).catch((err: unknown) => {
+                console.error('Failed to submit results:', err);
+            });
+        }
+    }, [card, results]);
+
     if (status === 'loading') {
         return (
             <StatusScreen
@@ -338,9 +367,14 @@ export function Feed({
                 title="Нет соединения"
                 text="Проверьте интернет и попробуйте ещё раз"
                 action={
-                    <Button size="medium" variant="primary" stretched onClick={retry}>
-                        Повторить
-                    </Button>
+                    <Flex direction="column" align="stretch" gap={8}>
+                        <Button size="medium" variant="primary" stretched onClick={retry}>
+                            Повторить
+                        </Button>
+                        <Button size="medium" variant="ghost" stretched onClick={handleBack}>
+                            Назад
+                        </Button>
+                    </Flex>
                 }
             />
         );
@@ -391,10 +425,20 @@ export function Feed({
         <Screen>
             <Flex direction="column" align="stretch" gap={8}>
                 <Flex justify="space-between" align="center" gap={8}>
-                    <Typography.Text variant="label" color="secondary">
-                        {card.topic}
-                    </Typography.Text>
-                    <Typography.Text variant="label" color="secondary">
+                    <Flex align="center" gap={8} style={{ minWidth: 0 }}>
+                        <IconButton
+                            size="small"
+                            variant="ghost"
+                            aria-label="Назад"
+                            onClick={handleBack}
+                        >
+                            <IconChevronLeft size={20} />
+                        </IconButton>
+                        <Typography.Text variant="label" color="secondary">
+                            {card.topic}
+                        </Typography.Text>
+                    </Flex>
+                    <Typography.Text variant="label" color="secondary" style={{ flexShrink: 0 }}>
                         {index + 1} / {cards.length}
                     </Typography.Text>
                 </Flex>
@@ -532,7 +576,7 @@ export function Feed({
                                             Верный ответ
                                         </Typography.Text>
                                         <Typography.Text variant="body" className={s.answerText}>
-                                            {labelOf(card, card.answer)}
+                                            {labelOf(card, answerTextOf(card))}
                                         </Typography.Text>
                                     </Flex>
                                 </Flex>
@@ -608,7 +652,7 @@ export function Feed({
                         stretched
                         disabled={busy}
                         iconBefore={<IconFlag size={16} tone="muted" />}
-                        onClick={() => onReportCard(card.id)}
+                        onClick={() => onReportCard(card)}
                     >
                         <Typography.Text variant="description" color="tertiary">
                             Карточка неверная

@@ -15,13 +15,32 @@ const REASONS: { value: CardIssueReason; label: string }[] = [
 export interface CardIssueProps {
     card: Card;
     setTitle: string;
+    isOwner?: boolean;
     onBack: () => void;
-    onEdit: (reason: CardIssueReason) => void;
-    onRemove: (reason: CardIssueReason) => void;
+    onEdit?: (reason: CardIssueReason) => void;
+    onRemove?: (reason: CardIssueReason) => void;
+    onReport?: (reason: CardIssueReason) => void;
 }
 
-export function CardIssue({ card, setTitle, onBack, onEdit, onRemove }: CardIssueProps) {
+export function CardIssue({
+    card,
+    setTitle,
+    isOwner = true,
+    onBack,
+    onEdit,
+    onRemove,
+    onReport,
+}: CardIssueProps) {
     const [reason, setReason] = useState<CardIssueReason>('answer');
+
+    const formattedAnswer =
+        typeof card.answer === 'object' && card.answer !== null
+            ? 'Таблица'
+            : typeof card.answer === 'boolean'
+              ? card.answer
+                  ? 'Верно'
+                  : 'Неверно'
+              : String(card.answer ?? '');
 
     return (
         <Screen>
@@ -48,7 +67,7 @@ export function CardIssue({ card, setTitle, onBack, onEdit, onRemove }: CardIssu
                         {card.question}
                     </Typography.Text>
                     <Typography.Text variant="description" color="secondary" className={s.previewText}>
-                        Ответ: {card.answer}
+                        Ответ: {formattedAnswer}
                     </Typography.Text>
                 </Flex>
 
@@ -68,18 +87,27 @@ export function CardIssue({ card, setTitle, onBack, onEdit, onRemove }: CardIssu
                 </fieldset>
 
                 <Typography.Text variant="description" color="secondary" className={s.note}>
-                    Карточку можно поправить сразу или убрать из набора. Причина поможет делать
-                    карточки точнее.
+                    {isOwner
+                        ? 'Карточку можно поправить сразу или убрать из набора. Причина поможет делать карточки точнее.'
+                        : 'Сообщение об ошибке будет отправлено, чтобы сделать карточку точнее.'}
                 </Typography.Text>
             </Flex>
 
             <Flex direction="column" align="stretch" gap={8}>
-                <Button size="medium" variant="primary" stretched onClick={() => onEdit(reason)}>
-                    Исправить карточку
-                </Button>
-                <Button size="medium" variant="secondary" stretched onClick={() => onRemove(reason)}>
-                    Удалить из набора
-                </Button>
+                {isOwner ? (
+                    <>
+                        <Button size="medium" variant="primary" stretched onClick={() => onEdit?.(reason)}>
+                            Исправить карточку
+                        </Button>
+                        <Button size="medium" variant="secondary" stretched onClick={() => onRemove?.(reason)}>
+                            Удалить из набора
+                        </Button>
+                    </>
+                ) : (
+                    <Button size="medium" variant="primary" stretched onClick={() => onReport?.(reason)}>
+                        Сообщить об ошибке
+                    </Button>
+                )}
             </Flex>
         </Screen>
     );

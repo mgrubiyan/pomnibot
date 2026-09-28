@@ -16,3 +16,17 @@ tasks:
       - mkdir -p ../miniapp/contracts
       - bunx openapi-typescript openapi.yaml -o ../miniapp/contracts/schema.ts
       - cp client.ts ../miniapp/contracts/index.ts
+  gen-data-api:
+    desc: "Generate DATA-API.yaml"
+    sources:
+      - openapi.yaml
+    generates:
+      - data-api/DATA-API.yaml
+    cmds:
+      - >-
+        python data-api/generate_data_api.py -i openapi.yaml
+        -o data-api/DATA-API.yaml
+        --solution-name 'Pomnibot API'
+        --team-id t583_hakaton_max_bot
+        --base-url https://pomnibot.steins.ru/api/
+        --default-role user

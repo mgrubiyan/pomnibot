@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button, CellHeader, CellList, CellSimple, Flex, Spinner, Typography } from '@maxhub/max-ui';
 import type { CardSet, TodayData } from '../types';
-import { mockToday, mockTodayDone, mockTodayEmpty } from '../mocks';
+import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
 import { IconDoc, IconOffline } from '../components/Icons';
@@ -11,32 +11,12 @@ import s from './Home.module.css';
 
 type Status = 'loading' | 'error' | 'ready';
 
-const LOAD_DELAY = 700;
-
-/**
- * Mocks instead of a request; the real endpoint comes later.
- * The states are reachable through ?home=done, ?home=empty and ?fail
- */
-function loadToday(): Promise<TodayData> {
-    return new Promise((resolve, reject) => {
-        window.setTimeout(() => {
-            const params = new URLSearchParams(window.location.search);
-
-            if (params.has('fail')) {
-                reject(new Error('network'));
-                return;
-            }
-            if (params.get('home') === 'done') {
-                resolve(mockTodayDone);
-                return;
-            }
-            if (params.get('home') === 'empty') {
-                resolve(mockTodayEmpty);
-                return;
-            }
-            resolve(mockToday);
-        }, LOAD_DELAY);
-    });
+async function loadToday(): Promise<TodayData> {
+    const { data, error } = await api.GET('/');
+    if (error || !data) {
+        throw new Error(error?.message ?? 'Failed to load today data');
+    }
+    return data;
 }
 
 /** «24 карточки · 8 на повтор», without the tail when nothing is due. */

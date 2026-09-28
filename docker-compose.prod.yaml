@@ -12,9 +12,16 @@ services:
       - "traefik.http.middlewares.pomnibot-headers.headers.customResponseHeaders.Content-Security-Policy=frame-ancestors 'self' https://*.max.ru https://max.ru https://*.vk.com https://vk.com *"
       - "traefik.http.services.pomnibot.loadbalancer.server.port=8080"
     networks:
+      - default
       - traefik-network
 
+  postgres:
+    ports: !reset []
+    networks:
+      - default
+
 networks:
+  default:
   traefik-network:
     name: traefik-network
     external: true

@@ -9,6 +9,7 @@ declare global {
         WebApp?: {
             ready?: () => void;
             close?: () => void;
+            initData?: string;
             [key: string]: unknown;
         };
     }
