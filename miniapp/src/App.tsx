@@ -187,9 +187,15 @@ function App() {
             await api.PUT('/cards/{cardId}', {
                 params: { path: { cardId } },
                 body: {
+                    kind: patch.kind,
                     question: patch.question,
                     answer: patch.answer,
                     options: patch.options,
+                    table: patch.table,
+                    explanation: patch.explanation,
+                    topic: patch.topic,
+                    sourceQuote: patch.sourceQuote,
+                    sourceRef: patch.sourceRef,
                 },
             });
         } catch (err) {

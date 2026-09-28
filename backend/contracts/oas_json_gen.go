@@ -2067,6 +2067,39 @@ func (s *OptCardAnswer) UnmarshalJSON(data []byte) error {
 	return s.Decode(d)
 }
 
+// Encode encodes CardKind as json.
+func (o OptCardKind) Encode(e *jx.Encoder) {
+	if !o.Set {
+		return
+	}
+	e.Str(string(o.Value))
+}
+
+// Decode decodes CardKind from json.
+func (o *OptCardKind) Decode(d *jx.Decoder) error {
+	if o == nil {
+		return errors.New("invalid: unable to decode OptCardKind to nil")
+	}
+	o.Set = true
+	if err := o.Value.Decode(d); err != nil {
+		return err
+	}
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s OptCardKind) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *OptCardKind) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
 // Encode encodes string as json.
 func (o OptString) Encode(e *jx.Encoder) {
 	if !o.Set {
@@ -3176,6 +3209,12 @@ func (s *UpdateCardRequest) Encode(e *jx.Encoder) {
 // encodeFields encodes fields.
 func (s *UpdateCardRequest) encodeFields(e *jx.Encoder) {
 	{
+		if s.Kind.Set {
+			e.FieldStart("kind")
+			s.Kind.Encode(e)
+		}
+	}
+	{
 		if s.Question.Set {
 			e.FieldStart("question")
 			s.Question.Encode(e)
@@ -3229,15 +3268,16 @@ func (s *UpdateCardRequest) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfUpdateCardRequest = [8]string{
-	0: "question",
-	1: "options",
-	2: "table",
-	3: "answer",
-	4: "explanation",
-	5: "sourceQuote",
-	6: "sourceRef",
-	7: "topic",
+var jsonFieldsNameOfUpdateCardRequest = [9]string{
+	0: "kind",
+	1: "question",
+	2: "options",
+	3: "table",
+	4: "answer",
+	5: "explanation",
+	6: "sourceQuote",
+	7: "sourceRef",
+	8: "topic",
 }
 
 // Decode decodes UpdateCardRequest from json.
@@ -3248,6 +3288,16 @@ func (s *UpdateCardRequest) Decode(d *jx.Decoder) error {
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
+		case "kind":
+			if err := func() error {
+				s.Kind.Reset()
+				if err := s.Kind.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"kind\"")
+			}
 		case "question":
 			if err := func() error {
 				s.Question.Reset()

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -51,12 +52,16 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID int64, cardID u
 	// Update base card fields
 	arg := db.UpdateCardParams{
 		ID:          pgCardID,
+		Kind:        existing.Kind,
 		Question:    existing.Question,
 		AnswerText:  existing.AnswerText,
 		Explanation: existing.Explanation,
 		SourceQuote: existing.SourceQuote,
 		SourceRef:   existing.SourceRef,
 		AuthorID:    userID,
+	}
+	if req.Kind.IsSet() {
+		arg.Kind = string(req.Kind.Value)
 	}
 	if req.Question.IsSet() {
 		arg.Question = req.Question.Value
@@ -69,6 +74,22 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID int64, cardID u
 	}
 	if req.SourceRef.IsSet() {
 		arg.SourceRef = pgtype.Text{String: req.SourceRef.Value, Valid: true}
+	}
+	if req.Answer.IsSet() {
+		switch req.Answer.Value.Type {
+		case contracts.StringCardAnswer:
+			arg.AnswerText = pgtype.Text{String: req.Answer.Value.String, Valid: true}
+		case contracts.BoolCardAnswer:
+			arg.AnswerText = pgtype.Text{String: strconv.FormatBool(req.Answer.Value.Bool), Valid: true}
+		case contracts.IntCardAnswer:
+			if int(req.Answer.Value.Int) < len(req.Options) {
+				arg.AnswerText = pgtype.Text{String: req.Options[req.Answer.Value.Int], Valid: true}
+			} else {
+				arg.AnswerText = pgtype.Text{String: strconv.Itoa(req.Answer.Value.Int), Valid: true}
+			}
+		case contracts.TableLayoutCardAnswer:
+			// table answer text can remain as is
+		}
 	}
 
 	updated, err := s.querier.UpdateCard(ctx, arg)
@@ -93,8 +114,33 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID int64, cardID u
 		}
 	}
 
+	// If table layout is provided, replace columns and items
+	if req.Table.IsSet() {
+		_ = s.querier.DeleteCardTableColumns(ctx, pgCardID)
+		_ = s.querier.DeleteCardTableItems(ctx, pgCardID)
+		for idx, col := range req.Table.Value.Columns {
+			_, _ = s.querier.CreateCardTableColumn(ctx, db.CreateCardTableColumnParams{
+				CardID:   pgCardID,
+				Position: int32(idx),
+				Name:     col,
+			})
+		}
+		for _, item := range req.Table.Value.Items {
+			_, _ = s.querier.CreateCardTableItem(ctx, db.CreateCardTableItemParams{
+				CardID:     pgCardID,
+				ItemText:   item.Text,
+				ColumnName: item.Column,
+			})
+		}
+	}
+
 	setUUID, _ := uuid.FromBytes(existing.SetID.Bytes[:])
 	cardKind := contracts.CardKind(updated.Kind)
+	topic := existing.Topic
+	if req.Topic.IsSet() {
+		topic = req.Topic.Value
+	}
+
 	res := &contracts.Card{
 		ID:          cardID,
 		SetId:       setUUID,
@@ -102,7 +148,7 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID int64, cardID u
 		Question:    updated.Question,
 		Explanation: updated.Explanation,
 		SourceQuote: updated.SourceQuote,
-		Topic:       existing.Topic,
+		Topic:       topic,
 	}
 
 	if updated.SourceRef.Valid && updated.SourceRef.String != "" {
@@ -113,9 +159,23 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID int64, cardID u
 		res.Options = req.Options
 	}
 
-	res.Answer = contracts.CardAnswer{
-		Type:   contracts.StringCardAnswer,
-		String: updated.AnswerText.String,
+	if req.Table.IsSet() {
+		res.Table.SetTo(req.Table.Value)
+		res.Answer = contracts.CardAnswer{
+			Type:        contracts.TableLayoutCardAnswer,
+			TableLayout: req.Table.Value,
+		}
+	} else if cardKind == contracts.CardKindBoolean {
+		b, _ := strconv.ParseBool(updated.AnswerText.String)
+		res.Answer = contracts.CardAnswer{
+			Type: contracts.BoolCardAnswer,
+			Bool: b,
+		}
+	} else {
+		res.Answer = contracts.CardAnswer{
+			Type:   contracts.StringCardAnswer,
+			String: updated.AnswerText.String,
+		}
 	}
 
 	return res, nil

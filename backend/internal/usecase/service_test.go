@@ -333,6 +333,202 @@ func TestCardService_UpdateCard_Authorization(t *testing.T) {
 	}
 }
 
+func TestCardService_UpdateCard_FieldsAndKinds(t *testing.T) {
+	cardUUID := uuid.New()
+	var pgUUID pgtype.UUID
+	_ = pgUUID.Scan(cardUUID.String())
+
+	setUUID := uuid.New()
+	var pgSetUUID pgtype.UUID
+	_ = pgSetUUID.Scan(setUUID.String())
+
+	authorID := int64(100)
+
+	t.Run("Update boolean card with answer and topic", func(t *testing.T) {
+		var updatedArg db.UpdateCardParams
+		mock := &mockQuerier{
+			getCardByIDForAuthorFunc: func(_ context.Context, _ db.GetCardByIDForAuthorParams) (db.GetCardByIDForAuthorRow, error) {
+				return db.GetCardByIDForAuthorRow{
+					ID:         pgUUID,
+					SetID:      pgSetUUID,
+					Kind:       "boolean",
+					Question:   "Initial question",
+					AnswerText: pgtype.Text{String: "false", Valid: true},
+					Topic:      "Initial Topic",
+				}, nil
+			},
+			updateCardFunc: func(_ context.Context, arg db.UpdateCardParams) (db.Card, error) {
+				updatedArg = arg
+				return db.Card{
+					ID:          arg.ID,
+					Kind:        "boolean",
+					Question:    arg.Question,
+					AnswerText:  arg.AnswerText,
+					Explanation: arg.Explanation,
+					SourceQuote: arg.SourceQuote,
+					SourceRef:   arg.SourceRef,
+				}, nil
+			},
+		}
+
+		svc := usecase.NewCardService(mock, usecase.NewUserService(mock))
+
+		req := &contracts.UpdateCardRequest{
+			Question:    contracts.NewOptString("Is preprocessor first?"),
+			Explanation: contracts.NewOptString("Yes, it is the first stage."),
+			Topic:       contracts.NewOptString("Compilation"),
+			Answer: contracts.NewOptCardAnswer(contracts.CardAnswer{
+				Type: contracts.BoolCardAnswer,
+				Bool: true,
+			}),
+		}
+
+		res, err := svc.UpdateCard(context.Background(), authorID, cardUUID, req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if res.Question != "Is preprocessor first?" {
+			t.Errorf("expected updated question, got %s", res.Question)
+		}
+		if res.Topic != "Compilation" {
+			t.Errorf("expected topic Compilation, got %s", res.Topic)
+		}
+		if res.Explanation != "Yes, it is the first stage." {
+			t.Errorf("expected updated explanation, got %s", res.Explanation)
+		}
+		if updatedArg.AnswerText.String != "true" {
+			t.Errorf("expected db AnswerText 'true', got %s", updatedArg.AnswerText.String)
+		}
+		if !res.Answer.Bool {
+			t.Errorf("expected Bool answer true")
+		}
+	})
+
+	t.Run("Update table card layout", func(t *testing.T) {
+		colsDeleted := false
+		itemsDeleted := false
+		createdCols := 0
+		createdItems := 0
+
+		mock := &mockQuerier{
+			getCardByIDForAuthorFunc: func(_ context.Context, _ db.GetCardByIDForAuthorParams) (db.GetCardByIDForAuthorRow, error) {
+				return db.GetCardByIDForAuthorRow{
+					ID:       pgUUID,
+					SetID:    pgSetUUID,
+					Kind:     "table",
+					Question: "Categorize items",
+				}, nil
+			},
+			updateCardFunc: func(_ context.Context, arg db.UpdateCardParams) (db.Card, error) {
+				return db.Card{
+					ID:       arg.ID,
+					Kind:     "table",
+					Question: arg.Question,
+				}, nil
+			},
+			deleteCardTableColumnsFunc: func(_ context.Context, _ pgtype.UUID) error {
+				colsDeleted = true
+				return nil
+			},
+			deleteCardTableItemsFunc: func(_ context.Context, _ pgtype.UUID) error {
+				itemsDeleted = true
+				return nil
+			},
+			createCardTableColumnFunc: func(_ context.Context, _ db.CreateCardTableColumnParams) (db.CardTableColumn, error) {
+				createdCols++
+				return db.CardTableColumn{}, nil
+			},
+			createCardTableItemFunc: func(_ context.Context, _ db.CreateCardTableItemParams) (db.CardTableItem, error) {
+				createdItems++
+				return db.CardTableItem{}, nil
+			},
+		}
+
+		svc := usecase.NewCardService(mock, usecase.NewUserService(mock))
+
+		tableReq := contracts.TableLayout{
+			Columns: []string{"Col A", "Col B"},
+			Items: []contracts.TableItem{
+				{Text: "Item 1", Column: "Col A"},
+				{Text: "Item 2", Column: "Col B"},
+			},
+		}
+
+		req := &contracts.UpdateCardRequest{
+			Table: contracts.NewOptTableLayout(tableReq),
+		}
+
+		res, err := svc.UpdateCard(context.Background(), authorID, cardUUID, req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !colsDeleted || !itemsDeleted {
+			t.Errorf("expected old table columns and items to be deleted")
+		}
+		if createdCols != 2 || createdItems != 2 {
+			t.Errorf("expected 2 columns and 2 items created, got %d cols and %d items", createdCols, createdItems)
+		}
+		if !res.Table.IsSet() || len(res.Table.Value.Columns) != 2 {
+			t.Errorf("expected table layout in response")
+		}
+	})
+
+	t.Run("Update card kind to choice with options", func(t *testing.T) {
+		var updatedKind string
+		mock := &mockQuerier{
+			getCardByIDForAuthorFunc: func(_ context.Context, _ db.GetCardByIDForAuthorParams) (db.GetCardByIDForAuthorRow, error) {
+				return db.GetCardByIDForAuthorRow{
+					ID:         pgUUID,
+					SetID:      pgSetUUID,
+					Kind:       "input",
+					Question:   "Initial question",
+					AnswerText: pgtype.Text{String: "Option 1", Valid: true},
+				}, nil
+			},
+			updateCardFunc: func(_ context.Context, arg db.UpdateCardParams) (db.Card, error) {
+				updatedKind = arg.Kind
+				return db.Card{
+					ID:         arg.ID,
+					Kind:       arg.Kind,
+					Question:   arg.Question,
+					AnswerText: arg.AnswerText,
+				}, nil
+			},
+			deleteCardOptionsFunc: func(_ context.Context, _ pgtype.UUID) error {
+				return nil
+			},
+			createCardOptionFunc: func(_ context.Context, _ db.CreateCardOptionParams) (db.CardOption, error) {
+				return db.CardOption{}, nil
+			},
+		}
+
+		svc := usecase.NewCardService(mock, usecase.NewUserService(mock))
+
+		req := &contracts.UpdateCardRequest{
+			Kind:    contracts.NewOptCardKind(contracts.CardKindChoice),
+			Options: []string{"Option 1", "Option 2"},
+			Answer: contracts.NewOptCardAnswer(contracts.CardAnswer{
+				Type:   contracts.StringCardAnswer,
+				String: "Option 1",
+			}),
+		}
+
+		res, err := svc.UpdateCard(context.Background(), authorID, cardUUID, req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if updatedKind != "choice" {
+			t.Errorf("expected db kind 'choice', got %s", updatedKind)
+		}
+		if res.Kind != contracts.CardKindChoice {
+			t.Errorf("expected res.Kind CardKindChoice, got %v", res.Kind)
+		}
+		if len(res.Options) != 2 {
+			t.Errorf("expected 2 options in res")
+		}
+	})
+}
+
 func TestCardService_DeleteCard_Authorization(t *testing.T) {
 	cardUUID := uuid.New()
 	authorID := int64(100)

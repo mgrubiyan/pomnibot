@@ -256,6 +256,7 @@ export interface components {
             topic: string;
         };
         UpdateCardRequest: {
+            kind?: components["schemas"]["CardKind"];
             question?: string;
             /** @description choice only */
             options?: string[];

@@ -20,6 +20,9 @@ type mockQuerier struct {
 	createCardTableItemFunc        func(ctx context.Context, arg db.CreateCardTableItemParams) (db.CardTableItem, error)
 	createSetFunc                  func(ctx context.Context, arg db.CreateSetParams) (db.Set, error)
 	deleteCardFunc                 func(ctx context.Context, arg db.DeleteCardParams) (int64, error)
+	deleteCardOptionsFunc          func(ctx context.Context, cardID pgtype.UUID) error
+	deleteCardTableColumnsFunc     func(ctx context.Context, cardID pgtype.UUID) error
+	deleteCardTableItemsFunc       func(ctx context.Context, cardID pgtype.UUID) error
 	deleteSetFunc                  func(ctx context.Context, arg db.DeleteSetParams) (int64, error)
 	getCardByIDFunc                func(ctx context.Context, arg db.GetCardByIDParams) (db.GetCardByIDRow, error)
 	getCardByIDForAuthorFunc       func(ctx context.Context, arg db.GetCardByIDForAuthorParams) (db.GetCardByIDForAuthorRow, error)
@@ -121,6 +124,27 @@ func (m *mockQuerier) DeleteCard(ctx context.Context, arg db.DeleteCardParams) (
 		return m.deleteCardFunc(ctx, arg)
 	}
 	return 1, nil
+}
+
+func (m *mockQuerier) DeleteCardOptions(ctx context.Context, cardID pgtype.UUID) error {
+	if m.deleteCardOptionsFunc != nil {
+		return m.deleteCardOptionsFunc(ctx, cardID)
+	}
+	return nil
+}
+
+func (m *mockQuerier) DeleteCardTableColumns(ctx context.Context, cardID pgtype.UUID) error {
+	if m.deleteCardTableColumnsFunc != nil {
+		return m.deleteCardTableColumnsFunc(ctx, cardID)
+	}
+	return nil
+}
+
+func (m *mockQuerier) DeleteCardTableItems(ctx context.Context, cardID pgtype.UUID) error {
+	if m.deleteCardTableItemsFunc != nil {
+		return m.deleteCardTableItemsFunc(ctx, cardID)
+	}
+	return nil
 }
 
 func (m *mockQuerier) DeleteSet(ctx context.Context, arg db.DeleteSetParams) (int64, error) {
