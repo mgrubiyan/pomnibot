@@ -98,6 +98,17 @@ func isInvisible(r rune) bool {
 	return false
 }
 
+// isBullet reports list markers, which slides are full of and the model
+// leaves out of its quotes. The middle dot is not one: "кг·м/с²".
+func isBullet(r rune) bool {
+	switch r {
+	case '▶', '►', '▸', '▹', '•', '◦', '▪', '▫', '■', '□', '●', '○', '‣', '∙', '➢', '➤',
+		'\uF0B7', '\uF0A7', '\uF076': // Symbol and Wingdings bullets of Word PDFs
+		return true
+	}
+	return false
+}
+
 func isQuoteMark(r rune) bool {
 	switch r {
 	case '"', '\'', '`', '«', '»', '„', '“', '”', '‟', '‘', '’', '‚', '‛', '‹', '›':
@@ -124,7 +135,8 @@ type folded struct {
 
 // fold reduces s to a form in which the model's copy of a quote matches the
 // notes: lowercase, ё → е, no quote marks, one kind of dash with no spaces
-// around it, "…" as three dots, runs of whitespace as one space.
+// around it, "…" as three dots, list bullets and runs of whitespace as one
+// space.
 //
 // It ignores only typography. Words, their order and punctuation other than
 // quotes and dashes must match, so a paraphrase does not pass.
@@ -154,7 +166,7 @@ func fold(s string) folded {
 		switch {
 		case isInvisible(r) || isQuoteMark(r):
 			continue
-		case unicode.IsSpace(r):
+		case unicode.IsSpace(r) || isBullet(r):
 			if spaceFrom < 0 {
 				spaceFrom = from
 			}

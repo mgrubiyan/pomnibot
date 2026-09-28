@@ -66,6 +66,29 @@ func TestFindQuoteLimitsTheGap(t *testing.T) {
 	}
 }
 
+// Slides are lists: the model drops the bullets and ends items with
+// periods. Bullets are typography, like quote marks and dashes.
+func TestFindQuoteIgnoresBullets(t *testing.T) {
+	fragment := "Языки с виртуальными машинами (Java, C#):\n" +
+		"▶ Компиляция в байт-код (промежуточное представление)\n" +
+		"▶ Виртуальная машина переводит байт-код в машинный код\n" +
+		"• Плюсы: кроссплатформенность\n" +
+		"▶ Минусы: больше памяти, медленнее выполнение"
+	quote := "Языки с виртуальными машинами (Java, C#): Компиляция в байт-код (промежуточное представление). " +
+		"Виртуальная машина переводит байт-код в машинный код. Плюсы: кроссплатформенность"
+	want := "Языки с виртуальными машинами (Java, C#):\n" +
+		"▶ Компиляция в байт-код (промежуточное представление)\n" +
+		"▶ Виртуальная машина переводит байт-код в машинный код\n" +
+		"• Плюсы: кроссплатформенность"
+	if got, ok := findQuote(fragment, quote); !ok || got != want {
+		t.Errorf("findQuote() = %q, %v; want %q", got, ok, want)
+	}
+	// A middle dot is no bullet: "кг·м/с²" is not "кг м/с²".
+	if got, ok := findQuote("Единица силы — ньютон: 1 Н = 1 кг·м/с², то есть килограмм-метр на секунду в квадрате.", "Единица силы — ньютон: 1 Н = 1 кг м/с²"); ok {
+		t.Errorf("findQuote() accepted a middle dot as a bullet: %q", got)
+	}
+}
+
 func TestFindQuote(t *testing.T) {
 	const fragment = "Клеточный цикл — это период жизни клетки от одного деления до следующего\n" +
 		"или до её гибели. Ядро окружено «ядерной оболочкой» из двух мембран. " +
