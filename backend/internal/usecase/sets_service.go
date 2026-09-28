@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
+	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 )
@@ -215,6 +216,33 @@ func (s *setServiceImpl) GenerateMockSet(ctx context.Context, userID int64, titl
 	set, cardsCount, err := repository.GenerateSetForUser(ctx, s.querier, userID, title)
 	if err != nil {
 		return nil, fmt.Errorf("generate set for user: %w", err)
+	}
+
+	setUUID, err := uuid.FromBytes(set.ID.Bytes[:])
+	if err != nil {
+		return nil, fmt.Errorf("parse set uuid: %w", err)
+	}
+
+	res := &contracts.CardSet{
+		ID:         setUUID,
+		Title:      set.Title,
+		CardsTotal: cardsCount,
+		CardsDue:   cardsCount,
+	}
+	if set.ShareCode != "" {
+		res.ShareCode.SetTo(set.ShareCode)
+	}
+	return res, nil
+}
+
+func (s *setServiceImpl) SaveGeneratedSet(ctx context.Context, userID int64, title string, genResult generator.Result) (*contracts.CardSet, error) {
+	if err := s.userService.EnsureUser(ctx, userID); err != nil {
+		return nil, err
+	}
+
+	set, cardsCount, err := repository.SaveGeneratedSet(ctx, s.querier, userID, title, genResult)
+	if err != nil {
+		return nil, fmt.Errorf("save generated set for user: %w", err)
 	}
 
 	setUUID, err := uuid.FromBytes(set.ID.Bytes[:])

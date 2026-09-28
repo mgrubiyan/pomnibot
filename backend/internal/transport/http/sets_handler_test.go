@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
+	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
@@ -67,6 +68,10 @@ func (m *mockSetService) GenerateMockSet(ctx context.Context, userID int64, titl
 	if m.generateMockSetFunc != nil {
 		return m.generateMockSetFunc(ctx, userID, title)
 	}
+	return nil, nil
+}
+
+func (m *mockSetService) SaveGeneratedSet(_ context.Context, _ int64, _ string, _ generator.Result) (*contracts.CardSet, error) {
 	return nil, nil
 }
 

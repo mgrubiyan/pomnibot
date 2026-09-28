@@ -10,6 +10,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
+	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
+	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
@@ -490,3 +492,65 @@ func TestSetService_GenerateMockSet(t *testing.T) {
 	})
 }
 
+func TestSetService_SaveGeneratedSet(t *testing.T) {
+	ctx := context.Background()
+	const userID = int64(123)
+	const title = "Конспект по биологии"
+
+	mock := &mockQuerier{
+		ensureUserFunc: func(_ context.Context, id int64) (db.User, error) {
+			return db.User{ID: id}, nil
+		},
+		getSetByShareCodeFunc: func(_ context.Context, _ db.GetSetByShareCodeParams) (db.GetSetByShareCodeRow, error) {
+			return db.GetSetByShareCodeRow{}, pgx.ErrNoRows
+		},
+		createSetFunc: func(_ context.Context, arg db.CreateSetParams) (db.Set, error) {
+			var setUUID pgtype.UUID
+			_ = setUUID.Scan("22222222-2222-2222-2222-222222222222")
+			return db.Set{
+				ID:        setUUID,
+				Title:     arg.Title,
+				AuthorID:  arg.AuthorID,
+				ShareCode: arg.ShareCode,
+			}, nil
+		},
+		joinSetFunc: func(_ context.Context, arg db.JoinSetParams) (db.UserSet, error) {
+			return db.UserSet{UserID: arg.UserID, SetID: arg.SetID}, nil
+		},
+		upsertTopicFunc: func(_ context.Context, name string) (db.Topic, error) {
+			return db.Topic{Name: name}, nil
+		},
+		createFactFunc: func(_ context.Context, arg db.CreateFactParams) (db.Fact, error) {
+			return db.Fact{ID: arg.ID, SetID: arg.SetID, Name: arg.Name}, nil
+		},
+		createCardFunc: func(_ context.Context, arg db.CreateCardParams) (db.Card, error) {
+			return db.Card{ID: arg.ID, FactID: arg.FactID, Kind: arg.Kind}, nil
+		},
+		initUserFactProgressFunc: func(_ context.Context, _ db.InitUserFactProgressParams) error {
+			return nil
+		},
+	}
+
+	svc := usecase.NewSetService(mock, usecase.NewUserService(mock))
+	genResult := generator.Result{
+		Facts: []cards.Fact{
+			{ID: "f1", Name: "Fact 1", Topic: "Bio"},
+		},
+		Cards: []cards.Card{
+			{FactID: "f1", Kind: cards.KindFlip, Question: "Q1", Answer: "A1"},
+		},
+	}
+
+	t.Run("success saves generated set", func(t *testing.T) {
+		res, err := svc.SaveGeneratedSet(ctx, userID, title, genResult)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if res.Title != title {
+			t.Errorf("expected title %q, got %q", title, res.Title)
+		}
+		if res.CardsTotal != 1 {
+			t.Errorf("expected 1 card, got %d", res.CardsTotal)
+		}
+	})
+}

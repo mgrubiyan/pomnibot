@@ -63,6 +63,16 @@ func NewGenerator(p providers.Provider, opts Options) *Generator {
 	}
 }
 
+// WithOnBatch returns a shallow copy of Generator with a custom OnBatch callback.
+func (g *Generator) WithOnBatch(onBatch func(Batch)) *Generator {
+	if g == nil {
+		return nil
+	}
+	cp := *g
+	cp.opts.OnBatch = onBatch
+	return &cp
+}
+
 // Generate runs the pipeline on one document: normalize, split, drop junk,
 // one model call per fragment, check quotes, drop duplicates, add
 // distractors, trim to MaxFactsPerDoc. Cards reach OnBatch as they are ready;
