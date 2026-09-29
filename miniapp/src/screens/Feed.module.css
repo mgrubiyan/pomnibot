@@ -165,17 +165,6 @@
     cursor: default;
 }
 
-/* Voice input block inside the card */
-
-.voice {
-    /* Keeps a recognized phrase from pushing the card apart. */
-    min-width: 0;
-}
-
-.transcript {
-    text-wrap: pretty;
-    overflow-wrap: anywhere;
-}
 
 /* Answer breakdown */
 

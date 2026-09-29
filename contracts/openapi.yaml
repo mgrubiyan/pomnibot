@@ -321,7 +321,6 @@ paths:
     post:
       tags:
         - Cards
-      # TODO: voice streaming
       summary: Send answer's text for input kind of questions
       operationId: AnswerQuestion
       parameters:

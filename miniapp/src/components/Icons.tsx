@@ -50,18 +50,6 @@ export const IconCross = (props: IconProps) => (
     </Icon>
 );
 
-export const IconMic = (props: IconProps) => (
-    <Icon {...props}>
-        <rect x="9" y="3" width="6" height="11" rx="3" />
-        <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
-    </Icon>
-);
-
-export const IconStop = (props: IconProps) => (
-    <Icon {...props}>
-        <rect x="7" y="7" width="10" height="10" rx="2" />
-    </Icon>
-);
 
 export const IconCopy = (props: IconProps) => (
     <Icon {...props}>
