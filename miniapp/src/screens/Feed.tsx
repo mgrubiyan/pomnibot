@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Flex, IconButton, Input, Spinner, Typography } from '@maxhub/max-ui';
-import type { AnswerResult, Card } from '../types';
+import type { AnswerResult, Card, CheckMethod } from '../types';
 import { api } from '../api';
 import { TableColumns, TablePool } from '../components/TableCard';
 import { visibleCards, type CardPatch } from '../utils/cards';
+import { AnswerCheck, type CheckStage } from '../components/AnswerCheck';
 import {
     correctCount,
     emptyPlacement,
@@ -47,18 +48,20 @@ const motionAllowed = () => !window.matchMedia('(prefers-reduced-motion: reduce)
 /** Answers are compared loosely: case, extra spaces and ё do not matter. */
 const norm = (value: string) => value.trim().toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ');
 
-/** How long a typed answer may take to check before it counts as wrong. */
-const CHECK_TIMEOUT_MS = 10_000;
+/** After this long the check gives up and the reader compares by hand. */
+const CHECK_TIMEOUT_MS = 20_000;
+/** Until then waiting is normal and the card says nothing about it. */
+const CHECK_SLOW_MS = 4_000;
 
-interface Checked {
-    correct: boolean;
-    reason: string | null;
-}
+type Checked =
+    | { ok: true; correct: boolean; reason: string | null; method: CheckMethod }
+    | { ok: false };
 
 /**
  * A typed answer in other words than the card's goes to the backend, which
- * forgives word forms and typos and asks a model about the meaning. Without
- * an answer in time it counts as wrong, as an exact comparison would say.
+ * forgives word forms and typos and asks a model about the meaning. A check
+ * that never answers is not a wrong answer: the card then shows the excerpt
+ * from the notes and lets the reader judge.
  */
 async function checkAnswer(cardId: string, answer: string): Promise<Checked> {
     const controller = new AbortController();
@@ -69,9 +72,11 @@ async function checkAnswer(cardId: string, answer: string): Promise<Checked> {
             body: { answer },
             signal: controller.signal,
         });
-        return data ? { correct: data.isCorrect, reason: data.reason ?? null } : { correct: false, reason: null };
+        return data
+            ? { ok: true, correct: data.isCorrect, reason: data.reason ?? null, method: data.method }
+            : { ok: false };
     } catch {
-        return { correct: false, reason: null };
+        return { ok: false };
     } finally {
         window.clearTimeout(timer);
     }
@@ -166,9 +171,13 @@ export function Feed({
     const [given, setGiven] = useState<string | null>(null);
     const [verdict, setVerdict] = useState<Verdict | null>(null);
     // A typed answer being checked by meaning, and why it counts or not.
-    const [checking, setChecking] = useState(false);
+    const [check, setCheck] = useState<{ stage: CheckStage; answer: string } | null>(null);
     const [reason, setReason] = useState<string | null>(null);
-    const checkingCard = useRef<string | null>(null);
+    const [method, setMethod] = useState<CheckMethod | null>(null);
+    // Every attempt gets a number, so a late answer from an abandoned one
+    // — the reader stopped waiting, moved on or retried — is dropped.
+    const checkRunRef = useRef(0);
+    const [checkRun, setCheckRun] = useState(0);
     const [revealed, setRevealed] = useState(false);
     const [draft, setDraft] = useState('');
     // The layout is keyed by card id instead of being reset by an effect:
@@ -230,40 +239,96 @@ export function Feed({
         return () => window.clearTimeout(timer);
     }, [flipping]);
 
+    const askCheck = useCallback(
+        (cardId: string, answer: string) => {
+            const run = checkRunRef.current + 1;
+            checkRunRef.current = run;
+            setCheck({ stage: 'checking', answer });
+            setCheckRun(run);
+
+            void checkAnswer(cardId, answer).then((result) => {
+                if (checkRunRef.current !== run) {
+                    return; // the reader stopped waiting or moved on
+                }
+                // A silent model is not a wrong answer: on fallback the backend
+                // reports the local check, which was unsure — «Неверно» here
+                // would be undeserved, so the reader compares by hand.
+                if (!result.ok || (result.method === 'fallback' && !result.correct)) {
+                    setCheck((current) => (current ? { ...current, stage: 'failed' } : current));
+                    return;
+                }
+                setCheck(null);
+                setReason(result.reason);
+                setMethod(result.method);
+                setGiven(answer);
+                setVerdict(result.correct ? 'correct' : 'wrong');
+                startFlip();
+            });
+        },
+        [startFlip],
+    );
+
+    // Waiting is silent at first; past CHECK_SLOW_MS the card admits it.
+    useEffect(() => {
+        if (checkRun === 0) {
+            return;
+        }
+        const timer = window.setTimeout(
+            () =>
+                setCheck((current) =>
+                    current?.stage === 'checking' ? { ...current, stage: 'slow' } : current,
+                ),
+            CHECK_SLOW_MS,
+        );
+
+        return () => window.clearTimeout(timer);
+    }, [checkRun]);
+
+    /** The reader stops waiting: the excerpt and the two buttons instead. */
+    const showReference = () => {
+        checkRunRef.current += 1;
+        setCheck((current) => (current ? { ...current, stage: 'shown' } : current));
+    };
+
+    /** Nobody judged the answer, so the verdict comes from the reader. */
+    const selfCheck = (correct: boolean) => {
+        if (!check) {
+            return;
+        }
+        checkRunRef.current += 1;
+        setCheck(null);
+        setReason(null);
+        setMethod(null);
+        setGiven(check.answer);
+        setVerdict(correct ? 'correct' : 'wrong');
+        startFlip();
+    };
+
     const submit = useCallback(
         (value: string) => {
             if (!card) {
                 return;
             }
-            setGiven(value);
             const exact = norm(value) === norm(answerTextOf(card));
             if (card.kind !== 'input' || exact) {
+                setGiven(value);
                 setVerdict(exact ? 'correct' : 'wrong');
                 startFlip();
                 return;
             }
+            // The card stays face up while the answer is being checked:
+            // the breakdown has nothing to show until the verdict is in.
             // Other words: the card turns once the backend has judged them.
-            const cardId = card.id;
-            checkingCard.current = cardId;
-            setChecking(true);
-            void checkAnswer(cardId, value).then(({ correct, reason: why }) => {
-                if (checkingCard.current !== cardId) {
-                    return; // the user has moved on
-                }
-                checkingCard.current = null;
-                setChecking(false);
-                setReason(why);
-                setVerdict(correct ? 'correct' : 'wrong');
-                startFlip();
-            });
+            askCheck(card.id, value);
         },
-        [card, startFlip],
+        [card, askCheck, startFlip],
     );
 
     const reset = useCallback(() => {
-        checkingCard.current = null;
-        setChecking(false);
+        checkRunRef.current += 1;
+        setCheck(null);
         setReason(null);
+        setMethod(null);
         setGiven(null);
         setVerdict(null);
         setRevealed(false);
@@ -522,10 +587,13 @@ export function Feed({
 
             <div key={card.id} className={cx(s.flip, leaving && s.leaving)}>
                 <div className={cx(s.flipInner, showAnswer && s.flipped)}>
+                    {/* While the answer is being checked the card carries three
+                        blocks — question, answer, what the check is doing —
+                        spread top to bottom instead of one question in the middle. */}
                     <Flex
                         direction="column"
                         align="stretch"
-                        justify="center"
+                        justify={check ? 'space-between' : 'center'}
                         gap={24}
                         inert={showAnswer || flipping}
                         aria-hidden={showAnswer}
@@ -534,13 +602,23 @@ export function Feed({
                             s.face,
                             s.faceFront,
                             s.card,
-                            s.cardCentered,
+                            !check && s.cardCentered,
                             tapToReveal && s.tappable,
                         )}
                     >
                         <Typography.Text variant="subheader" asChild>
                             <h1 className={s.question}>{card.question}</h1>
                         </Typography.Text>
+
+                        {check ? (
+                            <AnswerCheck
+                                stage={check.stage}
+                                answer={check.answer}
+                                sourceQuote={card.sourceQuote}
+                                sourceRef={card.sourceRef}
+                                onSelfCheck={selfCheck}
+                            />
+                        ) : null}
 
                         {layout ? (
                             <TableColumns
@@ -592,6 +670,12 @@ export function Feed({
                         {!layout && reason ? (
                             <Typography.Text variant="body" color="secondary">
                                 {reason}
+                            </Typography.Text>
+                        ) : null}
+
+                        {method === 'fallback' ? (
+                            <Typography.Text variant="description" color="tertiary">
+                                Сверили по словам: модель не ответила вовремя
                             </Typography.Text>
                         ) : null}
 
@@ -740,24 +824,55 @@ export function Feed({
                         </button>
                     ))}
 
-                    {card.kind === 'input' ? (
+                    {card.kind === 'input' && !check ? (
                         <>
                             <Input
                                 size="large"
                                 value={draft}
                                 placeholder="Ваш ответ"
-                                disabled={checking}
                                 onChange={(event) => setDraft(event.target.value)}
                             />
                             <Button
                                 size="medium"
                                 variant="secondary"
                                 stretched
-                                disabled={draft.trim().length === 0 || checking}
+                                disabled={draft.trim().length === 0}
                                 onClick={() => submit(draft)}
                             >
-                                {checking ? 'Проверяю…' : 'Ответить'}
+                                Ответить
                             </Button>
+                        </>
+                    ) : null}
+
+                    {check ? (
+                        <>
+                            {check.stage === 'checking' || check.stage === 'slow' ? (
+                                <Button size="medium" variant="secondary" stretched disabled>
+                                    Проверяю ответ
+                                </Button>
+                            ) : null}
+
+                            {check.stage === 'slow' ? (
+                                <Button
+                                    size="medium"
+                                    variant="secondary"
+                                    stretched
+                                    onClick={showReference}
+                                >
+                                    Показать ответ
+                                </Button>
+                            ) : null}
+
+                            {check.stage === 'failed' || check.stage === 'shown' ? (
+                                <Button
+                                    size="medium"
+                                    variant="secondary"
+                                    stretched
+                                    onClick={() => askCheck(card.id, check.answer)}
+                                >
+                                    Попробовать снова
+                                </Button>
+                            ) : null}
                         </>
                     ) : null}
 
