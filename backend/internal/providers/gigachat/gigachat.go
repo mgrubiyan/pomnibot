@@ -57,9 +57,8 @@ type Config struct {
 	BaseURL       string // up to the API version: https://api.giga.chat/v1
 	AuthURL       string
 	HTTPClient    *http.Client // nil: a client trusting the Russian Trusted Root CA
-	// MaxTokens caps the answer, DefaultMaxTokens by default. It is set here
-	// rather than by the caller: token counts depend on the model's tokenizer
-	// and price.
+	// MaxTokens caps the answer. It is set here rather than by the caller:
+	// token counts depend on the model's tokenizer and price.
 	MaxTokens int
 }
 
@@ -70,7 +69,8 @@ func env(key string) string {
 // ConfigFromEnv reads GIGACHAT_AUTH_KEY, GIGACHAT_CLIENT_ID,
 // GIGACHAT_CLIENT_SECRET, GIGACHAT_SCOPE, GIGACHAT_MODEL,
 // GIGACHAT_FALLBACK_MODEL, GIGACHAT_BASE_URL, GIGACHAT_AUTH_URL and
-// GIGACHAT_MAX_TOKENS. Unset optional values take defaults in New.
+// GIGACHAT_MAX_TOKENS. All are required, except that the credentials are
+// either GIGACHAT_AUTH_KEY, or GIGACHAT_CLIENT_ID and GIGACHAT_CLIENT_SECRET.
 func ConfigFromEnv() (Config, error) {
 	cfg := Config{
 		AuthKey:       env("GIGACHAT_AUTH_KEY"),
@@ -85,10 +85,13 @@ func ConfigFromEnv() (Config, error) {
 
 	var errs []error
 
+	// The Authorization Key is base64 of client_id:client_secret, so either
+	// one is enough.
+	if cfg.AuthKey == "" && (cfg.ClientID == "" || cfg.ClientSecret == "") {
+		errs = append(errs, errors.New("GIGACHAT_AUTH_KEY, or GIGACHAT_CLIENT_ID and GIGACHAT_CLIENT_SECRET, are required but empty"))
+	}
+
 	for _, r := range []struct{ name, val string }{
-		{"GIGACHAT_AUTH_KEY", cfg.AuthKey},
-		{"GIGACHAT_CLIENT_ID", cfg.ClientID},
-		{"GIGACHAT_CLIENT_SECRET", cfg.ClientSecret},
 		{"GIGACHAT_SCOPE", cfg.Scope},
 		{"GIGACHAT_MODEL", cfg.Model},
 		{"GIGACHAT_FALLBACK_MODEL", cfg.FallbackModel},

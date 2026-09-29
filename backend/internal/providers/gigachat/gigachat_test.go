@@ -558,12 +558,30 @@ func TestConfigMaxTokens(t *testing.T) {
 }
 
 func TestConfigCredentials(t *testing.T) {
-	setGigaChatEnv(t)
-
-	t.Setenv("GIGACHAT_CLIENT_ID", "")
-	t.Setenv("GIGACHAT_CLIENT_SECRET", "")
-	if _, err := ConfigFromEnv(); err == nil {
-		t.Error("ConfigFromEnv() succeeded without any credentials")
+	tests := []struct {
+		name                string
+		authKey, id, secret string
+		wantErr             bool
+	}{
+		{"authorization key alone", "aWQ6c2VjcmV0", "", "", false},
+		{"client id and secret", "", "id", "secret", false},
+		{"client id without a secret", "", "id", "", true},
+		{"none", "", "", "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setGigaChatEnv(t)
+			t.Setenv("GIGACHAT_AUTH_KEY", tt.authKey)
+			t.Setenv("GIGACHAT_CLIENT_ID", tt.id)
+			t.Setenv("GIGACHAT_CLIENT_SECRET", tt.secret)
+			_, err := ConfigFromEnv()
+			if tt.wantErr && (err == nil || !strings.Contains(err.Error(), "GIGACHAT_AUTH_KEY")) {
+				t.Errorf("error = %v, want one naming GIGACHAT_AUTH_KEY", err)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("ConfigFromEnv() error = %v", err)
+			}
+		})
 	}
 
 	cfg := Config{ClientID: "id"} // no secret
@@ -598,6 +616,7 @@ func TestAuthKey(t *testing.T) {
 	})
 
 	t.Run("read from the environment", func(t *testing.T) {
+		setGigaChatEnv(t)
 		t.Setenv("GIGACHAT_AUTH_KEY", key)
 		if cfg, err := ConfigFromEnv(); err != nil || cfg.AuthKey != key {
 			t.Errorf("AuthKey = %q, error = %v", cfg.AuthKey, err)
