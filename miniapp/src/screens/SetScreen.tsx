@@ -4,34 +4,15 @@ import type { Card, CardSet, User } from '../types';
 import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
-import { IconChevronLeft, IconOffline, IconTrash } from '../components/Icons';
+import { IconChevronLeft, IconOffline, IconShare, IconTrash } from '../components/Icons';
 import { estimateMinutes } from '../utils/estimate';
+import { loadCards, loadSet } from '../utils/sets';
 import { aboutMinutesLabel, cardsLabel } from '../utils/plural';
 import { formatAuthorName } from '../utils/user';
 import s from './SetScreen.module.css';
 
 type Status = 'loading' | 'error' | 'ready';
 
-
-async function loadSet(setId: string): Promise<CardSet> {
-    const { data, error } = await api.GET('/sets/{setId}', {
-        params: { path: { setId } },
-    });
-    if (error || !data) {
-        throw new Error(error?.message ?? 'not found');
-    }
-    return data;
-}
-
-async function loadCards(setId: string): Promise<Card[]> {
-    const { data, error } = await api.GET('/sets/{setId}/cards', {
-        params: { path: { setId } },
-    });
-    if (error || !data) {
-        throw new Error(error?.message ?? 'not found');
-    }
-    return data;
-}
 
 async function loadFeed(): Promise<Card[]> {
     const { data, error } = await api.GET('/feed');
@@ -43,33 +24,29 @@ async function loadFeed(): Promise<Card[]> {
 
 export interface SetScreenProps {
     setId: string;
-    /** Cards of the set, optional if fetched internally */
-    cards?: Card[];
-    toast?: { kind: 'removed' | 'edited' } | null;
     currentUser?: User | null;
     onBack: () => void;
     onStart: (setId: string, setTitle?: string) => void;
     onRemove: (setId: string) => void;
-    onOpenCard: (card: Card, isOwner: boolean, setTitle: string) => void;
+    /** The list of cards lives on its own screen, managed from there. */
+    onOpenCards: (setId: string) => void;
+    onShare: (setId: string, setTitle: string) => void;
     onOpenLeaderboard?: (setId: string, setTitle: string) => void;
-    onUndoRemoveCard?: () => void;
 }
 
 export function SetScreen({
     setId,
-    cards: initialCards,
-    toast,
     currentUser,
     onBack,
     onStart,
     onRemove,
-    onOpenCard,
+    onOpenCards,
+    onShare,
     onOpenLeaderboard,
-    onUndoRemoveCard,
 }: SetScreenProps) {
     const [status, setStatus] = useState<Status>('loading');
     const [set, setSet] = useState<CardSet | null>(null);
-    const [cards, setCards] = useState<Card[]>(initialCards ?? []);
+    const [cards, setCards] = useState<Card[]>([]);
     const [feedCards, setFeedCards] = useState<Card[]>([]);
     const [attempt, setAttempt] = useState(0);
     const [confirmingRemove, setConfirmingRemove] = useState(false);
@@ -138,6 +115,7 @@ export function SetScreen({
     // Only the author can manage the set and its cards; members have shared access.
     const isOwner = Boolean(currentUser && set.author && set.author.id === currentUser.id);
     const shared = !isOwner;
+    const showLeaderboard = isOwner && Boolean(onOpenLeaderboard);
 
     return (
         <Screen>
@@ -183,55 +161,39 @@ export function SetScreen({
                     </Flex>
                 </Flex>
 
-                {isOwner && onOpenLeaderboard ? (
-                    <CellList mode="island" filled className={s.factsList}>
+                <CellList mode="island" filled className={s.factsList}>
+                    {showLeaderboard ? (
                         <CellSimple
                             as="button"
                             showChevron
-                            onClick={() => onOpenLeaderboard(set.id, set.title)}
+                            onClick={() => onOpenLeaderboard?.(set.id, set.title)}
                             title="Таблица лидеров"
                             subtitle="Рейтинг участников"
                         />
-                    </CellList>
-                ) : null}
+                    ) : null}
+                    <CellSimple
+                        as="button"
+                        showChevron
+                        separator={showLeaderboard}
+                        onClick={() => onOpenCards(set.id)}
+                        title={`Карточки · ${cards.length}`}
+                        subtitle={isOwner ? 'Просмотр и правка' : 'Просмотр'}
+                    />
+                </CellList>
 
-                <Flex direction="column" align="stretch" gap={8}>
-                    <Flex justify="space-between" align="baseline" gap={8} className={s.cardsHeader}>
-                        <Typography.Text variant="label" color="tertiary">
-                            Карточки · {cards.length}
-                        </Typography.Text>
-                    </Flex>
-                    <CellList mode="island" filled className={s.factsList}>
-                        {cards.map((card, index) => (
-                            <CellSimple
-                                key={card.id}
-                                as={isOwner ? 'button' : undefined}
-                                separator={index > 0}
-                                showChevron={isOwner}
-                                onClick={isOwner ? () => onOpenCard(card, isOwner, set.title) : undefined}
-                                title={<span className={s.cardTitle}>{card.question}</span>}
-                                subtitle={card.topic}
-                            />
-                        ))}
-                    </CellList>
-                </Flex>
+                <Button
+                    size="medium"
+                    variant="secondary"
+                    stretched
+                    iconBefore={<IconShare size={20} />}
+                    onClick={() => onShare(set.id, set.title)}
+                >
+                    Поделиться
+                </Button>
 
             </Flex>
 
             <Flex direction="column" align="stretch" gap={8}>
-                {toast ? (
-                    <div className={s.undo} role="status">
-                        <Typography.Text variant="detail">
-                            {toast.kind === 'removed' ? 'Карточка удалена' : 'Карточка исправлена'}
-                        </Typography.Text>
-                        {toast.kind === 'removed' && onUndoRemoveCard ? (
-                            <button type="button" className={s.undoButton} onClick={onUndoRemoveCard}>
-                                <Typography.Text variant="detail">Вернуть</Typography.Text>
-                            </button>
-                        ) : null}
-                    </div>
-                ) : null}
-
                 {confirmingRemove ? (
                     <>
                         <Typography.Text variant="description" color="secondary" className={s.confirmText}>

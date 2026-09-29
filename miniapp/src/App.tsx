@@ -5,6 +5,7 @@ import Feed from './screens/Feed';
 import Home from './screens/Home';
 import JoinSet from './screens/JoinSet';
 import SetScreen from './screens/SetScreen';
+import SetCards from './screens/SetCards';
 import Share from './screens/Share';
 import Leaderboard from './screens/Leaderboard';
 import { api } from './api';
@@ -15,6 +16,7 @@ import type { CardPatch } from './utils/cards';
 type Screen =
     | { name: 'home' }
     | { name: 'set'; setId: string }
+    | { name: 'set-cards'; setId: string }
     | {
           name: 'feed';
           setId?: string;
@@ -37,7 +39,7 @@ type Screen =
           feedResults?: AnswerResult[];
       };
 
-/** What to report on the set screen after an action on a card. */
+/** What to report on the cards screen after an action on a card. */
 type Toast =
     | { kind: 'removed'; cardId: string }
     | { kind: 'edited' };
@@ -121,7 +123,7 @@ function App() {
                 initialResults: feedResults,
             });
         } else {
-            setScreen({ name: 'set', setId });
+            setScreen({ name: 'set-cards', setId });
             setToast({ kind: 'removed', cardId });
         }
     };
@@ -165,7 +167,7 @@ function App() {
                 initialResults: feedResults,
             });
         } else {
-            setScreen({ name: 'set', setId });
+            setScreen({ name: 'set-cards', setId });
             setToast({ kind: 'edited' });
         }
     };
@@ -229,7 +231,7 @@ function App() {
                             initialResults: feedResults,
                         });
                     } else {
-                        openSet(card.setId);
+                        go({ name: 'set-cards', setId: card.setId });
                     }
                 }}
                 onSave={(patch) =>
@@ -297,29 +299,38 @@ function App() {
         );
     }
 
-    if (screen.name === 'set') {
+    if (screen.name === 'set-cards') {
         return (
-            <SetScreen
+            <SetCards
                 key={screen.setId}
                 setId={screen.setId}
-                toast={toast}
                 currentUser={currentUser}
-                onBack={goHome}
-                onStart={(setId, setTitle) => go({ name: 'feed', setId, setTitle })}
-                onRemove={removeSet}
-                onOpenCard={(card, isOwner, setTitle) => {
-                    if (!isOwner) {
-                        return;
-                    }
+                toast={toast}
+                onBack={() => openSet(screen.setId)}
+                onOpenCard={(card, setTitle) =>
                     go({
                         name: 'card-edit',
                         card,
                         setTitle,
                         isOwner: true,
                         fromFeed: false,
-                        feedSetId: undefined,
-                    });
-                }}
+                    })
+                }
+            />
+        );
+    }
+
+    if (screen.name === 'set') {
+        return (
+            <SetScreen
+                key={screen.setId}
+                setId={screen.setId}
+                currentUser={currentUser}
+                onBack={goHome}
+                onStart={(setId, setTitle) => go({ name: 'feed', setId, setTitle })}
+                onRemove={removeSet}
+                onOpenCards={(setId) => go({ name: 'set-cards', setId })}
+                onShare={(setId, setTitle) => go({ name: 'share', setId, setTitle })}
                 onOpenLeaderboard={(setId, setTitle) =>
                     go({
                         name: 'leaderboard',

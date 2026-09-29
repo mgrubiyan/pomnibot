@@ -1,0 +1,56 @@
+/* Cards of a set, moved off the set screen so it keeps only what matters
+   for a review. The list scrolls, the header stays put. */
+
+.header {
+    padding: 8px 0 0;
+}
+
+.headerText {
+    min-width: 0;
+}
+
+.title {
+    margin: 0;
+}
+
+.setTitle {
+    overflow-wrap: anywhere;
+}
+
+.body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.hint {
+    padding: 0 16px;
+    text-wrap: pretty;
+}
+
+.list {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.cardTitle {
+    /* A long question is ellipsized onto a single line. */
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The outcome of an edit. The library has no component for it, so it is
+   done by hand: inverted — text color as background, card color as text. */
+.notice {
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+    box-sizing: border-box;
+    padding: 4px 16px;
+    border-radius: 12px;
+    background: var(--text-primary);
+    color: var(--background-card);
+}
