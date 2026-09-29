@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Flex, IconButton, Input, Spinner, Typography } from '@maxhub/max-ui';
-import type { AnswerResult, Card, CheckMethod } from '../types';
+import type { AnswerResult, Card } from '../types';
 import { api } from '../api';
 import { TableColumns, TablePool } from '../components/TableCard';
 import { visibleCards, type CardPatch } from '../utils/cards';
@@ -48,37 +48,35 @@ const motionAllowed = () => !window.matchMedia('(prefers-reduced-motion: reduce)
 /** Answers are compared loosely: case, extra spaces and ё do not matter. */
 const norm = (value: string) => value.trim().toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ');
 
-/** After this long the check gives up and the reader compares by hand. */
-const CHECK_TIMEOUT_MS = 20_000;
-/** Until then waiting is normal and the card says nothing about it. */
-const CHECK_SLOW_MS = 4_000;
+/** The reader always waits for the verdict; past these marks only the words change. */
+const CHECK_LONGER_MS = 8_000;
+const CHECK_ALMOST_MS = 12_000;
+/** A lost request or a silent model: ask again after this pause. */
+const CHECK_RETRY_MS = 2_000;
 
-type Checked =
-    | { ok: true; correct: boolean; reason: string | null; method: CheckMethod }
-    | { ok: false };
+interface Checked {
+    correct: boolean;
+    reason: string | null;
+}
 
 /**
  * A typed answer in other words than the card's goes to the backend, which
- * forgives word forms and typos and asks a model about the meaning. A check
- * that never answers is not a wrong answer: the card then shows the excerpt
- * from the notes and lets the reader judge.
+ * forgives word forms and typos and asks a model about the meaning. Null
+ * when there is no verdict yet: the request was lost, or the backend gave
+ * up on the model (fallback) — the reader keeps waiting for a real one.
  */
-async function checkAnswer(cardId: string, answer: string): Promise<Checked> {
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
+async function checkAnswer(cardId: string, answer: string): Promise<Checked | null> {
     try {
         const { data } = await api.POST('/cards/{cardId}/check', {
             params: { path: { cardId } },
             body: { answer },
-            signal: controller.signal,
         });
-        return data
-            ? { ok: true, correct: data.isCorrect, reason: data.reason ?? null, method: data.method }
-            : { ok: false };
+        if (!data || data.method === 'fallback') {
+            return null;
+        }
+        return { correct: data.isCorrect, reason: data.reason ?? null };
     } catch {
-        return { ok: false };
-    } finally {
-        window.clearTimeout(timer);
+        return null;
     }
 }
 
@@ -173,7 +171,6 @@ export function Feed({
     // A typed answer being checked by meaning, and why it counts or not.
     const [check, setCheck] = useState<{ stage: CheckStage; answer: string } | null>(null);
     const [reason, setReason] = useState<string | null>(null);
-    const [method, setMethod] = useState<CheckMethod | null>(null);
     // Every attempt gets a number, so a late answer from an abandoned one
     // — the reader stopped waiting, moved on or retried — is dropped.
     const checkRunRef = useRef(0);
@@ -246,63 +243,55 @@ export function Feed({
             setCheck({ stage: 'checking', answer });
             setCheckRun(run);
 
-            void checkAnswer(cardId, answer).then((result) => {
+            const attempt = () => {
                 if (checkRunRef.current !== run) {
-                    return; // the reader stopped waiting or moved on
+                    return; // the reader moved on
                 }
-                // A silent model is not a wrong answer: on fallback the backend
-                // reports the local check, which was unsure — «Неверно» here
-                // would be undeserved, so the reader compares by hand.
-                if (!result.ok || (result.method === 'fallback' && !result.correct)) {
-                    setCheck((current) => (current ? { ...current, stage: 'failed' } : current));
-                    return;
-                }
-                setCheck(null);
-                setReason(result.reason);
-                setMethod(result.method);
-                setGiven(answer);
-                setVerdict(result.correct ? 'correct' : 'wrong');
-                startFlip();
-            });
+                void checkAnswer(cardId, answer).then((result) => {
+                    if (checkRunRef.current !== run) {
+                        return;
+                    }
+                    if (!result) {
+                        // No verdict yet: the reader keeps waiting, we ask again.
+                        window.setTimeout(attempt, CHECK_RETRY_MS);
+                        return;
+                    }
+                    setCheck(null);
+                    setReason(result.reason);
+                    setGiven(answer);
+                    setVerdict(result.correct ? 'correct' : 'wrong');
+                    startFlip();
+                });
+            };
+            attempt();
         },
         [startFlip],
     );
 
-    // Waiting is silent at first; past CHECK_SLOW_MS the card admits it.
+    // Leaving the feed drops a check that is still waiting or retrying.
+    useEffect(
+        () => () => {
+            checkRunRef.current += 1;
+        },
+        [],
+    );
+
+    // The wait never ends early; past the marks only the words change.
+    // Timers belong to the reader's attempt, so retries do not restart them.
     useEffect(() => {
         if (checkRun === 0) {
             return;
         }
-        const timer = window.setTimeout(
-            () =>
-                setCheck((current) =>
-                    current?.stage === 'checking' ? { ...current, stage: 'slow' } : current,
-                ),
-            CHECK_SLOW_MS,
-        );
+        const toStage = (stage: CheckStage) => () =>
+            setCheck((current) => (current ? { ...current, stage } : current));
+        const longer = window.setTimeout(toStage('longer'), CHECK_LONGER_MS);
+        const almost = window.setTimeout(toStage('almost'), CHECK_ALMOST_MS);
 
-        return () => window.clearTimeout(timer);
+        return () => {
+            window.clearTimeout(longer);
+            window.clearTimeout(almost);
+        };
     }, [checkRun]);
-
-    /** The reader stops waiting: the excerpt and the two buttons instead. */
-    const showReference = () => {
-        checkRunRef.current += 1;
-        setCheck((current) => (current ? { ...current, stage: 'shown' } : current));
-    };
-
-    /** Nobody judged the answer, so the verdict comes from the reader. */
-    const selfCheck = (correct: boolean) => {
-        if (!check) {
-            return;
-        }
-        checkRunRef.current += 1;
-        setCheck(null);
-        setReason(null);
-        setMethod(null);
-        setGiven(check.answer);
-        setVerdict(correct ? 'correct' : 'wrong');
-        startFlip();
-    };
 
     const submit = useCallback(
         (value: string) => {
@@ -328,7 +317,6 @@ export function Feed({
         checkRunRef.current += 1;
         setCheck(null);
         setReason(null);
-        setMethod(null);
         setGiven(null);
         setVerdict(null);
         setRevealed(false);
@@ -611,13 +599,7 @@ export function Feed({
                         </Typography.Text>
 
                         {check ? (
-                            <AnswerCheck
-                                stage={check.stage}
-                                answer={check.answer}
-                                sourceQuote={card.sourceQuote}
-                                sourceRef={card.sourceRef}
-                                onSelfCheck={selfCheck}
-                            />
+                            <AnswerCheck stage={check.stage} answer={check.answer} />
                         ) : null}
 
                         {layout ? (
@@ -670,12 +652,6 @@ export function Feed({
                         {!layout && reason ? (
                             <Typography.Text variant="body" color="secondary">
                                 {reason}
-                            </Typography.Text>
-                        ) : null}
-
-                        {method === 'fallback' ? (
-                            <Typography.Text variant="description" color="tertiary">
-                                Сверили по словам: модель не ответила вовремя
                             </Typography.Text>
                         ) : null}
 
@@ -845,35 +821,9 @@ export function Feed({
                     ) : null}
 
                     {check ? (
-                        <>
-                            {check.stage === 'checking' || check.stage === 'slow' ? (
-                                <Button size="medium" variant="secondary" stretched disabled>
-                                    Проверяю ответ
-                                </Button>
-                            ) : null}
-
-                            {check.stage === 'slow' ? (
-                                <Button
-                                    size="medium"
-                                    variant="secondary"
-                                    stretched
-                                    onClick={showReference}
-                                >
-                                    Показать ответ
-                                </Button>
-                            ) : null}
-
-                            {check.stage === 'failed' || check.stage === 'shown' ? (
-                                <Button
-                                    size="medium"
-                                    variant="secondary"
-                                    stretched
-                                    onClick={() => askCheck(card.id, check.answer)}
-                                >
-                                    Попробовать снова
-                                </Button>
-                            ) : null}
-                        </>
+                        <Button size="medium" variant="secondary" stretched disabled>
+                            Проверяю ответ
+                        </Button>
                     ) : null}
 
                     {card.kind === 'flip' ? (
