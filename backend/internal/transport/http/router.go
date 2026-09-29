@@ -5,10 +5,11 @@ import (
 	"net/http"
 
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
+	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
 // NewRouter sets up the HTTP router combining OpenAPI handlers, SPA static file serving, and middlewares.
-func NewRouter(handler contracts.Handler, staticFS fs.FS) (http.Handler, error) {
+func NewRouter(handler contracts.Handler, staticFS fs.FS, botToken string, userService usecase.UserService) (http.Handler, error) {
 	staticHandler := NewSPAHandler(staticFS)
 
 	apiServer, err := contracts.NewServer(
@@ -20,5 +21,6 @@ func NewRouter(handler contracts.Handler, staticFS fs.FS) (http.Handler, error) 
 		return nil, err
 	}
 
-	return LoggingMiddleware(apiServer), nil
+	authMiddleware := AuthMiddleware(botToken, userService)
+	return LoggingMiddleware(authMiddleware(apiServer)), nil
 }

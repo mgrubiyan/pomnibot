@@ -1,24 +1,421 @@
 openapi: 3.0.3
 info:
   title: Pomnibot API
-  version: 0.0.1
+  version: 1.0
   description: OpenAPI specification for Pomnibot
+tags:
+  - name: Sets
+    description: Sets of cards
+  - name: Cards
+    description: Cards
+  - name: Homescreen
+    description: Homescreen
+
 servers:
   - url: /api
     description: Base API prefix
+
 paths:
   /health:
     get:
       summary: Health check endpoint
       operationId: getHealth
       responses:
-        "200":
+        '200':
           description: Service is healthy
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HealthResponse"
+                $ref: '#/components/schemas/HealthResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /sets/{setId}:
+    get:
+      tags:
+        - Sets
+      summary: Get a card set
+      operationId: GetSet
+      parameters:
+        - name: setId
+          in: path
+          required: true
+          description: The ID of the card set
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Card set retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardSet'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+        - Sets
+      summary: Delete a card set
+      operationId: DeleteSet
+      parameters:
+        - name: setId
+          in: path
+          required: true
+          description: The ID of the card set to delete
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Card set deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /sets/{setId}/cards:
+    get:
+      tags:
+        - Sets
+      summary: Get cards
+      operationId: GetCardsBySetID
+      parameters:
+        - name: setId
+          in: path
+          required: true
+          description: Filter cards by set ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Cards retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Card'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /sets/{setId}/share:
+    get:
+      tags:
+        - Sets
+      summary: Get share code for a set
+      operationId: GetSetShareCode
+      parameters:
+        - name: setId
+          in: path
+          required: true
+          description: The ID of the card set
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Set share details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardSet'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /sets/{setId}/plan:
+    get:
+      tags:
+        - Sets
+      summary: Get set's facts plan
+      operationId: GetSetPlan
+      parameters:
+        - name: setId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Pairs fact - date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetPlanResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /sets/{setId}/leaderboard:
+    get:
+      tags:
+        - Sets
+      summary: Get set leaderboard for author
+      operationId: GetSetLeaderboard
+      parameters:
+        - name: setId
+          in: path
+          required: true
+          description: The ID of the card set
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Leaderboard retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetLeaderboardResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /sets/join:
+    post:
+      tags:
+        - Sets
+      summary: Join a card set by code
+      operationId: JoinSetByShareCode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinSetRequest'
+      responses:
+        '200':
+          description: Card set joined successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardSet'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /:
+    get:
+      tags:
+        - Homescreen
+      summary: Get today overview data
+      operationId: GetToday
+      responses:
+        '200':
+          description: Today data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodayData'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /feed:
+    get:
+      tags:
+        - Homescreen
+      summary: Get questions of current feed
+      operationId: GetFeedQuestions
+      responses:
+        '200':
+          description: Feed of questions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Card'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /results:
+    post:
+      tags:
+        - Homescreen
+      summary: Send set/feed results
+      operationId: SendResults
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendResultsRequest'
+      responses:
+        '204':
+          description: Results was sent
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /cards/{cardId}:
+    put:
+      tags:
+        - Cards
+      summary: Update a card
+      operationId: UpdateCard
+      parameters:
+        - name: cardId
+          in: path
+          required: true
+          description: The ID of the card to update
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCardRequest'
+      responses:
+        '200':
+          description: Card updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+        - Cards
+      summary: Delete a card
+      operationId: DeleteCard
+      parameters:
+        - name: cardId
+          in: path
+          required: true
+          description: The ID of the card to delete
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Card deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /cards/{cardId}/answer:
+    post:
+      tags:
+        - Cards
+      summary: Send answer's text for input kind of questions
+      operationId: AnswerQuestion
+      parameters:
+        - name: cardId
+          in: path
+          required: true
+          description: The ID of the card
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerQuestionRequest'
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnswerQuestionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /cards/{cardId}/check:
+    post:
+      tags:
+        - Cards
+      summary: Check a typed answer by meaning without recording it
+      description: >-
+        The answer need not match word for word: form, word order and typos
+        do not matter, and answers in other words are judged by a language
+        model. Nothing is recorded: the feed sends results with SendResults.
+      operationId: CheckAnswer
+      parameters:
+        - name: cardId
+          in: path
+          required: true
+          description: The ID of the card
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckAnswerRequest'
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckAnswerResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
 components:
+  responses:
+    BadRequest:
+      description: Bad request / validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Forbidden / insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
   schemas:
     HealthResponse:
       type: object
@@ -28,3 +425,336 @@ components:
         status:
           type: string
           example: ok
+
+    ErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+
+    TableItem:
+      type: object
+      description: A term of the table and the column it belongs to.
+      required:
+        - text
+        - column
+      properties:
+        text:
+          type: string
+        column:
+          type: string
+
+    TableLayout:
+      type: object
+      description: "Sorting card: lay the terms out across the columns."
+      required:
+        - columns
+        - items
+      properties:
+        columns:
+          type: array
+          items:
+            type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TableItem'
+
+    CardKind:
+      type: string
+      enum:
+        - choice
+        - flip
+        - input
+        - boolean
+        - table
+
+    CardAnswer:
+      description: "
+      choice - integer
+      input - string
+      boolean - boolean
+      table - #/components/schemas/TableLayout
+      "
+      oneOf:
+        - type: integer                            # kind choice: index in options
+        - type: string                             # kind input
+        - type: boolean                            # kind boolean
+        - $ref: '#/components/schemas/TableLayout' # kind table
+
+    Card:
+      type: object
+      required:
+        - id
+        - setId
+        - kind
+        - question
+        - answer
+        - explanation
+        - sourceQuote
+        - topic
+      properties:
+        id:
+          type: string
+          format: uuid
+        setId:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/CardKind'
+        question:
+          type: string
+        options:
+          type: array
+          items:
+            type: string
+          description: choice only
+        table:
+          $ref: '#/components/schemas/TableLayout'
+        answer:
+          $ref: '#/components/schemas/CardAnswer'
+        explanation:
+          type: string
+          description: 2-3 sentences
+        sourceQuote:
+          type: string
+          description: quote from the notes
+        sourceRef:
+          type: string
+          description: "where the quote is from: «Лекция 3, стр. 2»"
+        topic:
+          type: string
+          description: topic, used for stats
+
+    UpdateCardRequest:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/CardKind'
+        question:
+          type: string
+        options:
+          type: array
+          items:
+            type: string
+          description: choice only
+        table:
+          $ref: '#/components/schemas/TableLayout'
+        answer:
+          $ref: '#/components/schemas/CardAnswer'
+        explanation:
+          type: string
+          description: 2-3 sentences
+        sourceQuote:
+          type: string
+          description: quote from the notes
+        sourceRef:
+          type: string
+          description: "where the quote is from: «Лекция 3, стр. 2»"
+        topic:
+          type: string
+          description: topic, used for stats
+
+    User:
+      type: object
+      required:
+        - id
+        - firstName
+      properties:
+        id:
+          type: integer
+          format: int64
+        firstName:
+          type: string
+        lastName:
+          type: string
+        username:
+          type: string
+
+    CardSet:
+      type: object
+      required:
+        - id
+        - title
+        - cardsTotal
+        - cardsDue
+        - author
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          description: "«Матанализ, лекция 3»"
+        cardsTotal:
+          type: integer
+        cardsDue:
+          type: integer
+          description: how many are due for review
+        author:
+          $ref: '#/components/schemas/User'
+        shareCode:
+          type: string
+          pattern: '\d{6}'
+          example: '123456'
+        userRank:
+          type: integer
+          description: User's rank place in the set rating (1-based)
+          example: 1
+        userPercentile:
+          type: integer
+          description: User's progress mapped from ELO (0-100%)
+          example: 85
+
+    JoinSetRequest:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          pattern: '\d{6}'
+          example: '123456'
+          description: The 6-digit share code of the set
+
+    SetPlanItem:
+      type: object
+      required:
+        - factName
+        - date
+      properties:
+        factName:
+          type: string
+        date:
+          type: string
+          format: date-time
+
+    SetPlanResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/SetPlanItem'
+
+    LeaderboardEntry:
+      type: object
+      required:
+        - user
+        - rank
+        - percentile
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        rank:
+          type: integer
+          example: 1
+        percentile:
+          type: integer
+          example: 85
+
+    SetLeaderboardResponse:
+      type: object
+      required:
+        - setId
+        - items
+      properties:
+        setId:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LeaderboardEntry'
+
+    TodayData:
+      type: object
+      required:
+        - user
+        - dueCount
+        - estimatedMinutes
+        - sets
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        dueCount:
+          type: integer
+        estimatedMinutes:
+          type: integer
+        nextReviewAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Earliest scheduled review for the user, if any
+        sets:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardSet'
+
+    AnswerResult:
+      type: object
+      required:
+        - cardId
+        - correct
+        - answeredAt
+      properties:
+        cardId:
+          type: string
+          format: uuid
+        correct:
+          type: boolean
+        answeredAt:
+          type: string
+          format: date-time
+
+    SendResultsRequest:
+      type: array
+      items:
+        $ref: '#/components/schemas/AnswerResult'
+
+    AnswerQuestionRequest:
+      type: object
+      required:
+        - answer
+      properties:
+        answer:
+          type: string
+
+    CheckAnswerRequest:
+      type: object
+      required:
+        - answer
+      properties:
+        answer:
+          type: string
+
+    CheckAnswerResponse:
+      type: object
+      required:
+        - isCorrect
+        - method
+      properties:
+        isCorrect:
+          type: boolean
+        reason:
+          type: string
+          description: Why the answer counts or what it lacks, when a model judged it
+        method:
+          type: string
+          enum:
+            - local
+            - model
+            - fallback
+          description: >-
+            local: matched up to form and typos, or surely wrong; model: judged
+            by meaning; fallback: the model did not answer in time, local verdict
+
+    AnswerQuestionResponse:
+      type: object
+      required:
+        - isCorrect
+        - userAnswer
+      properties:
+        isCorrect:
+          type: boolean
+        userAnswer:
+          type: string

@@ -1,0 +1,22 @@
+# 1. Deny everything
+*
+
+# 2. Open corridors
+!miniapp/
+!miniapp/src/
+!miniapp/src/screens/
+!contracts/
+
+# 3. Explicitly allow only these files
+!miniapp/src/screens/AddNote.tsx
+!miniapp/src/screens/CardEdit.tsx
+!miniapp/src/screens/CardIssue.tsx
+!miniapp/src/screens/Feed.tsx
+!miniapp/src/screens/Home.tsx
+!miniapp/src/screens/JoinSet.tsx
+!miniapp/src/screens/Result.tsx
+!miniapp/src/screens/SetScreen.tsx
+!miniapp/src/screens/Share.tsx
+!miniapp/src/types.ts
+!contracts/types.md
+!contracts/gen.yaml

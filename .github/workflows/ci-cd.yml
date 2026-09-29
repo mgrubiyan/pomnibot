@@ -35,14 +35,45 @@ jobs:
           go-version: '1.25'
           cache-dependency-path: backend/go.mod
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'contracts/data-api/validator-requirements.txt'
+
+      - name: Install DATA-API dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r 'contracts/data-api/validator-requirements.txt'
+
       - name: Install Task
         uses: arduino/setup-task@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Generate DATA-API.yaml
+        run: |
+          task gen:data-api
+
+      - name: Check for drift (is committed DATA-API up-to-date?)
+        run: |
+          git diff --exit-code contracts/data-api/DATA-API.yaml \
+          || (echo "DATA-API.yaml outdated! Run generate_data_api.py and commit result." && exit 1)
+
+      - name: Run DATA-API Validator
+        run: |
+          python contracts/data-api/validate_data_api.py contracts/data-api/DATA-API.yaml \
+          --openapi $GITHUB_WORKSPACE/contracts/openapi.yaml \
+          --schema $GITHUB_WORKSPACE/contracts/data-api/DATA-API.schema.json
+
       - name: Install contracts dependencies
         working-directory: contracts
         run: bun install --frozen-lockfile
+
+      - name: Install sqlc
+        run: |
+          go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 
       - name: Verify generated contracts
         run: |
@@ -138,28 +169,134 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Copy Compose files to VPS
+      - name: Generate .env file from secrets and variables
+        env:
+          # Configuration variables (GitHub Actions Variables)
+          DOMAIN: ${{ vars.DOMAIN || secrets.DOMAIN }}
+          PORT: ${{ vars.PORT || secrets.PORT }}
+          DOCKER_IMAGE: ${{ vars.DOCKER_IMAGE || secrets.DOCKER_IMAGE }}
+          IMAGE_TAG: ${{ vars.IMAGE_TAG || secrets.IMAGE_TAG }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH || secrets.DEPLOY_PATH }}
+          POSTGRES_USER: ${{ vars.POSTGRES_USER || secrets.POSTGRES_USER }}
+          POSTGRES_DB: ${{ vars.POSTGRES_DB || secrets.POSTGRES_DB }}
+          POSTGRES_PORT: ${{ vars.POSTGRES_PORT || secrets.POSTGRES_PORT }}
+          GIGACHAT_CLIENT_ID: ${{ vars.GIGACHAT_CLIENT_ID || secrets.GIGACHAT_CLIENT_ID }}
+          GIGACHAT_SCOPE: ${{ vars.GIGACHAT_SCOPE || secrets.GIGACHAT_SCOPE }}
+          GIGACHAT_MODEL: ${{ vars.GIGACHAT_MODEL || secrets.GIGACHAT_MODEL }}
+          GIGACHAT_FALLBACK_MODEL: ${{ vars.GIGACHAT_FALLBACK_MODEL || secrets.GIGACHAT_FALLBACK_MODEL }}
+          GIGACHAT_BASE_URL: ${{ vars.GIGACHAT_BASE_URL || secrets.GIGACHAT_BASE_URL }}
+          GIGACHAT_AUTH_URL: ${{ vars.GIGACHAT_AUTH_URL || secrets.GIGACHAT_AUTH_URL }}
+          GIGACHAT_MAX_TOKENS: ${{ vars.GIGACHAT_MAX_TOKENS || secrets.GIGACHAT_MAX_TOKENS }}
+          YC_FOLDER_ID: ${{ vars.YC_FOLDER_ID || secrets.YC_FOLDER_ID }}
+          YC_OCR_MODEL: ${{ vars.YC_OCR_MODEL || secrets.YC_OCR_MODEL }}
+          APP_URL: ${{ vars.APP_URL || secrets.APP_URL }}
+          MAX_API_URL: ${{ vars.MAX_API_URL || secrets.MAX_API_URL }}
+          MAX_INSECURE_SKIP_VERIFY: ${{ vars.MAX_INSECURE_SKIP_VERIFY || secrets.MAX_INSECURE_SKIP_VERIFY }}
+          NOTIFICATIONS_ENABLED: ${{ vars.NOTIFICATIONS_ENABLED || secrets.NOTIFICATIONS_ENABLED }}
+          NOTIFICATION_TIME: ${{ vars.NOTIFICATION_TIME || secrets.NOTIFICATION_TIME }}
+          NOTIFICATION_TZ: ${{ vars.NOTIFICATION_TZ || secrets.NOTIFICATION_TZ }}
+
+          # Sensitive credentials (GitHub Actions Secrets)
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GIGACHAT_AUTH_KEY: ${{ secrets.GIGACHAT_AUTH_KEY }}
+          GIGACHAT_CLIENT_SECRET: ${{ secrets.GIGACHAT_CLIENT_SECRET }}
+          YC_API_KEY: ${{ secrets.YC_API_KEY }}
+        run: |
+          touch .env
+          chmod 644 .env
+
+          CONFIG_VARS=(
+            DOMAIN
+            PORT
+            DOCKER_IMAGE
+            IMAGE_TAG
+            DEPLOY_PATH
+            POSTGRES_USER
+            POSTGRES_DB
+            POSTGRES_PORT
+            GIGACHAT_CLIENT_ID
+            GIGACHAT_SCOPE
+            GIGACHAT_MODEL
+            GIGACHAT_FALLBACK_MODEL
+            GIGACHAT_BASE_URL
+            GIGACHAT_AUTH_URL
+            GIGACHAT_MAX_TOKENS
+            YC_FOLDER_ID
+            YC_OCR_MODEL
+            APP_URL
+            MAX_API_URL
+            MAX_INSECURE_SKIP_VERIFY
+            NOTIFICATIONS_ENABLED
+            NOTIFICATION_TIME
+            NOTIFICATION_TZ
+          )
+
+          SECRET_VARS=(
+            BOT_TOKEN
+            POSTGRES_PASSWORD
+            DATABASE_URL
+            GIGACHAT_AUTH_KEY
+            GIGACHAT_CLIENT_SECRET
+            YC_API_KEY
+          )
+
+          POPULATED_VARS=()
+          for key in "${CONFIG_VARS[@]}"; do
+            val="${!key}"
+            if [ -n "$val" ]; then
+              printf '%s=%s\n' "$key" "$val" >> .env
+              POPULATED_VARS+=("$key")
+            fi
+          done
+
+          POPULATED_SECRETS=()
+          for key in "${SECRET_VARS[@]}"; do
+            val="${!key}"
+            if [ -n "$val" ]; then
+              printf '%s=%s\n' "$key" "$val" >> .env
+              POPULATED_SECRETS+=("$key")
+            fi
+          done
+
+          if [ ${#POPULATED_VARS[@]} -gt 0 ]; then
+            echo "Populated variables: ${POPULATED_VARS[*]}"
+          else
+            echo "No variables configured."
+          fi
+
+          if [ ${#POPULATED_SECRETS[@]} -gt 0 ]; then
+            echo "Populated secrets: ${POPULATED_SECRETS[*]}"
+          else
+            echo "No secrets configured."
+          fi
+
+      - name: Copy Compose and .env files to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST || secrets.SSH_HOST }}
-          username: ${{ secrets.VPS_USER || secrets.SSH_USER || 'deployer' }}
+          username: ${{ secrets.VPS_USER || vars.VPS_USER || secrets.SSH_USER || vars.SSH_USER || 'deployer' }}
           key: ${{ secrets.VPS_SSH_KEY || secrets.SSH_KEY }}
-          port: ${{ secrets.VPS_PORT || secrets.SSH_PORT || 22 }}
-          source: 'docker-compose.yaml,docker-compose.prod.yaml'
-          target: ${{ secrets.DEPLOY_PATH || '/home/deployer/pomnibot' }}
+          port: ${{ vars.VPS_PORT || secrets.VPS_PORT || vars.SSH_PORT || secrets.SSH_PORT || 22 }}
+          source: 'docker-compose.yaml,docker-compose.prod.yaml,.env'
+          target: ${{ secrets.DEPLOY_PATH || vars.DEPLOY_PATH || '/home/deployer/pomnibot' }}
 
       - name: Pull and restart containers via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST || secrets.SSH_HOST }}
-          username: ${{ secrets.VPS_USER || secrets.SSH_USER || 'deployer' }}
+          username: ${{ secrets.VPS_USER || vars.VPS_USER || secrets.SSH_USER || vars.SSH_USER || 'deployer' }}
           key: ${{ secrets.VPS_SSH_KEY || secrets.SSH_KEY }}
-          port: ${{ secrets.VPS_PORT || secrets.SSH_PORT || 22 }}
+          port: ${{ vars.VPS_PORT || secrets.VPS_PORT || vars.SSH_PORT || secrets.SSH_PORT || 22 }}
           script: |
             set -e
-            DEPLOY_DIR="${{ secrets.DEPLOY_PATH || '/home/deployer/pomnibot' }}"
+            DEPLOY_DIR="${{ secrets.DEPLOY_PATH || vars.DEPLOY_PATH || '/home/deployer/pomnibot' }}"
             mkdir -p "$DEPLOY_DIR"
             cd "$DEPLOY_DIR"
+
+            # Set restrictive permissions on .env if copied
+            [ -f .env ] && chmod 600 .env
 
             # Login to GHCR to pull image
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u "${{ github.actor }}" --password-stdin

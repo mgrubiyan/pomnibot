@@ -1,10 +1,16 @@
-import type { Card } from '../types';
+import type { Card, CardAnswer, CardKind, TableLayout } from '../types';
 
-/** What the user changed in a card. No backend yet, so edits live in App. */
+/** What the user changed in a card. */
 export interface CardPatch {
+    kind?: CardKind;
     question?: string;
-    answer?: string;
+    answer?: CardAnswer;
     options?: string[];
+    table?: TableLayout;
+    explanation?: string;
+    topic?: string;
+    sourceQuote?: string;
+    sourceRef?: string;
 }
 
 export const applyPatch = (card: Card, patch?: CardPatch): Card =>

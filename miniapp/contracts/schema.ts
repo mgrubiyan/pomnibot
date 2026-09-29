@@ -21,6 +21,215 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sets/{setId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a card set */
+        get: operations["GetSet"];
+        put?: never;
+        post?: never;
+        /** Delete a card set */
+        delete: operations["DeleteSet"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sets/{setId}/cards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get cards */
+        get: operations["GetCardsBySetID"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sets/{setId}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get share code for a set */
+        get: operations["GetSetShareCode"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sets/{setId}/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get set's facts plan */
+        get: operations["GetSetPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sets/{setId}/leaderboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get set leaderboard for author */
+        get: operations["GetSetLeaderboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sets/join": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Join a card set by code */
+        post: operations["JoinSetByShareCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get today overview data */
+        get: operations["GetToday"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/feed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get questions of current feed */
+        get: operations["GetFeedQuestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send set/feed results */
+        post: operations["SendResults"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cards/{cardId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update a card */
+        put: operations["UpdateCard"];
+        post?: never;
+        /** Delete a card */
+        delete: operations["DeleteCard"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cards/{cardId}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send answer's text for input kind of questions */
+        post: operations["AnswerQuestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cards/{cardId}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a typed answer by meaning without recording it
+         * @description The answer need not match word for word: form, word order and typos do not matter, and answers in other words are judged by a language model. Nothing is recorded: the feed sends results with SendResults.
+         */
+        post: operations["CheckAnswer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -29,8 +238,191 @@ export interface components {
             /** @example ok */
             status: string;
         };
+        ErrorResponse: {
+            message: string;
+        };
+        /** @description A term of the table and the column it belongs to. */
+        TableItem: {
+            text: string;
+            column: string;
+        };
+        /** @description Sorting card: lay the terms out across the columns. */
+        TableLayout: {
+            columns: string[];
+            items: components["schemas"]["TableItem"][];
+        };
+        /** @enum {string} */
+        CardKind: "choice" | "flip" | "input" | "boolean" | "table";
+        /** @description choice - integer input - string boolean - boolean table - #/components/schemas/TableLayout */
+        CardAnswer: number | string | boolean | components["schemas"]["TableLayout"];
+        Card: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            setId: string;
+            kind: components["schemas"]["CardKind"];
+            question: string;
+            /** @description choice only */
+            options?: string[];
+            table?: components["schemas"]["TableLayout"];
+            answer: components["schemas"]["CardAnswer"];
+            /** @description 2-3 sentences */
+            explanation: string;
+            /** @description quote from the notes */
+            sourceQuote: string;
+            /** @description where the quote is from: «Лекция 3, стр. 2» */
+            sourceRef?: string;
+            /** @description topic, used for stats */
+            topic: string;
+        };
+        UpdateCardRequest: {
+            kind?: components["schemas"]["CardKind"];
+            question?: string;
+            /** @description choice only */
+            options?: string[];
+            table?: components["schemas"]["TableLayout"];
+            answer?: components["schemas"]["CardAnswer"];
+            /** @description 2-3 sentences */
+            explanation?: string;
+            /** @description quote from the notes */
+            sourceQuote?: string;
+            /** @description where the quote is from: «Лекция 3, стр. 2» */
+            sourceRef?: string;
+            /** @description topic, used for stats */
+            topic?: string;
+        };
+        User: {
+            /** Format: int64 */
+            id: number;
+            firstName: string;
+            lastName?: string;
+            username?: string;
+        };
+        CardSet: {
+            /** Format: uuid */
+            id: string;
+            /** @description «Матанализ, лекция 3» */
+            title: string;
+            cardsTotal: number;
+            /** @description how many are due for review */
+            cardsDue: number;
+            author: components["schemas"]["User"];
+            /** @example 123456 */
+            shareCode?: string;
+            /**
+             * @description User's rank place in the set rating (1-based)
+             * @example 1
+             */
+            userRank?: number;
+            /**
+             * @description User's progress mapped from ELO (0-100%)
+             * @example 85
+             */
+            userPercentile?: number;
+        };
+        JoinSetRequest: {
+            /**
+             * @description The 6-digit share code of the set
+             * @example 123456
+             */
+            code: string;
+        };
+        SetPlanItem: {
+            factName: string;
+            /** Format: date-time */
+            date: string;
+        };
+        SetPlanResponse: components["schemas"]["SetPlanItem"][];
+        LeaderboardEntry: {
+            user: components["schemas"]["User"];
+            /** @example 1 */
+            rank: number;
+            /** @example 85 */
+            percentile: number;
+        };
+        SetLeaderboardResponse: {
+            /** Format: uuid */
+            setId: string;
+            items: components["schemas"]["LeaderboardEntry"][];
+        };
+        TodayData: {
+            user: components["schemas"]["User"];
+            dueCount: number;
+            estimatedMinutes: number;
+            /**
+             * Format: date-time
+             * @description Earliest scheduled review for the user, if any
+             */
+            nextReviewAt?: string | null;
+            sets: components["schemas"]["CardSet"][];
+        };
+        AnswerResult: {
+            /** Format: uuid */
+            cardId: string;
+            correct: boolean;
+            /** Format: date-time */
+            answeredAt: string;
+        };
+        SendResultsRequest: components["schemas"]["AnswerResult"][];
+        AnswerQuestionRequest: {
+            answer: string;
+        };
+        CheckAnswerRequest: {
+            answer: string;
+        };
+        CheckAnswerResponse: {
+            isCorrect: boolean;
+            /** @description Why the answer counts or what it lacks, when a model judged it */
+            reason?: string;
+            /**
+             * @description local: matched up to form and typos, or surely wrong; model: judged by meaning; fallback: the model did not answer in time, local verdict
+             * @enum {string}
+             */
+            method: "local" | "model" | "fallback";
+        };
+        AnswerQuestionResponse: {
+            isCorrect: boolean;
+            userAnswer: string;
+        };
     };
-    responses: never;
+    responses: {
+        /** @description Bad request / validation error */
+        BadRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description Resource not found */
+        NotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description Forbidden / insufficient permissions */
+        Forbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description Internal server error */
+        InternalServerError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+    };
     parameters: never;
     requestBodies: never;
     headers: never;
@@ -56,6 +448,361 @@ export interface operations {
                     "application/json": components["schemas"]["HealthResponse"];
                 };
             };
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    GetSet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ID of the card set */
+                setId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Card set retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CardSet"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    DeleteSet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ID of the card set to delete */
+                setId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Card set deleted successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    GetCardsBySetID: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Filter cards by set ID */
+                setId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cards retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Card"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    GetSetShareCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ID of the card set */
+                setId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Set share details retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CardSet"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    GetSetPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                setId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pairs fact - date */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetPlanResponse"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    GetSetLeaderboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ID of the card set */
+                setId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Leaderboard retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetLeaderboardResponse"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    JoinSetByShareCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JoinSetRequest"];
+            };
+        };
+        responses: {
+            /** @description Card set joined successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CardSet"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    GetToday: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Today data retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TodayData"];
+                };
+            };
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    GetFeedQuestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Feed of questions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Card"][];
+                };
+            };
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    SendResults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendResultsRequest"];
+            };
+        };
+        responses: {
+            /** @description Results was sent */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    UpdateCard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ID of the card to update */
+                cardId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCardRequest"];
+            };
+        };
+        responses: {
+            /** @description Card updated successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Card"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    DeleteCard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ID of the card to delete */
+                cardId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Card deleted successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    AnswerQuestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ID of the card */
+                cardId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerQuestionRequest"];
+            };
+        };
+        responses: {
+            /** @description Ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerQuestionResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    CheckAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ID of the card */
+                cardId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckAnswerRequest"];
+            };
+        };
+        responses: {
+            /** @description Ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckAnswerResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
         };
     };
 }

@@ -37,13 +37,10 @@ React 19 + TypeScript + Vite на Bun 1.4+, библиотека [@maxhub/max-ui
 ```
 Home ─┬─ «Начать» ─────────────► Feed (все карточки на повтор)
       ├─ тап по набору ───────► SetScreen ─┬─ «Повторить N» ──► Feed (набор)
-      │                                    ├─ тап по карточке ─► CardIssue
+      │                                    ├─ тап по карточке (владелец) ─► CardEdit ──► SetScreen
       │                                    └─ «Удалить набор»
       ├─ «Добавить конспект» ─► AddNote
       └─ «Ввести код набора» ─► JoinSet ───► SetScreen
-
-Feed ── «Карточка неверная» ──► CardIssue ─┬─ «Исправить» ──► CardEdit ──► SetScreen
-                                           └─ «Удалить» ────────────────► SetScreen
 ```
 
 Из ленты выход по кнопке «На главную» на экране «На сегодня всё»,
@@ -53,12 +50,11 @@ Feed ── «Карточка неверная» ──► CardIssue ─┬─ 
 
 | Экран | Файл | Что делает |
 |---|---|---|
-| Home | [src/screens/Home.tsx](src/screens/Home.tsx) | «На сегодня», список наборов, кнопки добавления |
-| SetScreen | [src/screens/SetScreen.tsx](src/screens/SetScreen.tsx) | Состав набора, список карточек, «Почему это работает», запуск и удаление |
+| Home | [src/screens/Home.tsx](src/screens/Home.tsx) | «На сегодня», список наборов, «Почему это работает», кнопки добавления |
+| SetScreen | [src/screens/SetScreen.tsx](src/screens/SetScreen.tsx) | Состав набора, список карточек, запуск и удаление |
 | Feed | [src/screens/Feed.tsx](src/screens/Feed.tsx) | Лента карточек: вопрос, разбор, цитата-источник |
 | JoinSet | [src/screens/JoinSet.tsx](src/screens/JoinSet.tsx) | Ввод шестизначного кода набора |
 | AddNote | [src/screens/AddNote.tsx](src/screens/AddNote.tsx) | Объясняет, что конспект отправляют боту в чат |
-| CardIssue | [src/screens/CardIssue.tsx](src/screens/CardIssue.tsx) | Причина, почему карточка плохая: поправить или убрать |
 | CardEdit | [src/screens/CardEdit.tsx](src/screens/CardEdit.tsx) | Правка вопроса, ответа и неверных вариантов |
 
 ## Общее между экранами
@@ -88,12 +84,9 @@ MAX Bridge — объект `window.WebApp` из скрипта `max-web-app.js`
 - Ссылка-приглашение: мини-приложение, открытое со стартовым параметром
   `join_<код>`, например `join_482917`, сразу показывает экран кода с уже
   введённым кодом. Добавляет набор сам студент.
-- [src/api.ts](src/api.ts) — клиент API, пока без вызовов: экраны на моках.
-  Когда запросы появятся, каждый понесёт подписанные данные запуска
-  `initData` в заголовке `X-Max-Init-Data`, чтобы бэкенд проверил подпись
-  и понял, кто спрашивает. Бэкенд этот заголовок пока не читает, в
-  `contracts/openapi.yaml` его тоже нет: имя нужно согласовать с командой
-  бэкенда.
+- [src/api.ts](src/api.ts) — клиент API. Каждый запрос несёт подписанные
+  данные запуска `initData` в заголовке `X-Init-Data`; бэкенд проверяет
+  подпись токеном бота и по ней узнаёт пользователя.
 
 ## Виды карточек
 

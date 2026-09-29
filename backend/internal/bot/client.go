@@ -4,33 +4,34 @@ package bot
 import (
 	"bytes"
 	"context"
-	_ "embed"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
+	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
-)
 
-//go:embed certs/rootca.pem
-var rootCAPEM []byte
+	"github.com/mgrubiyan/pomnibot/backend/internal/tlsroot"
+)
 
 const defaultAPIBaseURL = "https://platform-api2.max.ru"
 
-// User represents a MAX user or bot profile.
+// User represents a MAX user or bot profile according to MAX Bot API sender schema.
 type User struct {
-	UserID    int64  `json:"user_id"`
-	FirstName string `json:"first_name"`
-	Username  string `json:"username"`
-	IsBot     bool   `json:"is_bot"`
-	Name      string `json:"name"`
+	UserID    int64   `json:"user_id"`
+	FirstName string  `json:"first_name"`
+	LastName  *string `json:"last_name,omitempty"`
+	Username  *string `json:"username,omitempty"`
+	IsBot     bool    `json:"is_bot"`
+	Name      string  `json:"name,omitempty"`
 }
 
 // UpdateResponse represents response from GET /updates.
@@ -50,9 +51,10 @@ type Update struct {
 
 // Message represents incoming message.
 type Message struct {
-	Recipient MessageRecipient `json:"recipient"`
-	Sender    User             `json:"sender"`
-	Body      MessageBody      `json:"body"`
+	Recipient   MessageRecipient `json:"recipient"`
+	Sender      User             `json:"sender"`
+	Body        MessageBody      `json:"body"`
+	Attachments []Attachment     `json:"attachments,omitempty"`
 }
 
 // MessageRecipient describes who received the message.
@@ -64,8 +66,9 @@ type MessageRecipient struct {
 
 // MessageBody contains the message content.
 type MessageBody struct {
-	Mid  string `json:"mid"`
-	Text string `json:"text"`
+	Mid         string       `json:"mid"`
+	Text        string       `json:"text"`
+	Attachments []Attachment `json:"attachments,omitempty"`
 }
 
 // SendMessageRequest contains payload for POST /messages.
@@ -74,10 +77,23 @@ type SendMessageRequest struct {
 	Attachments []Attachment `json:"attachments,omitempty"`
 }
 
-// Attachment represents attachment (e.g. inline keyboard).
+// Attachment represents attachment (e.g. inline keyboard, file, image).
 type Attachment struct {
-	Type    string                 `json:"type"`
-	Payload map[string]interface{} `json:"payload"`
+	Type     string                 `json:"type"`
+	Filename string                 `json:"filename,omitempty"`
+	Name     string                 `json:"name,omitempty"`
+	Title    string                 `json:"title,omitempty"`
+	URL      string                 `json:"url,omitempty"`
+	Token    string                 `json:"token,omitempty"`
+	Size     *int64                 `json:"size,omitempty"`
+	Payload  map[string]interface{} `json:"payload,omitempty"`
+}
+
+// DownloadedFile represents downloaded file contents and metadata.
+type DownloadedFile struct {
+	Data        []byte
+	Filename    string
+	ContentType string
 }
 
 // SubscriptionsResponse represents response from GET /subscriptions.
@@ -104,15 +120,8 @@ func NewClient(token string, baseURL string) (*Client, error) {
 	}
 	baseURL = strings.TrimSuffix(baseURL, "/")
 
-	// Create root CA pool including system CAs and bundled Russian Root CA
-	certPool, err := x509.SystemCertPool()
-	if err != nil || certPool == nil {
-		certPool = x509.NewCertPool()
-	}
-
-	if len(rootCAPEM) > 0 {
-		certPool.AppendCertsFromPEM(rootCAPEM)
-	}
+	// Root CA pool including system CAs and bundled Russian Root CA
+	certPool := tlsroot.Pool()
 
 	insecureSkipVerify := os.Getenv("MAX_INSECURE_SKIP_VERIFY") == "true"
 
@@ -216,19 +225,147 @@ func (c *Client) GetUpdates(ctx context.Context, marker *int64, timeout int) (*U
 	return &resp, nil
 }
 
-// SendMessage sends a message to chatID or userID.
-func (c *Client) SendMessage(ctx context.Context, chatID int64, userID int64, msg SendMessageRequest) error {
+// SendMessageResponse represents response payload from POST /messages.
+type SendMessageResponse struct {
+	Message *Message     `json:"message,omitempty"`
+	Body    *MessageBody `json:"body,omitempty"`
+}
+
+// SendMessage sends a message to chatID or userID and returns the created message ID (mid) if available.
+func (c *Client) SendMessage(ctx context.Context, chatID int64, userID int64, msg SendMessageRequest) (string, error) {
 	params := url.Values{}
 	if chatID != 0 {
 		params.Set("chat_id", strconv.FormatInt(chatID, 10))
 	} else if userID != 0 {
 		params.Set("user_id", strconv.FormatInt(userID, 10))
 	} else {
-		return fmt.Errorf("either chatID or userID must be provided")
+		return "", fmt.Errorf("either chatID or userID must be provided")
 	}
 
 	endpoint := "/messages?" + params.Encode()
-	return c.doRequest(ctx, http.MethodPost, endpoint, msg, nil)
+	var resp SendMessageResponse
+	if err := c.doRequest(ctx, http.MethodPost, endpoint, msg, &resp); err != nil {
+		return "", err
+	}
+	if resp.Message != nil && resp.Message.Body.Mid != "" {
+		return resp.Message.Body.Mid, nil
+	}
+	if resp.Body != nil && resp.Body.Mid != "" {
+		return resp.Body.Mid, nil
+	}
+	return "", nil
+}
+
+// EditMessage edits an existing message by its messageID (mid).
+func (c *Client) EditMessage(ctx context.Context, messageID string, msg SendMessageRequest) error {
+	if messageID == "" {
+		return fmt.Errorf("messageID is required")
+	}
+	endpoint := "/messages?message_id=" + url.QueryEscape(messageID)
+	return c.doRequest(ctx, http.MethodPut, endpoint, msg, nil)
+}
+
+// SendAction notifies users in chat of bot activity (e.g. "typing_on").
+func (c *Client) SendAction(ctx context.Context, chatID int64, action string) error {
+	if chatID == 0 {
+		return nil
+	}
+	body := map[string]string{"action": action}
+	endpoint := fmt.Sprintf("/chats/%d/actions", chatID)
+	return c.doRequest(ctx, http.MethodPost, endpoint, body, nil)
+}
+
+var percentHexRegex = regexp.MustCompile(`%[0-9a-fA-F]{2}`)
+
+// cleanFilename cleans, unescapes, and strips path components from a filename.
+func cleanFilename(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+
+	// Repeatedly URL unescape if percent-encoded tokens are present (up to 3 iterations)
+	for i := 0; i < 3 && percentHexRegex.MatchString(name); i++ {
+		if unescaped, err := url.QueryUnescape(name); err == nil && unescaped != name {
+			name = unescaped
+		} else {
+			break
+		}
+	}
+
+	// Strip surrounding quotes if present
+	name = strings.Trim(name, "\"'")
+
+	// Normalize both Windows and Unix path separators and strip directory components
+	name = path.Base(strings.ReplaceAll(name, "\\", "/"))
+	if name == "." || name == "/" {
+		return ""
+	}
+	return strings.TrimSpace(name)
+}
+
+// DownloadFile downloads file bytes and metadata from a given URL.
+func (c *Client) DownloadFile(ctx context.Context, fileURL string) (*DownloadedFile, error) {
+	if fileURL == "" {
+		return nil, fmt.Errorf("file URL is empty")
+	}
+	if !strings.HasPrefix(fileURL, "http://") && !strings.HasPrefix(fileURL, "https://") {
+		fileURL = c.baseURL + "/" + strings.TrimPrefix(fileURL, "/")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fileURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create download request: %w", err)
+	}
+
+	if strings.Contains(fileURL, "max.ru") {
+		req.Header.Set("Authorization", c.token)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("download file %s: %w", fileURL, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("download failed with status %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read file body: %w", err)
+	}
+
+	filename := ""
+	if cd := resp.Header.Get("Content-Disposition"); cd != "" {
+		if _, params, err := mime.ParseMediaType(cd); err == nil {
+			if fn, ok := params["filename*"]; ok && strings.TrimSpace(fn) != "" {
+				parts := strings.SplitN(fn, "''", 2)
+				if len(parts) == 2 {
+					filename = parts[1]
+				} else {
+					filename = fn
+				}
+			} else if fn, ok := params["filename"]; ok && strings.TrimSpace(fn) != "" {
+				filename = fn
+			}
+		}
+	}
+	if filename == "" {
+		if u, err := url.Parse(fileURL); err == nil {
+			base := path.Base(u.Path)
+			if base != "" && base != "." && base != "/" {
+				filename = base
+			}
+		}
+	}
+
+	return &DownloadedFile{
+		Data:        data,
+		Filename:    cleanFilename(filename),
+		ContentType: resp.Header.Get("Content-Type"),
+	}, nil
 }
 
 // GetSubscriptions returns all active webhook subscriptions.

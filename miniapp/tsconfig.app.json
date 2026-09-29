@@ -22,5 +22,6 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src", "contracts"],
+  "exclude": ["src/**/*.test.ts"]
 }

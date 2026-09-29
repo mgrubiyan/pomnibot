@@ -1,48 +1,40 @@
 import { useEffect, useState } from 'react';
 import { Button, CellHeader, CellList, CellSimple, Flex, Spinner, Typography } from '@maxhub/max-ui';
-import type { CardSet, TodayData } from '../types';
-import { mockToday, mockTodayDone, mockTodayEmpty } from '../mocks';
+import type { Card, CardSet, TodayData } from '../types';
+import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
+import { WhyItWorks } from '../components/WhyItWorks';
 import { IconDoc, IconOffline } from '../components/Icons';
 import { estimateMinutes } from '../utils/estimate';
-import { aboutMinutesLabel, cardsLabel, daysLabel } from '../utils/plural';
+import { aboutMinutesLabel, cardsLabel } from '../utils/plural';
+import { formatAuthorName, formatGreetingName } from '../utils/user';
+import { formatNextReviewSubtitle } from '../utils/reviewDate';
 import s from './Home.module.css';
 
 type Status = 'loading' | 'error' | 'ready';
 
-const LOAD_DELAY = 700;
+async function loadToday(): Promise<TodayData> {
+    const { data, error } = await api.GET('/');
+    if (error || !data) {
+        throw new Error(error?.message ?? 'Failed to load today data');
+    }
+    return data;
+}
 
-/**
- * Mocks instead of a request; the real endpoint comes later.
- * The states are reachable through ?home=done, ?home=empty and ?fail
- */
-function loadToday(): Promise<TodayData> {
-    return new Promise((resolve, reject) => {
-        window.setTimeout(() => {
-            const params = new URLSearchParams(window.location.search);
-
-            if (params.has('fail')) {
-                reject(new Error('network'));
-                return;
-            }
-            if (params.get('home') === 'done') {
-                resolve(mockTodayDone);
-                return;
-            }
-            if (params.get('home') === 'empty') {
-                resolve(mockTodayEmpty);
-                return;
-            }
-            resolve(mockToday);
-        }, LOAD_DELAY);
-    });
+async function loadFeed(): Promise<Card[]> {
+    const { data, error } = await api.GET('/feed');
+    if (error || !data) {
+        throw new Error(error?.message ?? 'Failed to load feed');
+    }
+    return data;
 }
 
 /** «24 карточки · 8 на повтор», without the tail when nothing is due. */
-function setSummary(set: CardSet): string {
+function setSummary(set: CardSet, feedDueCount?: number): string {
     const total = cardsLabel(set.cardsTotal);
-    return set.cardsDue > 0 ? `${total} · ${set.cardsDue} на повтор` : total;
+    const due = feedDueCount !== undefined ? feedDueCount : set.cardsDue;
+    return due > 0 ? `${total} · ${due} на повтор` : total;
 }
 
 export interface HomeProps {
@@ -54,22 +46,27 @@ export interface HomeProps {
     onJoinSet: () => void;
     /** Sets deleted during this session: no backend yet, App remembers them. */
     removedSetIds: string[];
+    /** Notify parent when today data (including current user) is loaded */
+    onTodayLoaded?: (today: TodayData) => void;
 }
 
-export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds }: HomeProps) {
+export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, onTodayLoaded }: HomeProps) {
     const [status, setStatus] = useState<Status>('loading');
     const [today, setToday] = useState<TodayData | null>(null);
+    const [feedCards, setFeedCards] = useState<Card[]>([]);
     const [attempt, setAttempt] = useState(0);
 
     useEffect(() => {
         let cancelled = false;
 
-        loadToday()
-            .then((next) => {
+        Promise.all([loadToday(), loadFeed()])
+            .then(([nextToday, nextFeed]) => {
                 if (cancelled) {
                     return;
                 }
-                setToday(next);
+                setToday(nextToday);
+                setFeedCards(nextFeed);
+                onTodayLoaded?.(nextToday);
                 setStatus('ready');
             })
             .catch(() => {
@@ -81,7 +78,7 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds }
         return () => {
             cancelled = true;
         };
-    }, [attempt]);
+    }, [attempt, onTodayLoaded]);
 
     const retry = () => {
         setStatus('loading');
@@ -115,9 +112,12 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds }
 
     const sets = today.sets.filter((set) => !removedSetIds.includes(set.id));
     const hasSets = sets.length > 0;
-    // The counters are summed over the remaining sets: otherwise «на сегодня»
-    // would keep promising cards that a deletion has already taken away.
-    const dueCount = sets.reduce((total, set) => total + set.cardsDue, 0);
+    const setDueMap = new Map<string, number>();
+    for (const card of feedCards) {
+        setDueMap.set(card.setId, (setDueMap.get(card.setId) ?? 0) + 1);
+    }
+    const dueCount = feedCards.filter((card) => !removedSetIds.includes(card.setId)).length;
+    const nextReviewSubtitle = formatNextReviewSubtitle(today.nextReviewAt);
 
     const bottomActions = (
         <Flex direction="column" align="stretch" gap={8}>
@@ -134,47 +134,44 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds }
         <Screen>
             <Flex justify="space-between" align="baseline" gap={12} className={s.header}>
                 <Typography.Text variant="subheader" asChild>
-                    <h1 className={s.greeting}>Привет, {today.userName}</h1>
+                    <h1 className={s.greeting}>Привет, {formatGreetingName(today.user)}</h1>
                 </Typography.Text>
-                {/* «0 дней из 7» on the very first day reads as a reproach,
-                    so the counter waits for the first session. */}
-                {hasSets && today.activeDays > 0 ? (
-                    <Typography.Text variant="label" color="secondary" className={s.days}>
-                        Занимались {daysLabel(today.activeDays)} из 7
-                    </Typography.Text>
-                ) : null}
             </Flex>
 
-            {hasSets ? (
-                <>
-                    <Flex direction="column" align="stretch" gap={4} className={s.todayCard}>
-                        <Typography.Text variant="subheader">На сегодня</Typography.Text>
+            <Flex direction="column" align="stretch" gap={16} className={s.body}>
+                {hasSets ? (
+                    <>
+                        <Flex direction="column" align="stretch" gap={4} className={s.todayCard}>
+                            {dueCount > 0 ? (
+                                <>
+                                    <Typography.Text variant="subheader">На сегодня</Typography.Text>
+                                    <Typography.Text variant="body" color="secondary">
+                                        {cardsLabel(dueCount)} · {aboutMinutesLabel(estimateMinutes(dueCount))}
+                                    </Typography.Text>
+                                    <Button
+                                        size="medium"
+                                        variant="primary"
+                                        stretched
+                                        className={s.startButton}
+                                        onClick={onStart}
+                                    >
+                                        Начать
+                                    </Button>
+                                </>
+                            ) : (
+                                <>
+                                    <Typography.Text variant="subheader">На сегодня всё</Typography.Text>
+                                    {nextReviewSubtitle ? (
+                                        <Typography.Text variant="body" color="secondary">
+                                            {nextReviewSubtitle}
+                                        </Typography.Text>
+                                    ) : null}
+                                </>
+                            )}
+                        </Flex>
 
-                        {dueCount > 0 ? (
-                            <>
-                                <Typography.Text variant="body" color="secondary">
-                                    {cardsLabel(dueCount)} · {aboutMinutesLabel(estimateMinutes(dueCount))}
-                                </Typography.Text>
-                                <Button
-                                    size="medium"
-                                    variant="primary"
-                                    stretched
-                                    className={s.startButton}
-                                    onClick={onStart}
-                                >
-                                    Начать
-                                </Button>
-                            </>
-                        ) : (
-                            <Typography.Text variant="body" color="secondary">
-                                На сегодня всё, вернёмся завтра
-                            </Typography.Text>
-                        )}
-                    </Flex>
-
-                    <Flex direction="column" align="stretch" gap={8} className={s.setsSection}>
-                        <CellHeader>Мои наборы</CellHeader>
-                        <div className={s.setsScroll}>
+                        <Flex direction="column" align="stretch" gap={8} className={s.setsSection}>
+                            <CellHeader>Мои наборы</CellHeader>
                             <CellList mode="island" filled className={s.setsList}>
                                 {sets.map((set, index) => (
                                     <CellSimple
@@ -187,11 +184,11 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds }
                                         subtitle={
                                             <Flex direction="column" align="stretch">
                                                 <Typography.Text variant="description" color="secondary">
-                                                    {setSummary(set)}
+                                                    {setSummary(set, setDueMap.get(set.id))}
                                                 </Typography.Text>
-                                                {set.authorName ? (
+                                                {set.author && set.author.id !== today.user.id ? (
                                                     <Typography.Text variant="label" color="tertiary">
-                                                        Автор: {set.authorName}
+                                                        Автор: {formatAuthorName(set.author)}
                                                     </Typography.Text>
                                                 ) : null}
                                             </Flex>
@@ -199,17 +196,19 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds }
                                     />
                                 ))}
                             </CellList>
-                        </div>
+                        </Flex>
+                    </>
+                ) : (
+                    <Flex direction="column" align="center" justify="center" gap={12} className={s.empty}>
+                        <IconDoc size={48} tone="muted" />
+                        <Typography.Text variant="body" color="secondary" className={s.emptyText}>
+                            Загрузите конспект, и мы сделаем из него карточки
+                        </Typography.Text>
                     </Flex>
-                </>
-            ) : (
-                <Flex direction="column" align="center" justify="center" gap={12} className={s.empty}>
-                    <IconDoc size={48} tone="muted" />
-                    <Typography.Text variant="body" color="secondary" className={s.emptyText}>
-                        Загрузите конспект, и мы сделаем из него карточки
-                    </Typography.Text>
-                </Flex>
-            )}
+                )}
+
+                <WhyItWorks />
+            </Flex>
 
             {bottomActions}
         </Screen>

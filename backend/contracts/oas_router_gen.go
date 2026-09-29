@@ -10,6 +10,24 @@ import (
 	"github.com/ogen-go/ogen/uri"
 )
 
+var (
+	rn2AllowedHeaders = map[string]string{
+		"PUT": "Content-Type",
+	}
+	rn3AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
+	}
+	rn5AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
+	}
+	rn17AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
+	}
+	rn16AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
+	}
+)
+
 func (s *Server) cutPrefix(path string) (string, bool) {
 	prefix := s.cfg.Prefix
 	if prefix == "" {
@@ -40,6 +58,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
+	args := [1]string{}
 
 	// Static code generated router with unwrapped path search.
 	switch {
@@ -48,19 +67,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		switch elem[0] {
-		case '/': // Prefix: "/health"
+		case '/': // Prefix: "/"
 
-			if l := len("/health"); len(elem) >= l && elem[0:l] == "/health" {
+			if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
 				elem = elem[l:]
 			} else {
 				break
 			}
 
 			if len(elem) == 0 {
-				// Leaf node.
 				switch r.Method {
 				case "GET":
-					s.handleGetHealthRequest([0]string{}, elemIsEscaped, w, r)
+					s.handleGetTodayRequest([0]string{}, elemIsEscaped, w, r)
 				default:
 					s.notAllowed(w, r, notAllowedParams{
 						allowedMethods: "GET",
@@ -71,6 +89,386 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 
 				return
+			}
+			switch elem[0] {
+			case 'c': // Prefix: "cards/"
+
+				if l := len("cards/"); len(elem) >= l && elem[0:l] == "cards/" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				// Param: "cardId"
+				// Match until "/"
+				idx := strings.IndexByte(elem, '/')
+				if idx < 0 {
+					idx = len(elem)
+				}
+				args[0] = elem[:idx]
+				elem = elem[idx:]
+
+				if len(elem) == 0 {
+					switch r.Method {
+					case "DELETE":
+						s.handleDeleteCardRequest([1]string{
+							args[0],
+						}, elemIsEscaped, w, r)
+					case "PUT":
+						s.handleUpdateCardRequest([1]string{
+							args[0],
+						}, elemIsEscaped, w, r)
+					default:
+						s.notAllowed(w, r, notAllowedParams{
+							allowedMethods: "DELETE,PUT",
+							allowedHeaders: rn2AllowedHeaders,
+							acceptPost:     "",
+							acceptPatch:    "",
+						})
+					}
+
+					return
+				}
+				switch elem[0] {
+				case '/': // Prefix: "/"
+
+					if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						break
+					}
+					switch elem[0] {
+					case 'a': // Prefix: "answer"
+
+						if l := len("answer"); len(elem) >= l && elem[0:l] == "answer" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch r.Method {
+							case "POST":
+								s.handleAnswerQuestionRequest([1]string{
+									args[0],
+								}, elemIsEscaped, w, r)
+							default:
+								s.notAllowed(w, r, notAllowedParams{
+									allowedMethods: "POST",
+									allowedHeaders: rn3AllowedHeaders,
+									acceptPost:     "application/json",
+									acceptPatch:    "",
+								})
+							}
+
+							return
+						}
+
+					case 'c': // Prefix: "check"
+
+						if l := len("check"); len(elem) >= l && elem[0:l] == "check" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch r.Method {
+							case "POST":
+								s.handleCheckAnswerRequest([1]string{
+									args[0],
+								}, elemIsEscaped, w, r)
+							default:
+								s.notAllowed(w, r, notAllowedParams{
+									allowedMethods: "POST",
+									allowedHeaders: rn5AllowedHeaders,
+									acceptPost:     "application/json",
+									acceptPatch:    "",
+								})
+							}
+
+							return
+						}
+
+					}
+
+				}
+
+			case 'f': // Prefix: "feed"
+
+				if l := len("feed"); len(elem) >= l && elem[0:l] == "feed" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch r.Method {
+					case "GET":
+						s.handleGetFeedQuestionsRequest([0]string{}, elemIsEscaped, w, r)
+					default:
+						s.notAllowed(w, r, notAllowedParams{
+							allowedMethods: "GET",
+							allowedHeaders: nil,
+							acceptPost:     "",
+							acceptPatch:    "",
+						})
+					}
+
+					return
+				}
+
+			case 'h': // Prefix: "health"
+
+				if l := len("health"); len(elem) >= l && elem[0:l] == "health" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch r.Method {
+					case "GET":
+						s.handleGetHealthRequest([0]string{}, elemIsEscaped, w, r)
+					default:
+						s.notAllowed(w, r, notAllowedParams{
+							allowedMethods: "GET",
+							allowedHeaders: nil,
+							acceptPost:     "",
+							acceptPatch:    "",
+						})
+					}
+
+					return
+				}
+
+			case 'r': // Prefix: "results"
+
+				if l := len("results"); len(elem) >= l && elem[0:l] == "results" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch r.Method {
+					case "POST":
+						s.handleSendResultsRequest([0]string{}, elemIsEscaped, w, r)
+					default:
+						s.notAllowed(w, r, notAllowedParams{
+							allowedMethods: "POST",
+							allowedHeaders: rn17AllowedHeaders,
+							acceptPost:     "application/json",
+							acceptPatch:    "",
+						})
+					}
+
+					return
+				}
+
+			case 's': // Prefix: "sets/"
+
+				if l := len("sets/"); len(elem) >= l && elem[0:l] == "sets/" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					break
+				}
+				switch elem[0] {
+				case 'j': // Prefix: "join"
+					origElem := elem
+					if l := len("join"); len(elem) >= l && elem[0:l] == "join" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "POST":
+							s.handleJoinSetByShareCodeRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "POST",
+								allowedHeaders: rn16AllowedHeaders,
+								acceptPost:     "application/json",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+
+					elem = origElem
+				}
+				// Param: "setId"
+				// Match until "/"
+				idx := strings.IndexByte(elem, '/')
+				if idx < 0 {
+					idx = len(elem)
+				}
+				args[0] = elem[:idx]
+				elem = elem[idx:]
+
+				if len(elem) == 0 {
+					switch r.Method {
+					case "DELETE":
+						s.handleDeleteSetRequest([1]string{
+							args[0],
+						}, elemIsEscaped, w, r)
+					case "GET":
+						s.handleGetSetRequest([1]string{
+							args[0],
+						}, elemIsEscaped, w, r)
+					default:
+						s.notAllowed(w, r, notAllowedParams{
+							allowedMethods: "DELETE,GET",
+							allowedHeaders: nil,
+							acceptPost:     "",
+							acceptPatch:    "",
+						})
+					}
+
+					return
+				}
+				switch elem[0] {
+				case '/': // Prefix: "/"
+
+					if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						break
+					}
+					switch elem[0] {
+					case 'c': // Prefix: "cards"
+
+						if l := len("cards"); len(elem) >= l && elem[0:l] == "cards" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch r.Method {
+							case "GET":
+								s.handleGetCardsBySetIDRequest([1]string{
+									args[0],
+								}, elemIsEscaped, w, r)
+							default:
+								s.notAllowed(w, r, notAllowedParams{
+									allowedMethods: "GET",
+									allowedHeaders: nil,
+									acceptPost:     "",
+									acceptPatch:    "",
+								})
+							}
+
+							return
+						}
+
+					case 'l': // Prefix: "leaderboard"
+
+						if l := len("leaderboard"); len(elem) >= l && elem[0:l] == "leaderboard" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch r.Method {
+							case "GET":
+								s.handleGetSetLeaderboardRequest([1]string{
+									args[0],
+								}, elemIsEscaped, w, r)
+							default:
+								s.notAllowed(w, r, notAllowedParams{
+									allowedMethods: "GET",
+									allowedHeaders: nil,
+									acceptPost:     "",
+									acceptPatch:    "",
+								})
+							}
+
+							return
+						}
+
+					case 'p': // Prefix: "plan"
+
+						if l := len("plan"); len(elem) >= l && elem[0:l] == "plan" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch r.Method {
+							case "GET":
+								s.handleGetSetPlanRequest([1]string{
+									args[0],
+								}, elemIsEscaped, w, r)
+							default:
+								s.notAllowed(w, r, notAllowedParams{
+									allowedMethods: "GET",
+									allowedHeaders: nil,
+									acceptPost:     "",
+									acceptPatch:    "",
+								})
+							}
+
+							return
+						}
+
+					case 's': // Prefix: "share"
+
+						if l := len("share"); len(elem) >= l && elem[0:l] == "share" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch r.Method {
+							case "GET":
+								s.handleGetSetShareCodeRequest([1]string{
+									args[0],
+								}, elemIsEscaped, w, r)
+							default:
+								s.notAllowed(w, r, notAllowedParams{
+									allowedMethods: "GET",
+									allowedHeaders: nil,
+									acceptPost:     "",
+									acceptPatch:    "",
+								})
+							}
+
+							return
+						}
+
+					}
+
+				}
+
 			}
 
 		}
@@ -86,7 +484,7 @@ type Route struct {
 	operationGroup string
 	pathPattern    string
 	count          int
-	args           [0]string
+	args           [1]string
 }
 
 // Name returns ogen operation name.
@@ -159,29 +557,402 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 			break
 		}
 		switch elem[0] {
-		case '/': // Prefix: "/health"
+		case '/': // Prefix: "/"
 
-			if l := len("/health"); len(elem) >= l && elem[0:l] == "/health" {
+			if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
 				elem = elem[l:]
 			} else {
 				break
 			}
 
 			if len(elem) == 0 {
-				// Leaf node.
 				switch method {
 				case "GET":
-					r.name = GetHealthOperation
-					r.summary = "Health check endpoint"
-					r.operationID = "getHealth"
+					r.name = GetTodayOperation
+					r.summary = "Get today overview data"
+					r.operationID = "GetToday"
 					r.operationGroup = ""
-					r.pathPattern = "/health"
+					r.pathPattern = "/"
 					r.args = args
 					r.count = 0
 					return r, true
 				default:
 					return
 				}
+			}
+			switch elem[0] {
+			case 'c': // Prefix: "cards/"
+
+				if l := len("cards/"); len(elem) >= l && elem[0:l] == "cards/" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				// Param: "cardId"
+				// Match until "/"
+				idx := strings.IndexByte(elem, '/')
+				if idx < 0 {
+					idx = len(elem)
+				}
+				args[0] = elem[:idx]
+				elem = elem[idx:]
+
+				if len(elem) == 0 {
+					switch method {
+					case "DELETE":
+						r.name = DeleteCardOperation
+						r.summary = "Delete a card"
+						r.operationID = "DeleteCard"
+						r.operationGroup = ""
+						r.pathPattern = "/cards/{cardId}"
+						r.args = args
+						r.count = 1
+						return r, true
+					case "PUT":
+						r.name = UpdateCardOperation
+						r.summary = "Update a card"
+						r.operationID = "UpdateCard"
+						r.operationGroup = ""
+						r.pathPattern = "/cards/{cardId}"
+						r.args = args
+						r.count = 1
+						return r, true
+					default:
+						return
+					}
+				}
+				switch elem[0] {
+				case '/': // Prefix: "/"
+
+					if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						break
+					}
+					switch elem[0] {
+					case 'a': // Prefix: "answer"
+
+						if l := len("answer"); len(elem) >= l && elem[0:l] == "answer" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch method {
+							case "POST":
+								r.name = AnswerQuestionOperation
+								r.summary = "Send answer's text for input kind of questions"
+								r.operationID = "AnswerQuestion"
+								r.operationGroup = ""
+								r.pathPattern = "/cards/{cardId}/answer"
+								r.args = args
+								r.count = 1
+								return r, true
+							default:
+								return
+							}
+						}
+
+					case 'c': // Prefix: "check"
+
+						if l := len("check"); len(elem) >= l && elem[0:l] == "check" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch method {
+							case "POST":
+								r.name = CheckAnswerOperation
+								r.summary = "Check a typed answer by meaning without recording it"
+								r.operationID = "CheckAnswer"
+								r.operationGroup = ""
+								r.pathPattern = "/cards/{cardId}/check"
+								r.args = args
+								r.count = 1
+								return r, true
+							default:
+								return
+							}
+						}
+
+					}
+
+				}
+
+			case 'f': // Prefix: "feed"
+
+				if l := len("feed"); len(elem) >= l && elem[0:l] == "feed" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch method {
+					case "GET":
+						r.name = GetFeedQuestionsOperation
+						r.summary = "Get questions of current feed"
+						r.operationID = "GetFeedQuestions"
+						r.operationGroup = ""
+						r.pathPattern = "/feed"
+						r.args = args
+						r.count = 0
+						return r, true
+					default:
+						return
+					}
+				}
+
+			case 'h': // Prefix: "health"
+
+				if l := len("health"); len(elem) >= l && elem[0:l] == "health" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch method {
+					case "GET":
+						r.name = GetHealthOperation
+						r.summary = "Health check endpoint"
+						r.operationID = "getHealth"
+						r.operationGroup = ""
+						r.pathPattern = "/health"
+						r.args = args
+						r.count = 0
+						return r, true
+					default:
+						return
+					}
+				}
+
+			case 'r': // Prefix: "results"
+
+				if l := len("results"); len(elem) >= l && elem[0:l] == "results" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch method {
+					case "POST":
+						r.name = SendResultsOperation
+						r.summary = "Send set/feed results"
+						r.operationID = "SendResults"
+						r.operationGroup = ""
+						r.pathPattern = "/results"
+						r.args = args
+						r.count = 0
+						return r, true
+					default:
+						return
+					}
+				}
+
+			case 's': // Prefix: "sets/"
+
+				if l := len("sets/"); len(elem) >= l && elem[0:l] == "sets/" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					break
+				}
+				switch elem[0] {
+				case 'j': // Prefix: "join"
+					origElem := elem
+					if l := len("join"); len(elem) >= l && elem[0:l] == "join" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "POST":
+							r.name = JoinSetByShareCodeOperation
+							r.summary = "Join a card set by code"
+							r.operationID = "JoinSetByShareCode"
+							r.operationGroup = ""
+							r.pathPattern = "/sets/join"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+
+					elem = origElem
+				}
+				// Param: "setId"
+				// Match until "/"
+				idx := strings.IndexByte(elem, '/')
+				if idx < 0 {
+					idx = len(elem)
+				}
+				args[0] = elem[:idx]
+				elem = elem[idx:]
+
+				if len(elem) == 0 {
+					switch method {
+					case "DELETE":
+						r.name = DeleteSetOperation
+						r.summary = "Delete a card set"
+						r.operationID = "DeleteSet"
+						r.operationGroup = ""
+						r.pathPattern = "/sets/{setId}"
+						r.args = args
+						r.count = 1
+						return r, true
+					case "GET":
+						r.name = GetSetOperation
+						r.summary = "Get a card set"
+						r.operationID = "GetSet"
+						r.operationGroup = ""
+						r.pathPattern = "/sets/{setId}"
+						r.args = args
+						r.count = 1
+						return r, true
+					default:
+						return
+					}
+				}
+				switch elem[0] {
+				case '/': // Prefix: "/"
+
+					if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						break
+					}
+					switch elem[0] {
+					case 'c': // Prefix: "cards"
+
+						if l := len("cards"); len(elem) >= l && elem[0:l] == "cards" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch method {
+							case "GET":
+								r.name = GetCardsBySetIDOperation
+								r.summary = "Get cards"
+								r.operationID = "GetCardsBySetID"
+								r.operationGroup = ""
+								r.pathPattern = "/sets/{setId}/cards"
+								r.args = args
+								r.count = 1
+								return r, true
+							default:
+								return
+							}
+						}
+
+					case 'l': // Prefix: "leaderboard"
+
+						if l := len("leaderboard"); len(elem) >= l && elem[0:l] == "leaderboard" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch method {
+							case "GET":
+								r.name = GetSetLeaderboardOperation
+								r.summary = "Get set leaderboard for author"
+								r.operationID = "GetSetLeaderboard"
+								r.operationGroup = ""
+								r.pathPattern = "/sets/{setId}/leaderboard"
+								r.args = args
+								r.count = 1
+								return r, true
+							default:
+								return
+							}
+						}
+
+					case 'p': // Prefix: "plan"
+
+						if l := len("plan"); len(elem) >= l && elem[0:l] == "plan" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch method {
+							case "GET":
+								r.name = GetSetPlanOperation
+								r.summary = "Get set's facts plan"
+								r.operationID = "GetSetPlan"
+								r.operationGroup = ""
+								r.pathPattern = "/sets/{setId}/plan"
+								r.args = args
+								r.count = 1
+								return r, true
+							default:
+								return
+							}
+						}
+
+					case 's': // Prefix: "share"
+
+						if l := len("share"); len(elem) >= l && elem[0:l] == "share" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch method {
+							case "GET":
+								r.name = GetSetShareCodeOperation
+								r.summary = "Get share code for a set"
+								r.operationID = "GetSetShareCode"
+								r.operationGroup = ""
+								r.pathPattern = "/sets/{setId}/share"
+								r.args = args
+								r.count = 1
+								return r, true
+							default:
+								return
+							}
+						}
+
+					}
+
+				}
+
 			}
 
 		}

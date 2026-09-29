@@ -1,31 +1,48 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import AddNote from './screens/AddNote';
 import CardEdit from './screens/CardEdit';
-import CardIssue from './screens/CardIssue';
 import Feed from './screens/Feed';
 import Home from './screens/Home';
 import JoinSet from './screens/JoinSet';
 import SetScreen from './screens/SetScreen';
 import Share from './screens/Share';
+import Leaderboard from './screens/Leaderboard';
+import { api } from './api';
 import { startParam } from './max/bridge';
-import { mockCards, mockToday } from './mocks';
-import type { CardIssueReason } from './types';
-import { applyPatch, visibleCards, type CardPatch } from './utils/cards';
+import type { AnswerResult, Card, TodayData, User } from './types';
+import type { CardPatch } from './utils/cards';
 import { codeFromStartParam } from './utils/code';
 
 /** No router yet: browser history is not used. */
 type Screen =
     | { name: 'home' }
     | { name: 'set'; setId: string }
-    | { name: 'feed'; setId?: string }
-    | { name: 'share'; setId: string }
+    | {
+          name: 'feed';
+          setId?: string;
+          setTitle?: string;
+          initialIndex?: number;
+          initialResults?: AnswerResult[];
+      }
+    | { name: 'share'; setId: string; setTitle?: string }
+    | { name: 'leaderboard'; setId: string; setTitle?: string }
     | { name: 'add' }
     | { name: 'join'; code?: string }
-    | { name: 'card-issue'; cardId: string }
-    | { name: 'card-edit'; cardId: string };
+    | {
+          name: 'card-edit';
+          card: Card;
+          setTitle?: string;
+          isOwner?: boolean;
+          fromFeed?: boolean;
+          feedSetId?: string;
+          feedIndex?: number;
+          feedResults?: AnswerResult[];
+      };
 
 /** What to report on the set screen after an action on a card. */
-type Toast = { kind: 'removed'; cardId: string } | { kind: 'edited' };
+type Toast =
+    | { kind: 'removed'; cardId: string }
+    | { kind: 'edited' };
 
 /** An invite link opens the code screen with the code filled in. */
 function startScreen(): Screen {
@@ -35,13 +52,26 @@ function startScreen(): Screen {
 
 function App() {
     const [screen, setScreen] = useState<Screen>(startScreen);
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
 
-    // Edits and deletions live in memory for now: there is no backend,
-    // and browser storage is off limits.
+    useEffect(() => {
+        api.GET('/').then(({ data }) => {
+            if (data?.user) {
+                setCurrentUser(data.user);
+            }
+        }).catch(() => {
+            // fallback
+        });
+    }, []);
+
     const [removedSetIds, setRemovedSetIds] = useState<string[]>([]);
     const [removedCardIds, setRemovedCardIds] = useState<string[]>([]);
     const [cardPatches, setCardPatches] = useState<Record<string, CardPatch>>({});
     const [toast, setToast] = useState<Toast | null>(null);
+
+    const handleTodayLoaded = useCallback((today: TodayData) => {
+        setCurrentUser(today.user);
+    }, []);
 
     // The notice belongs to a single action, so any navigation clears it;
     // only deleting and saving raise it.
@@ -52,6 +82,101 @@ function App() {
 
     const goHome = () => go({ name: 'home' });
 
+    const openSet = (setId: string) => go({ name: 'set', setId });
+
+    const removeSet = async (setId: string) => {
+        try {
+            await api.DELETE('/sets/{setId}', {
+                params: { path: { setId } },
+            });
+        } catch (err) {
+            console.error('Failed to delete set:', err);
+        }
+        setRemovedSetIds((current) =>
+            current.includes(setId) ? current : [...current, setId],
+        );
+        goHome();
+    };
+
+    const removeCard = async (
+        cardId: string,
+        setId: string,
+        fromFeed?: boolean,
+        feedSetId?: string,
+        feedSetTitle?: string,
+        feedIndex?: number,
+        feedResults?: AnswerResult[],
+    ) => {
+        try {
+            await api.DELETE('/cards/{cardId}', {
+                params: { path: { cardId } },
+            });
+        } catch (err) {
+            console.error('Failed to delete card:', err);
+        }
+
+        setRemovedCardIds((current) =>
+            current.includes(cardId) ? current : [...current, cardId],
+        );
+
+        if (fromFeed) {
+            setScreen({
+                name: 'feed',
+                setId: feedSetId,
+                setTitle: feedSetTitle,
+                initialIndex: feedIndex,
+                initialResults: feedResults,
+            });
+        } else {
+            setScreen({ name: 'set', setId });
+            setToast({ kind: 'removed', cardId });
+        }
+    };
+
+    const saveCardEdit = async (
+        cardId: string,
+        setId: string,
+        patch: CardPatch,
+        fromFeed?: boolean,
+        feedSetId?: string,
+        feedSetTitle?: string,
+        feedIndex?: number,
+        feedResults?: AnswerResult[],
+    ) => {
+        try {
+            await api.PUT('/cards/{cardId}', {
+                params: { path: { cardId } },
+                body: {
+                    kind: patch.kind,
+                    question: patch.question,
+                    answer: patch.answer,
+                    options: patch.options,
+                    table: patch.table,
+                    explanation: patch.explanation,
+                    topic: patch.topic,
+                    sourceQuote: patch.sourceQuote,
+                    sourceRef: patch.sourceRef,
+                },
+            });
+        } catch (err) {
+            console.error('Failed to update card:', err);
+        }
+
+        setCardPatches((current) => ({ ...current, [cardId]: patch }));
+        if (fromFeed) {
+            setScreen({
+                name: 'feed',
+                setId: feedSetId,
+                setTitle: feedSetTitle,
+                initialIndex: feedIndex,
+                initialResults: feedResults,
+            });
+        } else {
+            setScreen({ name: 'set', setId });
+            setToast({ kind: 'edited' });
+        }
+    };
+
     const home = (
         <Home
             onStart={() => go({ name: 'feed' })}
@@ -59,44 +184,9 @@ function App() {
             onAddNote={() => go({ name: 'add' })}
             onJoinSet={() => go({ name: 'join' })}
             removedSetIds={removedSetIds}
+            onTodayLoaded={handleTodayLoaded}
         />
     );
-
-    const openSet = (setId: string) => go({ name: 'set', setId });
-
-    const removeSet = (setId: string) => {
-        setRemovedSetIds((current) =>
-            current.includes(setId) ? current : [...current, setId],
-        );
-        goHome();
-    };
-
-    const cardOf = (cardId: string) => {
-        const found = mockCards.find((card) => card.id === cardId);
-        return found ? applyPatch(found, cardPatches[cardId]) : undefined;
-    };
-
-    const titleOfSet = (setId: string) =>
-        mockToday.sets.find((set) => set.id === setId)?.title ?? 'Набор';
-
-    const removeCard = (cardId: string, setId: string, reason?: CardIssueReason) => {
-        // TODO: send the reported reason to the backend — the concept counts it.
-        void reason;
-        setRemovedCardIds((current) =>
-            current.includes(cardId) ? current : [...current, cardId],
-        );
-        setScreen({ name: 'set', setId });
-        setToast({ kind: 'removed', cardId });
-    };
-
-    const undoRemoveCard = () => {
-        if (toast?.kind !== 'removed') {
-            return;
-        }
-        const { cardId } = toast;
-        setRemovedCardIds((current) => current.filter((id) => id !== cardId));
-        setToast(null);
-    };
 
     if (screen.name === 'add') {
         return <AddNote onBack={goHome} />;
@@ -106,65 +196,109 @@ function App() {
         return <JoinSet initialCode={screen.code} onBack={goHome} onOpenSet={openSet} />;
     }
 
-    if (screen.name === 'card-issue' || screen.name === 'card-edit') {
-        const card = cardOf(screen.cardId);
+    if (screen.name === 'card-edit') {
+        const {
+            card,
+            setTitle,
+            isOwner = false,
+            fromFeed,
+            feedSetId,
+            feedIndex,
+            feedResults,
+        } = screen;
 
-        // The card was deleted while the screen was open.
-        if (!card) {
-            return home;
-        }
-
-        if (screen.name === 'card-issue') {
-            return (
-                <CardIssue
-                    card={card}
-                    setTitle={titleOfSet(card.setId)}
-                    onBack={() => openSet(card.setId)}
-                    onEdit={() => go({ name: 'card-edit', cardId: card.id })}
-                    onRemove={(reason) => removeCard(card.id, card.setId, reason)}
-                />
-            );
+        if (!isOwner) {
+            if (fromFeed) {
+                go({
+                    name: 'feed',
+                    setId: feedSetId,
+                    setTitle: feedSetId ? setTitle : undefined,
+                    initialIndex: feedIndex,
+                    initialResults: feedResults,
+                });
+            } else {
+                openSet(card.setId);
+            }
+            return null;
         }
 
         return (
             <CardEdit
                 card={card}
-                setTitle={titleOfSet(card.setId)}
-                onBack={() => go({ name: 'card-issue', cardId: card.id })}
-                onSave={(patch) => {
-                    setCardPatches((current) => ({ ...current, [card.id]: patch }));
-                    setScreen({ name: 'set', setId: card.setId });
-                    setToast({ kind: 'edited' });
+                setTitle={setTitle ?? 'Набор'}
+                onBack={() => {
+                    if (fromFeed) {
+                        go({
+                            name: 'feed',
+                            setId: feedSetId,
+                            setTitle: feedSetId ? setTitle : undefined,
+                            initialIndex: feedIndex,
+                            initialResults: feedResults,
+                        });
+                    } else {
+                        openSet(card.setId);
+                    }
                 }}
-                onRemove={() => removeCard(card.id, card.setId)}
+                onSave={(patch) =>
+                    saveCardEdit(
+                        card.id,
+                        card.setId,
+                        patch,
+                        fromFeed,
+                        feedSetId,
+                        setTitle,
+                        feedIndex,
+                        feedResults,
+                    )
+                }
+                onRemove={() =>
+                    removeCard(
+                        card.id,
+                        card.setId,
+                        fromFeed,
+                        feedSetId,
+                        setTitle,
+                        feedIndex,
+                        feedResults,
+                    )
+                }
             />
         );
     }
 
     if (screen.name === 'feed') {
-        const { setId } = screen;
+        const { setId, setTitle, initialIndex, initialResults } = screen;
         return (
             <Feed
                 key={setId ?? 'all'}
                 setId={setId}
-                setTitle={setId ? titleOfSet(setId) : undefined}
+                setTitle={setTitle}
+                initialIndex={initialIndex}
+                initialResults={initialResults}
                 removedCardIds={removedCardIds}
                 cardPatches={cardPatches}
-                onExit={goHome}
-                onReportCard={(cardId) => go({ name: 'card-issue', cardId })}
+                onExit={setId ? () => openSet(setId) : goHome}
+                onBack={setId ? () => openSet(setId) : goHome}
                 onShare={setId ? () => go({ name: 'share', setId }) : undefined}
             />
         );
     }
 
     if (screen.name === 'share') {
-        // Back leads to the set: the result screen lived inside the feed
-        // and is gone once we leave it.
         return (
             <Share
                 setId={screen.setId}
-                setTitle={titleOfSet(screen.setId)}
-                cardsCount={visibleCards(mockCards, screen.setId, removedCardIds, cardPatches).length}
+                setTitle={screen.setTitle}
+                onBack={() => openSet(screen.setId)}
+            />
+        );
+    }
+
+    if (screen.name === 'leaderboard') {
+        return (
+            <Leaderboard
+                setId={screen.setId}
+                setTitle={screen.setTitle}
                 onBack={() => openSet(screen.setId)}
             />
         );
@@ -175,13 +309,31 @@ function App() {
             <SetScreen
                 key={screen.setId}
                 setId={screen.setId}
-                cards={visibleCards(mockCards, screen.setId, removedCardIds, cardPatches)}
                 toast={toast}
+                currentUser={currentUser}
                 onBack={goHome}
-                onStart={(setId) => go({ name: 'feed', setId })}
+                onStart={(setId, setTitle) => go({ name: 'feed', setId, setTitle })}
                 onRemove={removeSet}
-                onOpenCard={(cardId) => go({ name: 'card-issue', cardId })}
-                onUndoRemoveCard={undoRemoveCard}
+                onOpenCard={(card, isOwner, setTitle) => {
+                    if (!isOwner) {
+                        return;
+                    }
+                    go({
+                        name: 'card-edit',
+                        card,
+                        setTitle,
+                        isOwner: true,
+                        fromFeed: false,
+                        feedSetId: undefined,
+                    });
+                }}
+                onOpenLeaderboard={(setId, setTitle) =>
+                    go({
+                        name: 'leaderboard',
+                        setId,
+                        setTitle,
+                    })
+                }
             />
         );
     }

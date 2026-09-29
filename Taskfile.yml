@@ -31,9 +31,32 @@ tasks:
       - task: miniapp:build
 
   gen:
-    desc: 'Генерация кода по контрактам OpenAPI (Go и TypeScript)'
+    desc: 'Генерация кода (OpenAPI контракты и sqlc)'
     cmds:
       - task: contracts:gen-openapi
+      - task: backend:sqlc
+      - task: contracts:gen-data-api
+
+  gen:openapi:
+    desc: 'Генерация кода по контрактам OpenAPI (Go и TypeScript)'
+    aliases:
+      - gen:contracts
+    cmds:
+      - task: contracts:gen-openapi
+
+  gen:data-api:
+    desc: 'Генерация DATA-API.yaml'
+    aliases:
+      - gen:data-api
+    cmds:
+      - task: contracts:gen-data-api
+
+  gen:sql:
+    desc: 'Генерация Go-кода по SQL-запросам (sqlc)'
+    aliases:
+      - gen:sqlc
+    cmds:
+      - task: backend:sqlc
 
   lint:
     desc: 'Линтинг всего проекта (фронтенд и бэкенд)'
@@ -55,6 +78,13 @@ tasks:
     desc: 'Запуск тестов бэкенда'
     cmds:
       - task: backend:test
+
+  cardsgen:
+    desc: 'Карточки из конспекта на живом GigaChat: task cardsgen -- notes.txt'
+    dir: '{{.USER_WORKING_DIR}}'
+    cmds:
+      - go -C '{{.ROOT_DIR}}/backend' build -o '{{.ROOT_DIR}}/.task/bin/cardsgen' ./cmd/cardsgen
+      - "'{{.ROOT_DIR}}/.task/bin/cardsgen' {{.CLI_ARGS}}"
 
   preview:
     desc: 'Предпросмотр фронтенда'
@@ -80,3 +110,18 @@ tasks:
     desc: 'Сборка Docker-образов'
     cmds:
       - docker compose build
+
+  db:up:
+    desc: 'Запуск PostgreSQL в Docker Compose'
+    cmds:
+      - docker compose up -d postgres
+
+  db:down:
+    desc: 'Остановка PostgreSQL в Docker Compose'
+    cmds:
+      - docker compose stop postgres
+
+  db:seed:
+    desc: 'Запуск сидера данных'
+    cmds:
+      - task: backend:seed

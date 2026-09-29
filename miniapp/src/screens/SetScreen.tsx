@@ -1,91 +1,77 @@
 import { useEffect, useState } from 'react';
-import { Button, CellHeader, CellList, CellSimple, Flex, IconButton, Spinner, Typography } from '@maxhub/max-ui';
-import type { Card, CardSet } from '../types';
-import { mockToday } from '../mocks';
+import { Button, CellList, CellSimple, Flex, IconButton, Spinner, Typography } from '@maxhub/max-ui';
+import type { Card, CardSet, User } from '../types';
+import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
 import { IconChevronLeft, IconOffline, IconTrash } from '../components/Icons';
 import { useBackButton } from '../max/useBackButton';
 import { estimateMinutes } from '../utils/estimate';
 import { aboutMinutesLabel, cardsLabel } from '../utils/plural';
+import { formatAuthorName } from '../utils/user';
 import s from './SetScreen.module.css';
 
 type Status = 'loading' | 'error' | 'ready';
 
-const LOAD_DELAY = 700;
 
-interface Fact {
-    title: string;
-    text: string;
-    source: string;
+async function loadSet(setId: string): Promise<CardSet> {
+    const { data, error } = await api.GET('/sets/{setId}', {
+        params: { path: { setId } },
+    });
+    if (error || !data) {
+        throw new Error(error?.message ?? 'not found');
+    }
+    return data;
 }
 
-/** Screen copy rather than user data, so it belongs in the code. */
-const FACTS: Fact[] = [
-    {
-        title: 'Вспоминать полезнее, чем перечитывать',
-        text: 'Через неделю студенты, которые проверяли себя, вспомнили 61% текста, а те, кто перечитывал, — 40%.',
-        source: 'Roediger, Karpicke · Psychological Science, 2006',
-    },
-    {
-        title: 'Паузы важнее количества',
-        text: 'Разнесённые по дням повторения запоминаются лучше, чем подряд. Чем дальше экзамен, тем длиннее могут быть паузы.',
-        source: 'Cepeda и др. · обзор 317 экспериментов, 2006',
-    },
-    {
-        title: 'Повтор — когда начинаете забывать',
-        text: 'Карточка возвращается, когда вероятность её вспомнить падает примерно до 90%. Так каждое повторение укрепляет память сильнее.',
-        source: 'Модель FSRS · Open Spaced Repetition',
-    },
-];
-
-/**
- * Mocks instead of a request; the real endpoint comes later.
- * Error screen — ?fail
- */
-function loadSet(setId: string): Promise<CardSet> {
-    return new Promise((resolve, reject) => {
-        window.setTimeout(() => {
-            if (new URLSearchParams(window.location.search).has('fail')) {
-                reject(new Error('network'));
-                return;
-            }
-
-            const found = mockToday.sets.find((item) => item.id === setId);
-            if (!found) {
-                reject(new Error('not found'));
-                return;
-            }
-            resolve(found);
-        }, LOAD_DELAY);
+async function loadCards(setId: string): Promise<Card[]> {
+    const { data, error } = await api.GET('/sets/{setId}/cards', {
+        params: { path: { setId } },
     });
+    if (error || !data) {
+        throw new Error(error?.message ?? 'not found');
+    }
+    return data;
+}
+
+async function loadFeed(): Promise<Card[]> {
+    const { data, error } = await api.GET('/feed');
+    if (error || !data) {
+        throw new Error(error?.message ?? 'Failed to load feed');
+    }
+    return data;
 }
 
 export interface SetScreenProps {
     setId: string;
-    /** Cards of the set with this session's edits and deletions applied. */
-    cards: Card[];
-    /** Outcome of the last action on a card; only a deletion can be undone. */
-    toast: { kind: 'removed' | 'edited' } | null;
+    /** Cards of the set, optional if fetched internally */
+    cards?: Card[];
+    toast?: { kind: 'removed' | 'edited' } | null;
+    currentUser?: User | null;
     onBack: () => void;
-    onStart: (setId: string) => void;
+    onStart: (setId: string, setTitle?: string) => void;
     onRemove: (setId: string) => void;
-    onOpenCard: (cardId: string) => void;
-    onUndoRemoveCard: () => void;
+    onOpenCard: (card: Card, isOwner: boolean, setTitle: string) => void;
+    onOpenLeaderboard?: (setId: string, setTitle: string) => void;
+    onUndoRemoveCard?: () => void;
 }
 
 export function SetScreen({
     setId,
-    cards,
+    cards: initialCards,
     toast,
+    currentUser,
     onBack,
     onStart,
     onRemove,
     onOpenCard,
+    onOpenLeaderboard,
     onUndoRemoveCard,
 }: SetScreenProps) {
     const [status, setStatus] = useState<Status>('loading');
     const [set, setSet] = useState<CardSet | null>(null);
+    const [cards, setCards] = useState<Card[]>(initialCards ?? []);
+    const [feedCards, setFeedCards] = useState<Card[]>([]);
     const [attempt, setAttempt] = useState(0);
     const [confirmingRemove, setConfirmingRemove] = useState(false);
 
@@ -94,12 +80,14 @@ export function SetScreen({
     useEffect(() => {
         let cancelled = false;
 
-        loadSet(setId)
-            .then((next) => {
+        Promise.all([loadSet(setId), loadCards(setId), loadFeed()])
+            .then(([nextSet, nextCards, nextFeed]) => {
                 if (cancelled) {
                     return;
                 }
-                setSet(next);
+                setSet(nextSet);
+                setCards(nextCards);
+                setFeedCards(nextFeed.filter((c) => c.setId === setId));
                 setStatus('ready');
             })
             .catch(() => {
@@ -148,9 +136,11 @@ export function SetScreen({
         );
     }
 
-    const hasDue = set.cardsDue > 0;
-    // Someone else's set is removed from the list, your own goes with its cards.
-    const shared = Boolean(set.authorName);
+    const dueCount = feedCards.length;
+    const hasDue = dueCount > 0;
+    // Only the author can manage the set and its cards; members have shared access.
+    const isOwner = Boolean(currentUser && set.author && set.author.id === currentUser.id);
+    const shared = !isOwner;
 
     return (
         <Screen>
@@ -164,25 +154,49 @@ export function SetScreen({
                     </Typography.Text>
                     <Typography.Text variant="description" color="secondary">
                         {cardsLabel(cards.length)}
-                        {hasDue ? ` · ${set.cardsDue} на повтор` : ''}
-                        {set.authorName ? ` · автор: ${set.authorName}` : ''}
+                        {hasDue ? ` · ${dueCount} на повтор` : ''}
+                        {shared && set.author ? ` · автор: ${formatAuthorName(set.author)}` : ''}
                     </Typography.Text>
                 </Flex>
             </Flex>
 
             <Flex direction="column" align="stretch" gap={16} className={s.body}>
-                {/* TODO: the review forecast goes here — retention in percent
-                    and the forgetting curve. No data for it yet, decided later. */}
-                <Flex
-                    direction="column"
-                    align="center"
-                    justify="center"
-                    className={s.forecastPlaceholder}
-                >
-                    <Typography.Text variant="description" color="tertiary">
-                        Прогноз повторений появится позже
-                    </Typography.Text>
+                <Flex direction="column" align="stretch" gap={12} className={s.ratingCard}>
+                    <Flex justify="space-between" align="baseline">
+                        <Typography.Text variant="body" color="secondary">
+                            Прогресс в наборе
+                        </Typography.Text>
+                        <Typography.Text variant="title">
+                            {set.userPercentile ?? 0}%
+                        </Typography.Text>
+                    </Flex>
+                    <div className={s.progressBarTrack}>
+                        <div
+                            className={s.progressBarFill}
+                            style={{ width: `${Math.min(100, Math.max(0, set.userPercentile ?? 0))}%` }}
+                        />
+                    </div>
+                    <Flex justify="space-between" align="center">
+                        <Typography.Text variant="description" color="secondary">
+                            Место в рейтинге
+                        </Typography.Text>
+                        <Typography.Text variant="label" color="primary">
+                            {set.userRank ? `${set.userRank} место` : '—'}
+                        </Typography.Text>
+                    </Flex>
                 </Flex>
+
+                {isOwner && onOpenLeaderboard ? (
+                    <CellList mode="island" filled className={s.factsList}>
+                        <CellSimple
+                            as="button"
+                            showChevron
+                            onClick={() => onOpenLeaderboard(set.id, set.title)}
+                            title="Таблица лидеров"
+                            subtitle="Рейтинг участников"
+                        />
+                    </CellList>
+                ) : null}
 
                 <Flex direction="column" align="stretch" gap={8}>
                     <Flex justify="space-between" align="baseline" gap={8} className={s.cardsHeader}>
@@ -194,10 +208,10 @@ export function SetScreen({
                         {cards.map((card, index) => (
                             <CellSimple
                                 key={card.id}
-                                as="button"
+                                as={isOwner ? 'button' : undefined}
                                 separator={index > 0}
-                                showChevron
-                                onClick={() => onOpenCard(card.id)}
+                                showChevron={isOwner}
+                                onClick={isOwner ? () => onOpenCard(card, isOwner, set.title) : undefined}
                                 title={<span className={s.cardTitle}>{card.question}</span>}
                                 subtitle={card.topic}
                             />
@@ -205,32 +219,6 @@ export function SetScreen({
                     </CellList>
                 </Flex>
 
-                <Flex direction="column" align="stretch" gap={8}>
-                    <CellHeader>Почему это работает</CellHeader>
-                    <CellList mode="island" filled className={s.factsList}>
-                        {FACTS.map((fact, index) => (
-                            <CellSimple
-                                key={fact.title}
-                                separator={index > 0}
-                                title={fact.title}
-                                subtitle={
-                                    <Flex direction="column" align="stretch" gap={4}>
-                                        <Typography.Text
-                                            variant="description"
-                                            color="secondary"
-                                            className={s.factText}
-                                        >
-                                            {fact.text}
-                                        </Typography.Text>
-                                        <Typography.Text variant="label" color="tertiary">
-                                            {fact.source}
-                                        </Typography.Text>
-                                    </Flex>
-                                }
-                            />
-                        ))}
-                    </CellList>
-                </Flex>
             </Flex>
 
             <Flex direction="column" align="stretch" gap={8}>
@@ -239,7 +227,7 @@ export function SetScreen({
                         <Typography.Text variant="detail">
                             {toast.kind === 'removed' ? 'Карточка удалена' : 'Карточка исправлена'}
                         </Typography.Text>
-                        {toast.kind === 'removed' ? (
+                        {toast.kind === 'removed' && onUndoRemoveCard ? (
                             <button type="button" className={s.undoButton} onClick={onUndoRemoveCard}>
                                 <Typography.Text variant="detail">Вернуть</Typography.Text>
                             </button>
@@ -276,14 +264,12 @@ export function SetScreen({
                 ) : (
                     <>
                         {hasDue ? (
-                            <Button size="medium" variant="primary" stretched onClick={() => onStart(set.id)}>
-                                Повторить {cardsLabel(set.cardsDue)} · {aboutMinutesLabel(estimateMinutes(set.cardsDue))}
+                            <Button size="medium" variant="primary" stretched onClick={() => onStart(set.id, set.title)}>
+                                Повторить {cardsLabel(dueCount)} · {aboutMinutesLabel(estimateMinutes(dueCount))}
                             </Button>
                         ) : (
-                            // The mockup has no such case: when nothing is due,
-                            // we offer to go through the whole set.
-                            <Button size="medium" variant="secondary" stretched onClick={() => onStart(set.id)}>
-                                Пройти набор целиком
+                            <Button size="medium" variant="secondary" stretched disabled>
+                                Все карточки повторены
                             </Button>
                         )}
 

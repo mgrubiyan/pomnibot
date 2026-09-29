@@ -1,0 +1,64 @@
+.header {
+    padding: 8px 0 0;
+}
+
+.headerText {
+    min-width: 0;
+}
+
+.title {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.list {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.rankBadge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 14px;
+    background: var(--background-surface);
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-primary);
+    flex-shrink: 0;
+}
+
+.rankTop1 {
+    background: #ffd700;
+    color: #1a1a1a;
+}
+
+.rankTop2 {
+    background: #c0c0c0;
+    color: #1a1a1a;
+}
+
+.rankTop3 {
+    background: #cd7f32;
+    color: #ffffff;
+}
+
+.percentileText {
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text-primary);
+}
+
+.empty {
+    padding: 32px 16px;
+    text-align: center;
+}

@@ -20,14 +20,27 @@
     overscroll-behavior: contain;
 }
 
-/* Room for the review forecast: there is no data for it yet. */
-.forecastPlaceholder {
+/* Personal progress card showing percentile and rank in set */
+.ratingCard {
     box-sizing: border-box;
-    min-height: 180px;
-    padding: 20px;
+    padding: 16px 20px;
     border-radius: 16px;
     background: var(--background-card);
-    text-align: center;
+}
+
+.progressBarTrack {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--divider-primary);
+    overflow: hidden;
+}
+
+.progressBarFill {
+    height: 100%;
+    border-radius: 3px;
+    background: var(--button-primary, var(--text-primary));
+    transition: width 0.3s ease-out;
 }
 
 .factsList {
@@ -35,9 +48,6 @@
     padding-right: 0;
 }
 
-.factText {
-    text-wrap: pretty;
-}
 
 .confirmText {
     text-wrap: pretty;

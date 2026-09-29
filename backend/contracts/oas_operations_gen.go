@@ -6,5 +6,19 @@ package contracts
 type OperationName = string
 
 const (
-	GetHealthOperation OperationName = "GetHealth"
+	AnswerQuestionOperation     OperationName = "AnswerQuestion"
+	CheckAnswerOperation        OperationName = "CheckAnswer"
+	DeleteCardOperation         OperationName = "DeleteCard"
+	DeleteSetOperation          OperationName = "DeleteSet"
+	GetCardsBySetIDOperation    OperationName = "GetCardsBySetID"
+	GetFeedQuestionsOperation   OperationName = "GetFeedQuestions"
+	GetHealthOperation          OperationName = "GetHealth"
+	GetSetOperation             OperationName = "GetSet"
+	GetSetLeaderboardOperation  OperationName = "GetSetLeaderboard"
+	GetSetPlanOperation         OperationName = "GetSetPlan"
+	GetSetShareCodeOperation    OperationName = "GetSetShareCode"
+	GetTodayOperation           OperationName = "GetToday"
+	JoinSetByShareCodeOperation OperationName = "JoinSetByShareCode"
+	SendResultsOperation        OperationName = "SendResults"
+	UpdateCardOperation         OperationName = "UpdateCard"
 )

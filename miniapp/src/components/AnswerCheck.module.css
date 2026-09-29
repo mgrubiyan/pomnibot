@@ -1,0 +1,13 @@
+/* The card while a typed answer is being checked: the answer itself and
+   a line that keeps the reader waiting for the verdict. */
+
+.answer {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.divider {
+    width: 100%;
+    height: 1px;
+    background: var(--divider-primary);
+}

@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Button, Flex, Input, Spinner, Typography } from '@maxhub/max-ui';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Button, Flex, IconButton, Input, Spinner, Typography } from '@maxhub/max-ui';
 import type { AnswerResult, Card } from '../types';
-import { mockCards } from '../mocks';
+import { api } from '../api';
 import { TableColumns, TablePool } from '../components/TableCard';
 import { visibleCards, type CardPatch } from '../utils/cards';
+import { AnswerCheck, type CheckStage } from '../components/AnswerCheck';
 import {
     correctCount,
     emptyPlacement,
@@ -17,12 +18,10 @@ import { useBackButton } from '../max/useBackButton';
 import { cx } from '../utils/cx';
 import {
     IconCheck,
+    IconChevronLeft,
     IconCross,
     IconDoc,
-    IconFlag,
-    IconMic,
     IconOffline,
-    IconStop,
 } from '../components/Icons';
 import s from './Feed.module.css';
 
@@ -39,9 +38,6 @@ const BOOLEAN_OPTIONS: Option[] = [
     { label: 'Неверно', value: 'false' },
 ];
 
-const LOAD_DELAY = 700;
-const VOICE_DELAY = 1500;
-const VOICE_SUBMIT_DELAY = 600;
 /** Matches the transform duration in Feed.module.css. */
 const FLIP_MS = 350;
 /** Matches the cardOut animation in Feed.module.css. */
@@ -53,14 +49,70 @@ const motionAllowed = () => !window.matchMedia('(prefers-reduced-motion: reduce)
 /** Answers are compared loosely: case, extra spaces and ё do not matter. */
 const norm = (value: string) => value.trim().toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ');
 
+/** The reader always waits for the verdict; past these marks only the words change. */
+const CHECK_LONGER_MS = 8_000;
+const CHECK_ALMOST_MS = 12_000;
+/** A lost request or a silent model: ask again after this pause. */
+const CHECK_RETRY_MS = 2_000;
+
+interface Checked {
+    correct: boolean;
+    reason: string | null;
+}
+
+/**
+ * A typed answer in other words than the card's goes to the backend, which
+ * forgives word forms and typos and asks a model about the meaning. Null
+ * when there is no verdict yet: the request was lost, or the backend gave
+ * up on the model (fallback) — the reader keeps waiting for a real one.
+ */
+async function checkAnswer(cardId: string, answer: string): Promise<Checked | null> {
+    try {
+        const { data } = await api.POST('/cards/{cardId}/check', {
+            params: { path: { cardId } },
+            body: { answer },
+        });
+        if (!data || data.method === 'fallback') {
+            return null;
+        }
+        return { correct: data.isCorrect, reason: data.reason ?? null };
+    } catch {
+        return null;
+    }
+}
+
+function shuffle<T>(items: readonly T[]): T[] {
+    const next = [...items];
+    for (let i = next.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [next[i], next[j]] = [next[j], next[i]];
+    }
+    return next;
+}
+
 function optionsOf(card: Card): Option[] {
     if (card.kind === 'boolean') {
         return BOOLEAN_OPTIONS;
     }
     if (card.kind === 'choice') {
-        return (card.options ?? []).map((option) => ({ label: option, value: option }));
+        return shuffle(
+            (card.options ?? []).map((option) => ({ label: option, value: option })),
+        );
     }
     return [];
+}
+
+function answerTextOf(card: Card): string {
+    if (typeof card.answer === 'boolean') {
+        return card.answer ? 'true' : 'false';
+    }
+    if (typeof card.answer === 'number' && card.options) {
+        return card.options[card.answer] ?? String(card.answer);
+    }
+    if (typeof card.answer === 'object' && card.answer !== null) {
+        return '';
+    }
+    return String(card.answer ?? '');
 }
 
 /** Boolean cards store 'true' / 'false', which must never reach the screen. */
@@ -71,52 +123,17 @@ function labelOf(card: Card, value: string): string {
     return value === 'true' ? 'Верно' : 'Неверно';
 }
 
-/**
- * Mocks instead of a request; the real endpoint comes later.
- * Error screen — ?fail, a single card by kind or id — ?card=table, ?card=c9
- */
-function loadCards(setId?: string): Promise<Card[]> {
-    return new Promise((resolve, reject) => {
-        window.setTimeout(() => {
-            const params = new URLSearchParams(window.location.search);
-
-            if (params.has('fail')) {
-                reject(new Error('network'));
-                return;
-            }
-
-            let next = setId ? mockCards.filter((card) => card.setId === setId) : mockCards;
-
-            const only = params.get('card');
-            if (only) {
-                next = next.filter((card) => card.id === only || card.kind === only);
-            }
-
-            resolve(next);
-        }, LOAD_DELAY);
-    });
+async function loadCards(setId?: string): Promise<Card[]> {
+    const { data, error } = await api.GET('/feed');
+    if (error || !data) {
+        throw new Error(error?.message ?? 'Failed to load feed');
+    }
+    if (setId) {
+        return data.filter((card) => card.setId === setId);
+    }
+    return data;
 }
 
-/** Recognition stub: no engine yet, so we always «hear» the right answer. */
-function mockTranscript(card: Card): string {
-    if (card.kind === 'boolean') {
-        return card.answer === 'true' ? 'верно' : 'неверно';
-    }
-    if (card.kind === 'choice') {
-        return card.answer.split(' ').slice(0, 4).join(' ').toLowerCase();
-    }
-    return card.answer.toLowerCase();
-}
-
-/** Maps the recognized phrase onto an answer option when one matches. */
-function matchTranscript(card: Card, phrase: string): string {
-    const options = optionsOf(card);
-    if (options.length === 0) {
-        return phrase;
-    }
-    const hit = options.find((option) => norm(option.label).startsWith(norm(phrase)));
-    return hit ? hit.value : phrase;
-}
 
 export interface FeedProps {
     /** When set, only the cards of this set are shown. */
@@ -126,8 +143,10 @@ export interface FeedProps {
     /** Cards deleted and edited during this session. */
     removedCardIds: string[];
     cardPatches: Record<string, CardPatch>;
+    initialIndex?: number;
+    initialResults?: AnswerResult[];
     onExit: () => void;
-    onReportCard: (cardId: string) => void;
+    onBack?: () => void;
     /** Opens sharing from the result screen; absent for the daily mix. */
     onShare?: () => void;
 }
@@ -137,20 +156,28 @@ export function Feed({
     setTitle,
     removedCardIds,
     cardPatches,
+    initialIndex = 0,
+    initialResults = [],
     onExit,
-    onReportCard,
+    onBack,
     onShare,
 }: FeedProps) {
     const [status, setStatus] = useState<Status>('loading');
     const [cards, setCards] = useState<Card[]>([]);
-    const [index, setIndex] = useState(0);
+    const [index, setIndex] = useState(initialIndex);
+    const [results, setResults] = useState<AnswerResult[]>(initialResults);
 
     const [given, setGiven] = useState<string | null>(null);
     const [verdict, setVerdict] = useState<Verdict | null>(null);
+    // A typed answer being checked by meaning, and why it counts or not.
+    const [check, setCheck] = useState<{ stage: CheckStage; answer: string } | null>(null);
+    const [reason, setReason] = useState<string | null>(null);
+    // Every attempt gets a number, so a late answer from an abandoned one
+    // — the reader stopped waiting, moved on or retried — is dropped.
+    const checkRunRef = useRef(0);
+    const [checkRun, setCheckRun] = useState(0);
     const [revealed, setRevealed] = useState(false);
     const [draft, setDraft] = useState('');
-    const [listening, setListening] = useState(false);
-    const [transcript, setTranscript] = useState('');
     // The layout is keyed by card id instead of being reset by an effect:
     // that way it appears on its own and needs no setState in an effect.
     const [placements, setPlacements] = useState<Record<string, Placement>>({});
@@ -164,15 +191,11 @@ export function Feed({
     const [leaving, setLeaving] = useState(false);
     // One entry per card the user moved on from — the result screen
     // is built from it, and later the backend will save each one.
-    const [results, setResults] = useState<AnswerResult[]>([]);
 
     const [attempt, setAttempt] = useState(0);
 
-    // The feed has no back control of its own: in MAX the header button
-    // leaves it, the same way the result screen does.
-    useBackButton(onExit);
-
     const card = cards[index];
+    const options = useMemo(() => (card ? optionsOf(card) : []), [card]);
 
     // Reloading goes through an attempt counter: the button handler flips
     // the status, the effect only fetches the data.
@@ -184,7 +207,7 @@ export function Feed({
                 if (cancelled) {
                     return;
                 }
-                setCards(visibleCards(next, undefined, removedCardIds, cardPatches));
+                setCards(visibleCards(next, setId, removedCardIds, cardPatches));
                 setStatus('ready');
             })
             .catch(() => {
@@ -214,43 +237,91 @@ export function Feed({
         return () => window.clearTimeout(timer);
     }, [flipping]);
 
+    const askCheck = useCallback(
+        (cardId: string, answer: string) => {
+            const run = checkRunRef.current + 1;
+            checkRunRef.current = run;
+            setCheck({ stage: 'checking', answer });
+            setCheckRun(run);
+
+            const attempt = () => {
+                if (checkRunRef.current !== run) {
+                    return; // the reader moved on
+                }
+                void checkAnswer(cardId, answer).then((result) => {
+                    if (checkRunRef.current !== run) {
+                        return;
+                    }
+                    if (!result) {
+                        // No verdict yet: the reader keeps waiting, we ask again.
+                        window.setTimeout(attempt, CHECK_RETRY_MS);
+                        return;
+                    }
+                    setCheck(null);
+                    setReason(result.reason);
+                    setGiven(answer);
+                    setVerdict(result.correct ? 'correct' : 'wrong');
+                    startFlip();
+                });
+            };
+            attempt();
+        },
+        [startFlip],
+    );
+
+    // Leaving the feed drops a check that is still waiting or retrying.
+    useEffect(
+        () => () => {
+            checkRunRef.current += 1;
+        },
+        [],
+    );
+
+    // The wait never ends early; past the marks only the words change.
+    // Timers belong to the reader's attempt, so retries do not restart them.
+    useEffect(() => {
+        if (checkRun === 0) {
+            return;
+        }
+        const toStage = (stage: CheckStage) => () =>
+            setCheck((current) => (current ? { ...current, stage } : current));
+        const longer = window.setTimeout(toStage('longer'), CHECK_LONGER_MS);
+        const almost = window.setTimeout(toStage('almost'), CHECK_ALMOST_MS);
+
+        return () => {
+            window.clearTimeout(longer);
+            window.clearTimeout(almost);
+        };
+    }, [checkRun]);
+
     const submit = useCallback(
         (value: string) => {
             if (!card) {
                 return;
             }
-            setGiven(value);
-            setVerdict(norm(value) === norm(card.answer) ? 'correct' : 'wrong');
-            startFlip();
+            const exact = norm(value) === norm(answerTextOf(card));
+            if (card.kind !== 'input' || exact) {
+                setGiven(value);
+                setVerdict(exact ? 'correct' : 'wrong');
+                startFlip();
+                return;
+            }
+            // The card stays face up while the answer is being checked:
+            // the breakdown has nothing to show until the verdict is in.
+            // Other words: the card turns once the backend has judged them.
+            askCheck(card.id, value);
         },
-        [card, startFlip],
+        [card, askCheck, startFlip],
     );
 
-    // Voice answer stub: a «listening» pause, then the phrase, then the answer.
-    useEffect(() => {
-        if (!listening || !card) {
-            return;
-        }
-        const phrase = mockTranscript(card);
-        const showPhrase = window.setTimeout(() => setTranscript(phrase), VOICE_DELAY);
-        const answer = window.setTimeout(() => {
-            setListening(false);
-            submit(matchTranscript(card, phrase));
-        }, VOICE_DELAY + VOICE_SUBMIT_DELAY);
-
-        return () => {
-            window.clearTimeout(showPhrase);
-            window.clearTimeout(answer);
-        };
-    }, [listening, card, submit]);
-
     const reset = useCallback(() => {
+        checkRunRef.current += 1;
+        setCheck(null);
+        setReason(null);
         setGiven(null);
         setVerdict(null);
         setRevealed(false);
         setDraft('');
-        setListening(false);
-        setTranscript('');
         setPicked(null);
         setFlipping(false);
     }, []);
@@ -326,6 +397,87 @@ export function Feed({
         return () => window.clearTimeout(timer);
     }, [leaving, showNext]);
 
+    const submittedCardIdsRef = useRef<Set<string>>(new Set());
+    const inFlightRef = useRef<Promise<void> | null>(null);
+    const [isLeaving, setIsLeaving] = useState(false);
+
+    const submitResults = useCallback(
+        async (currentResults: AnswerResult[]): Promise<void> => {
+            if (inFlightRef.current) {
+                try {
+                    await inFlightRef.current;
+                } catch {
+                    // ignore
+                }
+            }
+            const unsubmitted = currentResults.filter(
+                (r) => !submittedCardIdsRef.current.has(r.cardId),
+            );
+            if (unsubmitted.length === 0) {
+                return;
+            }
+            const validResults = setId
+                ? unsubmitted.filter((r) => cards.some((c) => c.id === r.cardId))
+                : unsubmitted;
+            if (validResults.length === 0) {
+                return;
+            }
+            for (const r of validResults) {
+                submittedCardIdsRef.current.add(r.cardId);
+            }
+            const promise = api
+                .POST('/results', {
+                    body: validResults,
+                })
+                .then(() => {})
+                .catch((err: unknown) => {
+                    console.error('Failed to submit results:', err);
+                })
+                .finally(() => {
+                    inFlightRef.current = null;
+                });
+            inFlightRef.current = promise;
+            await promise;
+        },
+        [cards, setId],
+    );
+
+    const handleBack = async () => {
+        if (isLeaving) {
+            return;
+        }
+        setIsLeaving(true);
+        try {
+            await submitResults(results);
+        } finally {
+            if (onBack) {
+                onBack();
+            } else {
+                onExit();
+            }
+        }
+    };
+
+    const handleExit = async () => {
+        if (inFlightRef.current) {
+            try {
+                await inFlightRef.current;
+            } catch {
+                // ignore
+            }
+        }
+        onExit();
+    };
+
+    // The MAX header button does what the feed's own back button does.
+    useBackButton(handleBack);
+
+    useEffect(() => {
+        if (!card && results.length > 0) {
+            void submitResults(results);
+        }
+    }, [card, results, submitResults]);
+
     if (status === 'loading') {
         return (
             <StatusScreen
@@ -343,9 +495,14 @@ export function Feed({
                 title="Нет соединения"
                 text="Проверьте интернет и попробуйте ещё раз"
                 action={
-                    <Button size="medium" variant="primary" stretched onClick={retry}>
-                        Повторить
-                    </Button>
+                    <Flex direction="column" align="stretch" gap={8}>
+                        <Button size="medium" variant="primary" stretched onClick={retry}>
+                            Повторить
+                        </Button>
+                        <Button size="medium" variant="ghost" stretched onClick={handleBack}>
+                            Назад
+                        </Button>
+                    </Flex>
                 }
             />
         );
@@ -360,7 +517,7 @@ export function Feed({
                     setTitle={setTitle}
                     cards={cards}
                     results={results}
-                    onExit={onExit}
+                    onExit={handleExit}
                     onShare={onShare}
                 />
             );
@@ -371,17 +528,15 @@ export function Feed({
                 title="На сегодня всё"
                 text="Сложные карточки вернутся через 2 дня"
                 action={
-                    <Button size="medium" variant="secondary" stretched onClick={onExit}>
-                        На главную
+                    <Button size="medium" variant="secondary" stretched onClick={handleExit}>
+                        {setId ? 'К набору' : 'На главную'}
                     </Button>
                 }
             />
         );
     }
 
-    const options = optionsOf(card);
     const showAnswer = given !== null || revealed;
-    const canVoice = card.kind !== 'flip';
     // A flip card has no answer of its own, so the right one is always
     // shown — after «Знал» the screen would otherwise hold no answer.
     const hasGiven = given !== null && card.kind !== 'flip';
@@ -396,10 +551,21 @@ export function Feed({
         <Screen>
             <Flex direction="column" align="stretch" gap={8}>
                 <Flex justify="space-between" align="center" gap={8}>
-                    <Typography.Text variant="label" color="secondary">
-                        {card.topic}
-                    </Typography.Text>
-                    <Typography.Text variant="label" color="secondary">
+                    <Flex align="center" gap={8} style={{ minWidth: 0 }}>
+                        <IconButton
+                            size="small"
+                            variant="ghost"
+                            aria-label="Назад"
+                            disabled={isLeaving}
+                            onClick={handleBack}
+                        >
+                            <IconChevronLeft size={20} />
+                        </IconButton>
+                        <Typography.Text variant="label" color="secondary">
+                            {card.topic}
+                        </Typography.Text>
+                    </Flex>
+                    <Typography.Text variant="label" color="secondary" style={{ flexShrink: 0 }}>
                         {index + 1} / {cards.length}
                     </Typography.Text>
                 </Flex>
@@ -413,10 +579,13 @@ export function Feed({
 
             <div key={card.id} className={cx(s.flip, leaving && s.leaving)}>
                 <div className={cx(s.flipInner, showAnswer && s.flipped)}>
+                    {/* While the answer is being checked the card carries three
+                        blocks — question, answer, what the check is doing —
+                        spread top to bottom instead of one question in the middle. */}
                     <Flex
                         direction="column"
                         align="stretch"
-                        justify="center"
+                        justify={check ? 'space-between' : 'center'}
                         gap={24}
                         inert={showAnswer || flipping}
                         aria-hidden={showAnswer}
@@ -425,13 +594,17 @@ export function Feed({
                             s.face,
                             s.faceFront,
                             s.card,
-                            s.cardCentered,
+                            !check && s.cardCentered,
                             tapToReveal && s.tappable,
                         )}
                     >
                         <Typography.Text variant="subheader" asChild>
                             <h1 className={s.question}>{card.question}</h1>
                         </Typography.Text>
+
+                        {check ? (
+                            <AnswerCheck stage={check.stage} answer={check.answer} />
+                        ) : null}
 
                         {layout ? (
                             <TableColumns
@@ -444,21 +617,6 @@ export function Feed({
                             />
                         ) : null}
 
-                        {listening ? (
-                            <Flex direction="column" align="stretch" gap={4} aria-live="polite" className={s.voice}>
-                                <Flex align="center" gap={4}>
-                                    <IconMic size={14} tone="muted" />
-                                    <Typography.Text variant="label" color="tertiary">
-                                        Слушаю…
-                                    </Typography.Text>
-                                </Flex>
-                                {transcript ? (
-                                    <Typography.Text variant="body" color="secondary" className={s.transcript}>
-                                        «{transcript}»
-                                    </Typography.Text>
-                                ) : null}
-                            </Flex>
-                        ) : null}
                     </Flex>
 
                     <Flex
@@ -494,6 +652,12 @@ export function Feed({
                         ) : (
                             <Typography.Text variant="subheader">Ответ</Typography.Text>
                         )}
+
+                        {!layout && reason ? (
+                            <Typography.Text variant="body" color="secondary">
+                                {reason}
+                            </Typography.Text>
+                        ) : null}
 
                         <Typography.Text variant="body-strong" color="secondary">
                             {card.question}
@@ -537,7 +701,7 @@ export function Feed({
                                             Верный ответ
                                         </Typography.Text>
                                         <Typography.Text variant="body" className={s.answerText}>
-                                            {labelOf(card, card.answer)}
+                                            {labelOf(card, answerTextOf(card))}
                                         </Typography.Text>
                                     </Flex>
                                 </Flex>
@@ -606,19 +770,6 @@ export function Feed({
                             Дальше
                         </Button>
                     )}
-
-                    <Button
-                        size="small"
-                        variant="ghost"
-                        stretched
-                        disabled={busy}
-                        iconBefore={<IconFlag size={16} tone="muted" />}
-                        onClick={() => onReportCard(card.id)}
-                    >
-                        <Typography.Text variant="description" color="tertiary">
-                            Карточка неверная
-                        </Typography.Text>
-                    </Button>
                 </Flex>
             ) : layout ? (
                 <Flex direction="column" align="stretch" gap={8}>
@@ -647,20 +798,18 @@ export function Feed({
                             key={option.value}
                             type="button"
                             className={s.option}
-                            disabled={listening}
                             onClick={() => submit(option.value)}
                         >
                             <Typography.Text variant="body">{option.label}</Typography.Text>
                         </button>
                     ))}
 
-                    {card.kind === 'input' ? (
+                    {card.kind === 'input' && !check ? (
                         <>
                             <Input
                                 size="large"
                                 value={draft}
                                 placeholder="Ваш ответ"
-                                disabled={listening}
                                 onChange={(event) => setDraft(event.target.value)}
                             />
                             <Button
@@ -675,6 +824,12 @@ export function Feed({
                         </>
                     ) : null}
 
+                    {check ? (
+                        <Button size="medium" variant="secondary" stretched disabled>
+                            Проверяю ответ
+                        </Button>
+                    ) : null}
+
                     {card.kind === 'flip' ? (
                         <Button
                             size="medium"
@@ -684,33 +839,6 @@ export function Feed({
                         >
                             Показать ответ
                         </Button>
-                    ) : null}
-
-                    {canVoice ? (
-                        listening ? (
-                            <Button
-                                size="medium"
-                                variant="primary"
-                                stretched
-                                iconBefore={<IconStop size={20} />}
-                                onClick={() => {
-                                    setListening(false);
-                                    setTranscript('');
-                                }}
-                            >
-                                Остановить
-                            </Button>
-                        ) : (
-                            <Button
-                                size="medium"
-                                variant="ghost"
-                                stretched
-                                iconBefore={<IconMic size={20} />}
-                                onClick={() => setListening(true)}
-                            >
-                                Ответить голосом
-                            </Button>
-                        )
                     ) : null}
                 </Flex>
             )}
