@@ -23,9 +23,6 @@ var (
 	rn17AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
-	rn18AllowedHeaders = map[string]string{
-		"POST": "Content-Type",
-	}
 	rn16AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
@@ -199,33 +196,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							return
 						}
 
-					case 'i': // Prefix: "issue"
-
-						if l := len("issue"); len(elem) >= l && elem[0:l] == "issue" {
-							elem = elem[l:]
-						} else {
-							break
-						}
-
-						if len(elem) == 0 {
-							// Leaf node.
-							switch r.Method {
-							case "POST":
-								s.handleReportCardIssueRequest([1]string{
-									args[0],
-								}, elemIsEscaped, w, r)
-							default:
-								s.notAllowed(w, r, notAllowedParams{
-									allowedMethods: "POST",
-									allowedHeaders: rn17AllowedHeaders,
-									acceptPost:     "application/json",
-									acceptPatch:    "",
-								})
-							}
-
-							return
-						}
-
 					}
 
 				}
@@ -296,7 +266,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					default:
 						s.notAllowed(w, r, notAllowedParams{
 							allowedMethods: "POST",
-							allowedHeaders: rn18AllowedHeaders,
+							allowedHeaders: rn17AllowedHeaders,
 							acceptPost:     "application/json",
 							acceptPatch:    "",
 						})
@@ -707,31 +677,6 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								r.operationID = "CheckAnswer"
 								r.operationGroup = ""
 								r.pathPattern = "/cards/{cardId}/check"
-								r.args = args
-								r.count = 1
-								return r, true
-							default:
-								return
-							}
-						}
-
-					case 'i': // Prefix: "issue"
-
-						if l := len("issue"); len(elem) >= l && elem[0:l] == "issue" {
-							elem = elem[l:]
-						} else {
-							break
-						}
-
-						if len(elem) == 0 {
-							// Leaf node.
-							switch method {
-							case "POST":
-								r.name = ReportCardIssueOperation
-								r.summary = "Report an issue with a card"
-								r.operationID = "ReportCardIssue"
-								r.operationGroup = ""
-								r.pathPattern = "/cards/{cardId}/issue"
 								r.args = args
 								r.count = 1
 								return r, true

@@ -88,12 +88,6 @@ type Handler interface {
 	//
 	// POST /sets/join
 	JoinSetByShareCode(ctx context.Context, req *JoinSetRequest) (JoinSetByShareCodeRes, error)
-	// ReportCardIssue implements ReportCardIssue operation.
-	//
-	// Report an issue with a card.
-	//
-	// POST /cards/{cardId}/issue
-	ReportCardIssue(ctx context.Context, req *ReportCardIssueRequest, params ReportCardIssueParams) (ReportCardIssueRes, error)
 	// SendResults implements SendResults operation.
 	//
 	// Send set/feed results.

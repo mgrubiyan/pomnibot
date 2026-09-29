@@ -90,22 +90,3 @@ func (h *CardsHandler) CheckAnswer(ctx context.Context, req *contracts.CheckAnsw
 	}
 	return res, nil
 }
-
-// ReportCardIssue implements contracts.Handler.ReportCardIssue.
-func (h *CardsHandler) ReportCardIssue(ctx context.Context, req *contracts.ReportCardIssueRequest, params contracts.ReportCardIssueParams) (contracts.ReportCardIssueRes, error) {
-	if req == nil || strings.TrimSpace(string(req.Reason)) == "" {
-		return &contracts.ReportCardIssueBadRequest{Message: "reason is required"}, nil
-	}
-	userID, _ := UserIDFromContext(ctx)
-	err := h.cardService.ReportCardIssue(ctx, userID, params.CardId, req.Reason)
-	if err != nil {
-		if errors.Is(err, usecase.ErrValidation) {
-			return &contracts.ReportCardIssueBadRequest{Message: err.Error()}, nil
-		}
-		if errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
-			return &contracts.ReportCardIssueNotFound{Message: err.Error()}, nil
-		}
-		return &contracts.ReportCardIssueInternalServerError{Message: err.Error()}, nil
-	}
-	return &contracts.ReportCardIssueNoContent{}, nil
-}

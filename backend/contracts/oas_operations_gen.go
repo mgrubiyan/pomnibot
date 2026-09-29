@@ -19,7 +19,6 @@ const (
 	GetSetShareCodeOperation    OperationName = "GetSetShareCode"
 	GetTodayOperation           OperationName = "GetToday"
 	JoinSetByShareCodeOperation OperationName = "JoinSetByShareCode"
-	ReportCardIssueOperation    OperationName = "ReportCardIssue"
 	SendResultsOperation        OperationName = "SendResults"
 	UpdateCardOperation         OperationName = "UpdateCard"
 )

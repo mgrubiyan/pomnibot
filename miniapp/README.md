@@ -37,13 +37,10 @@ React 19 + TypeScript + Vite на Bun 1.4+, библиотека [@maxhub/max-ui
 ```
 Home ─┬─ «Начать» ─────────────► Feed (все карточки на повтор)
       ├─ тап по набору ───────► SetScreen ─┬─ «Повторить N» ──► Feed (набор)
-      │                                    ├─ тап по карточке ─► CardIssue
+      │                                    ├─ тап по карточке (владелец) ─► CardEdit ──► SetScreen
       │                                    └─ «Удалить набор»
       ├─ «Добавить конспект» ─► AddNote
       └─ «Ввести код набора» ─► JoinSet ───► SetScreen
-
-Feed ── «Карточка неверная» ──► CardIssue ─┬─ «Исправить» ──► CardEdit ──► SetScreen
-                                           └─ «Удалить» ────────────────► SetScreen
 ```
 
 Из ленты выход по кнопке «На главную» на экране «На сегодня всё».
@@ -57,7 +54,6 @@ Feed ── «Карточка неверная» ──► CardIssue ─┬─ 
 | Feed | [src/screens/Feed.tsx](src/screens/Feed.tsx) | Лента карточек: вопрос, разбор, цитата-источник |
 | JoinSet | [src/screens/JoinSet.tsx](src/screens/JoinSet.tsx) | Ввод шестизначного кода набора |
 | AddNote | [src/screens/AddNote.tsx](src/screens/AddNote.tsx) | Объясняет, что конспект отправляют боту в чат |
-| CardIssue | [src/screens/CardIssue.tsx](src/screens/CardIssue.tsx) | Причина, почему карточка плохая: поправить или убрать |
 | CardEdit | [src/screens/CardEdit.tsx](src/screens/CardEdit.tsx) | Правка вопроса, ответа и неверных вариантов |
 
 ## Общее между экранами

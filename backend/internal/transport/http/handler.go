@@ -143,14 +143,6 @@ func (h *APIHandler) AnswerQuestion(ctx context.Context, req *contracts.AnswerQu
 	return h.UnimplementedHandler.AnswerQuestion(ctx, req, params)
 }
 
-// ReportCardIssue implements contracts.Handler.ReportCardIssue.
-func (h *APIHandler) ReportCardIssue(ctx context.Context, req *contracts.ReportCardIssueRequest, params contracts.ReportCardIssueParams) (contracts.ReportCardIssueRes, error) {
-	if h.cards != nil {
-		return h.cards.ReportCardIssue(ctx, req, params)
-	}
-	return h.UnimplementedHandler.ReportCardIssue(ctx, req, params)
-}
-
 // --- Homescreen Domain Delegation ---
 
 // GetToday implements contracts.Handler.GetToday.

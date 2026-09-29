@@ -8,7 +8,6 @@ export type Card = components['schemas']['Card'];
 export type CardSet = components['schemas']['CardSet'];
 export type TodayData = components['schemas']['TodayData'];
 export type AnswerResult = components['schemas']['AnswerResult'];
-export type CardIssueReason = components['schemas']['CardIssueReason'];
 export type User = components['schemas']['User'];
 export type LeaderboardEntry = components['schemas']['LeaderboardEntry'];
 export type SetLeaderboardResponse = components['schemas']['SetLeaderboardResponse'];

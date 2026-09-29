@@ -303,37 +303,3 @@ func gradeInput(card db.GetCardByIDRow, answer string) grader.Input {
 		Given:    answer,
 	}
 }
-
-func (s *cardServiceImpl) ReportCardIssue(ctx context.Context, userID int64, cardID uuid.UUID, reason contracts.CardIssueReason) error {
-	var pgCardID pgtype.UUID
-	if err := pgCardID.Scan(cardID.String()); err != nil {
-		return fmt.Errorf("%w: invalid card id", ErrValidation)
-	}
-
-	if err := s.userService.EnsureUser(ctx, userID); err != nil {
-		return err
-	}
-
-	_, err := s.querier.GetCardByID(ctx, db.GetCardByIDParams{
-		ID:     pgCardID,
-		UserID: userID,
-	})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrNotFound
-		}
-		return fmt.Errorf("get card by id: %w", err)
-	}
-
-	dbReason := db.CardIssueReason(reason)
-	_, err = s.querier.CreateCardIssue(ctx, db.CreateCardIssueParams{
-		CardID: pgCardID,
-		UserID: userID,
-		Reason: dbReason,
-	})
-	if err != nil {
-		return fmt.Errorf("create card issue: %w", err)
-	}
-
-	return nil
-}

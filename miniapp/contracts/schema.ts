@@ -193,23 +193,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/cards/{cardId}/issue": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Report an issue with a card */
-        post: operations["ReportCardIssue"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/cards/{cardId}/answer": {
         parameters: {
             query?: never;
@@ -307,14 +290,6 @@ export interface components {
             sourceRef?: string;
             /** @description topic, used for stats */
             topic?: string;
-        };
-        /**
-         * @description What is wrong with a card — asked before editing or deleting it.
-         * @enum {string}
-         */
-        CardIssueReason: "answer" | "wording" | "not-in-notes" | "other";
-        ReportCardIssueRequest: {
-            reason: components["schemas"]["CardIssueReason"];
         };
         User: {
             /** Format: int64 */
@@ -763,34 +738,6 @@ export interface operations {
                 };
                 content?: never;
             };
-            404: components["responses"]["NotFound"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    ReportCardIssue: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The ID of the card */
-                cardId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReportCardIssueRequest"];
-            };
-        };
-        responses: {
-            /** @description Card issue reported successfully */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };
