@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -118,6 +120,9 @@ func (b *Bot) Start(ctx context.Context) error {
 	// 3. Start long polling loop
 	slog.Info("starting MAX bot long-polling loop...", "app_url", b.appURL)
 	go b.pollLoop(ctx)
+
+	// 4. Start review notifications scheduler
+	b.startNotificationLoop(ctx)
 
 	return nil
 }
@@ -598,4 +603,152 @@ func (b *Bot) sendMessageWithButtons(ctx context.Context, chatID int64, userID i
 func (b *Bot) sendWelcomeMessage(ctx context.Context, chatID int64, userID int64) {
 	welcomeText := "Привет! Я Помнибот 🤖\n\nЯ помогаю готовиться к экзаменам и повторять материал по твоим конспектам без выдумок и со ссылками на текст.\n\nНажми кнопку ниже, чтобы открыть мини-приложение:"
 	b.sendMessageWithButtons(ctx, chatID, userID, welcomeText)
+}
+
+// nextRunDuration calculates the duration until the next occurrence of targetHour:targetMinute in the specified location.
+func nextRunDuration(now time.Time, targetHour, targetMinute int, loc *time.Location) time.Duration {
+	if loc == nil {
+		loc = time.UTC
+	}
+	nowInLoc := now.In(loc)
+	targetToday := time.Date(nowInLoc.Year(), nowInLoc.Month(), nowInLoc.Day(), targetHour, targetMinute, 0, 0, loc)
+
+	if !targetToday.After(nowInLoc) {
+		targetToday = targetToday.AddDate(0, 0, 1)
+	}
+
+	return targetToday.Sub(nowInLoc)
+}
+
+// SendReviewReminders queries users who have cards due today or earlier and sends them a review reminder message.
+func (b *Bot) SendReviewReminders(ctx context.Context) (int, error) {
+	if b.userService == nil {
+		return 0, errors.New("user service is not configured")
+	}
+
+	tz := os.Getenv("NOTIFICATION_TZ")
+	if tz == "" {
+		tz = "Europe/Moscow"
+	}
+
+	userIDs, err := b.userService.GetUsersWithDueFacts(ctx, time.Now(), tz)
+	if err != nil {
+		return 0, fmt.Errorf("get users with due facts: %w", err)
+	}
+
+	if len(userIDs) == 0 {
+		slog.InfoContext(ctx, "no users with due facts found for review reminder")
+		return 0, nil
+	}
+
+	text := "Привет! ⏰ Пора повторить материал — в приложении тебя ждут карточки на сегодня. Загляни в Помнибот! 📚"
+	buttons := b.buildAppButtons()
+	msg := SendMessageRequest{
+		Text: text,
+		Attachments: []Attachment{
+			{
+				Type: "inline_keyboard",
+				Payload: map[string]interface{}{
+					"buttons": buttons,
+				},
+			},
+		},
+	}
+
+	successCount := 0
+	for _, userID := range userIDs {
+		if userID == 0 || userID == 100001 {
+			continue
+		}
+
+		if _, err := b.client.SendMessage(ctx, 0, userID, msg); err != nil {
+			slog.WarnContext(ctx, "failed to send review reminder to user",
+				"user_id", userID,
+				"error", err,
+			)
+			continue
+		}
+
+		successCount++
+		// Small delay to be polite to API rate limits
+		select {
+		case <-ctx.Done():
+			return successCount, ctx.Err()
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+
+	slog.InfoContext(ctx, "sent review reminders",
+		"candidate_count", len(userIDs),
+		"success_count", successCount,
+	)
+
+	return successCount, nil
+}
+
+func (b *Bot) startNotificationLoop(ctx context.Context) {
+	if os.Getenv("NOTIFICATIONS_ENABLED") == "false" {
+		slog.InfoContext(ctx, "review notifications are disabled via NOTIFICATIONS_ENABLED=false")
+		return
+	}
+
+	timeStr := os.Getenv("NOTIFICATION_TIME")
+	if timeStr == "" {
+		timeStr = "10:00"
+	}
+
+	targetHour := 10
+	targetMinute := 0
+	parts := strings.Split(timeStr, ":")
+	if len(parts) == 2 {
+		if h, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil && h >= 0 && h < 24 {
+			targetHour = h
+		}
+		if m, err := strconv.Atoi(strings.TrimSpace(parts[1])); err == nil && m >= 0 && m < 60 {
+			targetMinute = m
+		}
+	}
+
+	tzName := os.Getenv("NOTIFICATION_TZ")
+	if tzName == "" {
+		tzName = "Europe/Moscow"
+	}
+
+	loc, err := time.LoadLocation(tzName)
+	if err != nil {
+		slog.WarnContext(ctx, "failed to load timezone for notifications, falling back to MSK (UTC+3)",
+			"tz", tzName,
+			"error", err,
+		)
+		loc = time.FixedZone("MSK", 3*3600)
+	}
+
+	slog.InfoContext(ctx, "starting review notifications scheduler",
+		"time", fmt.Sprintf("%02d:%02d", targetHour, targetMinute),
+		"tz", loc.String(),
+	)
+
+	go func() {
+		for {
+			delay := nextRunDuration(time.Now(), targetHour, targetMinute, loc)
+			slog.InfoContext(ctx, "scheduled next review notifications dispatch",
+				"delay", delay.String(),
+				"target_time", time.Now().Add(delay).In(loc).Format(time.RFC3339),
+			)
+
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(delay):
+			}
+
+			if ctx.Err() != nil {
+				return
+			}
+
+			if _, err := b.SendReviewReminders(ctx); err != nil {
+				slog.ErrorContext(ctx, "error dispatching review reminders", "error", err)
+			}
+		}
+	}()
 }

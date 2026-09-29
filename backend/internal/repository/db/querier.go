@@ -42,6 +42,7 @@ type Querier interface {
 	GetUserFactProgress(ctx context.Context, arg GetUserFactProgressParams) (UserFactProgress, error)
 	GetUserSetRating(ctx context.Context, arg GetUserSetRatingParams) (GetUserSetRatingRow, error)
 	GetUserSets(ctx context.Context, userID int64) ([]GetUserSetsRow, error)
+	GetUsersWithDueFacts(ctx context.Context, arg GetUsersWithDueFactsParams) ([]int64, error)
 	InitUserFactProgress(ctx context.Context, arg InitUserFactProgressParams) error
 	IsSetAuthor(ctx context.Context, arg IsSetAuthorParams) (bool, error)
 	JoinSet(ctx context.Context, arg JoinSetParams) (UserSet, error)

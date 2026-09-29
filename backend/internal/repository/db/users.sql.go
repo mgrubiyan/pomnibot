@@ -66,6 +66,45 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 	return i, err
 }
 
+const getUsersWithDueFacts = `-- name: GetUsersWithDueFacts :many
+SELECT DISTINCT u.id
+FROM users u
+JOIN user_sets us ON us.user_id = u.id
+JOIN facts f ON f.set_id = us.set_id
+LEFT JOIN user_fact_progress ufp ON ufp.fact_id = f.id AND ufp.user_id = u.id
+WHERE u.is_bot = FALSE
+  AND u.id NOT IN (0, 100001)
+  AND (
+    ufp.next_review_at IS NULL
+    OR (ufp.next_review_at AT TIME ZONE $1::text)::date <= ($2::timestamptz AT TIME ZONE $1::text)::date
+  )
+`
+
+type GetUsersWithDueFactsParams struct {
+	Tz  string             `json:"tz"`
+	Now pgtype.Timestamptz `json:"now"`
+}
+
+func (q *Queries) GetUsersWithDueFacts(ctx context.Context, arg GetUsersWithDueFactsParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, getUsersWithDueFacts, arg.Tz, arg.Now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertUser = `-- name: UpsertUser :one
 INSERT INTO users (id, first_name, last_name, username, is_bot, last_active_at)
 VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)

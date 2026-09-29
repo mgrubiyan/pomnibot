@@ -192,6 +192,9 @@ jobs:
           APP_URL: ${{ vars.APP_URL || secrets.APP_URL }}
           MAX_API_URL: ${{ vars.MAX_API_URL || secrets.MAX_API_URL }}
           MAX_INSECURE_SKIP_VERIFY: ${{ vars.MAX_INSECURE_SKIP_VERIFY || secrets.MAX_INSECURE_SKIP_VERIFY }}
+          NOTIFICATIONS_ENABLED: ${{ vars.NOTIFICATIONS_ENABLED || secrets.NOTIFICATIONS_ENABLED }}
+          NOTIFICATION_TIME: ${{ vars.NOTIFICATION_TIME || secrets.NOTIFICATION_TIME }}
+          NOTIFICATION_TZ: ${{ vars.NOTIFICATION_TZ || secrets.NOTIFICATION_TZ }}
 
           # Sensitive credentials (GitHub Actions Secrets)
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
@@ -225,6 +228,9 @@ jobs:
             APP_URL
             MAX_API_URL
             MAX_INSECURE_SKIP_VERIFY
+            NOTIFICATIONS_ENABLED
+            NOTIFICATION_TIME
+            NOTIFICATION_TZ
           )
 
           SECRET_VARS=(

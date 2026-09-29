@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -19,8 +21,9 @@ import (
 )
 
 type mockUserService struct {
-	upsertUserFunc func(ctx context.Context, params usecase.UpsertUserParams) error
-	ensureUserFunc func(ctx context.Context, userID int64) error
+	upsertUserFunc           func(ctx context.Context, params usecase.UpsertUserParams) error
+	ensureUserFunc           func(ctx context.Context, userID int64) error
+	getUsersWithDueFactsFunc func(ctx context.Context, now time.Time, tz string) ([]int64, error)
 }
 
 func (m *mockUserService) UpsertUser(ctx context.Context, params usecase.UpsertUserParams) error {
@@ -35,6 +38,13 @@ func (m *mockUserService) EnsureUser(ctx context.Context, userID int64) error {
 		return m.ensureUserFunc(ctx, userID)
 	}
 	return nil
+}
+
+func (m *mockUserService) GetUsersWithDueFacts(ctx context.Context, now time.Time, tz string) ([]int64, error) {
+	if m.getUsersWithDueFactsFunc != nil {
+		return m.getUsersWithDueFactsFunc(ctx, now, tz)
+	}
+	return nil, nil
 }
 
 type mockSetService struct {
@@ -1007,4 +1017,201 @@ func TestClient_DownloadFile(t *testing.T) {
 
 func ref[T any](v T) *T {
 	return &v
+}
+
+func TestNextRunDuration(t *testing.T) {
+	loc, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		t.Fatalf("failed to load Europe/Moscow: %v", err)
+	}
+
+	t.Run("before target time on the same day", func(t *testing.T) {
+		now := time.Date(2026, 9, 29, 8, 30, 0, 0, loc)
+		d := nextRunDuration(now, 10, 0, loc)
+		expected := 1*time.Hour + 30*time.Minute
+		if d != expected {
+			t.Errorf("expected %v, got %v", expected, d)
+		}
+	})
+
+	t.Run("at target time returns 24 hours to tomorrow", func(t *testing.T) {
+		now := time.Date(2026, 9, 29, 10, 0, 0, 0, loc)
+		d := nextRunDuration(now, 10, 0, loc)
+		expected := 24 * time.Hour
+		if d != expected {
+			t.Errorf("expected %v, got %v", expected, d)
+		}
+	})
+
+	t.Run("after target time on the same day schedules for next day", func(t *testing.T) {
+		now := time.Date(2026, 9, 29, 15, 0, 0, 0, loc)
+		d := nextRunDuration(now, 10, 0, loc)
+		expected := 19 * time.Hour
+		if d != expected {
+			t.Errorf("expected %v, got %v", expected, d)
+		}
+	})
+}
+
+func TestSendReviewReminders(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("successfully sends reminders and filters bypass users", func(t *testing.T) {
+		type sentMsg struct {
+			UserID int64
+			Body   SendMessageRequest
+		}
+		var sentMessages []sentMsg
+
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodGet && r.URL.Path == "/me" {
+				w.WriteHeader(http.StatusOK)
+				_ = json.NewEncoder(w).Encode(User{
+					UserID:   1,
+					Username: ref("pomnibot"),
+				})
+				return
+			}
+			if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/messages") {
+				userIDStr := r.URL.Query().Get("user_id")
+				var req SendMessageRequest
+				_ = json.NewDecoder(r.Body).Decode(&req)
+				userIDVal := int64(0)
+				if userIDStr != "" {
+					_, _ = fmt.Sscanf(userIDStr, "%d", &userIDVal)
+				}
+				sentMessages = append(sentMessages, sentMsg{
+					UserID: userIDVal,
+					Body:   req,
+				})
+				w.WriteHeader(http.StatusOK)
+				_ = json.NewEncoder(w).Encode(SendMessageResponse{
+					Message: &Message{
+						Body: MessageBody{Mid: "mid-123"},
+					},
+				})
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer ts.Close()
+
+		client, err := NewClient("token", ts.URL)
+		if err != nil {
+			t.Fatalf("failed to create client: %v", err)
+		}
+
+		userSvc := &mockUserService{
+			getUsersWithDueFactsFunc: func(_ context.Context, _ time.Time, _ string) ([]int64, error) {
+				return []int64{101, 102, 100001, 0}, nil
+			},
+		}
+
+		bot, err := NewBot(client, "https://pomnibot.steins.ru", userSvc, &mockSetService{}, &mockFileExtractor{}, &mockCardGenerator{})
+		if err != nil {
+			t.Fatalf("failed to create bot: %v", err)
+		}
+		bot.botUser = &User{UserID: 1, Username: ref("pomnibot")}
+
+		count, err := bot.SendReviewReminders(ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if count != 2 {
+			t.Errorf("expected 2 sent reminders, got %d", count)
+		}
+
+		if len(sentMessages) != 2 {
+			t.Fatalf("expected 2 API calls, got %d", len(sentMessages))
+		}
+
+		if sentMessages[0].UserID != 101 || sentMessages[1].UserID != 102 {
+			t.Errorf("expected user IDs 101 and 102, got %d and %d", sentMessages[0].UserID, sentMessages[1].UserID)
+		}
+
+		expectedText := "Привет! ⏰ Пора повторить материал — в приложении тебя ждут карточки на сегодня. Загляни в Помнибот! 📚"
+		for _, m := range sentMessages {
+			if m.Body.Text != expectedText {
+				t.Errorf("expected text %q, got %q", expectedText, m.Body.Text)
+			}
+			if len(m.Body.Attachments) != 1 || m.Body.Attachments[0].Type != "inline_keyboard" {
+				t.Errorf("expected inline_keyboard attachment, got %+v", m.Body.Attachments)
+			}
+		}
+	})
+
+	t.Run("partial failure continues sending to other users", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/messages") {
+				userIDStr := r.URL.Query().Get("user_id")
+				if userIDStr == "201" {
+					w.WriteHeader(http.StatusInternalServerError)
+					_, _ = w.Write([]byte(`{"error":"failed"}`))
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+				_ = json.NewEncoder(w).Encode(SendMessageResponse{
+					Message: &Message{
+						Body: MessageBody{Mid: "mid-202"},
+					},
+				})
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer ts.Close()
+
+		client, err := NewClient("token", ts.URL)
+		if err != nil {
+			t.Fatalf("failed to create client: %v", err)
+		}
+
+		userSvc := &mockUserService{
+			getUsersWithDueFactsFunc: func(_ context.Context, _ time.Time, _ string) ([]int64, error) {
+				return []int64{201, 202}, nil
+			},
+		}
+
+		bot, err := NewBot(client, "https://pomnibot.steins.ru", userSvc, &mockSetService{}, &mockFileExtractor{}, &mockCardGenerator{})
+		if err != nil {
+			t.Fatalf("failed to create bot: %v", err)
+		}
+
+		count, err := bot.SendReviewReminders(ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if count != 1 {
+			t.Errorf("expected 1 successful sent reminder, got %d", count)
+		}
+	})
+
+	t.Run("user service error returns error", func(t *testing.T) {
+		client, err := NewClient("token", "http://localhost")
+		if err != nil {
+			t.Fatalf("failed to create client: %v", err)
+		}
+
+		mockErr := errors.New("db error")
+		userSvc := &mockUserService{
+			getUsersWithDueFactsFunc: func(_ context.Context, _ time.Time, _ string) ([]int64, error) {
+				return nil, mockErr
+			},
+		}
+
+		bot, err := NewBot(client, "https://pomnibot.steins.ru", userSvc, &mockSetService{}, &mockFileExtractor{}, &mockCardGenerator{})
+		if err != nil {
+			t.Fatalf("failed to create bot: %v", err)
+		}
+
+		count, err := bot.SendReviewReminders(ctx)
+		if err == nil {
+			t.Fatalf("expected error, got count %d", count)
+		}
+		if !errors.Is(err, mockErr) {
+			t.Errorf("expected wrapped mockErr, got %v", err)
+		}
+	})
 }

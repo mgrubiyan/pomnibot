@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
@@ -51,4 +53,35 @@ func (s *userServiceImpl) EnsureUser(ctx context.Context, userID int64) error {
 		return fmt.Errorf("ensure user %d: %w", userID, err)
 	}
 	return nil
+}
+
+// GetUsersWithDueFacts returns all user IDs who have cards due today or earlier in the given timezone.
+func (s *userServiceImpl) GetUsersWithDueFacts(ctx context.Context, now time.Time, tz string) ([]int64, error) {
+	if strings.TrimSpace(tz) == "" {
+		tz = "Europe/Moscow"
+	}
+
+	pgNow := pgtype.Timestamptz{
+		Time:  now,
+		Valid: true,
+	}
+
+	rawUsers, err := s.querier.GetUsersWithDueFacts(ctx, db.GetUsersWithDueFactsParams{
+		Tz:  tz,
+		Now: pgNow,
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "failed to get users with due facts from database", "error", err)
+		return nil, fmt.Errorf("get users with due facts: %w", err)
+	}
+
+	users := make([]int64, 0, len(rawUsers))
+	for _, id := range rawUsers {
+		if id == 0 || id == 100001 {
+			continue
+		}
+		users = append(users, id)
+	}
+
+	return users, nil
 }

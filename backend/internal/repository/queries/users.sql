@@ -23,3 +23,16 @@ SELECT * FROM users WHERE id = $1;
 SELECT COUNT(DISTINCT DATE(answered_at))::INT AS active_days
 FROM answer_results
 WHERE user_id = $1 AND answered_at >= NOW() - INTERVAL '7 days';
+
+-- name: GetUsersWithDueFacts :many
+SELECT DISTINCT u.id
+FROM users u
+JOIN user_sets us ON us.user_id = u.id
+JOIN facts f ON f.set_id = us.set_id
+LEFT JOIN user_fact_progress ufp ON ufp.fact_id = f.id AND ufp.user_id = u.id
+WHERE u.is_bot = FALSE
+  AND u.id NOT IN (0, 100001)
+  AND (
+    ufp.next_review_at IS NULL
+    OR (ufp.next_review_at AT TIME ZONE sqlc.arg('tz')::text)::date <= (sqlc.arg('now')::timestamptz AT TIME ZONE sqlc.arg('tz')::text)::date
+  );

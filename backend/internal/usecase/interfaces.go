@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
@@ -49,4 +50,5 @@ type UpsertUserParams struct {
 type UserService interface {
 	UpsertUser(ctx context.Context, params UpsertUserParams) error
 	EnsureUser(ctx context.Context, userID int64) error
+	GetUsersWithDueFacts(ctx context.Context, now time.Time, tz string) ([]int64, error)
 }

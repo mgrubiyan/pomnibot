@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
@@ -11,8 +12,9 @@ import (
 
 type mockUserQuerier struct {
 	db.Querier
-	upsertUserFunc func(ctx context.Context, arg db.UpsertUserParams) (db.User, error)
-	ensureUserFunc func(ctx context.Context, id int64) (db.User, error)
+	upsertUserFunc           func(ctx context.Context, arg db.UpsertUserParams) (db.User, error)
+	ensureUserFunc           func(ctx context.Context, id int64) (db.User, error)
+	getUsersWithDueFactsFunc func(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]int64, error)
 }
 
 func (m *mockUserQuerier) UpsertUser(ctx context.Context, arg db.UpsertUserParams) (db.User, error) {
@@ -27,6 +29,13 @@ func (m *mockUserQuerier) EnsureUser(ctx context.Context, id int64) (db.User, er
 		return m.ensureUserFunc(ctx, id)
 	}
 	return db.User{}, nil
+}
+
+func (m *mockUserQuerier) GetUsersWithDueFacts(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]int64, error) {
+	if m.getUsersWithDueFactsFunc != nil {
+		return m.getUsersWithDueFactsFunc(ctx, arg)
+	}
+	return nil, nil
 }
 
 func TestUserService_UpsertUser(t *testing.T) {
@@ -173,6 +182,76 @@ func TestUserService_EnsureUser(t *testing.T) {
 		}
 		if !errors.Is(err, mockErr) {
 			t.Errorf("expected wrapped mockErr, got %v", err)
+		}
+	})
+}
+
+func TestUserService_GetUsersWithDueFacts(t *testing.T) {
+	ctx := context.Background()
+	fixedTime := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
+
+	t.Run("successful retrieval with default timezone", func(t *testing.T) {
+		var capturedArg db.GetUsersWithDueFactsParams
+		mock := &mockUserQuerier{
+			getUsersWithDueFactsFunc: func(_ context.Context, arg db.GetUsersWithDueFactsParams) ([]int64, error) {
+				capturedArg = arg
+				return []int64{123, 456}, nil
+			},
+		}
+
+		svc := usecase.NewUserService(mock)
+		users, err := svc.GetUsersWithDueFacts(ctx, fixedTime, "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if capturedArg.Tz != "Europe/Moscow" {
+			t.Errorf("expected default timezone 'Europe/Moscow', got '%s'", capturedArg.Tz)
+		}
+		if !capturedArg.Now.Valid || capturedArg.Now.Time != fixedTime {
+			t.Errorf("expected Now timestamp %+v, got %+v", fixedTime, capturedArg.Now.Time)
+		}
+		if len(users) != 2 || users[0] != 123 || users[1] != 456 {
+			t.Errorf("expected [123, 456], got %v", users)
+		}
+	})
+
+	t.Run("filters out bypass IDs 0 and 100001", func(t *testing.T) {
+		mock := &mockUserQuerier{
+			getUsersWithDueFactsFunc: func(_ context.Context, _ db.GetUsersWithDueFactsParams) ([]int64, error) {
+				return []int64{0, 100001, 789}, nil
+			},
+		}
+
+		svc := usecase.NewUserService(mock)
+		users, err := svc.GetUsersWithDueFacts(ctx, fixedTime, "Europe/Moscow")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(users) != 1 || users[0] != 789 {
+			t.Errorf("expected only [789], got %v", users)
+		}
+	})
+
+	t.Run("database error returns wrapped error", func(t *testing.T) {
+		mockErr := errors.New("query failed")
+		mock := &mockUserQuerier{
+			getUsersWithDueFactsFunc: func(_ context.Context, _ db.GetUsersWithDueFactsParams) ([]int64, error) {
+				return nil, mockErr
+			},
+		}
+
+		svc := usecase.NewUserService(mock)
+		users, err := svc.GetUsersWithDueFacts(ctx, fixedTime, "Europe/Moscow")
+		if err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+		if !errors.Is(err, mockErr) {
+			t.Errorf("expected wrapped mockErr, got %v", err)
+		}
+		if users != nil {
+			t.Errorf("expected nil users on error, got %v", users)
 		}
 	})
 }
