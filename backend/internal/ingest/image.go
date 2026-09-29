@@ -10,6 +10,8 @@ import (
 	"image/jpeg"
 	_ "image/png" // PNG decoding for photos sent as screenshots
 	"math"
+
+	_ "golang.org/x/image/webp" // WebP decoding: messengers store photos in it
 )
 
 // OCR service limits, enforced here rather than learned from an error.
@@ -33,8 +35,9 @@ type limits struct {
 
 var serviceLimits = limits{bytes: MaxOCRBytes, pixels: MaxOCRPixels, pages: MaxOCRPages}
 
-// fitImage returns an image the OCR service accepts. One within the limits
-// goes as is. A larger one, typical for a phone camera, is turned upright by
+// fitImage returns an image the OCR service accepts. A JPEG or PNG within the
+// limits goes as is; another format, such as WebP, is re-encoded like a
+// photo too large. A larger one, typical for a phone camera, is turned upright by
 // its EXIF orientation (re-encoding drops EXIF), shrunk along the long side
 // to fit the pixel limit, converted to grayscale and encoded as JPEG,
 // lowering quality and then size until it fits the byte limit.
@@ -44,7 +47,8 @@ func fitImage(data []byte, lim limits) (out []byte, mime string, resized bool, e
 		return nil, "", false, fmt.Errorf("read image: %w", err)
 	}
 	mime = "image/" + format
-	if cfg.Width*cfg.Height <= lim.pixels && len(data) <= lim.bytes {
+	accepted := format == "jpeg" || format == "png"
+	if accepted && cfg.Width*cfg.Height <= lim.pixels && len(data) <= lim.bytes {
 		return data, mime, false, nil
 	}
 
