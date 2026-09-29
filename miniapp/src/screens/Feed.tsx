@@ -19,9 +19,7 @@ import {
     IconChevronLeft,
     IconCross,
     IconDoc,
-    IconMic,
     IconOffline,
-    IconStop,
 } from '../components/Icons';
 import s from './Feed.module.css';
 
@@ -38,8 +36,6 @@ const BOOLEAN_OPTIONS: Option[] = [
     { label: 'Неверно', value: 'false' },
 ];
 
-const VOICE_DELAY = 1500;
-const VOICE_SUBMIT_DELAY = 600;
 /** Matches the transform duration in Feed.module.css. */
 const FLIP_MS = 350;
 /** Matches the cardOut animation in Feed.module.css. */
@@ -134,26 +130,6 @@ async function loadCards(setId?: string): Promise<Card[]> {
     return data;
 }
 
-/** Recognition stub: no engine yet, so we always «hear» the right answer. */
-function mockTranscript(card: Card): string {
-    const ans = answerTextOf(card);
-    if (card.kind === 'boolean') {
-        return ans === 'true' ? 'верно' : 'неверно';
-    }
-    if (card.kind === 'choice') {
-        return ans.split(' ').slice(0, 4).join(' ').toLowerCase();
-    }
-    return ans.toLowerCase();
-}
-
-/** Maps the recognized phrase onto an answer option when one matches. */
-function matchTranscript(options: Option[], phrase: string): string {
-    if (options.length === 0) {
-        return phrase;
-    }
-    const hit = options.find((option) => norm(option.label).startsWith(norm(phrase)));
-    return hit ? hit.value : phrase;
-}
 
 export interface FeedProps {
     /** When set, only the cards of this set are shown. */
@@ -195,8 +171,6 @@ export function Feed({
     const checkingCard = useRef<string | null>(null);
     const [revealed, setRevealed] = useState(false);
     const [draft, setDraft] = useState('');
-    const [listening, setListening] = useState(false);
-    const [transcript, setTranscript] = useState('');
     // The layout is keyed by card id instead of being reset by an effect:
     // that way it appears on its own and needs no setState in an effect.
     const [placements, setPlacements] = useState<Record<string, Placement>>({});
@@ -286,24 +260,6 @@ export function Feed({
         [card, startFlip],
     );
 
-    // Voice answer stub: a «listening» pause, then the phrase, then the answer.
-    useEffect(() => {
-        if (!listening || !card) {
-            return;
-        }
-        const phrase = mockTranscript(card);
-        const showPhrase = window.setTimeout(() => setTranscript(phrase), VOICE_DELAY);
-        const answer = window.setTimeout(() => {
-            setListening(false);
-            submit(matchTranscript(options, phrase));
-        }, VOICE_DELAY + VOICE_SUBMIT_DELAY);
-
-        return () => {
-            window.clearTimeout(showPhrase);
-            window.clearTimeout(answer);
-        };
-    }, [listening, card, options, submit]);
-
     const reset = useCallback(() => {
         checkingCard.current = null;
         setChecking(false);
@@ -312,8 +268,6 @@ export function Feed({
         setVerdict(null);
         setRevealed(false);
         setDraft('');
-        setListening(false);
-        setTranscript('');
         setPicked(null);
         setFlipping(false);
     }, []);
@@ -526,7 +480,6 @@ export function Feed({
     }
 
     const showAnswer = given !== null || revealed;
-    const canVoice = card.kind !== 'flip';
     // A flip card has no answer of its own, so the right one is always
     // shown — after «Знал» the screen would otherwise hold no answer.
     const hasGiven = given !== null && card.kind !== 'flip';
@@ -600,21 +553,6 @@ export function Feed({
                             />
                         ) : null}
 
-                        {listening ? (
-                            <Flex direction="column" align="stretch" gap={4} aria-live="polite" className={s.voice}>
-                                <Flex align="center" gap={4}>
-                                    <IconMic size={14} tone="muted" />
-                                    <Typography.Text variant="label" color="tertiary">
-                                        Слушаю…
-                                    </Typography.Text>
-                                </Flex>
-                                {transcript ? (
-                                    <Typography.Text variant="body" color="secondary" className={s.transcript}>
-                                        «{transcript}»
-                                    </Typography.Text>
-                                ) : null}
-                            </Flex>
-                        ) : null}
                     </Flex>
 
                     <Flex
@@ -796,7 +734,6 @@ export function Feed({
                             key={option.value}
                             type="button"
                             className={s.option}
-                            disabled={listening}
                             onClick={() => submit(option.value)}
                         >
                             <Typography.Text variant="body">{option.label}</Typography.Text>
@@ -809,7 +746,7 @@ export function Feed({
                                 size="large"
                                 value={draft}
                                 placeholder="Ваш ответ"
-                                disabled={listening || checking}
+                                disabled={checking}
                                 onChange={(event) => setDraft(event.target.value)}
                             />
                             <Button
@@ -833,33 +770,6 @@ export function Feed({
                         >
                             Показать ответ
                         </Button>
-                    ) : null}
-
-                    {canVoice ? (
-                        listening ? (
-                            <Button
-                                size="medium"
-                                variant="primary"
-                                stretched
-                                iconBefore={<IconStop size={20} />}
-                                onClick={() => {
-                                    setListening(false);
-                                    setTranscript('');
-                                }}
-                            >
-                                Остановить
-                            </Button>
-                        ) : (
-                            <Button
-                                size="medium"
-                                variant="ghost"
-                                stretched
-                                iconBefore={<IconMic size={20} />}
-                                onClick={() => setListening(true)}
-                            >
-                                Ответить голосом
-                            </Button>
-                        )
                     ) : null}
                 </Flex>
             )}
