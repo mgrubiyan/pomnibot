@@ -131,16 +131,6 @@ func words(s string) []string {
 	return out
 }
 
-// containsAll reports whether every string of b is in a.
-func containsAll(a, b []string) bool {
-	for _, s := range b {
-		if !slices.Contains(a, s) {
-			return false
-		}
-	}
-	return true
-}
-
 // numbers are the digit runs of s, sorted: order does not matter.
 func numbers(s string) []string {
 	out := strings.FieldsFunc(s, func(r rune) bool { return !unicode.IsDigit(r) })
