@@ -8,7 +8,7 @@
 
 | | |
 |---|---|
-| Бот в MAX | **[ССЫЛКА НА БОТА — заполнить](https://max.ru/)** |
+| Бот в MAX | **[@t583_hakaton_max_bot](https://max.ru/t583_hakaton_max_bot)** — «Хакатон МАХ 583» |
 | Мини-приложение в браузере | https://pomnibot.steins.ru |
 | API | https://pomnibot.steins.ru/api/ (`GET /api/health`) |
 
