@@ -135,18 +135,6 @@ func main() {
 			os.Exit(1)
 		}
 
-		// GigaChat writes the cards and reads photos and scans.
-		var gigachatClient *gigachat.Client
-		if gigachatCfg, err := gigachat.ConfigFromEnv(); err == nil {
-			if gigachatClient, err = gigachat.New(gigachatCfg); err != nil {
-				slog.Warn("failed to initialize gigachat client", "error", err)
-			}
-		} else {
-			slog.Warn("gigachat configuration not found in environment", "error", err)
-		}
-
-		// Yandex OCR turns photos upright and checks GigaChat's reading, or
-		// reads them alone without GigaChat.
 		var ocr ingest.OCR
 		if yandexCfg := yandex.ConfigFromEnv(); yandexCfg.APIKey != "" {
 			yandexClient, err := yandex.New(yandexCfg)
@@ -157,13 +145,6 @@ func main() {
 				slog.Info("yandex OCR client initialized")
 			}
 		}
-		if gigachatClient != nil {
-			if ocr == nil {
-				slog.Warn("photos are read by GigaChat unchecked and not turned upright: set YC_API_KEY for Yandex OCR")
-			}
-			ocr = &ingest.VisionOCR{Model: gigachatClient, Checker: ocr}
-			slog.Info("photos and scans are read by GigaChat")
-		}
 
 		extractor, err := ingest.NewExtractor(ocr, ingest.Options{})
 		if err != nil {
@@ -172,10 +153,17 @@ func main() {
 		}
 
 		var cardGen bot.CardGenerator
-		if gigachatClient != nil {
-			gen := generator.NewGenerator(gigachatClient, generator.Options{})
-			cardGen = bot.NewGeneratorAdapter(gen)
-			slog.Info("gigachat card generator initialized")
+		if gigachatCfg, err := gigachat.ConfigFromEnv(); err == nil {
+			gigachatClient, err := gigachat.New(gigachatCfg)
+			if err != nil {
+				slog.Warn("failed to initialize gigachat client", "error", err)
+			} else {
+				gen := generator.NewGenerator(gigachatClient, generator.Options{})
+				cardGen = bot.NewGeneratorAdapter(gen)
+				slog.Info("gigachat card generator initialized")
+			}
+		} else {
+			slog.Warn("gigachat configuration not found in environment", "error", err)
 		}
 
 		maxBot, err := bot.NewBot(botClient, appURL, userService, setService, extractor, cardGen)

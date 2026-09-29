@@ -13,7 +13,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 	"unicode"
 )
@@ -168,14 +167,12 @@ func (e *Extractor) Extract(ctx context.Context, files []File) (Result, error) {
 			pages = []string{e.readText(&res, i, f)}
 		case KindPDF:
 			pages, err = e.readPDF(ctx, &res, i, f)
-		case KindJPEG, KindPNG, KindWebP:
+		case KindJPEG, KindPNG:
 			var text string
 			text, err = e.readImage(ctx, &res, i, f)
 			pages = []string{text}
 		default:
-			// The detected type goes to the log: a messenger may send a page
-			// or a HEIC photo where a JPEG was expected.
-			err = &Error{File: f.Name, Err: fmt.Errorf("%w: %s", ErrUnsupported, http.DetectContentType(f.Data)),
+			err = &Error{File: f.Name, Err: ErrUnsupported,
 				Message: "Формат не поддерживается: пришлите текст, PDF или фото страниц."}
 		}
 		if err != nil {

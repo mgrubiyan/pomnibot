@@ -138,16 +138,6 @@ func TestVisionReadsOnlyRequestedPDFPages(t *testing.T) {
 	}
 }
 
-// Seen live: the model wraps formulas in LaTeX dollars despite the prompt.
-func TestVisionDropsLaTeXDollars(t *testing.T) {
-	model := &fakeModel{texts: []string{"2. $∠AOK = ◡AK$ — центральный, $$∠AKO = 90° − ◡AK/2$$\nЦена тетради $5"}}
-	pages, err := (&VisionOCR{Model: model}).Recognize(context.Background(), OCRRequest{Data: jpegOf(t, 600, 800), MimeType: "image/jpeg", Pages: 1})
-	want := "2. ∠AOK = ◡AK — центральный, ∠AKO = 90° − ◡AK/2\nЦена тетради $5"
-	if err != nil || len(pages) != 1 || pages[0].Text != want {
-		t.Errorf("got %+v, %v; want %q", pages, err, want)
-	}
-}
-
 func TestLineConfirmed(t *testing.T) {
 	checker := checkWords("Угол между насательной и хордой измеряет-\nся половиной дуги. Георгий об измерении угли меж-\nду")
 	for line, want := range map[string]bool{

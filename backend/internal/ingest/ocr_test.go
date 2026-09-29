@@ -103,28 +103,6 @@ func TestExtractMixedPDF(t *testing.T) {
 	}
 }
 
-// Seen live: MAX served a photo named photo_1.jpg in WebP, which neither OCR
-// takes. It goes on as a JPEG.
-func TestExtractWebPPhotoAsJPEG(t *testing.T) {
-	ocr := &fakeOCR{answer: func(int, OCRRequest) ([]OCRPage, error) {
-		return []OCRPage{{Text: "Митоз — непрямое деление соматических клеток, при котором образуются две дочерние клетки."}}, nil
-	}}
-	res, err := newOCRExtractor(t, ocr, &fakePDF{}).Extract(context.Background(), []File{{Name: "photo_1.jpg", Data: webpBytes(t)}})
-	if err != nil {
-		t.Fatalf("Extract() error = %v", err)
-	}
-	if len(ocr.reqs) != 1 || ocr.reqs[0].MimeType != "image/jpeg" {
-		t.Fatalf("OCR requests %+v, want one JPEG", ocr.reqs)
-	}
-	cfg, format, err := image.DecodeConfig(bytes.NewReader(ocr.reqs[0].Data))
-	if err != nil || format != "jpeg" || cfg.Width != 64 || cfg.Height != 48 {
-		t.Errorf("sent %s %dx%d (err %v), want the 64x48 photo as JPEG", format, cfg.Width, cfg.Height, err)
-	}
-	if !strings.Contains(res.Text, "Митоз") || res.Source != SourceOCR {
-		t.Errorf("result %+v", res)
-	}
-}
-
 func TestExtractPhotosInOrder(t *testing.T) {
 	ocr := &fakeOCR{answer: func(n int, _ OCRRequest) ([]OCRPage, error) {
 		return []OCRPage{{Text: fmt.Sprintf("Фото номер %d: митоз — непрямое деление соматических клеток.", n)}}, nil
