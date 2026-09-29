@@ -572,6 +572,125 @@ func (*CardSet) getSetRes()             {}
 func (*CardSet) getSetShareCodeRes()    {}
 func (*CardSet) joinSetByShareCodeRes() {}
 
+type CheckAnswerBadRequest ErrorResponse
+
+func (*CheckAnswerBadRequest) checkAnswerRes() {}
+
+type CheckAnswerInternalServerError ErrorResponse
+
+func (*CheckAnswerInternalServerError) checkAnswerRes() {}
+
+type CheckAnswerNotFound ErrorResponse
+
+func (*CheckAnswerNotFound) checkAnswerRes() {}
+
+// Ref: #/components/schemas/CheckAnswerRequest
+type CheckAnswerRequest struct {
+	Answer string `json:"answer"`
+}
+
+// GetAnswer returns the value of Answer.
+func (s *CheckAnswerRequest) GetAnswer() string {
+	return s.Answer
+}
+
+// SetAnswer sets the value of Answer.
+func (s *CheckAnswerRequest) SetAnswer(val string) {
+	s.Answer = val
+}
+
+// Ref: #/components/schemas/CheckAnswerResponse
+type CheckAnswerResponse struct {
+	IsCorrect bool `json:"isCorrect"`
+	// Why the answer counts or what it lacks, when a model judged it.
+	Reason OptString `json:"reason"`
+	// Local: matched up to form and typos, or surely wrong; model: judged by meaning; fallback: the model
+	// did not answer in time, local verdict.
+	Method CheckAnswerResponseMethod `json:"method"`
+}
+
+// GetIsCorrect returns the value of IsCorrect.
+func (s *CheckAnswerResponse) GetIsCorrect() bool {
+	return s.IsCorrect
+}
+
+// GetReason returns the value of Reason.
+func (s *CheckAnswerResponse) GetReason() OptString {
+	return s.Reason
+}
+
+// GetMethod returns the value of Method.
+func (s *CheckAnswerResponse) GetMethod() CheckAnswerResponseMethod {
+	return s.Method
+}
+
+// SetIsCorrect sets the value of IsCorrect.
+func (s *CheckAnswerResponse) SetIsCorrect(val bool) {
+	s.IsCorrect = val
+}
+
+// SetReason sets the value of Reason.
+func (s *CheckAnswerResponse) SetReason(val OptString) {
+	s.Reason = val
+}
+
+// SetMethod sets the value of Method.
+func (s *CheckAnswerResponse) SetMethod(val CheckAnswerResponseMethod) {
+	s.Method = val
+}
+
+func (*CheckAnswerResponse) checkAnswerRes() {}
+
+// Local: matched up to form and typos, or surely wrong; model: judged by meaning; fallback: the model
+// did not answer in time, local verdict.
+type CheckAnswerResponseMethod string
+
+const (
+	CheckAnswerResponseMethodLocal    CheckAnswerResponseMethod = "local"
+	CheckAnswerResponseMethodModel    CheckAnswerResponseMethod = "model"
+	CheckAnswerResponseMethodFallback CheckAnswerResponseMethod = "fallback"
+)
+
+// AllValues returns all CheckAnswerResponseMethod values.
+func (CheckAnswerResponseMethod) AllValues() []CheckAnswerResponseMethod {
+	return []CheckAnswerResponseMethod{
+		CheckAnswerResponseMethodLocal,
+		CheckAnswerResponseMethodModel,
+		CheckAnswerResponseMethodFallback,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s CheckAnswerResponseMethod) MarshalText() ([]byte, error) {
+	switch s {
+	case CheckAnswerResponseMethodLocal:
+		return []byte(s), nil
+	case CheckAnswerResponseMethodModel:
+		return []byte(s), nil
+	case CheckAnswerResponseMethodFallback:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *CheckAnswerResponseMethod) UnmarshalText(data []byte) error {
+	switch CheckAnswerResponseMethod(data) {
+	case CheckAnswerResponseMethodLocal:
+		*s = CheckAnswerResponseMethodLocal
+		return nil
+	case CheckAnswerResponseMethodModel:
+		*s = CheckAnswerResponseMethodModel
+		return nil
+	case CheckAnswerResponseMethodFallback:
+		*s = CheckAnswerResponseMethodFallback
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
 type DeleteCardInternalServerError ErrorResponse
 
 func (*DeleteCardInternalServerError) deleteCardRes() {}

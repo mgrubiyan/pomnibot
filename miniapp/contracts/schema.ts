@@ -227,6 +227,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/cards/{cardId}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a typed answer by meaning without recording it
+         * @description The answer need not match word for word: form, word order and typos do not matter, and answers in other words are judged by a language model. Nothing is recorded: the feed sends results with SendResults.
+         */
+        post: operations["CheckAnswer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -368,6 +388,19 @@ export interface components {
         SendResultsRequest: components["schemas"]["AnswerResult"][];
         AnswerQuestionRequest: {
             answer: string;
+        };
+        CheckAnswerRequest: {
+            answer: string;
+        };
+        CheckAnswerResponse: {
+            isCorrect: boolean;
+            /** @description Why the answer counts or what it lacks, when a model judged it */
+            reason?: string;
+            /**
+             * @description local: matched up to form and typos, or surely wrong; model: judged by meaning; fallback: the model did not answer in time, local verdict
+             * @enum {string}
+             */
+            method: "local" | "model" | "fallback";
         };
         AnswerQuestionResponse: {
             isCorrect: boolean;
@@ -785,6 +818,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnswerQuestionResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    CheckAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ID of the card */
+                cardId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckAnswerRequest"];
+            };
+        };
+        responses: {
+            /** @description Ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckAnswerResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];

@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mgrubiyan/pomnibot/backend/internal/bot"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
+	"github.com/mgrubiyan/pomnibot/backend/internal/grader"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest/yandex"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
@@ -62,6 +63,21 @@ func main() {
 		homescreenService usecase.HomescreenService
 	)
 
+	// GigaChat writes the cards, reads photos and scans, and checks typed
+	// answers by meaning.
+	var gigachatClient *gigachat.Client
+	if gigachatCfg, err := gigachat.ConfigFromEnv(); err == nil {
+		if gigachatClient, err = gigachat.New(gigachatCfg); err != nil {
+			slog.Warn("failed to initialize gigachat client", "error", err)
+		}
+	} else {
+		slog.Warn("gigachat configuration not found in environment", "error", err)
+	}
+	answerGrader := &grader.Grader{}
+	if gigachatClient != nil {
+		answerGrader.Model = gigachatClient
+	}
+
 	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
 		slog.Info("connecting to database and executing migrations...")
 		if err := repository.RunMigrations(ctx, dbURL); err != nil {
@@ -88,7 +104,7 @@ func main() {
 
 		userService = usecase.NewUserService(queries)
 		setService = usecase.NewSetService(queries, userService)
-		cardService = usecase.NewCardService(queries, userService)
+		cardService = usecase.NewCardService(queries, userService, usecase.WithGrader(answerGrader))
 		homescreenService = usecase.NewHomescreenService(queries, userService)
 		slog.Info("persistence layer and usecase services wired successfully")
 	} else {
@@ -133,16 +149,6 @@ func main() {
 		if err != nil {
 			slog.Error("failed to create bot client", "error", err)
 			os.Exit(1)
-		}
-
-		// GigaChat writes the cards and reads photos and scans.
-		var gigachatClient *gigachat.Client
-		if gigachatCfg, err := gigachat.ConfigFromEnv(); err == nil {
-			if gigachatClient, err = gigachat.New(gigachatCfg); err != nil {
-				slog.Warn("failed to initialize gigachat client", "error", err)
-			}
-		} else {
-			slog.Warn("gigachat configuration not found in environment", "error", err)
 		}
 
 		// Yandex OCR turns photos upright and checks GigaChat's reading, or

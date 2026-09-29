@@ -17,13 +17,16 @@ var (
 	rn3AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
-	rn16AllowedHeaders = map[string]string{
+	rn5AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
 	rn17AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
-	rn14AllowedHeaders = map[string]string{
+	rn18AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
+	}
+	rn16AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
 )
@@ -169,6 +172,33 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							return
 						}
 
+					case 'c': // Prefix: "check"
+
+						if l := len("check"); len(elem) >= l && elem[0:l] == "check" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch r.Method {
+							case "POST":
+								s.handleCheckAnswerRequest([1]string{
+									args[0],
+								}, elemIsEscaped, w, r)
+							default:
+								s.notAllowed(w, r, notAllowedParams{
+									allowedMethods: "POST",
+									allowedHeaders: rn5AllowedHeaders,
+									acceptPost:     "application/json",
+									acceptPatch:    "",
+								})
+							}
+
+							return
+						}
+
 					case 'i': // Prefix: "issue"
 
 						if l := len("issue"); len(elem) >= l && elem[0:l] == "issue" {
@@ -187,7 +217,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							default:
 								s.notAllowed(w, r, notAllowedParams{
 									allowedMethods: "POST",
-									allowedHeaders: rn16AllowedHeaders,
+									allowedHeaders: rn17AllowedHeaders,
 									acceptPost:     "application/json",
 									acceptPatch:    "",
 								})
@@ -266,7 +296,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					default:
 						s.notAllowed(w, r, notAllowedParams{
 							allowedMethods: "POST",
-							allowedHeaders: rn17AllowedHeaders,
+							allowedHeaders: rn18AllowedHeaders,
 							acceptPost:     "application/json",
 							acceptPatch:    "",
 						})
@@ -303,7 +333,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						default:
 							s.notAllowed(w, r, notAllowedParams{
 								allowedMethods: "POST",
-								allowedHeaders: rn14AllowedHeaders,
+								allowedHeaders: rn16AllowedHeaders,
 								acceptPost:     "application/json",
 								acceptPatch:    "",
 							})
@@ -652,6 +682,31 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								r.operationID = "AnswerQuestion"
 								r.operationGroup = ""
 								r.pathPattern = "/cards/{cardId}/answer"
+								r.args = args
+								r.count = 1
+								return r, true
+							default:
+								return
+							}
+						}
+
+					case 'c': // Prefix: "check"
+
+						if l := len("check"); len(elem) >= l && elem[0:l] == "check" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch method {
+							case "POST":
+								r.name = CheckAnswerOperation
+								r.summary = "Check a typed answer by meaning without recording it"
+								r.operationID = "CheckAnswer"
+								r.operationGroup = ""
+								r.pathPattern = "/cards/{cardId}/check"
 								r.args = args
 								r.count = 1
 								return r, true

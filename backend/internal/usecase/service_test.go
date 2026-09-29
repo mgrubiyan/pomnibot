@@ -11,7 +11,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
+	"github.com/mgrubiyan/pomnibot/backend/internal/grader"
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
@@ -278,6 +280,57 @@ func TestCardService_AnswerQuestion(t *testing.T) {
 	}
 	if !recorded || !progressUpdated {
 		t.Fatal("expected answer recording and progress update")
+	}
+}
+
+type fakeModel struct{ calls int }
+
+func (m *fakeModel) Complete(context.Context, providers.Request) (providers.Response, error) {
+	m.calls++
+	return providers.Response{Content: []byte(`{"correct": true, "reason": "Упорядоченный — то же, что отсортированный."}`)}, nil
+}
+
+// A typed answer is checked by meaning and nothing is recorded: the feed
+// sends results itself.
+func TestCardService_CheckAnswer(t *testing.T) {
+	cardUUID := uuid.New()
+	var pgUUID pgtype.UUID
+	_ = pgUUID.Scan(cardUUID.String())
+
+	mock := &mockQuerier{
+		getCardByIDFunc: func(_ context.Context, arg db.GetCardByIDParams) (db.GetCardByIDRow, error) {
+			if arg.UserID != 100 {
+				return db.GetCardByIDRow{}, pgx.ErrNoRows
+			}
+			return db.GetCardByIDRow{
+				ID:          pgUUID,
+				FactID:      "fact-1",
+				Kind:        "input",
+				Question:    "На каком массиве применим бинарный поиск?",
+				AnswerText:  pgtype.Text{String: "на отсортированном массиве", Valid: true},
+				SourceQuote: "Бинарный поиск работает только на отсортированном массиве",
+			}, nil
+		},
+		recordAnswerResultFunc: func(context.Context, db.RecordAnswerResultParams) (db.AnswerResult, error) {
+			t.Fatal("a check must not record the answer")
+			return db.AnswerResult{}, nil
+		},
+	}
+	model := &fakeModel{}
+	svc := usecase.NewCardService(mock, usecase.NewUserService(mock), usecase.WithGrader(&grader.Grader{Model: model}))
+
+	res, err := svc.CheckAnswer(context.Background(), 100, cardUUID, "массив должен быть упорядочен")
+	if err != nil || !res.IsCorrect || res.Method != contracts.CheckAnswerResponseMethodModel || res.Reason.Value == "" {
+		t.Fatalf("CheckAnswer() = %+v, %v; want correct by the model with a reason", res, err)
+	}
+
+	res, err = svc.CheckAnswer(context.Background(), 100, cardUUID, "Отсортированный массив.")
+	if err != nil || !res.IsCorrect || res.Method != contracts.CheckAnswerResponseMethodLocal || model.calls != 1 {
+		t.Fatalf("CheckAnswer() = %+v, %v, model calls %d; want correct locally", res, err, model.calls)
+	}
+
+	if _, err := svc.CheckAnswer(context.Background(), 200, cardUUID, "что угодно"); !errors.Is(err, usecase.ErrNotFound) {
+		t.Fatalf("someone else's card: err = %v, want ErrNotFound", err)
 	}
 }
 

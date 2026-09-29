@@ -22,6 +22,17 @@ func (UnimplementedHandler) AnswerQuestion(ctx context.Context, req *AnswerQuest
 	return r, ht.ErrNotImplemented
 }
 
+// CheckAnswer implements CheckAnswer operation.
+//
+// The answer need not match word for word: form, word order and typos do not matter, and answers in
+// other words are judged by a language model. Nothing is recorded: the feed sends results with
+// SendResults.
+//
+// POST /cards/{cardId}/check
+func (UnimplementedHandler) CheckAnswer(ctx context.Context, req *CheckAnswerRequest, params CheckAnswerParams) (r CheckAnswerRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // DeleteCard implements DeleteCard operation.
 //
 // Delete a card.

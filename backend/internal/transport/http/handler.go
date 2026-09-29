@@ -127,6 +127,14 @@ func (h *APIHandler) DeleteCard(ctx context.Context, params contracts.DeleteCard
 	return h.UnimplementedHandler.DeleteCard(ctx, params)
 }
 
+// CheckAnswer implements contracts.Handler.CheckAnswer.
+func (h *APIHandler) CheckAnswer(ctx context.Context, req *contracts.CheckAnswerRequest, params contracts.CheckAnswerParams) (contracts.CheckAnswerRes, error) {
+	if h.cards != nil {
+		return h.cards.CheckAnswer(ctx, req, params)
+	}
+	return h.UnimplementedHandler.CheckAnswer(ctx, req, params)
+}
+
 // AnswerQuestion implements contracts.Handler.AnswerQuestion.
 func (h *APIHandler) AnswerQuestion(ctx context.Context, req *contracts.AnswerQuestionRequest, params contracts.AnswerQuestionParams) (contracts.AnswerQuestionRes, error) {
 	if h.cards != nil {
