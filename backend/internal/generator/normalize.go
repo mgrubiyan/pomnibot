@@ -109,6 +109,13 @@ func isBullet(r rune) bool {
 	return false
 }
 
+// isSign reports signs of formulas and brackets: spacing around them varies
+// between a reading of a formula and its quote, "cos (180° - α)" and
+// "cos(180°−α)".
+func isSign(r rune) bool {
+	return strings.ContainsRune("=+<>≤≥≠≈×·*/^()[]", r)
+}
+
 func isQuoteMark(r rune) bool {
 	switch r {
 	case '"', '\'', '`', '«', '»', '„', '“', '”', '‟', '‘', '’', '‚', '‛', '‹', '›':
@@ -138,8 +145,9 @@ type folded struct {
 // around it, "…" as three dots, list bullets and runs of whitespace as one
 // space.
 //
-// It ignores only typography. Words, their order and punctuation other than
-// quotes and dashes must match, so a paraphrase does not pass.
+// It ignores only typography, spaces around signs of formulas included.
+// Words, their order and punctuation other than quotes and dashes must
+// match, so a paraphrase does not pass.
 func fold(s string) folded {
 	f := folded{
 		start: make([]int, 0, len(s)),
@@ -157,7 +165,7 @@ func fold(s string) folded {
 	}
 
 	spaceFrom, spaceTo := -1, -1 // pending whitespace run, written lazily
-	afterDash := false
+	glued := false               // after a dash or a sign, where a space means nothing
 	for i := 0; i < len(s); {
 		r, size := utf8.DecodeRuneInString(s[i:])
 		from, to := i, i+size
@@ -175,14 +183,14 @@ func fold(s string) folded {
 		case isDash(r):
 			spaceFrom = -1
 			emit('-', from, to)
-			afterDash = true
+			glued = true
 			continue
 		}
 
-		if spaceFrom >= 0 && !afterDash && b.Len() > 0 {
+		if spaceFrom >= 0 && !glued && !isSign(r) && b.Len() > 0 {
 			emit(' ', spaceFrom, spaceTo)
 		}
-		spaceFrom, afterDash = -1, false
+		spaceFrom, glued = -1, isSign(r)
 
 		switch r {
 		case '…':
@@ -220,6 +228,16 @@ func trimQuote(s string) string {
 // every fragment of a biology lecture.
 const minQuoteRunes = 20
 
+// minFormulaRunes is the shortest quote holding an equation: "sin 45° =
+// √2/2" is no phrase every fragment has.
+const minFormulaRunes = 8
+
+// tooShort reports a folded quote too short to prove anything.
+func tooShort(q string) bool {
+	n := utf8.RuneCountInString(q)
+	return n < minQuoteRunes && (n < minFormulaRunes || !strings.ContainsRune(q, '='))
+}
+
 // findQuote looks for the model's quote in the fragment text, ignoring case,
 // ё, quote marks, dashes and whitespace. It returns the matching span of the
 // fragment itself, so the card shows the notes and not the model's copy.
@@ -240,7 +258,7 @@ func findQuote(fragment, quote string) (string, bool) {
 // locateQuote is findQuote giving the byte offsets of the span in fragment.
 func locateQuote(fragment, quote string) (start, end int, ok bool) {
 	q := trimQuote(fold(quote).s)
-	if utf8.RuneCountInString(q) < minQuoteRunes {
+	if tooShort(q) {
 		return 0, 0, false
 	}
 	f := fold(fragment)
