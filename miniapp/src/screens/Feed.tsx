@@ -250,7 +250,10 @@ export function Feed({
                 if (checkRunRef.current !== run) {
                     return; // the reader stopped waiting or moved on
                 }
-                if (!result.ok) {
+                // A silent model is not a wrong answer: on fallback the backend
+                // reports the local check, which was unsure — «Неверно» here
+                // would be undeserved, so the reader compares by hand.
+                if (!result.ok || (result.method === 'fallback' && !result.correct)) {
                     setCheck((current) => (current ? { ...current, stage: 'failed' } : current));
                     return;
                 }
