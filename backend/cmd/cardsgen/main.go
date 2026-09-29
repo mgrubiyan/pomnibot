@@ -87,7 +87,7 @@ func run() error {
 	}
 	// GigaChat writes the cards and, unless -ocr yandex, reads the photos.
 	var client *gigachat.Client
-	modelName := gigachat.DefaultModel
+	modelName := "GigaChat-3-Ultra"
 	if !*extractOnly || *ocrMode == "vision" {
 		cfg, err := gigachat.ConfigFromEnv()
 		if err != nil {
@@ -187,21 +187,19 @@ func extract(ctx context.Context, paths []string, ocrModel string, vision provid
 		hasPDF = hasPDF || ingest.DetectKind(data) == ingest.KindPDF
 	}
 
-	// Yandex OCR only with credentials: without them text and typed PDFs
-	// still work, and GigaChat reads photos unchecked.
-	var ocr ingest.OCR
-	if cfg := yandex.ConfigFromEnv(); cfg.APIKey != "" {
-		client, err := yandex.New(cfg)
-		if err != nil {
-			return ingest.Result{}, err
-		}
-		ocr = client
+	// Yandex OCR turns photos upright and checks GigaChat's reading, or
+	// reads them alone with -ocr yandex.
+	cfg, err := yandex.ConfigFromEnv()
+	if err != nil {
+		return ingest.Result{}, err
 	}
+	client, err := yandex.New(cfg)
+	if err != nil {
+		return ingest.Result{}, err
+	}
+	var ocr ingest.OCR = client
 	if vision != nil {
-		if ocr == nil {
-			slog.Warn("photos and scans are read by GigaChat unchecked and not turned upright: set YC_API_KEY for Yandex OCR")
-		}
-		ocr = &ingest.VisionOCR{Model: vision, Checker: ocr}
+		ocr = &ingest.VisionOCR{Model: vision, Checker: client}
 	}
 	ext, err := ingest.NewExtractor(ocr, ingest.Options{DisablePDF: !hasPDF, OCRModel: ocrModel})
 	if err != nil {

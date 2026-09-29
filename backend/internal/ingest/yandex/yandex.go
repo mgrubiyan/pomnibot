@@ -30,8 +30,6 @@ import (
 
 // Defaults, overridable through Config.
 const (
-	DefaultBaseURL      = "https://ai.api.cloud.yandex.net"
-	DefaultOperationURL = "https://operation.api.cloud.yandex.net"
 	DefaultPollInterval = 2 * time.Second
 )
 
@@ -58,14 +56,6 @@ type Config struct {
 	HTTPClient   *http.Client // nil: a client with the system roots plus the Russian Trusted Root CA
 }
 
-// ConfigFromEnv reads YC_API_KEY and YC_FOLDER_ID.
-func ConfigFromEnv() Config {
-	return Config{
-		APIKey:   os.Getenv("YC_API_KEY"),
-		FolderID: os.Getenv("YC_FOLDER_ID"),
-	}
-}
-
 // Client calls Yandex Vision OCR. It is safe for concurrent use.
 type Client struct {
 	cfg     Config
@@ -75,19 +65,69 @@ type Client struct {
 
 var _ ingest.OCR = (*Client)(nil)
 
+// env читает переменную и обрезает пробелы/переводы строк.
+func env(key string) string {
+	return strings.TrimSpace(os.Getenv(key))
+}
+
+// ConfigFromEnv читает конфиг из окружения. Все переменные обязательны.
+func ConfigFromEnv() (Config, error) {
+	cfg := Config{
+		BaseURL:      env("YC_OCR_BASE_URL"),
+		OperationURL: env("YC_OCR_OPERATION_URL"),
+		APIKey:       env("YC_API_KEY"),
+		FolderID:     env("YC_FOLDER_ID"),
+	}
+	if err := cfg.normalizeAndValidate(); err != nil {
+		return Config{}, err
+	}
+	return cfg, nil
+}
+
+// normalizeAndValidate чистит значения и проверяет, что все обязательные заданы.
+func (c *Config) normalizeAndValidate() error {
+	c.APIKey = strings.TrimSpace(c.APIKey)
+	c.FolderID = strings.TrimSpace(c.FolderID)
+	c.BaseURL = strings.TrimSuffix(strings.TrimSpace(c.BaseURL), "/")
+	c.OperationURL = strings.TrimSuffix(strings.TrimSpace(c.OperationURL), "/")
+
+	var errs []error
+
+	for _, r := range []struct{ name, val string }{
+		{"YC_OCR_BASE_URL", c.BaseURL},
+		{"YC_OCR_OPERATION_URL", c.OperationURL},
+		{"YC_API_KEY", c.APIKey},
+		{"YC_FOLDER_ID", c.FolderID},
+	} {
+		if r.val == "" {
+			errs = append(errs, fmt.Errorf("%s is required but empty", r.name))
+		}
+	}
+
+	for _, u := range []struct{ name, val string }{
+		{"YC_OCR_BASE_URL", c.BaseURL},
+		{"YC_OCR_OPERATION_URL", c.OperationURL},
+	} {
+		if u.val == "" {
+			continue // уже отмечено выше
+		}
+		p, err := url.Parse(u.val)
+		if err != nil || (p.Scheme != "http" && p.Scheme != "https") || p.Host == "" {
+			errs = append(errs, fmt.Errorf("%s = %q, want a valid http(s) URL", u.name, u.val))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("yandex config: %w", errors.Join(errs...))
+	}
+	return nil
+}
+
 // New returns a Client.
 func New(cfg Config) (*Client, error) {
-	if cfg.APIKey == "" {
-		return nil, errors.New("yandex: YC_API_KEY is required")
+	if err := cfg.normalizeAndValidate(); err != nil {
+		return nil, err
 	}
-	if cfg.BaseURL == "" {
-		cfg.BaseURL = DefaultBaseURL
-	}
-	if cfg.OperationURL == "" {
-		cfg.OperationURL = DefaultOperationURL
-	}
-	cfg.BaseURL = strings.TrimSuffix(cfg.BaseURL, "/")
-	cfg.OperationURL = strings.TrimSuffix(cfg.OperationURL, "/")
 	if cfg.PollInterval <= 0 {
 		cfg.PollInterval = DefaultPollInterval
 	}

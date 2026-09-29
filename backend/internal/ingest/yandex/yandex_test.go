@@ -244,11 +244,39 @@ func TestFolderIsOptional(t *testing.T) {
 
 func TestNewRequiresCredentials(t *testing.T) {
 	if _, err := New(Config{FolderID: "folder"}); err == nil {
-		t.Error("New() without a key succeeded")
+		t.Error("New() without an API key succeeded, want error")
 	}
+}
+
+func TestConfigFromEnv(t *testing.T) {
 	t.Setenv("YC_API_KEY", "k")
 	t.Setenv("YC_FOLDER_ID", "f")
-	if cfg := ConfigFromEnv(); cfg.APIKey != "k" || cfg.FolderID != "f" {
-		t.Errorf("ConfigFromEnv() = %+v", cfg)
+	t.Setenv("YC_OCR_BASE_URL", "https://ocr.test/")
+	t.Setenv("YC_OCR_OPERATION_URL", "https://operation.test")
+
+	cfg, err := ConfigFromEnv()
+	if err != nil {
+		t.Fatalf("ConfigFromEnv() error = %v", err)
+	}
+	if cfg.APIKey != "k" {
+		t.Errorf("APIKey = %q, want %q", cfg.APIKey, "k")
+	}
+	if cfg.FolderID != "f" {
+		t.Errorf("FolderID = %q, want %q", cfg.FolderID, "f")
+	}
+	if cfg.BaseURL != "https://ocr.test" {
+		t.Errorf("BaseURL = %q, want %q", cfg.BaseURL, "https://ocr.test")
+	}
+	if cfg.OperationURL != "https://operation.test" {
+		t.Errorf("OperationURL = %q, want %q", cfg.OperationURL, "https://operation.test")
+	}
+}
+
+func TestConfigFromEnvMissing(t *testing.T) {
+	t.Setenv("YC_API_KEY", "")
+	t.Setenv("YC_FOLDER_ID", "")
+
+	if _, err := ConfigFromEnv(); err == nil {
+		t.Error("ConfigFromEnv() with empty env succeeded, want error")
 	}
 }

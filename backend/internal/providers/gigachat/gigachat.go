@@ -18,6 +18,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -26,22 +27,6 @@ import (
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 	"github.com/mgrubiyan/pomnibot/backend/internal/tlsroot"
-)
-
-// Defaults, overridable through Config or the environment.
-const (
-	// DefaultBaseURL serves GigaChat-3-Ultra; the older
-	// https://gigachat.devices.sberbank.ru/api/v1 does not.
-	DefaultBaseURL       = "https://api.giga.chat/v1"
-	DefaultAuthURL       = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
-	DefaultScope         = "GIGACHAT_API_PERS"
-	DefaultModel         = "GigaChat-3-Ultra"
-	DefaultFallbackModel = "GigaChat-2-Max"
-	// DefaultMaxTokens fits a fragment's worth of cards with room to spare:
-	// a fact with four cards and choice distractors took up to about 850
-	// tokens on GigaChat-3-Ultra, five facts about 4000, and a cut answer is
-	// broken JSON. Only the tokens written are billed.
-	DefaultMaxTokens = 8192
 )
 
 const (
@@ -72,33 +57,77 @@ type Config struct {
 	BaseURL       string // up to the API version: https://api.giga.chat/v1
 	AuthURL       string
 	HTTPClient    *http.Client // nil: a client trusting the Russian Trusted Root CA
-	// MaxTokens caps the answer, DefaultMaxTokens by default. It is set here
-	// rather than by the caller: token counts depend on the model's tokenizer
-	// and price.
+	// MaxTokens caps the answer. It is set here rather than by the caller:
+	// token counts depend on the model's tokenizer and price.
 	MaxTokens int
+}
+
+func env(key string) string {
+	return strings.TrimSpace(os.Getenv(key))
 }
 
 // ConfigFromEnv reads GIGACHAT_AUTH_KEY, GIGACHAT_CLIENT_ID,
 // GIGACHAT_CLIENT_SECRET, GIGACHAT_SCOPE, GIGACHAT_MODEL,
 // GIGACHAT_FALLBACK_MODEL, GIGACHAT_BASE_URL, GIGACHAT_AUTH_URL and
-// GIGACHAT_MAX_TOKENS. Unset optional values take defaults in New.
+// GIGACHAT_MAX_TOKENS. All are required, except that the credentials are
+// either GIGACHAT_AUTH_KEY, or GIGACHAT_CLIENT_ID and GIGACHAT_CLIENT_SECRET.
 func ConfigFromEnv() (Config, error) {
 	cfg := Config{
-		AuthKey:       os.Getenv("GIGACHAT_AUTH_KEY"),
-		ClientID:      os.Getenv("GIGACHAT_CLIENT_ID"),
-		ClientSecret:  os.Getenv("GIGACHAT_CLIENT_SECRET"),
-		Scope:         os.Getenv("GIGACHAT_SCOPE"),
-		Model:         os.Getenv("GIGACHAT_MODEL"),
-		FallbackModel: os.Getenv("GIGACHAT_FALLBACK_MODEL"),
-		BaseURL:       os.Getenv("GIGACHAT_BASE_URL"),
-		AuthURL:       os.Getenv("GIGACHAT_AUTH_URL"),
+		AuthKey:       env("GIGACHAT_AUTH_KEY"),
+		ClientID:      env("GIGACHAT_CLIENT_ID"),
+		ClientSecret:  env("GIGACHAT_CLIENT_SECRET"),
+		Scope:         env("GIGACHAT_SCOPE"),
+		Model:         env("GIGACHAT_MODEL"),
+		FallbackModel: env("GIGACHAT_FALLBACK_MODEL"),
+		BaseURL:       strings.TrimSuffix(env("GIGACHAT_BASE_URL"), "/"),
+		AuthURL:       env("GIGACHAT_AUTH_URL"),
 	}
-	if v := os.Getenv("GIGACHAT_MAX_TOKENS"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n <= 0 {
-			return Config{}, fmt.Errorf("gigachat: GIGACHAT_MAX_TOKENS = %q, want a positive number", v)
+
+	var errs []error
+
+	// The Authorization Key is base64 of client_id:client_secret, so either
+	// one is enough.
+	if cfg.AuthKey == "" && (cfg.ClientID == "" || cfg.ClientSecret == "") {
+		errs = append(errs, errors.New("GIGACHAT_AUTH_KEY, or GIGACHAT_CLIENT_ID and GIGACHAT_CLIENT_SECRET, are required but empty"))
+	}
+
+	for _, r := range []struct{ name, val string }{
+		{"GIGACHAT_SCOPE", cfg.Scope},
+		{"GIGACHAT_MODEL", cfg.Model},
+		{"GIGACHAT_FALLBACK_MODEL", cfg.FallbackModel},
+		{"GIGACHAT_BASE_URL", cfg.BaseURL},
+		{"GIGACHAT_AUTH_URL", cfg.AuthURL},
+	} {
+		if r.val == "" {
+			errs = append(errs, fmt.Errorf("%s is required but empty", r.name))
 		}
+	}
+
+	// URL should be valid http(s).
+	for _, u := range []struct{ name, val string }{
+		{"GIGACHAT_BASE_URL", cfg.BaseURL},
+		{"GIGACHAT_AUTH_URL", cfg.AuthURL},
+	} {
+		if u.val == "" {
+			continue
+		}
+		parsed, err := url.Parse(u.val)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			errs = append(errs, fmt.Errorf("%s = %q, want a valid http(s) URL", u.name, u.val))
+		}
+	}
+
+	// MAX_TOKENS
+	if v := env("GIGACHAT_MAX_TOKENS"); v == "" {
+		errs = append(errs, errors.New("GIGACHAT_MAX_TOKENS is required but empty"))
+	} else if n, err := strconv.Atoi(v); err != nil || n <= 0 {
+		errs = append(errs, fmt.Errorf("GIGACHAT_MAX_TOKENS = %q, want a positive number", v))
+	} else {
 		cfg.MaxTokens = n
+	}
+
+	if len(errs) > 0 {
+		return Config{}, fmt.Errorf("gigachat config: %w", errors.Join(errs...))
 	}
 	return cfg, nil
 }
@@ -124,15 +153,8 @@ func New(cfg Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg.Scope = or(cfg.Scope, DefaultScope)
-	cfg.Model = or(cfg.Model, DefaultModel)
-	cfg.BaseURL = strings.TrimSuffix(or(cfg.BaseURL, DefaultBaseURL), "/")
-	cfg.AuthURL = or(cfg.AuthURL, DefaultAuthURL)
 	if cfg.FallbackModel == cfg.Model {
 		cfg.FallbackModel = ""
-	}
-	if cfg.MaxTokens <= 0 {
-		cfg.MaxTokens = DefaultMaxTokens
 	}
 	hc := cfg.HTTPClient
 	if hc == nil {
