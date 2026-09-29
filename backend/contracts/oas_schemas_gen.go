@@ -951,6 +951,74 @@ func (o OptInt) Or(d int) int {
 	return d
 }
 
+// NewOptNilDateTime returns new OptNilDateTime with value set to v.
+func NewOptNilDateTime(v time.Time) OptNilDateTime {
+	return OptNilDateTime{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptNilDateTime is optional nullable time.Time.
+type OptNilDateTime struct {
+	Value time.Time
+	Set   bool
+	Null  bool
+}
+
+// IsSet returns true if OptNilDateTime was set.
+func (o OptNilDateTime) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptNilDateTime) Reset() {
+	var v time.Time
+	o.Value = v
+	o.Set = false
+	o.Null = false
+}
+
+// SetTo sets value to v.
+func (o *OptNilDateTime) SetTo(v time.Time) {
+	o.Set = true
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o OptNilDateTime) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *OptNilDateTime) SetToNull() {
+	o.Set = true
+	o.Null = true
+	var v time.Time
+	o.Value = v
+}
+
+// IsEmpty returns true if the field was omitted from the payload (not Set and not Null).
+func (o OptNilDateTime) IsEmpty() bool {
+	return !o.Set && !o.Null
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptNilDateTime) Get() (v time.Time, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptNilDateTime) Or(d time.Time) time.Time {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptString returns new OptString with value set to v.
 func NewOptString(v string) OptString {
 	return OptString{
@@ -1172,22 +1240,17 @@ func (s *TableLayout) SetItems(val []TableItem) {
 
 // Ref: #/components/schemas/TodayData
 type TodayData struct {
-	User User `json:"user"`
-	// As in «4 дня из 7».
-	ActiveDays       int       `json:"activeDays"`
-	DueCount         int       `json:"dueCount"`
-	EstimatedMinutes int       `json:"estimatedMinutes"`
-	Sets             []CardSet `json:"sets"`
+	User             User `json:"user"`
+	DueCount         int  `json:"dueCount"`
+	EstimatedMinutes int  `json:"estimatedMinutes"`
+	// Earliest scheduled review for the user, if any.
+	NextReviewAt OptNilDateTime `json:"nextReviewAt"`
+	Sets         []CardSet      `json:"sets"`
 }
 
 // GetUser returns the value of User.
 func (s *TodayData) GetUser() User {
 	return s.User
-}
-
-// GetActiveDays returns the value of ActiveDays.
-func (s *TodayData) GetActiveDays() int {
-	return s.ActiveDays
 }
 
 // GetDueCount returns the value of DueCount.
@@ -1200,6 +1263,11 @@ func (s *TodayData) GetEstimatedMinutes() int {
 	return s.EstimatedMinutes
 }
 
+// GetNextReviewAt returns the value of NextReviewAt.
+func (s *TodayData) GetNextReviewAt() OptNilDateTime {
+	return s.NextReviewAt
+}
+
 // GetSets returns the value of Sets.
 func (s *TodayData) GetSets() []CardSet {
 	return s.Sets
@@ -1210,11 +1278,6 @@ func (s *TodayData) SetUser(val User) {
 	s.User = val
 }
 
-// SetActiveDays sets the value of ActiveDays.
-func (s *TodayData) SetActiveDays(val int) {
-	s.ActiveDays = val
-}
-
 // SetDueCount sets the value of DueCount.
 func (s *TodayData) SetDueCount(val int) {
 	s.DueCount = val
@@ -1223,6 +1286,11 @@ func (s *TodayData) SetDueCount(val int) {
 // SetEstimatedMinutes sets the value of EstimatedMinutes.
 func (s *TodayData) SetEstimatedMinutes(val int) {
 	s.EstimatedMinutes = val
+}
+
+// SetNextReviewAt sets the value of NextReviewAt.
+func (s *TodayData) SetNextReviewAt(val OptNilDateTime) {
+	s.NextReviewAt = val
 }
 
 // SetSets sets the value of Sets.

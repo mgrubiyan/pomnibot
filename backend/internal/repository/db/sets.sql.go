@@ -69,6 +69,21 @@ func (q *Queries) DeleteSet(ctx context.Context, arg DeleteSetParams) (int64, er
 	return result.RowsAffected(), nil
 }
 
+const getNextReviewDateForUser = `-- name: GetNextReviewDateForUser :one
+SELECT MIN(ufp.next_review_at)::TIMESTAMPTZ AS next_review_at
+FROM facts f
+JOIN user_sets us ON us.set_id = f.set_id AND us.user_id = $1
+JOIN user_fact_progress ufp ON ufp.fact_id = f.id AND ufp.user_id = $1
+WHERE ufp.next_review_at > NOW()
+`
+
+func (q *Queries) GetNextReviewDateForUser(ctx context.Context, userID int64) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, getNextReviewDateForUser, userID)
+	var next_review_at pgtype.Timestamptz
+	err := row.Scan(&next_review_at)
+	return next_review_at, err
+}
+
 const getSetByID = `-- name: GetSetByID :one
 SELECT
     s.id,

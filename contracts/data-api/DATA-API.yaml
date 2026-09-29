@@ -42,7 +42,6 @@ checks:
     - 200
     contentType: application/json
     requiredFields:
-    - activeDays
     - dueCount
     - estimatedMinutes
     - sets
@@ -51,7 +50,6 @@ checks:
       type: object
       required:
       - user
-      - activeDays
       - dueCount
       - estimatedMinutes
       - sets
@@ -71,13 +69,15 @@ checks:
               type: string
             username:
               type: string
-        activeDays:
-          type: integer
-          description: as in «4 дня из 7»
         dueCount:
           type: integer
         estimatedMinutes:
           type: integer
+        nextReviewAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Earliest scheduled review for the user, if any
         sets:
           type: array
           items:

@@ -670,20 +670,21 @@ components:
       type: object
       required:
         - user
-        - activeDays
         - dueCount
         - estimatedMinutes
         - sets
       properties:
         user:
           $ref: '#/components/schemas/User'
-        activeDays:
-          type: integer
-          description: "as in «4 дня из 7»"
         dueCount:
           type: integer
         estimatedMinutes:
           type: integer
+        nextReviewAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Earliest scheduled review for the user, if any
         sets:
           type: array
           items:

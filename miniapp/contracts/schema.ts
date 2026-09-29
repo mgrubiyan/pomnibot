@@ -347,10 +347,13 @@ export interface components {
         };
         TodayData: {
             user: components["schemas"]["User"];
-            /** @description as in «4 дня из 7» */
-            activeDays: number;
             dueCount: number;
             estimatedMinutes: number;
+            /**
+             * Format: date-time
+             * @description Earliest scheduled review for the user, if any
+             */
+            nextReviewAt?: string | null;
             sets: components["schemas"]["CardSet"][];
         };
         AnswerResult: {

@@ -4,10 +4,12 @@ import type { Card, CardSet, TodayData } from '../types';
 import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
+import { WhyItWorks } from '../components/WhyItWorks';
 import { IconDoc, IconOffline } from '../components/Icons';
 import { estimateMinutes } from '../utils/estimate';
-import { aboutMinutesLabel, cardsLabel, daysLabel } from '../utils/plural';
+import { aboutMinutesLabel, cardsLabel } from '../utils/plural';
 import { formatAuthorName, formatGreetingName } from '../utils/user';
+import { formatNextReviewSubtitle } from '../utils/reviewDate';
 import s from './Home.module.css';
 
 type Status = 'loading' | 'error' | 'ready';
@@ -115,6 +117,7 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
         setDueMap.set(card.setId, (setDueMap.get(card.setId) ?? 0) + 1);
     }
     const dueCount = feedCards.filter((card) => !removedSetIds.includes(card.setId)).length;
+    const nextReviewSubtitle = formatNextReviewSubtitle(today.nextReviewAt);
 
     const bottomActions = (
         <Flex direction="column" align="stretch" gap={8}>
@@ -133,45 +136,42 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
                 <Typography.Text variant="subheader" asChild>
                     <h1 className={s.greeting}>Привет, {formatGreetingName(today.user)}</h1>
                 </Typography.Text>
-                {/* «0 дней из 7» on the very first day reads as a reproach,
-                    so the counter waits for the first session. */}
-                {hasSets && today.activeDays > 0 ? (
-                    <Typography.Text variant="label" color="secondary" className={s.days}>
-                        Занимались {daysLabel(today.activeDays)} из 7
-                    </Typography.Text>
-                ) : null}
             </Flex>
 
-            {hasSets ? (
-                <>
-                    <Flex direction="column" align="stretch" gap={4} className={s.todayCard}>
-                        <Typography.Text variant="subheader">На сегодня</Typography.Text>
+            <Flex direction="column" align="stretch" gap={16} className={s.body}>
+                {hasSets ? (
+                    <>
+                        <Flex direction="column" align="stretch" gap={4} className={s.todayCard}>
+                            {dueCount > 0 ? (
+                                <>
+                                    <Typography.Text variant="subheader">На сегодня</Typography.Text>
+                                    <Typography.Text variant="body" color="secondary">
+                                        {cardsLabel(dueCount)} · {aboutMinutesLabel(estimateMinutes(dueCount))}
+                                    </Typography.Text>
+                                    <Button
+                                        size="medium"
+                                        variant="primary"
+                                        stretched
+                                        className={s.startButton}
+                                        onClick={onStart}
+                                    >
+                                        Начать
+                                    </Button>
+                                </>
+                            ) : (
+                                <>
+                                    <Typography.Text variant="subheader">На сегодня всё</Typography.Text>
+                                    {nextReviewSubtitle ? (
+                                        <Typography.Text variant="body" color="secondary">
+                                            {nextReviewSubtitle}
+                                        </Typography.Text>
+                                    ) : null}
+                                </>
+                            )}
+                        </Flex>
 
-                        {dueCount > 0 ? (
-                            <>
-                                <Typography.Text variant="body" color="secondary">
-                                    {cardsLabel(dueCount)} · {aboutMinutesLabel(estimateMinutes(dueCount))}
-                                </Typography.Text>
-                                <Button
-                                    size="medium"
-                                    variant="primary"
-                                    stretched
-                                    className={s.startButton}
-                                    onClick={onStart}
-                                >
-                                    Начать
-                                </Button>
-                            </>
-                        ) : (
-                            <Typography.Text variant="body" color="secondary">
-                                На сегодня всё, вернёмся завтра
-                            </Typography.Text>
-                        )}
-                    </Flex>
-
-                    <Flex direction="column" align="stretch" gap={8} className={s.setsSection}>
-                        <CellHeader>Мои наборы</CellHeader>
-                        <div className={s.setsScroll}>
+                        <Flex direction="column" align="stretch" gap={8} className={s.setsSection}>
+                            <CellHeader>Мои наборы</CellHeader>
                             <CellList mode="island" filled className={s.setsList}>
                                 {sets.map((set, index) => (
                                     <CellSimple
@@ -196,17 +196,19 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
                                     />
                                 ))}
                             </CellList>
-                        </div>
+                        </Flex>
+                    </>
+                ) : (
+                    <Flex direction="column" align="center" justify="center" gap={12} className={s.empty}>
+                        <IconDoc size={48} tone="muted" />
+                        <Typography.Text variant="body" color="secondary" className={s.emptyText}>
+                            Загрузите конспект, и мы сделаем из него карточки
+                        </Typography.Text>
                     </Flex>
-                </>
-            ) : (
-                <Flex direction="column" align="center" justify="center" gap={12} className={s.empty}>
-                    <IconDoc size={48} tone="muted" />
-                    <Typography.Text variant="body" color="secondary" className={s.emptyText}>
-                        Загрузите конспект, и мы сделаем из него карточки
-                    </Typography.Text>
-                </Flex>
-            )}
+                )}
+
+                <WhyItWorks />
+            </Flex>
 
             {bottomActions}
         </Screen>

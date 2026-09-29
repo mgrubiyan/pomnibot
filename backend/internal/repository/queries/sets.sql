@@ -93,6 +93,13 @@ JOIN user_sets us ON us.set_id = f.set_id AND us.user_id = $1
 LEFT JOIN user_fact_progress ufp ON ufp.fact_id = f.id AND ufp.user_id = $1
 WHERE ufp.next_review_at IS NULL OR ufp.next_review_at <= NOW();
 
+-- name: GetNextReviewDateForUser :one
+SELECT MIN(ufp.next_review_at)::TIMESTAMPTZ AS next_review_at
+FROM facts f
+JOIN user_sets us ON us.set_id = f.set_id AND us.user_id = $1
+JOIN user_fact_progress ufp ON ufp.fact_id = f.id AND ufp.user_id = $1
+WHERE ufp.next_review_at > NOW();
+
 -- name: GetSetLeaderboard :many
 WITH set_facts AS (
     SELECT f.id FROM facts f WHERE f.set_id = sqlc.arg('set_id')::UUID

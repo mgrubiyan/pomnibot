@@ -371,7 +371,6 @@ func TestRouter_E2E_Integration(t *testing.T) {
 					ID:        testUserID,
 					FirstName: "Tester",
 				},
-				ActiveDays: 3,
 				DueCount:   7,
 			}, nil
 		},

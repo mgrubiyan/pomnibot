@@ -45,7 +45,6 @@ func TestHomescreenHandler_GetToday(t *testing.T) {
 			ID:        12345,
 			FirstName: "Alex",
 		},
-		ActiveDays:       4,
 		DueCount:         15,
 		EstimatedMinutes: 20,
 		Sets: []contracts.CardSet{
@@ -91,9 +90,6 @@ func TestHomescreenHandler_GetToday(t *testing.T) {
 				if today.User.FirstName != "Alex" {
 					t.Fatalf("expected FirstName 'Alex', got %q", today.User.FirstName)
 				}
-				if today.ActiveDays != 4 {
-					t.Fatalf("expected ActiveDays 4, got %d", today.ActiveDays)
-				}
 				if today.DueCount != 15 {
 					t.Fatalf("expected DueCount 15, got %d", today.DueCount)
 				}
@@ -132,7 +128,6 @@ func TestHomescreenHandler_GetToday(t *testing.T) {
 								ID:        99999,
 								FirstName: "NewUser",
 							},
-							ActiveDays:       0,
 							DueCount:         0,
 							EstimatedMinutes: 0,
 							Sets:             []contracts.CardSet{},

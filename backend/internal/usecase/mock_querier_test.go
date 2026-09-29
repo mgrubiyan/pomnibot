@@ -10,7 +10,7 @@ import (
 type mockQuerier struct {
 	db.Querier
 	countTotalDueCardsForUserFunc  func(ctx context.Context, userID int64) (int32, error)
-	countUserActiveDaysFunc        func(ctx context.Context, userID int64) (int32, error)
+	getNextReviewDateForUserFunc   func(ctx context.Context, userID int64) (pgtype.Timestamptz, error)
 	createCardFunc                 func(ctx context.Context, arg db.CreateCardParams) (db.Card, error)
 	createCardOptionFunc           func(ctx context.Context, arg db.CreateCardOptionParams) (db.CardOption, error)
 	createFactFunc                 func(ctx context.Context, arg db.CreateFactParams) (db.Fact, error)
@@ -63,11 +63,11 @@ func (m *mockQuerier) CountTotalDueCardsForUser(ctx context.Context, userID int6
 	return 0, nil
 }
 
-func (m *mockQuerier) CountUserActiveDays(ctx context.Context, userID int64) (int32, error) {
-	if m.countUserActiveDaysFunc != nil {
-		return m.countUserActiveDaysFunc(ctx, userID)
+func (m *mockQuerier) GetNextReviewDateForUser(ctx context.Context, userID int64) (pgtype.Timestamptz, error) {
+	if m.getNextReviewDateForUserFunc != nil {
+		return m.getNextReviewDateForUserFunc(ctx, userID)
 	}
-	return 0, nil
+	return pgtype.Timestamptz{}, nil
 }
 
 func (m *mockQuerier) CreateCard(ctx context.Context, arg db.CreateCardParams) (db.Card, error) {
