@@ -251,6 +251,8 @@ func TestNewRequiresCredentials(t *testing.T) {
 func TestConfigFromEnv(t *testing.T) {
 	t.Setenv("YC_API_KEY", "k")
 	t.Setenv("YC_FOLDER_ID", "f")
+	t.Setenv("YC_OCR_BASE_URL", "https://ocr.test/")
+	t.Setenv("YC_OCR_OPERATION_URL", "https://operation.test")
 
 	cfg, err := ConfigFromEnv()
 	if err != nil {
@@ -261,6 +263,12 @@ func TestConfigFromEnv(t *testing.T) {
 	}
 	if cfg.FolderID != "f" {
 		t.Errorf("FolderID = %q, want %q", cfg.FolderID, "f")
+	}
+	if cfg.BaseURL != "https://ocr.test" {
+		t.Errorf("BaseURL = %q, want %q", cfg.BaseURL, "https://ocr.test")
+	}
+	if cfg.OperationURL != "https://operation.test" {
+		t.Errorf("OperationURL = %q, want %q", cfg.OperationURL, "https://operation.test")
 	}
 }
 
