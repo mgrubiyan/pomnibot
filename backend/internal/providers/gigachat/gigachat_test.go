@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"regexp"
 	"slices"
@@ -28,6 +29,8 @@ func TestMain(m *testing.M) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	os.Exit(m.Run())
 }
+
+const fakeAccessToken = "token-1"
 
 type chatReply struct {
 	status int
@@ -171,19 +174,20 @@ func request() providers.Request {
 func TestCompleteSendsStructuredOutput(t *testing.T) {
 	api := &fakeAPI{chat: func(int, chatRequest) chatReply { return ok(`{"cards":[]}`) }}
 	c := newTestClient(t, api)
+	cfg := c.cfg
 
 	resp, err := c.Complete(context.Background(), request())
 	if err != nil {
 		t.Fatalf("Complete() error = %v", err)
 	}
-	if string(resp.Content) != `{"cards":[]}` || resp.Model != "GigaChat-3-Ultra:3.0.1" ||
+	if string(resp.Content) != `{"cards":[]}` || resp.Model != cfg.Model+":3.0.1" ||
 		resp.Usage.PromptTokens != 120 || resp.Usage.CompletionTokens != 30 {
 		t.Errorf("response = %+v", resp)
 	}
 
 	reqs, auth := api.requests()
 	req := reqs[0]
-	if req.Model != "GigaChat-3-Ultra" || req.Stream || req.MaxTokens != DefaultMaxTokens {
+	if req.Model != cfg.Model || req.Stream || req.MaxTokens != cfg.MaxTokens {
 		t.Errorf("request = %+v", req)
 	}
 	if req.Temperature <= 0 || req.Temperature > 0.001 {
@@ -196,21 +200,23 @@ func TestCompleteSendsStructuredOutput(t *testing.T) {
 	if rf := req.ResponseFormat; rf == nil || rf.Type != "json_schema" || !rf.Strict || string(rf.Schema) != string(schema) {
 		t.Errorf("response_format = %+v", rf)
 	}
-	if auth[0] != "Bearer token-1" {
-		t.Errorf("Authorization = %q", auth[0])
+	wantBearer := "Bearer " + fakeAccessToken
+	if auth[0] != wantBearer {
+		t.Errorf("Authorization = %q, want %q", auth[0], wantBearer)
 	}
 
 	oauth := api.oauthReqs[0]
-	wantBasic := "Basic " + base64.StdEncoding.EncodeToString([]byte("client-id:client-secret"))
-	if oauth.Header.Get("Authorization") != wantBasic {
-		t.Errorf("OAuth Authorization = %q", oauth.Header.Get("Authorization"))
+	wantBasic := "Basic " + base64.StdEncoding.EncodeToString([]byte(cfg.ClientID+":"+cfg.ClientSecret))
+	if got := oauth.Header.Get("Authorization"); got != wantBasic {
+		t.Errorf("OAuth Authorization = %q, want %q", got, wantBasic)
 	}
 	uuid4 := regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 	if !uuid4.MatchString(oauth.Header.Get("RqUID")) {
 		t.Errorf("RqUID = %q, want a UUID v4", oauth.Header.Get("RqUID"))
 	}
-	if api.oauthForms[0] != "scope=GIGACHAT_API_PERS" {
-		t.Errorf("OAuth form = %q", api.oauthForms[0])
+	wantForm := "scope=" + url.QueryEscape(cfg.Scope)
+	if api.oauthForms[0] != wantForm {
+		t.Errorf("OAuth form = %q, want %q", api.oauthForms[0], wantForm)
 	}
 }
 
@@ -471,30 +477,73 @@ func TestDoesNotRetryBadCredentials(t *testing.T) {
 	}
 }
 
-func TestConfig(t *testing.T) {
-	t.Setenv("GIGACHAT_AUTH_KEY", "")
+func setGigaChatEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("GIGACHAT_AUTH_KEY", "aWQ6c2VjcmV0")
 	t.Setenv("GIGACHAT_CLIENT_ID", "id")
 	t.Setenv("GIGACHAT_CLIENT_SECRET", "secret")
-	t.Setenv("GIGACHAT_SCOPE", "")
-	t.Setenv("GIGACHAT_MODEL", "")
-	t.Setenv("GIGACHAT_FALLBACK_MODEL", "GigaChat-2-Max")
-	t.Setenv("GIGACHAT_BASE_URL", "")
-	t.Setenv("GIGACHAT_AUTH_URL", "")
-	t.Setenv("GIGACHAT_MAX_TOKENS", "")
+	t.Setenv("GIGACHAT_SCOPE", "TEST_SCOPE")
+	t.Setenv("GIGACHAT_MODEL", "test-model")
+	t.Setenv("GIGACHAT_FALLBACK_MODEL", "test-fallback-model")
+	t.Setenv("GIGACHAT_BASE_URL", "https://gigachat.test/v1")
+	t.Setenv("GIGACHAT_AUTH_URL", "https://auth.test/oauth")
+	t.Setenv("GIGACHAT_MAX_TOKENS", "4096")
+}
+
+func TestConfig(t *testing.T) {
+	setGigaChatEnv(t)
 
 	cfg, err := ConfigFromEnv()
 	if err != nil {
 		t.Fatalf("ConfigFromEnv() error = %v", err)
 	}
+	want := Config{
+		AuthKey:       "aWQ6c2VjcmV0",
+		ClientID:      "id",
+		ClientSecret:  "secret",
+		Scope:         "TEST_SCOPE",
+		Model:         "test-model",
+		FallbackModel: "test-fallback-model",
+		BaseURL:       "https://gigachat.test/v1",
+		AuthURL:       "https://auth.test/oauth",
+		MaxTokens:     4096,
+	}
+	if cfg != want {
+		t.Errorf("config = %+v, want %+v", cfg, want)
+	}
+
 	c, err := New(cfg)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
 	defer c.Close()
-	if c.cfg.Scope != DefaultScope || c.cfg.Model != DefaultModel || c.cfg.FallbackModel != "GigaChat-2-Max" ||
-		c.cfg.BaseURL != DefaultBaseURL || c.cfg.AuthURL != DefaultAuthURL || c.cfg.MaxTokens != DefaultMaxTokens {
-		t.Errorf("config = %+v", c.cfg)
+	if c.cfg != want {
+		t.Errorf("client config = %+v, want %+v", c.cfg, want)
 	}
+}
+
+func TestConfigRequiredVars(t *testing.T) {
+	required := []string{
+		"GIGACHAT_SCOPE",
+		"GIGACHAT_MODEL",
+		"GIGACHAT_FALLBACK_MODEL",
+		"GIGACHAT_BASE_URL",
+		"GIGACHAT_AUTH_URL",
+		"GIGACHAT_MAX_TOKENS",
+	}
+	for _, name := range required {
+		t.Run(name, func(t *testing.T) {
+			setGigaChatEnv(t)
+			t.Setenv(name, "")
+			if _, err := ConfigFromEnv(); err == nil || !strings.Contains(err.Error(), name) {
+				t.Errorf("%s unset: error = %v, want one naming the variable", name, err)
+			}
+		})
+	}
+}
+
+func TestConfigMaxTokens(t *testing.T) {
+	setGigaChatEnv(t)
 
 	t.Setenv("GIGACHAT_MAX_TOKENS", "8000")
 	if cfg, err := ConfigFromEnv(); err != nil || cfg.MaxTokens != 8000 {
@@ -506,8 +555,19 @@ func TestConfig(t *testing.T) {
 			t.Errorf("GIGACHAT_MAX_TOKENS=%q: error = %v, want one naming the variable", bad, err)
 		}
 	}
+}
 
-	if _, err := New(Config{ClientID: "id"}); err == nil {
+func TestConfigCredentials(t *testing.T) {
+	setGigaChatEnv(t)
+
+	t.Setenv("GIGACHAT_CLIENT_ID", "")
+	t.Setenv("GIGACHAT_CLIENT_SECRET", "")
+	if _, err := ConfigFromEnv(); err == nil {
+		t.Error("ConfigFromEnv() succeeded without any credentials")
+	}
+
+	cfg := Config{ClientID: "id"} // no secret
+	if _, err := New(cfg); err == nil {
 		t.Error("New() without a secret succeeded")
 	}
 }

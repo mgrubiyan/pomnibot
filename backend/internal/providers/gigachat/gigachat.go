@@ -63,14 +63,14 @@ type Config struct {
 	MaxTokens int
 }
 
-// ConfigFromEnv reads GIGACHAT_AUTH_KEY, GIGACHAT_CLIENT_ID,
-// GIGACHAT_CLIENT_SECRET, GIGACHAT_SCOPE, GIGACHAT_MODEL,
-// GIGACHAT_FALLBACK_MODEL, GIGACHAT_BASE_URL, GIGACHAT_AUTH_URL and
-// GIGACHAT_MAX_TOKENS. Unset optional values take defaults in New.
 func env(key string) string {
 	return strings.TrimSpace(os.Getenv(key))
 }
 
+// ConfigFromEnv reads GIGACHAT_AUTH_KEY, GIGACHAT_CLIENT_ID,
+// GIGACHAT_CLIENT_SECRET, GIGACHAT_SCOPE, GIGACHAT_MODEL,
+// GIGACHAT_FALLBACK_MODEL, GIGACHAT_BASE_URL, GIGACHAT_AUTH_URL and
+// GIGACHAT_MAX_TOKENS. Unset optional values take defaults in New.
 func ConfigFromEnv() (Config, error) {
 	cfg := Config{
 		AuthKey:       env("GIGACHAT_AUTH_KEY"),

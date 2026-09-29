@@ -244,11 +244,31 @@ func TestFolderIsOptional(t *testing.T) {
 
 func TestNewRequiresCredentials(t *testing.T) {
 	if _, err := New(Config{FolderID: "folder"}); err == nil {
-		t.Error("New() without a key succeeded")
+		t.Error("New() without an API key succeeded, want error")
 	}
+}
+
+func TestConfigFromEnv(t *testing.T) {
 	t.Setenv("YC_API_KEY", "k")
 	t.Setenv("YC_FOLDER_ID", "f")
-	if cfg := ConfigFromEnv(); cfg.APIKey != "k" || cfg.FolderID != "f" {
-		t.Errorf("ConfigFromEnv() = %+v", cfg)
+
+	cfg, err := ConfigFromEnv()
+	if err != nil {
+		t.Fatalf("ConfigFromEnv() error = %v", err)
+	}
+	if cfg.APIKey != "k" {
+		t.Errorf("APIKey = %q, want %q", cfg.APIKey, "k")
+	}
+	if cfg.FolderID != "f" {
+		t.Errorf("FolderID = %q, want %q", cfg.FolderID, "f")
+	}
+}
+
+func TestConfigFromEnvMissing(t *testing.T) {
+	t.Setenv("YC_API_KEY", "")
+	t.Setenv("YC_FOLDER_ID", "")
+
+	if _, err := ConfigFromEnv(); err == nil {
+		t.Error("ConfigFromEnv() with empty env succeeded, want error")
 	}
 }
