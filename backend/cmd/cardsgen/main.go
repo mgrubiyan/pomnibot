@@ -187,9 +187,8 @@ func extract(ctx context.Context, paths []string, ocrModel string, vision provid
 		hasPDF = hasPDF || ingest.DetectKind(data) == ingest.KindPDF
 	}
 
-	// Yandex OCR only with credentials: without them text and typed PDFs
-	// still work, and GigaChat reads photos unchecked.
-	var ocr ingest.OCR
+	// Yandex OCR turns photos upright and checks GigaChat's reading, or
+	// reads them alone with -ocr yandex.
 	cfg, err := yandex.ConfigFromEnv()
 	if err != nil {
 		return ingest.Result{}, err
@@ -198,16 +197,9 @@ func extract(ctx context.Context, paths []string, ocrModel string, vision provid
 	if err != nil {
 		return ingest.Result{}, err
 	}
-	ocr = client
-
+	var ocr ingest.OCR = client
 	if vision != nil {
-		ocr = &ingest.VisionOCR{Model: vision, Checker: ocr}
-	}
-	if vision != nil {
-		if ocr == nil {
-			slog.Warn("photos and scans are read by GigaChat unchecked and not turned upright: set YC_API_KEY for Yandex OCR")
-		}
-		ocr = &ingest.VisionOCR{Model: vision, Checker: ocr}
+		ocr = &ingest.VisionOCR{Model: vision, Checker: client}
 	}
 	ext, err := ingest.NewExtractor(ocr, ingest.Options{DisablePDF: !hasPDF, OCRModel: ocrModel})
 	if err != nil {
