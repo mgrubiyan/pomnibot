@@ -40,9 +40,7 @@ var _ OCR = (*VisionOCR)(nil)
 const visionSystem = `Ты переписываешь в текст фотографию страницы рукописного конспекта.
 Перепиши всё, что написано на основной странице, дословно и в порядке чтения, сохраняя строки и нумерацию пунктов.
 Ничего не исправляй, не дополняй и не пересказывай: если слово написано с ошибкой или сокращено, оставь как есть.
-Формулы записывай обычным текстом с символами Unicode: √, °, ∠, ⊥, ∥, ∩, ∈, α, β, ◡ (дуга), дроби через /. Например: sin 30° = 1/2, cos(180° − α) = −cos α, ∠AKB = ◡AK/2. Без LaTeX и без знаков $.
-Числа, единицы, буквы и обозначения переписывай точно как в тетради: градусы оставляй градусами ([0°; 90°], а не [0; π/2]), ничего не переводи, не упрощай и не вычисляй.
-Таблицы переписывай построчно, каждое значение отдельной строкой: «sin 30° = 1/2». Дроби пиши в одну строку через /, не рисуй их в несколько строк и не выравнивай пробелами.
+Формулы записывай обычным текстом с символами Unicode: √, °, ∠, ⊥, ∥, ∩, ∈, α, β, ◡ (дуга), дроби через /. Например: sin 30° = 1/2, cos(180° − α) = −cos α, ∠AKB = ◡AK/2.
 Рисунки и чертежи не описывай, подписи на них пропускай. Обрывки соседних страниц и надписи на закладках пропускай.
 Неразборчивое место отметь как [неразборчиво]. Не пиши ничего, кроме текста страницы.`
 
@@ -192,17 +190,9 @@ func (v *VisionOCR) read(ctx context.Context, data []byte, rotate int) (string, 
 		if err != nil {
 			return "", err
 		}
-		texts = append(texts, dropLaTeXDollars(strings.TrimSpace(string(resp.Content))))
+		texts = append(texts, strings.TrimSpace(string(resp.Content)))
 	}
 	return joinHalves(texts), nil
-}
-
-// reLaTeXMath is a formula the model wrapped in LaTeX dollars despite the
-// prompt: "$∠AOK = ◡AK$". A lone dollar, as in "$5", stays.
-var reLaTeXMath = regexp.MustCompile(`\$\$([^$\n]+?)\$\$|\$([^$\n]+?)\$`)
-
-func dropLaTeXDollars(s string) string {
-	return reLaTeXMath.ReplaceAllString(s, "$1$2")
 }
 
 // joinHalves drops the lines the bottom half repeats from the overlap.

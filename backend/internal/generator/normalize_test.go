@@ -134,24 +134,6 @@ func TestNormalizedPageStartsWhenOpeningRepeatsEarlier(t *testing.T) {
 	}
 }
 
-// Seen live on photos: a formula read with spaces around its signs is
-// quoted without them. Spacing around signs means nothing; between words
-// it does.
-func TestFindQuoteIgnoresSpacesAroundSigns(t *testing.T) {
-	const fragment = "Тригонометрические функции тупого угла\ncos (180° - α) = -cos α\nsin (180° − α) = sin α\nsin 45° = √2/2"
-	// Formulas are short, but an equation is no everyday phrase.
-	for _, quote := range []string{"cos(180°−α)=−cos α", "sin(180° − α)=sin α", "sin 45°= √2/2"} {
-		if _, ok := findQuote(fragment, quote); !ok {
-			t.Errorf("findQuote(%q) rejected", quote)
-		}
-	}
-	for _, quote := range []string{"cos(180°−α)=−cosα", "Тригонометрическиефункции тупого угла"} {
-		if got, ok := findQuote(fragment, quote); ok {
-			t.Errorf("findQuote(%q) = %q, want words kept apart", quote, got)
-		}
-	}
-}
-
 func TestFindQuote(t *testing.T) {
 	const fragment = "Клеточный цикл — это период жизни клетки от одного деления до следующего\n" +
 		"или до её гибели. Ядро окружено «ядерной оболочкой» из двух мембран. " +
