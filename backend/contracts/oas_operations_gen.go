@@ -7,6 +7,7 @@ type OperationName = string
 
 const (
 	AnswerQuestionOperation     OperationName = "AnswerQuestion"
+	CheckAnswerOperation        OperationName = "CheckAnswer"
 	DeleteCardOperation         OperationName = "DeleteCard"
 	DeleteSetOperation          OperationName = "DeleteSet"
 	GetCardsBySetIDOperation    OperationName = "GetCardsBySetID"

@@ -14,6 +14,14 @@ type Handler interface {
 	//
 	// POST /cards/{cardId}/answer
 	AnswerQuestion(ctx context.Context, req *AnswerQuestionRequest, params AnswerQuestionParams) (AnswerQuestionRes, error)
+	// CheckAnswer implements CheckAnswer operation.
+	//
+	// The answer need not match word for word: form, word order and typos do not matter, and answers in
+	// other words are judged by a language model. Nothing is recorded: the feed sends results with
+	// SendResults.
+	//
+	// POST /cards/{cardId}/check
+	CheckAnswer(ctx context.Context, req *CheckAnswerRequest, params CheckAnswerParams) (CheckAnswerRes, error)
 	// DeleteCard implements DeleteCard operation.
 	//
 	// Delete a card.

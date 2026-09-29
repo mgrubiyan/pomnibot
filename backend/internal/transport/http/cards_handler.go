@@ -72,6 +72,25 @@ func (h *CardsHandler) AnswerQuestion(ctx context.Context, req *contracts.Answer
 	return res, nil
 }
 
+// CheckAnswer implements contracts.Handler.CheckAnswer.
+func (h *CardsHandler) CheckAnswer(ctx context.Context, req *contracts.CheckAnswerRequest, params contracts.CheckAnswerParams) (contracts.CheckAnswerRes, error) {
+	if req == nil || strings.TrimSpace(req.Answer) == "" {
+		return &contracts.CheckAnswerBadRequest{Message: "answer is required"}, nil
+	}
+	userID, _ := UserIDFromContext(ctx)
+	res, err := h.cardService.CheckAnswer(ctx, userID, params.CardId, strings.TrimSpace(req.Answer))
+	if err != nil {
+		if errors.Is(err, usecase.ErrValidation) {
+			return &contracts.CheckAnswerBadRequest{Message: err.Error()}, nil
+		}
+		if errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
+			return &contracts.CheckAnswerNotFound{Message: err.Error()}, nil
+		}
+		return &contracts.CheckAnswerInternalServerError{Message: err.Error()}, nil
+	}
+	return res, nil
+}
+
 // ReportCardIssue implements contracts.Handler.ReportCardIssue.
 func (h *CardsHandler) ReportCardIssue(ctx context.Context, req *contracts.ReportCardIssueRequest, params contracts.ReportCardIssueParams) (contracts.ReportCardIssueRes, error) {
 	if req == nil || strings.TrimSpace(string(req.Reason)) == "" {

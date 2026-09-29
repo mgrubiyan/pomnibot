@@ -5,6 +5,10 @@ type AnswerQuestionRes interface {
 	answerQuestionRes()
 }
 
+type CheckAnswerRes interface {
+	checkAnswerRes()
+}
+
 type DeleteCardRes interface {
 	deleteCardRes()
 }

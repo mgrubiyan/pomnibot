@@ -12,20 +12,36 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
+	"github.com/mgrubiyan/pomnibot/backend/internal/grader"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 )
 
 type cardServiceImpl struct {
 	querier     db.Querier
 	userService UserService
+	grader      *grader.Grader
+}
+
+// CardServiceOption configures NewCardService.
+type CardServiceOption func(*cardServiceImpl)
+
+// WithGrader checks typed answers with g, which asks a language model about
+// answers in other words. Without it answers are checked locally: form,
+// word order and typos are forgiven, other words are not.
+func WithGrader(g *grader.Grader) CardServiceOption {
+	return func(s *cardServiceImpl) { s.grader = g }
 }
 
 // NewCardService creates a new CardService implementation backed by db.Querier.
-func NewCardService(querier db.Querier, userService UserService) CardService {
-	return &cardServiceImpl{
+func NewCardService(querier db.Querier, userService UserService, opts ...CardServiceOption) CardService {
+	s := &cardServiceImpl{
 		querier:     querier,
 		userService: userService,
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID int64, cardID uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error) {
@@ -222,9 +238,7 @@ func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID int64, card
 		return nil, fmt.Errorf("get card by id: %w", err)
 	}
 
-	expectedAnswer := strings.TrimSpace(card.AnswerText.String)
-	actualAnswer := strings.TrimSpace(answer)
-	isCorrect := strings.EqualFold(expectedAnswer, actualAnswer)
+	isCorrect := s.grader.Check(ctx, gradeInput(card, answer)).Correct
 
 	now := time.Now()
 	var answeredAt pgtype.Timestamptz
@@ -253,6 +267,41 @@ func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID int64, card
 		IsCorrect:  isCorrect,
 		UserAnswer: answer,
 	}, nil
+}
+
+// CheckAnswer grades a typed answer by meaning without recording it: the feed
+// sends its results with SendResults.
+func (s *cardServiceImpl) CheckAnswer(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error) {
+	var pgCardID pgtype.UUID
+	if err := pgCardID.Scan(cardID.String()); err != nil {
+		return nil, fmt.Errorf("%w: invalid card id", ErrValidation)
+	}
+	card, err := s.querier.GetCardByID(ctx, db.GetCardByIDParams{ID: pgCardID, UserID: userID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get card by id: %w", err)
+	}
+
+	v := s.grader.Check(ctx, gradeInput(card, answer))
+	res := &contracts.CheckAnswerResponse{
+		IsCorrect: v.Correct,
+		Method:    contracts.CheckAnswerResponseMethod(v.Method),
+	}
+	if v.Reason != "" {
+		res.Reason = contracts.NewOptString(v.Reason)
+	}
+	return res, nil
+}
+
+func gradeInput(card db.GetCardByIDRow, answer string) grader.Input {
+	return grader.Input{
+		Question: card.Question,
+		Expected: card.AnswerText.String,
+		Quote:    card.SourceQuote,
+		Given:    answer,
+	}
 }
 
 func (s *cardServiceImpl) ReportCardIssue(ctx context.Context, userID int64, cardID uuid.UUID, reason contracts.CardIssueReason) error {

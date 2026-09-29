@@ -14,6 +14,7 @@ type mockCardService struct {
 	updateCardFunc      func(ctx context.Context, userID int64, cardID uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error)
 	deleteCardFunc      func(ctx context.Context, userID int64, cardID uuid.UUID) error
 	answerQuestionFunc  func(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error)
+	checkAnswerFunc     func(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error)
 	reportCardIssueFunc func(ctx context.Context, userID int64, cardID uuid.UUID, reason contracts.CardIssueReason) error
 }
 
@@ -34,6 +35,13 @@ func (m *mockCardService) DeleteCard(ctx context.Context, userID int64, cardID u
 func (m *mockCardService) AnswerQuestion(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error) {
 	if m.answerQuestionFunc != nil {
 		return m.answerQuestionFunc(ctx, userID, cardID, answer)
+	}
+	return nil, nil
+}
+
+func (m *mockCardService) CheckAnswer(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error) {
+	if m.checkAnswerFunc != nil {
+		return m.checkAnswerFunc(ctx, userID, cardID, answer)
 	}
 	return nil, nil
 }
@@ -478,6 +486,38 @@ func TestCardsHandler_DeleteCard_RelationalIntegrity(t *testing.T) {
 	}
 	if _, ok := resForeign.(*contracts.DeleteCardNotFound); !ok {
 		t.Fatalf("expected 404 DeleteCardNotFound, got %T", resForeign)
+	}
+}
+
+func TestCardsHandler_CheckAnswer(t *testing.T) {
+	cardID := uuid.New()
+	ctx := WithUserID(context.Background(), 12345)
+	svc := &mockCardService{
+		checkAnswerFunc: func(_ context.Context, userID int64, id uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error) {
+			if id != cardID {
+				return nil, usecase.ErrNotFound
+			}
+			if userID != 12345 || answer != "массив упорядочен" {
+				t.Fatalf("service got user %d, answer %q", userID, answer)
+			}
+			return &contracts.CheckAnswerResponse{IsCorrect: true, Method: contracts.CheckAnswerResponseMethodModel}, nil
+		},
+	}
+	h := NewCardsHandler(svc)
+
+	res, err := h.CheckAnswer(ctx, &contracts.CheckAnswerRequest{Answer: "  массив упорядочен "}, contracts.CheckAnswerParams{CardId: cardID})
+	if got, ok := res.(*contracts.CheckAnswerResponse); err != nil || !ok || !got.IsCorrect {
+		t.Errorf("answer: res %#v, err %v; want the service's verdict", res, err)
+	}
+	if res, _ := h.CheckAnswer(ctx, &contracts.CheckAnswerRequest{Answer: "  "}, contracts.CheckAnswerParams{CardId: cardID}); res == nil {
+		t.Error("empty answer: no response")
+	} else if _, ok := res.(*contracts.CheckAnswerBadRequest); !ok {
+		t.Errorf("empty answer: res %T, want bad request", res)
+	}
+	if res, _ := h.CheckAnswer(ctx, &contracts.CheckAnswerRequest{Answer: "массив упорядочен"}, contracts.CheckAnswerParams{CardId: uuid.New()}); res == nil {
+		t.Error("unknown card: no response")
+	} else if _, ok := res.(*contracts.CheckAnswerNotFound); !ok {
+		t.Errorf("unknown card: res %T, want not found", res)
 	}
 }
 

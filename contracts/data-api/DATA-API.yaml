@@ -474,6 +474,45 @@ checks:
           type: string
   timeoutMs: 5000
   repeatable: false
+- id: CheckAnswer
+  name: Check a typed answer by meaning without recording it
+  method: POST
+  path: /cards/{cardId}/check
+  role: user
+  request:
+    path:
+      cardId: sample-id
+    headers:
+      Content-Type: application/json
+  expected:
+    statusCodes:
+    - 200
+    contentType: application/json
+    requiredFields:
+    - isCorrect
+    - method
+    bodySchema:
+      type: object
+      required:
+      - isCorrect
+      - method
+      properties:
+        isCorrect:
+          type: boolean
+        reason:
+          type: string
+          description: Why the answer counts or what it lacks, when a model judged
+            it
+        method:
+          type: string
+          enum:
+          - local
+          - model
+          - fallback
+          description: 'local: matched up to form and typos, or surely wrong; model:
+            judged by meaning; fallback: the model did not answer in time, local verdict'
+  timeoutMs: 5000
+  repeatable: false
 - id: ReportCardIssue
   name: Report an issue with a card
   method: POST

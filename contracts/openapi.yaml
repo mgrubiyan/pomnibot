@@ -383,6 +383,44 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /cards/{cardId}/check:
+    post:
+      tags:
+        - Cards
+      summary: Check a typed answer by meaning without recording it
+      description: >-
+        The answer need not match word for word: form, word order and typos
+        do not matter, and answers in other words are judged by a language
+        model. Nothing is recorded: the feed sends results with SendResults.
+      operationId: CheckAnswer
+      parameters:
+        - name: cardId
+          in: path
+          required: true
+          description: The ID of the card
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckAnswerRequest'
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckAnswerResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
 components:
   responses:
     BadRequest:
@@ -728,6 +766,35 @@ components:
       properties:
         answer:
           type: string
+
+    CheckAnswerRequest:
+      type: object
+      required:
+        - answer
+      properties:
+        answer:
+          type: string
+
+    CheckAnswerResponse:
+      type: object
+      required:
+        - isCorrect
+        - method
+      properties:
+        isCorrect:
+          type: boolean
+        reason:
+          type: string
+          description: Why the answer counts or what it lacks, when a model judged it
+        method:
+          type: string
+          enum:
+            - local
+            - model
+            - fallback
+          description: >-
+            local: matched up to form and typos, or surely wrong; model: judged
+            by meaning; fallback: the model did not answer in time, local verdict
 
     AnswerQuestionResponse:
       type: object

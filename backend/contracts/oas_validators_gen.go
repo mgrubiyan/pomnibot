@@ -153,6 +153,42 @@ func (s *CardSet) Validate() error {
 	return nil
 }
 
+func (s *CheckAnswerResponse) Validate() error {
+	if s == nil {
+		return validate.ErrNilPointer
+	}
+
+	var failures []validate.FieldError
+	if err := func() error {
+		if err := s.Method.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "method",
+			Error: err,
+		})
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+	return nil
+}
+
+func (s CheckAnswerResponseMethod) Validate() error {
+	switch s {
+	case "local":
+		return nil
+	case "model":
+		return nil
+	case "fallback":
+		return nil
+	default:
+		return errors.Errorf("invalid value: %v", s)
+	}
+}
+
 func (s GetCardsBySetIDOKApplicationJSON) Validate() error {
 	alias := ([]Card)(s)
 	if alias == nil {
