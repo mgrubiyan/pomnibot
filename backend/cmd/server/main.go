@@ -98,9 +98,6 @@ func main() {
 		}
 
 		queries := db.New(pool)
-		if err := repository.SeedIfEmpty(ctx, pool, queries); err != nil {
-			slog.Warn("mock data seeder encountered an issue", "error", err)
-		}
 
 		userService = usecase.NewUserService(queries)
 		setService = usecase.NewSetService(queries, userService)
