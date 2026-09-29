@@ -11,4 +11,7 @@ export type AnswerResult = components['schemas']['AnswerResult'];
 export type User = components['schemas']['User'];
 export type LeaderboardEntry = components['schemas']['LeaderboardEntry'];
 export type SetLeaderboardResponse = components['schemas']['SetLeaderboardResponse'];
+export type CheckAnswerResponse = components['schemas']['CheckAnswerResponse'];
+/** How a typed answer was judged: by words, by meaning, or by words after the model kept silent. */
+export type CheckMethod = CheckAnswerResponse['method'];
 
