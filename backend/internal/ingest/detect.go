@@ -18,6 +18,7 @@ const (
 	KindPDF         Kind = "pdf"
 	KindJPEG        Kind = "jpeg"
 	KindPNG         Kind = "png"
+	KindWebP        Kind = "webp" // a photo as a messenger may store it, whatever its name
 	KindUnsupported Kind = "unsupported"
 )
 
@@ -31,6 +32,8 @@ func DetectKind(data []byte) Kind {
 		return KindJPEG
 	case ct == "image/png":
 		return KindPNG
+	case ct == "image/webp":
+		return KindWebP
 	case strings.HasPrefix(ct, "text/plain"):
 		return KindText
 	}
