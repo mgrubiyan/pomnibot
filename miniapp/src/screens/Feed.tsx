@@ -52,6 +52,36 @@ const motionAllowed = () => !window.matchMedia('(prefers-reduced-motion: reduce)
 /** Answers are compared loosely: case, extra spaces and ё do not matter. */
 const norm = (value: string) => value.trim().toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ');
 
+/** How long a typed answer may take to check before it counts as wrong. */
+const CHECK_TIMEOUT_MS = 10_000;
+
+interface Checked {
+    correct: boolean;
+    reason: string | null;
+}
+
+/**
+ * A typed answer in other words than the card's goes to the backend, which
+ * forgives word forms and typos and asks a model about the meaning. Without
+ * an answer in time it counts as wrong, as an exact comparison would say.
+ */
+async function checkAnswer(cardId: string, answer: string): Promise<Checked> {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
+    try {
+        const { data } = await api.POST('/cards/{cardId}/check', {
+            params: { path: { cardId } },
+            body: { answer },
+            signal: controller.signal,
+        });
+        return data ? { correct: data.isCorrect, reason: data.reason ?? null } : { correct: false, reason: null };
+    } catch {
+        return { correct: false, reason: null };
+    } finally {
+        window.clearTimeout(timer);
+    }
+}
+
 function shuffle<T>(items: readonly T[]): T[] {
     const next = [...items];
     for (let i = next.length - 1; i > 0; i--) {
@@ -162,6 +192,10 @@ export function Feed({
 
     const [given, setGiven] = useState<string | null>(null);
     const [verdict, setVerdict] = useState<Verdict | null>(null);
+    // A typed answer being checked by meaning, and why it counts or not.
+    const [checking, setChecking] = useState(false);
+    const [reason, setReason] = useState<string | null>(null);
+    const checkingCard = useRef<string | null>(null);
     const [revealed, setRevealed] = useState(false);
     const [draft, setDraft] = useState('');
     const [listening, setListening] = useState(false);
@@ -231,8 +265,26 @@ export function Feed({
                 return;
             }
             setGiven(value);
-            setVerdict(norm(value) === norm(answerTextOf(card)) ? 'correct' : 'wrong');
-            startFlip();
+            const exact = norm(value) === norm(answerTextOf(card));
+            if (card.kind !== 'input' || exact) {
+                setVerdict(exact ? 'correct' : 'wrong');
+                startFlip();
+                return;
+            }
+            // Other words: the card turns once the backend has judged them.
+            const cardId = card.id;
+            checkingCard.current = cardId;
+            setChecking(true);
+            void checkAnswer(cardId, value).then(({ correct, reason: why }) => {
+                if (checkingCard.current !== cardId) {
+                    return; // the user has moved on
+                }
+                checkingCard.current = null;
+                setChecking(false);
+                setReason(why);
+                setVerdict(correct ? 'correct' : 'wrong');
+                startFlip();
+            });
         },
         [card, startFlip],
     );
@@ -256,6 +308,9 @@ export function Feed({
     }, [listening, card, options, submit]);
 
     const reset = useCallback(() => {
+        checkingCard.current = null;
+        setChecking(false);
+        setReason(null);
         setGiven(null);
         setVerdict(null);
         setRevealed(false);
@@ -599,6 +654,12 @@ export function Feed({
                             <Typography.Text variant="subheader">Ответ</Typography.Text>
                         )}
 
+                        {!layout && reason ? (
+                            <Typography.Text variant="body" color="secondary">
+                                {reason}
+                            </Typography.Text>
+                        ) : null}
+
                         <Typography.Text variant="body-strong" color="secondary">
                             {card.question}
                         </Typography.Text>
@@ -764,17 +825,17 @@ export function Feed({
                                 size="large"
                                 value={draft}
                                 placeholder="Ваш ответ"
-                                disabled={listening}
+                                disabled={listening || checking}
                                 onChange={(event) => setDraft(event.target.value)}
                             />
                             <Button
                                 size="medium"
                                 variant="secondary"
                                 stretched
-                                disabled={draft.trim().length === 0}
+                                disabled={draft.trim().length === 0 || checking}
                                 onClick={() => submit(draft)}
                             >
-                                Ответить
+                                {checking ? 'Проверяю…' : 'Ответить'}
                             </Button>
                         </>
                     ) : null}
