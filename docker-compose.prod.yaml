@@ -3,7 +3,7 @@ services:
     ports: !reset []
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.pomnibot.rule=Host(`${DOMAIN:-pomnibot.steins.ru}`)"
+      - "traefik.http.routers.pomnibot.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.pomnibot.entrypoints=websecure"
       - "traefik.http.routers.pomnibot.tls=true"
       - "traefik.http.routers.pomnibot.tls.certresolver=letsencrypt"
