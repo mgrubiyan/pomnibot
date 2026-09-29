@@ -763,12 +763,12 @@ func TestSetService_GetCardsBySetID_Authorization(t *testing.T) {
 	svc := usecase.NewSetService(mock, usecase.NewUserService(mock))
 
 	// Member succeeds
-	cardsById, err := svc.GetCardsBySetID(context.Background(), memberID, setUUID)
+	cardsByID, err := svc.GetCardsBySetID(context.Background(), memberID, setUUID)
 	if err != nil {
 		t.Fatalf("unexpected error for member: %v", err)
 	}
-	if len(cardsById) != 1 {
-		t.Fatalf("expected 1 card, got %d", len(cardsById))
+	if len(cardsByID) != 1 {
+		t.Fatalf("expected 1 card, got %d", len(cardsByID))
 	}
 
 	// Non-member fails with ErrNotFound
