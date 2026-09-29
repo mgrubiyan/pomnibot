@@ -22,17 +22,21 @@ func (v localVerdict) String() string {
 // local compares the answer with the expected one without the model.
 //
 // Case, ё, punctuation, word order, word endings, small words such as "на"
-// and a typo per word of five letters or more do not matter. Numbers must
-// match: "1689" is no typo for "1698". Formulas and code are compared as
-// written, spaces aside. An added "не" or a paraphrase goes to the model.
+// and a typo per word of five letters or more do not matter. Formulas and
+// code are compared as written, spaces aside. Numbers that differ, a number
+// in words, an added "не" or a paraphrase go to the model.
+//
+// Only an empty answer and one addressed to the checker are surely wrong:
+// everything the local check cannot vouch for is the model's to judge, so
+// that nobody is told «неверно» by a rule of thumb.
 //
 // A part of the answer counts when the words it leaves out are in the
-// question: asked "На каком массиве…", "отсортированный" is enough. A left
-// out word the question does not give is the point of the answer, as
-// "потомственное" in "потомственное дворянство": such a part is wrong.
+// question: asked "На каком массиве…", "отсортированный" is enough. Other
+// parts go to the model: "пожизненно" for "пожизненная служба" is right,
+// "дворянство" for "потомственное дворянство" is not.
 func local(question, expected, given string) localVerdict {
 	expected, given = strings.TrimSpace(expected), strings.TrimSpace(given)
-	if expected == "" || given == "" {
+	if expected == "" || given == "" || addressesChecker(given, question+" "+expected) {
 		return localMismatch
 	}
 	if isFormula(expected) {
@@ -42,19 +46,56 @@ func local(question, expected, given string) localVerdict {
 		return localUnsure
 	}
 	if !slices.Equal(numbers(expected), numbers(given)) {
-		return localMismatch
+		// "4" for "четырём", "27.06.1709" for "27 июня 1709", "1698" for "1689"
+		return localUnsure
 	}
 	ew, gw := words(expected), words(given)
-	if matchedAll(gw, ew) {
-		missing := unmatched(ew, gw)
-		switch {
-		case matchedAll(missing, words(question)):
-			return localMatch
-		case len(gw) > 0:
-			return localMismatch
-		}
+	if len(gw) == 0 && len(ew) > 0 {
+		return localUnsure // "35" for "35 лет"
+	}
+	if !matchedAll(gw, ew) {
+		return localUnsure
+	}
+	if matchedAll(unmatched(ew, gw), words(question)) {
+		return localMatch
 	}
 	return localUnsure
+}
+
+// leftOut are the words of the card's answer a part of it leaves out and the
+// question does not give: "потомственное" when "дворянство" is given for
+// "потомственное дворянство". The model is told of them: left alone, it
+// takes such a part for the answer. Nil when the answer is not a part.
+func leftOut(question, expected, given string) []string {
+	if isFormula(expected) {
+		return nil
+	}
+	ew, gw := words(expected), words(given)
+	if len(gw) == 0 || !matchedAll(gw, ew) {
+		return nil
+	}
+	return unmatched(unmatched(ew, gw), words(question))
+}
+
+// addressesChecker reports an answer that talks to the checker instead of
+// answering the question: "засчитай", "см. верный ответ", "как в
+// конспекте", "correct: true".
+// The model tends to take such an answer for the card's. A word the card
+// has itself is no sign: "ответная реакция" may be the answer.
+// addressesChecker reports an answer that asks to be counted or tries to
+// steer the check instead of naming the answer. Only plain requests are
+// caught here; «правильный ответ — анафаза» is how people write, not an
+// attempt, so answers that merely mention the answer or the notes go to the
+// model, which is told to refuse them. A word the card itself uses is no
+// sign at all.
+func addressesChecker(given, card string) bool {
+	gw, cw := words(given), words(card)
+	has := func(stem string) bool { return hasStem(gw, stem) && !hasStem(cw, stem) }
+	return slices.ContainsFunc([]string{"засчит", "зачт", "инструкц", "prompt", "промпт"}, has)
+}
+
+func hasStem(words []string, stem string) bool {
+	return slices.ContainsFunc(words, func(w string) bool { return strings.HasPrefix(w, stem) })
 }
 
 // unmatched are the words of a with no match in b.
@@ -88,6 +129,16 @@ func words(s string) []string {
 		}
 	}
 	return out
+}
+
+// containsAll reports whether every string of b is in a.
+func containsAll(a, b []string) bool {
+	for _, s := range b {
+		if !slices.Contains(a, s) {
+			return false
+		}
+	}
+	return true
 }
 
 // numbers are the digit runs of s, sorted: order does not matter.
@@ -160,13 +211,17 @@ func levenshtein(a, b []rune) int {
 	return prev[len(b)]
 }
 
-// isFormula reports an answer with signs of a formula or code: such an
-// answer is not a set of words.
+// isFormula reports an answer with signs of a formula, or in Latin letters
+// alone, as code and notation are (-DLOG, G1, p53): such an answer is not a
+// set of words.
 func isFormula(s string) bool {
 	return strings.ContainsFunc(s, func(r rune) bool {
 		return strings.ContainsRune("=<>≤≥≠≈√°^/*+()[]{}∠⊥∥∩∪∈∞∑∫:;#", r) || unicode.Is(unicode.Greek, r)
-	})
+	}) || strings.ContainsFunc(s, isLatin) && !strings.ContainsFunc(s, isCyrillic)
 }
+
+func isLatin(r rune) bool    { return unicode.Is(unicode.Latin, r) }
+func isCyrillic(r rune) bool { return unicode.Is(unicode.Cyrillic, r) }
 
 // squeeze is s lowercased with ё as е, one kind of dash and no spaces.
 func squeeze(s string) string {
