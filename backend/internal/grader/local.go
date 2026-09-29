@@ -24,9 +24,13 @@ func (v localVerdict) String() string {
 // Case, ё, punctuation, word order, word endings, small words such as "на"
 // and a typo per word of five letters or more do not matter. Numbers must
 // match: "1689" is no typo for "1698". Formulas and code are compared as
-// written, spaces aside. Every word of each answer must be matched in the
-// other, so an added "не" or a paraphrase goes to the model.
-func local(expected, given string) localVerdict {
+// written, spaces aside. An added "не" or a paraphrase goes to the model.
+//
+// A part of the answer counts when the words it leaves out are in the
+// question: asked "На каком массиве…", "отсортированный" is enough. A left
+// out word the question does not give is the point of the answer, as
+// "потомственное" in "потомственное дворянство": such a part is wrong.
+func local(question, expected, given string) localVerdict {
 	expected, given = strings.TrimSpace(expected), strings.TrimSpace(given)
 	if expected == "" || given == "" {
 		return localMismatch
@@ -41,10 +45,27 @@ func local(expected, given string) localVerdict {
 		return localMismatch
 	}
 	ew, gw := words(expected), words(given)
-	if matchedAll(ew, gw) && matchedAll(gw, ew) {
-		return localMatch
+	if matchedAll(gw, ew) {
+		missing := unmatched(ew, gw)
+		switch {
+		case matchedAll(missing, words(question)):
+			return localMatch
+		case len(gw) > 0:
+			return localMismatch
+		}
 	}
 	return localUnsure
+}
+
+// unmatched are the words of a with no match in b.
+func unmatched(a, b []string) []string {
+	var out []string
+	for _, w := range a {
+		if !slices.ContainsFunc(b, func(v string) bool { return sameWord(w, v) }) {
+			out = append(out, w)
+		}
+	}
+	return out
 }
 
 // stopWords carry no answer: "на отсортированном массиве" is "отсортированный

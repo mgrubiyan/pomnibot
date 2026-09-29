@@ -42,8 +42,30 @@ func TestLocal(t *testing.T) {
 		{"cos(180° − α) = −cos α", "cos(180° − α) = cos α", localUnsure},
 	}
 	for _, tt := range tests {
-		if got := local(tt.expected, tt.given); got != tt.want {
+		if got := local("", tt.expected, tt.given); got != tt.want {
 			t.Errorf("local(%q, %q) = %v, want %v", tt.expected, tt.given, got, tt.want)
+		}
+	}
+}
+
+// A part of the answer counts when what it leaves out is in the question:
+// asked "На каком массиве…", "отсортированный" is the answer. A qualifier
+// the question does not give is the answer itself: "потомственное".
+func TestLocalPartialAnswer(t *testing.T) {
+	tests := []struct {
+		question, expected, given string
+		want                      localVerdict
+	}{
+		{"На каком массиве применим бинарный поиск?", "на отсортированном массиве", "отсортированный", localMatch},
+		{"Что получал дослужившийся до 8-го класса на статской службе?", "потомственное дворянство", "дворянство", localMismatch},
+		{"Что формируется в центре растительной клетки при цитокинезе?", "клеточная пластинка", "пластинка", localMismatch},
+		{"Какой налог ввели вместо подворного обложения?", "подушная подать", "подать", localMismatch},
+		// Other words than a part of the answer: the model judges.
+		{"Что получал дослужившийся до 8-го класса?", "потомственное дворянство", "наследственное дворянство", localUnsure},
+	}
+	for _, tt := range tests {
+		if got := local(tt.question, tt.expected, tt.given); got != tt.want {
+			t.Errorf("local(%q, %q, %q) = %v, want %v", tt.question, tt.expected, tt.given, got, tt.want)
 		}
 	}
 }
