@@ -317,37 +317,6 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
-  /cards/{cardId}/issue:
-    post:
-      tags:
-        - Cards
-      # TODO: Ambiguous HTTP method or path for reporting card issue
-      summary: Report an issue with a card
-      operationId: ReportCardIssue
-      parameters:
-        - name: cardId
-          in: path
-          required: true
-          description: The ID of the card
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReportCardIssueRequest'
-      responses:
-        '204':
-          description: Card issue reported successfully
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
   /cards/{cardId}/answer:
     post:
       tags:
@@ -588,23 +557,6 @@ components:
         topic:
           type: string
           description: topic, used for stats
-
-    CardIssueReason:
-      type: string
-      description: "What is wrong with a card — asked before editing or deleting it."
-      enum:
-        - answer
-        - wording
-        - not-in-notes
-        - other
-
-    ReportCardIssueRequest:
-      type: object
-      required:
-        - reason
-      properties:
-        reason:
-          $ref: '#/components/schemas/CardIssueReason'
 
     User:
       type: object

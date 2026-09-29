@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import AddNote from './screens/AddNote';
 import CardEdit from './screens/CardEdit';
-import CardIssue from './screens/CardIssue';
 import Feed from './screens/Feed';
 import Home from './screens/Home';
 import JoinSet from './screens/JoinSet';
@@ -9,7 +8,7 @@ import SetScreen from './screens/SetScreen';
 import Share from './screens/Share';
 import Leaderboard from './screens/Leaderboard';
 import { api } from './api';
-import type { AnswerResult, Card, CardIssueReason, TodayData, User } from './types';
+import type { AnswerResult, Card, TodayData, User } from './types';
 import type { CardPatch } from './utils/cards';
 
 /** No router yet: browser history is not used. */
@@ -28,16 +27,6 @@ type Screen =
     | { name: 'add' }
     | { name: 'join' }
     | {
-          name: 'card-issue';
-          card: Card;
-          setTitle?: string;
-          isOwner?: boolean;
-          fromFeed?: boolean;
-          feedSetId?: string;
-          feedIndex?: number;
-          feedResults?: AnswerResult[];
-      }
-    | {
           name: 'card-edit';
           card: Card;
           setTitle?: string;
@@ -51,8 +40,7 @@ type Screen =
 /** What to report on the set screen after an action on a card. */
 type Toast =
     | { kind: 'removed'; cardId: string }
-    | { kind: 'edited' }
-    | { kind: 'reported' };
+    | { kind: 'edited' };
 
 function App() {
     const [screen, setScreen] = useState<Screen>({ name: 'home' });
@@ -106,7 +94,6 @@ function App() {
     const removeCard = async (
         cardId: string,
         setId: string,
-        reason?: CardIssueReason,
         fromFeed?: boolean,
         feedSetId?: string,
         feedSetTitle?: string,
@@ -114,12 +101,6 @@ function App() {
         feedResults?: AnswerResult[],
     ) => {
         try {
-            if (reason) {
-                await api.POST('/cards/{cardId}/issue', {
-                    params: { path: { cardId } },
-                    body: { reason },
-                });
-            }
             await api.DELETE('/cards/{cardId}', {
                 params: { path: { cardId } },
             });
@@ -142,42 +123,6 @@ function App() {
         } else {
             setScreen({ name: 'set', setId });
             setToast({ kind: 'removed', cardId });
-        }
-    };
-
-    const reportCardIssue = async (
-        cardId: string,
-        reason: CardIssueReason,
-        setId: string,
-        fromFeed?: boolean,
-        feedSetId?: string,
-        feedSetTitle?: string,
-        feedIndex?: number,
-        feedResults?: AnswerResult[],
-    ) => {
-        try {
-            await api.POST('/cards/{cardId}/issue', {
-                params: { path: { cardId } },
-                body: { reason },
-            });
-        } catch (err) {
-            console.error('Failed to report card issue:', err);
-        }
-
-        if (fromFeed) {
-            setRemovedCardIds((current) =>
-                current.includes(cardId) ? current : [...current, cardId],
-            );
-            setScreen({
-                name: 'feed',
-                setId: feedSetId,
-                setTitle: feedSetTitle,
-                initialIndex: feedIndex,
-                initialResults: feedResults,
-            });
-        } else {
-            setScreen({ name: 'set', setId });
-            setToast({ kind: 'reported' });
         }
     };
 
@@ -225,40 +170,6 @@ function App() {
         }
     };
 
-    const openCardIssueFromFeed = async (
-        card: Card,
-        feedSetId?: string,
-        feedSetTitle?: string,
-        feedIndex?: number,
-        feedResults?: AnswerResult[],
-    ) => {
-        let isOwner = false;
-        let setTitle: string | undefined = feedSetTitle;
-        try {
-            const { data } = await api.GET('/sets/{setId}', {
-                params: { path: { setId: card.setId } },
-            });
-            if (data?.title) {
-                setTitle = data.title;
-            }
-            if (data?.author && currentUser && data.author.id === currentUser.id) {
-                isOwner = true;
-            }
-        } catch {
-            // fallback
-        }
-        go({
-            name: 'card-issue',
-            card,
-            setTitle,
-            isOwner,
-            fromFeed: true,
-            feedSetId,
-            feedIndex,
-            feedResults,
-        });
-    };
-
     const home = (
         <Home
             onStart={() => go({ name: 'feed' })}
@@ -278,7 +189,7 @@ function App() {
         return <JoinSet onBack={goHome} onOpenSet={openSet} />;
     }
 
-    if (screen.name === 'card-issue' || screen.name === 'card-edit') {
+    if (screen.name === 'card-edit') {
         const {
             card,
             setTitle,
@@ -288,68 +199,6 @@ function App() {
             feedIndex,
             feedResults,
         } = screen;
-
-        if (screen.name === 'card-issue') {
-            return (
-                <CardIssue
-                    card={card}
-                    setTitle={setTitle ?? 'Набор'}
-                    isOwner={isOwner}
-                    onBack={() => {
-                        if (fromFeed) {
-                            go({
-                                name: 'feed',
-                                setId: feedSetId,
-                                setTitle: feedSetId ? setTitle : undefined,
-                                initialIndex: feedIndex,
-                                initialResults: feedResults,
-                            });
-                        } else {
-                            openSet(card.setId);
-                        }
-                    }}
-                    onEdit={() => {
-                        if (!isOwner) {
-                            return;
-                        }
-                        go({
-                            name: 'card-edit',
-                            card,
-                            setTitle,
-                            isOwner: true,
-                            fromFeed,
-                            feedSetId,
-                            feedIndex,
-                            feedResults,
-                        });
-                    }}
-                    onRemove={(reason) =>
-                        removeCard(
-                            card.id,
-                            card.setId,
-                            reason,
-                            fromFeed,
-                            feedSetId,
-                            setTitle,
-                            feedIndex,
-                            feedResults,
-                        )
-                    }
-                    onReport={(reason) =>
-                        reportCardIssue(
-                            card.id,
-                            reason,
-                            card.setId,
-                            fromFeed,
-                            feedSetId,
-                            setTitle,
-                            feedIndex,
-                            feedResults,
-                        )
-                    }
-                />
-            );
-        }
 
         if (!isOwner) {
             if (fromFeed) {
@@ -370,18 +219,19 @@ function App() {
             <CardEdit
                 card={card}
                 setTitle={setTitle ?? 'Набор'}
-                onBack={() =>
-                    go({
-                        name: 'card-issue',
-                        card,
-                        setTitle,
-                        isOwner: true,
-                        fromFeed,
-                        feedSetId,
-                        feedIndex,
-                        feedResults,
-                    })
-                }
+                onBack={() => {
+                    if (fromFeed) {
+                        go({
+                            name: 'feed',
+                            setId: feedSetId,
+                            setTitle: feedSetId ? setTitle : undefined,
+                            initialIndex: feedIndex,
+                            initialResults: feedResults,
+                        });
+                    } else {
+                        openSet(card.setId);
+                    }
+                }}
                 onSave={(patch) =>
                     saveCardEdit(
                         card.id,
@@ -398,7 +248,6 @@ function App() {
                     removeCard(
                         card.id,
                         card.setId,
-                        undefined,
                         fromFeed,
                         feedSetId,
                         setTitle,
@@ -423,9 +272,6 @@ function App() {
                 cardPatches={cardPatches}
                 onExit={setId ? () => openSet(setId) : goHome}
                 onBack={setId ? () => openSet(setId) : goHome}
-                onReportCard={(card, idx, res) =>
-                    openCardIssueFromFeed(card, setId, setTitle, idx, res)
-                }
                 onShare={setId ? () => go({ name: 'share', setId }) : undefined}
             />
         );
@@ -461,16 +307,19 @@ function App() {
                 onBack={goHome}
                 onStart={(setId, setTitle) => go({ name: 'feed', setId, setTitle })}
                 onRemove={removeSet}
-                onOpenCard={(card, isOwner, setTitle) =>
+                onOpenCard={(card, isOwner, setTitle) => {
+                    if (!isOwner) {
+                        return;
+                    }
                     go({
-                        name: 'card-issue',
+                        name: 'card-edit',
                         card,
                         setTitle,
-                        isOwner,
+                        isOwner: true,
                         fromFeed: false,
                         feedSetId: undefined,
-                    })
-                }
+                    });
+                }}
                 onOpenLeaderboard={(setId, setTitle) =>
                     go({
                         name: 'leaderboard',

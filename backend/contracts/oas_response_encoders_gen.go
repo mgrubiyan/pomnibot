@@ -581,55 +581,6 @@ func encodeJoinSetByShareCodeResponse(response JoinSetByShareCodeRes, w http.Res
 	}
 }
 
-func encodeReportCardIssueResponse(response ReportCardIssueRes, w http.ResponseWriter, span trace.Span) error {
-	switch response := response.(type) {
-	case *ReportCardIssueNoContent:
-		w.WriteHeader(204)
-
-		return nil
-
-	case *ReportCardIssueBadRequest:
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(400)
-
-		e := new(jx.Encoder)
-		response.Encode(e)
-		if _, err := e.WriteTo(w); err != nil {
-			return errors.Wrap(err, "write")
-		}
-
-		return nil
-
-	case *ReportCardIssueNotFound:
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(404)
-
-		e := new(jx.Encoder)
-		response.Encode(e)
-		if _, err := e.WriteTo(w); err != nil {
-			return errors.Wrap(err, "write")
-		}
-
-		return nil
-
-	case *ReportCardIssueInternalServerError:
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(500)
-		span.SetStatus(codes.Error, http.StatusText(500))
-
-		e := new(jx.Encoder)
-		response.Encode(e)
-		if _, err := e.WriteTo(w); err != nil {
-			return errors.Wrap(err, "write")
-		}
-
-		return nil
-
-	default:
-		return errors.Errorf("unexpected response type: %T", response)
-	}
-}
-
 func encodeSendResultsResponse(response SendResultsRes, w http.ResponseWriter, span trace.Span) error {
 	switch response := response.(type) {
 	case *SendResultsNoContent:

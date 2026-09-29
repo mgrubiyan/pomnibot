@@ -69,8 +69,7 @@ export interface SetScreenProps {
     setId: string;
     /** Cards of the set, optional if fetched internally */
     cards?: Card[];
-    /** Outcome of the last action on a card */
-    toast?: { kind: 'removed' | 'edited' | 'reported' } | null;
+    toast?: { kind: 'removed' | 'edited' } | null;
     currentUser?: User | null;
     onBack: () => void;
     onStart: (setId: string, setTitle?: string) => void;
@@ -230,10 +229,10 @@ export function SetScreen({
                         {cards.map((card, index) => (
                             <CellSimple
                                 key={card.id}
-                                as="button"
+                                as={isOwner ? 'button' : undefined}
                                 separator={index > 0}
-                                showChevron
-                                onClick={() => onOpenCard(card, isOwner, set.title)}
+                                showChevron={isOwner}
+                                onClick={isOwner ? () => onOpenCard(card, isOwner, set.title) : undefined}
                                 title={<span className={s.cardTitle}>{card.question}</span>}
                                 subtitle={card.topic}
                             />
@@ -273,11 +272,7 @@ export function SetScreen({
                 {toast ? (
                     <div className={s.undo} role="status">
                         <Typography.Text variant="detail">
-                            {toast.kind === 'removed'
-                                ? 'Карточка удалена'
-                                : toast.kind === 'edited'
-                                  ? 'Карточка исправлена'
-                                  : 'Сообщение отправлено'}
+                            {toast.kind === 'removed' ? 'Карточка удалена' : 'Карточка исправлена'}
                         </Typography.Text>
                         {toast.kind === 'removed' && onUndoRemoveCard ? (
                             <button type="button" className={s.undoButton} onClick={onUndoRemoveCard}>

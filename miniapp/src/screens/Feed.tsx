@@ -19,7 +19,6 @@ import {
     IconChevronLeft,
     IconCross,
     IconDoc,
-    IconFlag,
     IconMic,
     IconOffline,
     IconStop,
@@ -168,7 +167,6 @@ export interface FeedProps {
     initialResults?: AnswerResult[];
     onExit: () => void;
     onBack?: () => void;
-    onReportCard: (card: Card, currentIndex: number, currentResults: AnswerResult[]) => void;
     /** Opens sharing from the result screen; absent for the daily mix. */
     onShare?: () => void;
 }
@@ -182,7 +180,6 @@ export function Feed({
     initialResults = [],
     onExit,
     onBack,
-    onReportCard,
     onShare,
 }: FeedProps) {
     const [status, setStatus] = useState<Status>('loading');
@@ -771,19 +768,6 @@ export function Feed({
                             Дальше
                         </Button>
                     )}
-
-                    <Button
-                        size="small"
-                        variant="ghost"
-                        stretched
-                        disabled={busy}
-                        iconBefore={<IconFlag size={16} tone="muted" />}
-                        onClick={() => onReportCard(card, index, results)}
-                    >
-                        <Typography.Text variant="description" color="tertiary">
-                            Карточка неверная
-                        </Typography.Text>
-                    </Button>
                 </Flex>
             ) : layout ? (
                 <Flex direction="column" align="stretch" gap={8}>

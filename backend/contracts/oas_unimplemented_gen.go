@@ -132,15 +132,6 @@ func (UnimplementedHandler) JoinSetByShareCode(ctx context.Context, req *JoinSet
 	return r, ht.ErrNotImplemented
 }
 
-// ReportCardIssue implements ReportCardIssue operation.
-//
-// Report an issue with a card.
-//
-// POST /cards/{cardId}/issue
-func (UnimplementedHandler) ReportCardIssue(ctx context.Context, req *ReportCardIssueRequest, params ReportCardIssueParams) (r ReportCardIssueRes, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
 // SendResults implements SendResults operation.
 //
 // Send set/feed results.

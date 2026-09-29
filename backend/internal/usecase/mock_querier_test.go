@@ -12,7 +12,6 @@ type mockQuerier struct {
 	countTotalDueCardsForUserFunc  func(ctx context.Context, userID int64) (int32, error)
 	countUserActiveDaysFunc        func(ctx context.Context, userID int64) (int32, error)
 	createCardFunc                 func(ctx context.Context, arg db.CreateCardParams) (db.Card, error)
-	createCardIssueFunc            func(ctx context.Context, arg db.CreateCardIssueParams) (db.CardIssue, error)
 	createCardOptionFunc           func(ctx context.Context, arg db.CreateCardOptionParams) (db.CardOption, error)
 	createFactFunc                 func(ctx context.Context, arg db.CreateFactParams) (db.Fact, error)
 	upsertTopicFunc                func(ctx context.Context, name string) (db.Topic, error)
@@ -120,13 +119,6 @@ func (m *mockQuerier) CreateSet(ctx context.Context, arg db.CreateSetParams) (db
 		return m.createSetFunc(ctx, arg)
 	}
 	return db.Set{}, nil
-}
-
-func (m *mockQuerier) CreateCardIssue(ctx context.Context, arg db.CreateCardIssueParams) (db.CardIssue, error) {
-	if m.createCardIssueFunc != nil {
-		return m.createCardIssueFunc(ctx, arg)
-	}
-	return db.CardIssue{}, nil
 }
 
 func (m *mockQuerier) DeleteCard(ctx context.Context, arg db.DeleteCardParams) (int64, error) {

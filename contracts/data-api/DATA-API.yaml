@@ -512,22 +512,6 @@ checks:
           description: 'local: matched up to form and typos, or surely wrong; model:
             judged by meaning; fallback: the model did not answer in time, local verdict'
   timeoutMs: 5000
-  repeatable: false
-- id: ReportCardIssue
-  name: Report an issue with a card
-  method: POST
-  path: /cards/{cardId}/issue
-  role: user
-  request:
-    path:
-      cardId: sample-id
-    headers:
-      Content-Type: application/json
-  expected:
-    statusCodes:
-    - 204
-  timeoutMs: 5000
-  repeatable: false
 - id: GetSet
   name: Get a card set
   method: GET

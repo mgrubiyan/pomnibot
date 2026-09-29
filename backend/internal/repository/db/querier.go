@@ -14,7 +14,6 @@ type Querier interface {
 	CountTotalDueCardsForUser(ctx context.Context, userID int64) (int32, error)
 	CountUserActiveDays(ctx context.Context, userID int64) (int32, error)
 	CreateCard(ctx context.Context, arg CreateCardParams) (Card, error)
-	CreateCardIssue(ctx context.Context, arg CreateCardIssueParams) (CardIssue, error)
 	CreateCardOption(ctx context.Context, arg CreateCardOptionParams) (CardOption, error)
 	CreateCardTableColumn(ctx context.Context, arg CreateCardTableColumnParams) (CardTableColumn, error)
 	CreateCardTableItem(ctx context.Context, arg CreateCardTableItemParams) (CardTableItem, error)

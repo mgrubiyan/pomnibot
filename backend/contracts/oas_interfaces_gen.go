@@ -53,10 +53,6 @@ type JoinSetByShareCodeRes interface {
 	joinSetByShareCodeRes()
 }
 
-type ReportCardIssueRes interface {
-	reportCardIssueRes()
-}
-
 type SendResultsRes interface {
 	sendResultsRes()
 }

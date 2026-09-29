@@ -171,12 +171,6 @@ func TestAPIHandler_CardsDelegation(t *testing.T) {
 			}
 			return &contracts.AnswerQuestionResponse{IsCorrect: true, UserAnswer: answer}, nil
 		},
-		reportCardIssueFunc: func(_ context.Context, userID int64, id uuid.UUID, reason contracts.CardIssueReason) error {
-			if userID != 456 || id != cardID || reason != contracts.CardIssueReasonOther {
-				t.Errorf("unexpected args: userID=%d, id=%s, reason=%s", userID, id, reason)
-			}
-			return nil
-		},
 	}
 
 	h := NewAPIHandler(nil, mockCard, nil)
@@ -209,16 +203,6 @@ func TestAPIHandler_CardsDelegation(t *testing.T) {
 		}
 		if _, ok := res.(*contracts.AnswerQuestionResponse); !ok {
 			t.Fatalf("expected *contracts.AnswerQuestionResponse, got %T", res)
-		}
-	})
-
-	t.Run("ReportCardIssue delegates to cardsHandler", func(t *testing.T) {
-		res, err := h.ReportCardIssue(ctx, &contracts.ReportCardIssueRequest{Reason: contracts.CardIssueReasonOther}, contracts.ReportCardIssueParams{CardId: cardID})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if _, ok := res.(*contracts.ReportCardIssueNoContent); !ok {
-			t.Fatalf("expected *contracts.ReportCardIssueNoContent, got %T", res)
 		}
 	})
 }
@@ -340,11 +324,6 @@ func TestAPIHandler_NilServicesFallback(t *testing.T) {
 		}
 
 		_, err = h.AnswerQuestion(ctx, &contracts.AnswerQuestionRequest{Answer: "test"}, contracts.AnswerQuestionParams{CardId: randomID})
-		if !errors.Is(err, ht.ErrNotImplemented) {
-			t.Fatalf("expected ErrNotImplemented, got %v", err)
-		}
-
-		_, err = h.ReportCardIssue(ctx, &contracts.ReportCardIssueRequest{Reason: contracts.CardIssueReasonOther}, contracts.ReportCardIssueParams{CardId: randomID})
 		if !errors.Is(err, ht.ErrNotImplemented) {
 			t.Fatalf("expected ErrNotImplemented, got %v", err)
 		}
