@@ -9,6 +9,7 @@ import (
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -79,6 +80,7 @@ func TestDetectKind(t *testing.T) {
 		{"PDF", pdfBytes, KindPDF},
 		{"PNG", pngBytes(t, 4, 4), KindPNG},
 		{"JPEG", jpegBytes(t, 4, 4), KindJPEG},
+		{"WebP", webpBytes(t), KindWebP},
 		{"UTF-8 text", []byte("Митоз — деление"), KindText},
 		{"Windows-1251 text", []byte{0xCC, 0xE8, 0xF2, 0xEE, 0xE7}, KindText},
 		{"binary", []byte{0x00, 0x01, 0x02, 0x03, 0xFF, 0xFE, 0x00}, KindUnsupported},
@@ -255,6 +257,23 @@ func TestExtractRejectsUnsupported(t *testing.T) {
 			t.Errorf("%s: error = %v, want *Error with %v and a message", name, err, want.err)
 		}
 	}
+
+	// The log tells what came instead: a page, a HEIC photo...
+	_, err := e.Extract(context.Background(), []File{{Name: "photo_1.jpg", Data: []byte("<!DOCTYPE html><html><body>Нет доступа</body></html>")}})
+	if err == nil || !strings.Contains(err.Error(), "text/html") {
+		t.Errorf("error = %v, want the detected type in it", err)
+	}
+}
+
+// webpBytes is a 64×48 photo in WebP, the format a messenger may store a
+// photo in whatever its file name says.
+func webpBytes(t *testing.T) []byte {
+	t.Helper()
+	data, err := os.ReadFile("testdata/photo.webp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }
 
 func TestExtractReportsBrokenPDF(t *testing.T) {
