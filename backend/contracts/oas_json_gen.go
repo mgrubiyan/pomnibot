@@ -5,6 +5,7 @@ package contracts
 import (
 	"math/bits"
 	"strconv"
+	"time"
 
 	"github.com/go-faster/errors"
 	"github.com/go-faster/jx"
@@ -2747,6 +2748,57 @@ func (s *OptInt) UnmarshalJSON(data []byte) error {
 	return s.Decode(d)
 }
 
+// Encode encodes time.Time as json.
+func (o OptNilDateTime) Encode(e *jx.Encoder, format func(*jx.Encoder, time.Time)) {
+	if !o.Set {
+		return
+	}
+	if o.Null {
+		e.Null()
+		return
+	}
+	format(e, o.Value)
+}
+
+// Decode decodes time.Time from json.
+func (o *OptNilDateTime) Decode(d *jx.Decoder, format func(*jx.Decoder) (time.Time, error)) error {
+	if o == nil {
+		return errors.New("invalid: unable to decode OptNilDateTime to nil")
+	}
+	if d.Next() == jx.Null {
+		if err := d.Null(); err != nil {
+			return err
+		}
+
+		var v time.Time
+		o.Value = v
+		o.Set = true
+		o.Null = true
+		return nil
+	}
+	o.Set = true
+	o.Null = false
+	v, err := format(d)
+	if err != nil {
+		return err
+	}
+	o.Value = v
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s OptNilDateTime) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e, json.EncodeDateTime)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *OptNilDateTime) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d, json.DecodeDateTime)
+}
+
 // Encode encodes string as json.
 func (o OptString) Encode(e *jx.Encoder) {
 	if !o.Set {
@@ -3489,16 +3541,18 @@ func (s *TodayData) encodeFields(e *jx.Encoder) {
 		s.User.Encode(e)
 	}
 	{
-		e.FieldStart("activeDays")
-		e.Int(s.ActiveDays)
-	}
-	{
 		e.FieldStart("dueCount")
 		e.Int(s.DueCount)
 	}
 	{
 		e.FieldStart("estimatedMinutes")
 		e.Int(s.EstimatedMinutes)
+	}
+	{
+		if s.NextReviewAt.Set {
+			e.FieldStart("nextReviewAt")
+			s.NextReviewAt.Encode(e, json.EncodeDateTime)
+		}
 	}
 	{
 		e.FieldStart("sets")
@@ -3512,9 +3566,9 @@ func (s *TodayData) encodeFields(e *jx.Encoder) {
 
 var jsonFieldsNameOfTodayData = [5]string{
 	0: "user",
-	1: "activeDays",
-	2: "dueCount",
-	3: "estimatedMinutes",
+	1: "dueCount",
+	2: "estimatedMinutes",
+	3: "nextReviewAt",
 	4: "sets",
 }
 
@@ -3537,20 +3591,8 @@ func (s *TodayData) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"user\"")
 			}
-		case "activeDays":
-			requiredBitSet[0] |= 1 << 1
-			if err := func() error {
-				v, err := d.Int()
-				s.ActiveDays = int(v)
-				if err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"activeDays\"")
-			}
 		case "dueCount":
-			requiredBitSet[0] |= 1 << 2
+			requiredBitSet[0] |= 1 << 1
 			if err := func() error {
 				v, err := d.Int()
 				s.DueCount = int(v)
@@ -3562,7 +3604,7 @@ func (s *TodayData) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"dueCount\"")
 			}
 		case "estimatedMinutes":
-			requiredBitSet[0] |= 1 << 3
+			requiredBitSet[0] |= 1 << 2
 			if err := func() error {
 				v, err := d.Int()
 				s.EstimatedMinutes = int(v)
@@ -3572,6 +3614,16 @@ func (s *TodayData) Decode(d *jx.Decoder) error {
 				return nil
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"estimatedMinutes\"")
+			}
+		case "nextReviewAt":
+			if err := func() error {
+				s.NextReviewAt.Reset()
+				if err := s.NextReviewAt.Decode(d, json.DecodeDateTime); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"nextReviewAt\"")
 			}
 		case "sets":
 			requiredBitSet[0] |= 1 << 4
@@ -3601,7 +3653,7 @@ func (s *TodayData) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b00011111,
+		0b00010111,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.

@@ -49,8 +49,8 @@ Home ─┬─ «Начать» ─────────────► Feed 
 
 | Экран | Файл | Что делает |
 |---|---|---|
-| Home | [src/screens/Home.tsx](src/screens/Home.tsx) | «На сегодня», список наборов, кнопки добавления |
-| SetScreen | [src/screens/SetScreen.tsx](src/screens/SetScreen.tsx) | Состав набора, список карточек, «Почему это работает», запуск и удаление |
+| Home | [src/screens/Home.tsx](src/screens/Home.tsx) | «На сегодня», список наборов, «Почему это работает», кнопки добавления |
+| SetScreen | [src/screens/SetScreen.tsx](src/screens/SetScreen.tsx) | Состав набора, список карточек, запуск и удаление |
 | Feed | [src/screens/Feed.tsx](src/screens/Feed.tsx) | Лента карточек: вопрос, разбор, цитата-источник |
 | JoinSet | [src/screens/JoinSet.tsx](src/screens/JoinSet.tsx) | Ввод шестизначного кода набора |
 | AddNote | [src/screens/AddNote.tsx](src/screens/AddNote.tsx) | Объясняет, что конспект отправляют боту в чат |

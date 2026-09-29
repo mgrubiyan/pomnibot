@@ -19,10 +19,6 @@ RETURNING *;
 -- name: GetUserByID :one
 SELECT * FROM users WHERE id = $1;
 
--- name: CountUserActiveDays :one
-SELECT COUNT(DISTINCT DATE(answered_at))::INT AS active_days
-FROM answer_results
-WHERE user_id = $1 AND answered_at >= NOW() - INTERVAL '7 days';
 
 -- name: GetUsersWithDueFacts :many
 SELECT DISTINCT u.id

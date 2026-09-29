@@ -11,19 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const countUserActiveDays = `-- name: CountUserActiveDays :one
-SELECT COUNT(DISTINCT DATE(answered_at))::INT AS active_days
-FROM answer_results
-WHERE user_id = $1 AND answered_at >= NOW() - INTERVAL '7 days'
-`
-
-func (q *Queries) CountUserActiveDays(ctx context.Context, userID int64) (int32, error) {
-	row := q.db.QueryRow(ctx, countUserActiveDays, userID)
-	var active_days int32
-	err := row.Scan(&active_days)
-	return active_days, err
-}
-
 const ensureUser = `-- name: EnsureUser :one
 INSERT INTO users (id, first_name, last_name, username, is_bot, last_active_at)
 VALUES ($1, '', NULL, NULL, FALSE, CURRENT_TIMESTAMP)

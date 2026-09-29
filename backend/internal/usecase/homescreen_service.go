@@ -35,14 +35,14 @@ func (s *homescreenServiceImpl) GetToday(ctx context.Context, userID int64) (*co
 		return nil, fmt.Errorf("get user by id: %w", err)
 	}
 
-	activeDays, err := s.querier.CountUserActiveDays(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("count active days: %w", err)
-	}
-
 	dueCount, err := s.querier.CountTotalDueCardsForUser(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("count due cards: %w", err)
+	}
+
+	nextReviewAt, err := s.querier.GetNextReviewDateForUser(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get next review date: %w", err)
 	}
 
 	setRows, err := s.querier.GetUserSets(ctx, userID)
@@ -75,11 +75,16 @@ func (s *homescreenServiceImpl) GetToday(ctx context.Context, userID int64) (*co
 
 	todayUser := buildUserContract(user.ID, user.FirstName, user.LastName, user.Username)
 
+	var optNextReviewAt contracts.OptNilDateTime
+	if nextReviewAt.Valid {
+		optNextReviewAt.SetTo(nextReviewAt.Time)
+	}
+
 	return &contracts.TodayData{
 		User:             todayUser,
-		ActiveDays:       int(activeDays),
 		DueCount:         int(dueCount),
 		EstimatedMinutes: estimatedMinutes,
+		NextReviewAt:     optNextReviewAt,
 		Sets:             sets,
 	}, nil
 }

@@ -335,12 +335,13 @@ func TestCardService_CheckAnswer(t *testing.T) {
 }
 
 func TestHomescreenService_GetToday(t *testing.T) {
+	futureTime := time.Now().Add(24 * time.Hour)
 	mock := &mockQuerier{
 		getUserByIDFunc: func(_ context.Context, id int64) (db.User, error) {
 			return db.User{ID: id, FirstName: "Tester"}, nil
 		},
-		countUserActiveDaysFunc: func(_ context.Context, _ int64) (int32, error) {
-			return 4, nil
+		getNextReviewDateForUserFunc: func(_ context.Context, _ int64) (pgtype.Timestamptz, error) {
+			return pgtype.Timestamptz{Time: futureTime, Valid: true}, nil
 		},
 		countTotalDueCardsForUserFunc: func(_ context.Context, _ int64) (int32, error) {
 			return 12, nil
@@ -364,11 +365,41 @@ func TestHomescreenService_GetToday(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if today.User.ID != 100 || today.User.FirstName != "Tester" || today.ActiveDays != 4 || today.DueCount != 12 {
+	if today.User.ID != 100 || today.User.FirstName != "Tester" || today.DueCount != 12 {
 		t.Fatalf("unexpected today data: %+v", today)
+	}
+	if !today.NextReviewAt.Set || today.NextReviewAt.Value.Unix() != futureTime.Unix() {
+		t.Fatalf("expected NextReviewAt to be set to futureTime, got %+v", today.NextReviewAt)
 	}
 	if today.EstimatedMinutes <= 0 {
 		t.Fatalf("expected estimatedMinutes > 0, got %d", today.EstimatedMinutes)
+	}
+}
+
+func TestHomescreenService_GetToday_NoNextReview(t *testing.T) {
+	mock := &mockQuerier{
+		getUserByIDFunc: func(_ context.Context, id int64) (db.User, error) {
+			return db.User{ID: id, FirstName: "Tester"}, nil
+		},
+		getNextReviewDateForUserFunc: func(_ context.Context, _ int64) (pgtype.Timestamptz, error) {
+			return pgtype.Timestamptz{Valid: false}, nil
+		},
+		countTotalDueCardsForUserFunc: func(_ context.Context, _ int64) (int32, error) {
+			return 0, nil
+		},
+		getUserSetsFunc: func(_ context.Context, _ int64) ([]db.GetUserSetsRow, error) {
+			return nil, nil
+		},
+	}
+
+	svc := usecase.NewHomescreenService(mock, usecase.NewUserService(mock))
+
+	today, err := svc.GetToday(context.Background(), 100)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if today.NextReviewAt.Set && !today.NextReviewAt.Null {
+		t.Fatalf("expected NextReviewAt to be unset or null, got %+v", today.NextReviewAt)
 	}
 }
 
