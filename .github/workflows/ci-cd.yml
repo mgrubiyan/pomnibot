@@ -189,7 +189,6 @@ jobs:
           GIGACHAT_MAX_TOKENS: ${{ vars.GIGACHAT_MAX_TOKENS || secrets.GIGACHAT_MAX_TOKENS }}
           YC_FOLDER_ID: ${{ vars.YC_FOLDER_ID || secrets.YC_FOLDER_ID }}
           YC_OCR_MODEL: ${{ vars.YC_OCR_MODEL || secrets.YC_OCR_MODEL }}
-          APP_URL: ${{ vars.APP_URL || secrets.APP_URL }}
           MAX_API_URL: ${{ vars.MAX_API_URL || secrets.MAX_API_URL }}
           MAX_INSECURE_SKIP_VERIFY: ${{ vars.MAX_INSECURE_SKIP_VERIFY || secrets.MAX_INSECURE_SKIP_VERIFY }}
           NOTIFICATIONS_ENABLED: ${{ vars.NOTIFICATIONS_ENABLED || secrets.NOTIFICATIONS_ENABLED }}
@@ -225,7 +224,6 @@ jobs:
             GIGACHAT_MAX_TOKENS
             YC_FOLDER_ID
             YC_OCR_MODEL
-            APP_URL
             MAX_API_URL
             MAX_INSECURE_SKIP_VERIFY
             NOTIFICATIONS_ENABLED

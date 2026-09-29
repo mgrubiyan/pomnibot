@@ -22,8 +22,6 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/tlsroot"
 )
 
-const defaultAPIBaseURL = "https://platform-api2.max.ru"
-
 // User represents a MAX user or bot profile according to MAX Bot API sender schema.
 type User struct {
 	UserID    int64   `json:"user_id"`
@@ -115,9 +113,6 @@ type Client struct {
 
 // NewClient creates a new MAX Bot API client with custom TLS config for Russian Trusted Root CA.
 func NewClient(token string, baseURL string) (*Client, error) {
-	if baseURL == "" {
-		baseURL = defaultAPIBaseURL
-	}
 	baseURL = strings.TrimSuffix(baseURL, "/")
 
 	// Root CA pool including system CAs and bundled Russian Root CA
