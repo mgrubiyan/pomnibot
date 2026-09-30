@@ -28,5 +28,5 @@ tasks:
         -o data-api/DATA-API.yaml
         --solution-name 'Pomnibot API'
         --team-id t583_hakaton_max_bot
-        --base-url https://pomnibot.steins.ru/api/
+        --base-url https://pomnibot.pslu.ru/api/
         --default-role user

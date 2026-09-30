@@ -6,7 +6,7 @@ solution:
   name: Pomnibot API
   teamId: t583_hakaton_max_bot
 api:
-  baseUrl: https://pomnibot.steins.ru/api/
+  baseUrl: https://pomnibot.pslu.ru/api/
   openapi: ../openapi.yaml
   defaultHeaders:
     Accept: application/json
