@@ -763,12 +763,12 @@ func TestSetService_GetCardsBySetID_Authorization(t *testing.T) {
 	svc := usecase.NewSetService(mock, usecase.NewUserService(mock))
 
 	// Member succeeds
-	cards, err := svc.GetCardsBySetID(context.Background(), memberID, setUUID)
+	cardsByID, err := svc.GetCardsBySetID(context.Background(), memberID, setUUID)
 	if err != nil {
 		t.Fatalf("unexpected error for member: %v", err)
 	}
-	if len(cards) != 1 {
-		t.Fatalf("expected 1 card, got %d", len(cards))
+	if len(cardsByID) != 1 {
+		t.Fatalf("expected 1 card, got %d", len(cardsByID))
 	}
 
 	// Non-member fails with ErrNotFound
@@ -797,68 +797,6 @@ func TestSetService_DeleteSet_NonMember(t *testing.T) {
 	if !errors.Is(err, usecase.ErrNotFound) {
 		t.Fatalf("expected ErrNotFound when leaving unenrolled set, got %v", err)
 	}
-}
-
-func TestSetService_GenerateMockSet(t *testing.T) {
-	ctx := context.Background()
-	const userID = int64(123)
-	const title = "Конспект по биологии"
-
-	mock := &mockQuerier{
-		ensureUserFunc: func(_ context.Context, id int64) (db.User, error) {
-			return db.User{ID: id}, nil
-		},
-		getSetByShareCodeFunc: func(_ context.Context, _ db.GetSetByShareCodeParams) (db.GetSetByShareCodeRow, error) {
-			return db.GetSetByShareCodeRow{}, pgx.ErrNoRows
-		},
-		createSetFunc: func(_ context.Context, arg db.CreateSetParams) (db.Set, error) {
-			var setUUID pgtype.UUID
-			_ = setUUID.Scan("11111111-1111-1111-1111-111111111111")
-			return db.Set{
-				ID:        setUUID,
-				Title:     arg.Title,
-				AuthorID:  arg.AuthorID,
-				ShareCode: arg.ShareCode,
-			}, nil
-		},
-		joinSetFunc: func(_ context.Context, arg db.JoinSetParams) (db.UserSet, error) {
-			return db.UserSet{UserID: arg.UserID, SetID: arg.SetID}, nil
-		},
-		initUserFactProgressFunc: func(_ context.Context, _ db.InitUserFactProgressParams) error {
-			return nil
-		},
-	}
-
-	svc := usecase.NewSetService(mock, usecase.NewUserService(mock))
-
-	t.Run("success generates card set", func(t *testing.T) {
-		res, err := svc.GenerateMockSet(ctx, userID, title)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if res.Title != title {
-			t.Errorf("expected title %q, got %q", title, res.Title)
-		}
-		if res.CardsTotal == 0 {
-			t.Errorf("expected cards total > 0, got %d", res.CardsTotal)
-		}
-		if !res.ShareCode.IsSet() || len(res.ShareCode.Value) != 6 {
-			t.Errorf("expected 6-char share code, got %v", res.ShareCode)
-		}
-	})
-
-	t.Run("ensure user error propagates", func(t *testing.T) {
-		mockErr := &mockQuerier{
-			ensureUserFunc: func(_ context.Context, _ int64) (db.User, error) {
-				return db.User{}, errors.New("db unavailable")
-			},
-		}
-		svcErr := usecase.NewSetService(mockErr, usecase.NewUserService(mockErr))
-		_, err := svcErr.GenerateMockSet(ctx, userID, title)
-		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-	})
 }
 
 func TestSetService_SaveGeneratedSet(t *testing.T) {

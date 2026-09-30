@@ -271,33 +271,6 @@ func (s *setServiceImpl) JoinSetByShareCode(ctx context.Context, userID int64, c
 	return mapSetRowToContract(row.ID, row.Title, author, row.ShareCode, row.CardsTotal, row.CardsDue)
 }
 
-func (s *setServiceImpl) GenerateMockSet(ctx context.Context, userID int64, title string) (*contracts.CardSet, error) {
-	if err := s.userService.EnsureUser(ctx, userID); err != nil {
-		return nil, err
-	}
-
-	set, cardsCount, err := repository.GenerateSetForUser(ctx, s.querier, userID, title)
-	if err != nil {
-		return nil, fmt.Errorf("generate set for user: %w", err)
-	}
-
-	setUUID, err := uuid.FromBytes(set.ID.Bytes[:])
-	if err != nil {
-		return nil, fmt.Errorf("parse set uuid: %w", err)
-	}
-
-	res := &contracts.CardSet{
-		ID:         setUUID,
-		Title:      set.Title,
-		CardsTotal: cardsCount,
-		CardsDue:   cardsCount,
-	}
-	if set.ShareCode != "" {
-		res.ShareCode.SetTo(set.ShareCode)
-	}
-	return res, nil
-}
-
 func (s *setServiceImpl) SaveGeneratedSet(ctx context.Context, userID int64, title string, genResult generator.Result) (*contracts.CardSet, error) {
 	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return nil, err
