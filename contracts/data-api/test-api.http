@@ -1,0 +1,187 @@
+### Тесты для апи на основе базового сида
+@host = http://localhost:8080/api
+@orgSet  = 6d12ca92-e5ba-4808-946e-17b207765a72
+@cppSet  = 104d6ef5-2d2b-451b-9ae4-07ec047600f5
+@geoSet  = a782a18c-b664-41c6-8a8c-9842393d3f4f
+
+### ---------- Health ----------
+GET {{host}}/health
+
+### ---------- Homescreen ----------
+# Ждём user.id=0, sets: 3 шт
+GET {{host}}//
+
+###
+GET {{host}}/feed
+
+### ---------- Sets ----------
+GET {{host}}/sets/{{geoSet}}
+
+### shareCode 238472
+GET {{host}}/sets/{{geoSet}}/share
+
+### 4 факта
+GET {{host}}/sets/{{geoSet}}/plan
+
+### автор -> 200
+GET {{host}}/sets/{{geoSet}}/leaderboard
+
+### не автор -> 403
+GET {{host}}/sets/{{orgSet}}/leaderboard
+
+### ОРГ Лекция по разделу 4
+GET {{host}}/sets/{{orgSet}}
+
+### Этапы обработки кода программы на C++_ пространства имён и локали
+GET {{host}}/sets/{{cppSet}}
+
+###
+GET {{host}}/sets/{{orgSet}}/cards
+
+### 404: несуществующий набор
+GET {{host}}/sets/00000000-0000-4000-8000-000000000000
+
+### ---------- Join ----------
+### 200 (набор "ОРГ Лекция по разделу 4")
+POST {{host}}/sets/join
+Content-Type: application/json
+
+{ "code": "298788" }
+
+### повторный join
+POST {{host}}/sets/join
+Content-Type: application/json
+
+{ "code": "298788" }
+
+### 404: кода нет
+POST {{host}}/sets/join
+Content-Type: application/json
+
+{ "code": "000000" }
+
+### 400: не 6 цифр
+POST {{host}}/sets/join
+Content-Type: application/json
+
+{ "code": "12ab" }
+
+### ---------- Answer (input-карточки) ----------
+# d6b86b0d… «Республика»
+### верно
+POST {{host}}/cards/d6b86b0d-e286-4396-93f2-93aaa55816af/answer
+Content-Type: application/json
+
+{ "answer": "Республика" }
+
+### верно с опечаткой/регистром
+POST {{host}}/cards/d6b86b0d-e286-4396-93f2-93aaa55816af/answer
+Content-Type: application/json
+
+{ "answer": "республика " }
+
+### неверно
+POST {{host}}/cards/d6b86b0d-e286-4396-93f2-93aaa55816af/answer
+Content-Type: application/json
+
+{ "answer": "монархия" }
+
+### 400: пустое тело
+POST {{host}}/cards/d6b86b0d-e286-4396-93f2-93aaa55816af/answer
+Content-Type: application/json
+
+{}
+
+### 404: карточки нет
+POST {{host}}/cards/00000000-0000-4000-8000-000000000000/answer
+Content-Type: application/json
+
+{ "answer": "x" }
+
+### ---------- Check (по смыслу, без записи) ----------
+# ab6c395f… «225»
+### method=local
+POST {{host}}/cards/ab6c395f-0bcd-4d54-b3b9-83c888ed51df/check
+Content-Type: application/json
+
+{ "answer": "225" }
+
+### method=model: другими словами
+POST {{host}}/cards/ab6c395f-0bcd-4d54-b3b9-83c888ed51df/check
+Content-Type: application/json
+
+{ "answer": "двести двадцать пять" }
+
+### неверно
+POST {{host}}/cards/ab6c395f-0bcd-4d54-b3b9-83c888ed51df/check
+Content-Type: application/json
+
+{ "answer": "450" }
+
+### f0c747ee… «арбитражные суды», ответ по смыслу
+POST {{host}}/cards/f0c747ee-acae-421d-89f6-bc69ec2733c0/check
+Content-Type: application/json
+
+{ "answer": "суды арбитража" }
+
+### ---------- Results ----------
+### 204: смесь верных/неверных (choice, boolean, flip, input)
+POST {{host}}/results
+Content-Type: application/json
+
+[
+  { "cardId": "2a89de89-0bcb-47d8-adb1-b9a09e3e4991", "correct": true,  "answeredAt": "2026-09-30T10:00:00Z" },
+  { "cardId": "400b2482-20b4-4b4d-92f7-aea8a05d565d", "correct": true,  "answeredAt": "2026-09-30T10:00:10Z" },
+  { "cardId": "7da1fdda-33e6-4b1b-aab0-e1d7f8e9d411", "correct": false, "answeredAt": "2026-09-30T10:00:20Z" },
+  { "cardId": "d6b86b0d-e286-4396-93f2-93aaa55816af", "correct": true,  "answeredAt": "2026-09-30T10:00:30Z" },
+  { "cardId": "756fe215-acbe-4d8f-8c0d-dc220f9abcc9", "correct": false, "answeredAt": "2026-09-30T10:00:40Z" }
+]
+
+### после /results: перепроверь GET /, /plan и userRank/userPercentile у наборов
+
+### 400 пустой массив
+POST {{host}}/results
+Content-Type: application/json
+
+[]
+
+### 400: битый uuid
+POST {{host}}/results
+Content-Type: application/json
+
+[ { "cardId": "not-a-uuid", "correct": true, "answeredAt": "2026-09-30T10:00:00Z" } ]
+
+### 400: нет поля correct
+POST {{host}}/results
+Content-Type: application/json
+
+[ { "cardId": "2a89de89-0bcb-47d8-adb1-b9a09e3e4991", "answeredAt": "2026-09-30T10:00:00Z" } ]
+
+### ---------- Update card ----------
+### 200: поменять объяснение
+PUT {{host}}/cards/4e402054-b545-492c-9b57-edebdcd48d4b
+Content-Type: application/json
+
+{ "answer": false, "explanation": "Президент не может досрочно распустить парламент в смешанной республике." }
+
+### 200: choice
+PUT {{host}}/cards/4e402054-b545-492c-9b57-edebdcd48d4b
+Content-Type: application/json
+
+{ "options": ["6 лет", "4 года", "5 лет", "7 лет"], "answer": 0 }
+
+### 400: неизвестный kind
+PUT {{host}}/cards/4e402054-b545-492c-9b57-edebdcd48d4b
+Content-Type: application/json
+
+{ "kind": "unknown" }
+
+### ---------- Delete (гонять в конце, деструктивно) ----------
+### 204 набор геометрии (автор — user 0)
+DELETE {{host}}/sets/{{geoSet}}
+
+### 404 повторное удаление
+DELETE {{host}}/cards/{{geoSet}}
+
+### чужой набор — 204, пользователь отписывается от набора
+DELETE {{host}}/sets/{{orgSet}}
