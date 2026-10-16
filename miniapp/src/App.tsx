@@ -54,7 +54,6 @@ function App() {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
 
     useEffect(() => {
-        window.WebApp?.ready?.();
         api.GET('/').then(({ data }) => {
             if (data?.user) {
                 setCurrentUser(data.user);

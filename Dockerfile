@@ -1,6 +1,9 @@
 # Stage 1: Build frontend with Bun
 FROM oven/bun:1.4-alpine AS frontend-builder
 
+ARG APP_ENV=prod
+ENV APP_ENV=${APP_ENV}
+
 WORKDIR /app/miniapp
 
 # Copy package files for dependency caching
@@ -52,6 +55,7 @@ USER appuser
 
 EXPOSE 8080
 
+ENV APP_ENV=prod
 ENV PORT=8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \

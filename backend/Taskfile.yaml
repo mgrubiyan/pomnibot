@@ -1,6 +1,11 @@
 version: '3'
 
 tasks:
+  dev:
+    desc: 'Запуск Go-сервера'
+    cmds:
+      - go run ./cmd/server
+
   lint:
     desc: 'Проверка кода бэкенда (golangci-lint)'
     cmds:

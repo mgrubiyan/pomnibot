@@ -1,20 +1,36 @@
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
+import { fileURLToPath } from 'node:url'
+import { createAppConfig, parseEnvironment } from './config.ts'
 
-const backendTarget = process.env.BACKEND_URL || 'http://localhost:8080'
+const envDir = fileURLToPath(new URL('..', import.meta.url))
 
-// https://vite.dev/config/
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    proxy: {
-      '/api': {
-        target: backendTarget,
-        changeOrigin: true,
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, envDir, '')
+  const environment = parseEnvironment(env.APP_ENV)
+
+  return {
+    plugins: [
+      react(),
+      {
+        name: 'max-sdk',
+        transformIndexHtml: () => createAppConfig(environment).maxEnabled
+          ? [{ tag: 'script', attrs: { src: 'https://st.max.ru/js/max-web-app.js' }, injectTo: 'head' }]
+          : [],
+      },
+    ],
+    envDir,
+    define: { __APP_ENV__: JSON.stringify(environment) },
+    server: {
+      proxy: {
+        '/api': {
+          target: env.BACKEND_URL || `http://localhost:${env.PORT || '8080'}`,
+          changeOrigin: true,
+        },
       },
     },
-  },
-  optimizeDeps: {
-    include: ['@maxhub/max-ui', 'react', 'react-dom', 'react/jsx-runtime'],
-  },
+    optimizeDeps: {
+      include: ['@maxhub/max-ui', 'react', 'react-dom', 'react/jsx-runtime'],
+    },
+  }
 })

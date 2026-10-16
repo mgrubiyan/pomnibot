@@ -20,7 +20,7 @@ type cardServiceImpl struct {
 	manual      ManualWriter
 	querier     db.Querier
 	userService UserService
-	grader      *grader.Grader
+	grader      AnswerGrader
 }
 
 // CardServiceOption configures NewCardService.
@@ -29,13 +29,14 @@ type CardServiceOption func(*cardServiceImpl)
 // WithGrader checks typed answers with g, which asks a language model about
 // answers in other words. Without it answers are checked locally: form,
 // word order and typos are forgiven, other words are not.
-func WithGrader(g *grader.Grader) CardServiceOption {
+func WithGrader(g AnswerGrader) CardServiceOption {
 	return func(s *cardServiceImpl) { s.grader = g }
 }
 
 // NewCardService creates a new CardService implementation backed by db.Querier.
 func NewCardService(querier db.Querier, userService UserService, opts ...CardServiceOption) CardService {
 	s := &cardServiceImpl{
+		grader:      LocalAnswerGrader{},
 		querier:     querier,
 		userService: userService,
 	}
