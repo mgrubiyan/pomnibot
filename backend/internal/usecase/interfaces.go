@@ -11,6 +11,7 @@ import (
 
 // SetService defines domain operations on card sets.
 type SetService interface {
+	CreateSet(context.Context, int64, *contracts.CreateSetRequest) (*contracts.CardSet, error)
 	GetSet(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.CardSet, error)
 	DeleteSet(ctx context.Context, userID int64, setID uuid.UUID) error
 	GetCardsBySetID(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.Card, error)
@@ -23,6 +24,7 @@ type SetService interface {
 
 // CardService defines domain operations on individual cards.
 type CardService interface {
+	CreateCard(context.Context, int64, uuid.UUID, *contracts.CreateCardRequest) (*contracts.Card, error)
 	UpdateCard(ctx context.Context, userID int64, cardID uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error)
 	DeleteCard(ctx context.Context, userID int64, cardID uuid.UUID) error
 	AnswerQuestion(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error)

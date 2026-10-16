@@ -474,3 +474,19 @@ func (q *Queries) LeaveSet(ctx context.Context, arg LeaveSetParams) (int64, erro
 	}
 	return result.RowsAffected(), nil
 }
+
+const lockSetForAuthor = `-- name: LockSetForAuthor :one
+SELECT id FROM sets WHERE id = $1 AND author_id = $2 FOR UPDATE
+`
+
+type LockSetForAuthorParams struct {
+	ID       pgtype.UUID `json:"id"`
+	AuthorID int64       `json:"author_id"`
+}
+
+func (q *Queries) LockSetForAuthor(ctx context.Context, arg LockSetForAuthorParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, lockSetForAuthor, arg.ID, arg.AuthorID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}

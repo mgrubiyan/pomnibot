@@ -254,6 +254,75 @@ checks:
     - 204
   timeoutMs: 5000
   repeatable: false
+- id: CreateSet
+  name: CreateSet
+  method: POST
+  path: /sets
+  role: user
+  request:
+    headers:
+      Content-Type: application/json
+  expected:
+    statusCodes:
+    - 201
+    contentType: application/json
+    requiredFields:
+    - author
+    - cardsDue
+    - cardsTotal
+    - id
+    - title
+    bodySchema:
+      type: object
+      required:
+      - id
+      - title
+      - cardsTotal
+      - cardsDue
+      - author
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          description: «Матанализ, лекция 3»
+        cardsTotal:
+          type: integer
+        cardsDue:
+          type: integer
+          description: how many are due for review
+        author:
+          type: object
+          required:
+          - id
+          - firstName
+          properties:
+            id:
+              type: integer
+              format: int64
+            firstName:
+              type: string
+            lastName:
+              type: string
+            username:
+              type: string
+        shareCode:
+          type: string
+          pattern: \d{6}
+          example: '123456'
+        userRank:
+          type: integer
+          description: User's rank place in the set rating (1-based)
+          example: 1
+        userPercentile:
+          type: integer
+          description: User's progress mapped from ELO (0-100%)
+          example: 85
+  timeoutMs: 5000
+  repeatable: false
+  extract:
+    setId: $.id
 - id: JoinSetByShareCode
   name: Join a card set by code
   method: POST
@@ -518,9 +587,11 @@ checks:
   method: GET
   path: /sets/{setId}
   role: user
+  dependsOn:
+  - CreateSet
   request:
     path:
-      setId: sample-id
+      setId: ${setId}
   expected:
     statusCodes:
     - 200
@@ -587,7 +658,7 @@ checks:
   role: user
   request:
     path:
-      setId: sample-id
+      setId: ${setId}
   expected:
     statusCodes:
     - 200
@@ -695,6 +766,130 @@ checks:
             description: topic, used for stats
   timeoutMs: 5000
   repeatable: true
+- id: CreateCard
+  name: CreateCard
+  method: POST
+  path: /sets/{setId}/cards
+  role: user
+  request:
+    path:
+      setId: ${setId}
+    headers:
+      Content-Type: application/json
+  expected:
+    statusCodes:
+    - 201
+    contentType: application/json
+    requiredFields:
+    - answer
+    - explanation
+    - id
+    - kind
+    - question
+    - setId
+    - sourceQuote
+    - topic
+    bodySchema:
+      type: object
+      required:
+      - id
+      - setId
+      - kind
+      - question
+      - answer
+      - explanation
+      - sourceQuote
+      - topic
+      properties:
+        id:
+          type: string
+          format: uuid
+        setId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+          - choice
+          - flip
+          - input
+          - boolean
+          - table
+        question:
+          type: string
+        options:
+          type: array
+          items:
+            type: string
+          description: choice only
+        table:
+          type: object
+          description: 'Sorting card: lay the terms out across the columns.'
+          required:
+          - columns
+          - items
+          properties:
+            columns:
+              type: array
+              items:
+                type: string
+            items:
+              type: array
+              items:
+                type: object
+                description: A term of the table and the column it belongs to.
+                required:
+                - text
+                - column
+                properties:
+                  text:
+                    type: string
+                  column:
+                    type: string
+        answer:
+          description: ' choice - integer input - string boolean - boolean table -
+            #/components/schemas/TableLayout '
+          oneOf:
+          - type: integer
+          - type: string
+          - type: boolean
+          - type: object
+            description: 'Sorting card: lay the terms out across the columns.'
+            required:
+            - columns
+            - items
+            properties:
+              columns:
+                type: array
+                items:
+                  type: string
+              items:
+                type: array
+                items:
+                  type: object
+                  description: A term of the table and the column it belongs to.
+                  required:
+                  - text
+                  - column
+                  properties:
+                    text:
+                      type: string
+                    column:
+                      type: string
+        explanation:
+          type: string
+          description: 2-3 sentences
+        sourceQuote:
+          type: string
+          description: quote from the notes
+        sourceRef:
+          type: string
+          description: 'where the quote is from: «Лекция 3, стр. 2»'
+        topic:
+          type: string
+          description: topic, used for stats
+  timeoutMs: 5000
+  repeatable: false
 - id: GetSetLeaderboard
   name: Get set leaderboard for author
   method: GET
@@ -702,7 +897,7 @@ checks:
   role: user
   request:
     path:
-      setId: sample-id
+      setId: ${setId}
   expected:
     statusCodes:
     - 200
@@ -758,7 +953,7 @@ checks:
   role: user
   request:
     path:
-      setId: sample-id
+      setId: ${setId}
   expected:
     statusCodes:
     - 200
@@ -785,7 +980,7 @@ checks:
   role: user
   request:
     path:
-      setId: sample-id
+      setId: ${setId}
   expected:
     statusCodes:
     - 200

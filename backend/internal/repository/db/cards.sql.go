@@ -134,13 +134,18 @@ func (q *Queries) CreateCardTableItem(ctx context.Context, arg CreateCardTableIt
 	return i, err
 }
 
-const deleteCard = `-- name: DeleteCard :execrows
-DELETE FROM cards c
-USING facts f, sets s
-WHERE c.id = $1
-  AND c.fact_id = f.id
-  AND f.set_id = s.id
-  AND s.author_id = $2
+const deleteCard = `-- name: DeleteCard :one
+WITH removed AS (
+    DELETE FROM cards c
+    USING facts f, sets s
+    WHERE c.id = $1 AND c.fact_id = f.id AND f.set_id = s.id AND s.author_id = $2
+    RETURNING c.fact_id
+), cleaned AS (
+    DELETE FROM facts f USING removed r
+    WHERE f.id = r.fact_id
+      AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.fact_id = f.id AND c.id <> $1)
+)
+SELECT COUNT(*) FROM removed
 `
 
 type DeleteCardParams struct {
@@ -149,11 +154,10 @@ type DeleteCardParams struct {
 }
 
 func (q *Queries) DeleteCard(ctx context.Context, arg DeleteCardParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteCard, arg.ID, arg.AuthorID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	row := q.db.QueryRow(ctx, deleteCard, arg.ID, arg.AuthorID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const deleteCardOptions = `-- name: DeleteCardOptions :exec

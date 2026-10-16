@@ -17,6 +17,7 @@ import (
 )
 
 type cardServiceImpl struct {
+	manual      ManualWriter
 	querier     db.Querier
 	userService UserService
 	grader      *grader.Grader

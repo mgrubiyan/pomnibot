@@ -122,3 +122,16 @@ func (h *SetsHandler) JoinSetByShareCode(ctx context.Context, req *contracts.Joi
 	}
 	return res, nil
 }
+
+// CreateSet creates manual content for the authenticated author.
+func (h *SetsHandler) CreateSet(ctx context.Context, req *contracts.CreateSetRequest) (contracts.CreateSetRes, error) {
+	userID, _ := UserIDFromContext(ctx)
+	res, err := h.setService.CreateSet(ctx, userID, req)
+	if err != nil {
+		if errors.Is(err, usecase.ErrValidation) {
+			return &contracts.CreateSetBadRequest{Message: err.Error()}, nil
+		}
+		return &contracts.CreateSetInternalServerError{Message: err.Error()}, nil
+	}
+	return res, nil
+}

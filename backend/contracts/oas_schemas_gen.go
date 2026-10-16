@@ -231,6 +231,7 @@ func (s *Card) SetTopic(val string) {
 	s.Topic = val
 }
 
+func (*Card) createCardRes() {}
 func (*Card) updateCardRes() {}
 
 // Choice - integer input - string boolean - boolean table - #/components/schemas/TableLayout.
@@ -511,6 +512,7 @@ func (s *CardSet) SetUserPercentile(val OptInt) {
 	s.UserPercentile = val
 }
 
+func (*CardSet) createSetRes()          {}
 func (*CardSet) getSetRes()             {}
 func (*CardSet) getSetShareCodeRes()    {}
 func (*CardSet) joinSetByShareCodeRes() {}
@@ -632,6 +634,122 @@ func (s *CheckAnswerResponseMethod) UnmarshalText(data []byte) error {
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
+}
+
+type CreateCardBadRequest ErrorResponse
+
+func (*CreateCardBadRequest) createCardRes() {}
+
+type CreateCardInternalServerError ErrorResponse
+
+func (*CreateCardInternalServerError) createCardRes() {}
+
+type CreateCardNotFound ErrorResponse
+
+func (*CreateCardNotFound) createCardRes() {}
+
+// Ref: #/components/schemas/CreateCardRequest
+type CreateCardRequest struct {
+	Kind        CardKind       `json:"kind"`
+	Question    string         `json:"question"`
+	Answer      CardAnswer     `json:"answer"`
+	Options     []string       `json:"options"`
+	Table       OptTableLayout `json:"table"`
+	Explanation OptString      `json:"explanation"`
+}
+
+// GetKind returns the value of Kind.
+func (s *CreateCardRequest) GetKind() CardKind {
+	return s.Kind
+}
+
+// GetQuestion returns the value of Question.
+func (s *CreateCardRequest) GetQuestion() string {
+	return s.Question
+}
+
+// GetAnswer returns the value of Answer.
+func (s *CreateCardRequest) GetAnswer() CardAnswer {
+	return s.Answer
+}
+
+// GetOptions returns the value of Options.
+func (s *CreateCardRequest) GetOptions() []string {
+	return s.Options
+}
+
+// GetTable returns the value of Table.
+func (s *CreateCardRequest) GetTable() OptTableLayout {
+	return s.Table
+}
+
+// GetExplanation returns the value of Explanation.
+func (s *CreateCardRequest) GetExplanation() OptString {
+	return s.Explanation
+}
+
+// SetKind sets the value of Kind.
+func (s *CreateCardRequest) SetKind(val CardKind) {
+	s.Kind = val
+}
+
+// SetQuestion sets the value of Question.
+func (s *CreateCardRequest) SetQuestion(val string) {
+	s.Question = val
+}
+
+// SetAnswer sets the value of Answer.
+func (s *CreateCardRequest) SetAnswer(val CardAnswer) {
+	s.Answer = val
+}
+
+// SetOptions sets the value of Options.
+func (s *CreateCardRequest) SetOptions(val []string) {
+	s.Options = val
+}
+
+// SetTable sets the value of Table.
+func (s *CreateCardRequest) SetTable(val OptTableLayout) {
+	s.Table = val
+}
+
+// SetExplanation sets the value of Explanation.
+func (s *CreateCardRequest) SetExplanation(val OptString) {
+	s.Explanation = val
+}
+
+type CreateSetBadRequest ErrorResponse
+
+func (*CreateSetBadRequest) createSetRes() {}
+
+type CreateSetInternalServerError ErrorResponse
+
+func (*CreateSetInternalServerError) createSetRes() {}
+
+// Ref: #/components/schemas/CreateSetRequest
+type CreateSetRequest struct {
+	Title string            `json:"title"`
+	Card  CreateCardRequest `json:"card"`
+}
+
+// GetTitle returns the value of Title.
+func (s *CreateSetRequest) GetTitle() string {
+	return s.Title
+}
+
+// GetCard returns the value of Card.
+func (s *CreateSetRequest) GetCard() CreateCardRequest {
+	return s.Card
+}
+
+// SetTitle sets the value of Title.
+func (s *CreateSetRequest) SetTitle(val string) {
+	s.Title = val
+}
+
+// SetCard sets the value of Card.
+func (s *CreateSetRequest) SetCard(val CreateCardRequest) {
+	s.Card = val
 }
 
 type DeleteCardInternalServerError ErrorResponse

@@ -20,10 +20,16 @@ var (
 	rn5AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
+	rn18AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
+	}
+	rn10AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
+	}
 	rn17AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
-	rn16AllowedHeaders = map[string]string{
+	rn9AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
 )
@@ -266,7 +272,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					default:
 						s.notAllowed(w, r, notAllowedParams{
 							allowedMethods: "POST",
-							allowedHeaders: rn17AllowedHeaders,
+							allowedHeaders: rn18AllowedHeaders,
 							acceptPost:     "application/json",
 							acceptPatch:    "",
 						})
@@ -275,69 +281,23 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 
-			case 's': // Prefix: "sets/"
+			case 's': // Prefix: "sets"
 
-				if l := len("sets/"); len(elem) >= l && elem[0:l] == "sets/" {
+				if l := len("sets"); len(elem) >= l && elem[0:l] == "sets" {
 					elem = elem[l:]
 				} else {
 					break
 				}
 
 				if len(elem) == 0 {
-					break
-				}
-				switch elem[0] {
-				case 'j': // Prefix: "join"
-					origElem := elem
-					if l := len("join"); len(elem) >= l && elem[0:l] == "join" {
-						elem = elem[l:]
-					} else {
-						break
-					}
-
-					if len(elem) == 0 {
-						// Leaf node.
-						switch r.Method {
-						case "POST":
-							s.handleJoinSetByShareCodeRequest([0]string{}, elemIsEscaped, w, r)
-						default:
-							s.notAllowed(w, r, notAllowedParams{
-								allowedMethods: "POST",
-								allowedHeaders: rn16AllowedHeaders,
-								acceptPost:     "application/json",
-								acceptPatch:    "",
-							})
-						}
-
-						return
-					}
-
-					elem = origElem
-				}
-				// Param: "setId"
-				// Match until "/"
-				idx := strings.IndexByte(elem, '/')
-				if idx < 0 {
-					idx = len(elem)
-				}
-				args[0] = elem[:idx]
-				elem = elem[idx:]
-
-				if len(elem) == 0 {
 					switch r.Method {
-					case "DELETE":
-						s.handleDeleteSetRequest([1]string{
-							args[0],
-						}, elemIsEscaped, w, r)
-					case "GET":
-						s.handleGetSetRequest([1]string{
-							args[0],
-						}, elemIsEscaped, w, r)
+					case "POST":
+						s.handleCreateSetRequest([0]string{}, elemIsEscaped, w, r)
 					default:
 						s.notAllowed(w, r, notAllowedParams{
-							allowedMethods: "DELETE,GET",
-							allowedHeaders: nil,
-							acceptPost:     "",
+							allowedMethods: "POST",
+							allowedHeaders: rn10AllowedHeaders,
+							acceptPost:     "application/json",
 							acceptPatch:    "",
 						})
 					}
@@ -357,9 +317,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						break
 					}
 					switch elem[0] {
-					case 'c': // Prefix: "cards"
-
-						if l := len("cards"); len(elem) >= l && elem[0:l] == "cards" {
+					case 'j': // Prefix: "join"
+						origElem := elem
+						if l := len("join"); len(elem) >= l && elem[0:l] == "join" {
 							elem = elem[l:]
 						} else {
 							break
@@ -368,15 +328,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						if len(elem) == 0 {
 							// Leaf node.
 							switch r.Method {
-							case "GET":
-								s.handleGetCardsBySetIDRequest([1]string{
-									args[0],
-								}, elemIsEscaped, w, r)
+							case "POST":
+								s.handleJoinSetByShareCodeRequest([0]string{}, elemIsEscaped, w, r)
 							default:
 								s.notAllowed(w, r, notAllowedParams{
-									allowedMethods: "GET",
-									allowedHeaders: nil,
-									acceptPost:     "",
+									allowedMethods: "POST",
+									allowedHeaders: rn17AllowedHeaders,
+									acceptPost:     "application/json",
 									acceptPatch:    "",
 								})
 							}
@@ -384,85 +342,163 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							return
 						}
 
-					case 'l': // Prefix: "leaderboard"
+						elem = origElem
+					}
+					// Param: "setId"
+					// Match until "/"
+					idx := strings.IndexByte(elem, '/')
+					if idx < 0 {
+						idx = len(elem)
+					}
+					args[0] = elem[:idx]
+					elem = elem[idx:]
 
-						if l := len("leaderboard"); len(elem) >= l && elem[0:l] == "leaderboard" {
+					if len(elem) == 0 {
+						switch r.Method {
+						case "DELETE":
+							s.handleDeleteSetRequest([1]string{
+								args[0],
+							}, elemIsEscaped, w, r)
+						case "GET":
+							s.handleGetSetRequest([1]string{
+								args[0],
+							}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "DELETE,GET",
+								allowedHeaders: nil,
+								acceptPost:     "",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+					switch elem[0] {
+					case '/': // Prefix: "/"
+
+						if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
 							elem = elem[l:]
 						} else {
 							break
 						}
 
 						if len(elem) == 0 {
-							// Leaf node.
-							switch r.Method {
-							case "GET":
-								s.handleGetSetLeaderboardRequest([1]string{
-									args[0],
-								}, elemIsEscaped, w, r)
-							default:
-								s.notAllowed(w, r, notAllowedParams{
-									allowedMethods: "GET",
-									allowedHeaders: nil,
-									acceptPost:     "",
-									acceptPatch:    "",
-								})
-							}
-
-							return
-						}
-
-					case 'p': // Prefix: "plan"
-
-						if l := len("plan"); len(elem) >= l && elem[0:l] == "plan" {
-							elem = elem[l:]
-						} else {
 							break
 						}
+						switch elem[0] {
+						case 'c': // Prefix: "cards"
 
-						if len(elem) == 0 {
-							// Leaf node.
-							switch r.Method {
-							case "GET":
-								s.handleGetSetPlanRequest([1]string{
-									args[0],
-								}, elemIsEscaped, w, r)
-							default:
-								s.notAllowed(w, r, notAllowedParams{
-									allowedMethods: "GET",
-									allowedHeaders: nil,
-									acceptPost:     "",
-									acceptPatch:    "",
-								})
+							if l := len("cards"); len(elem) >= l && elem[0:l] == "cards" {
+								elem = elem[l:]
+							} else {
+								break
 							}
 
-							return
-						}
+							if len(elem) == 0 {
+								// Leaf node.
+								switch r.Method {
+								case "GET":
+									s.handleGetCardsBySetIDRequest([1]string{
+										args[0],
+									}, elemIsEscaped, w, r)
+								case "POST":
+									s.handleCreateCardRequest([1]string{
+										args[0],
+									}, elemIsEscaped, w, r)
+								default:
+									s.notAllowed(w, r, notAllowedParams{
+										allowedMethods: "GET,POST",
+										allowedHeaders: rn9AllowedHeaders,
+										acceptPost:     "application/json",
+										acceptPatch:    "",
+									})
+								}
 
-					case 's': // Prefix: "share"
-
-						if l := len("share"); len(elem) >= l && elem[0:l] == "share" {
-							elem = elem[l:]
-						} else {
-							break
-						}
-
-						if len(elem) == 0 {
-							// Leaf node.
-							switch r.Method {
-							case "GET":
-								s.handleGetSetShareCodeRequest([1]string{
-									args[0],
-								}, elemIsEscaped, w, r)
-							default:
-								s.notAllowed(w, r, notAllowedParams{
-									allowedMethods: "GET",
-									allowedHeaders: nil,
-									acceptPost:     "",
-									acceptPatch:    "",
-								})
+								return
 							}
 
-							return
+						case 'l': // Prefix: "leaderboard"
+
+							if l := len("leaderboard"); len(elem) >= l && elem[0:l] == "leaderboard" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								// Leaf node.
+								switch r.Method {
+								case "GET":
+									s.handleGetSetLeaderboardRequest([1]string{
+										args[0],
+									}, elemIsEscaped, w, r)
+								default:
+									s.notAllowed(w, r, notAllowedParams{
+										allowedMethods: "GET",
+										allowedHeaders: nil,
+										acceptPost:     "",
+										acceptPatch:    "",
+									})
+								}
+
+								return
+							}
+
+						case 'p': // Prefix: "plan"
+
+							if l := len("plan"); len(elem) >= l && elem[0:l] == "plan" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								// Leaf node.
+								switch r.Method {
+								case "GET":
+									s.handleGetSetPlanRequest([1]string{
+										args[0],
+									}, elemIsEscaped, w, r)
+								default:
+									s.notAllowed(w, r, notAllowedParams{
+										allowedMethods: "GET",
+										allowedHeaders: nil,
+										acceptPost:     "",
+										acceptPatch:    "",
+									})
+								}
+
+								return
+							}
+
+						case 's': // Prefix: "share"
+
+							if l := len("share"); len(elem) >= l && elem[0:l] == "share" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								// Leaf node.
+								switch r.Method {
+								case "GET":
+									s.handleGetSetShareCodeRequest([1]string{
+										args[0],
+									}, elemIsEscaped, w, r)
+								default:
+									s.notAllowed(w, r, notAllowedParams{
+										allowedMethods: "GET",
+										allowedHeaders: nil,
+										acceptPost:     "",
+										acceptPatch:    "",
+									})
+								}
+
+								return
+							}
+
 						}
 
 					}
@@ -764,73 +800,24 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 					}
 				}
 
-			case 's': // Prefix: "sets/"
+			case 's': // Prefix: "sets"
 
-				if l := len("sets/"); len(elem) >= l && elem[0:l] == "sets/" {
+				if l := len("sets"); len(elem) >= l && elem[0:l] == "sets" {
 					elem = elem[l:]
 				} else {
 					break
 				}
 
 				if len(elem) == 0 {
-					break
-				}
-				switch elem[0] {
-				case 'j': // Prefix: "join"
-					origElem := elem
-					if l := len("join"); len(elem) >= l && elem[0:l] == "join" {
-						elem = elem[l:]
-					} else {
-						break
-					}
-
-					if len(elem) == 0 {
-						// Leaf node.
-						switch method {
-						case "POST":
-							r.name = JoinSetByShareCodeOperation
-							r.summary = "Join a card set by code"
-							r.operationID = "JoinSetByShareCode"
-							r.operationGroup = ""
-							r.pathPattern = "/sets/join"
-							r.args = args
-							r.count = 0
-							return r, true
-						default:
-							return
-						}
-					}
-
-					elem = origElem
-				}
-				// Param: "setId"
-				// Match until "/"
-				idx := strings.IndexByte(elem, '/')
-				if idx < 0 {
-					idx = len(elem)
-				}
-				args[0] = elem[:idx]
-				elem = elem[idx:]
-
-				if len(elem) == 0 {
 					switch method {
-					case "DELETE":
-						r.name = DeleteSetOperation
-						r.summary = "Delete a card set"
-						r.operationID = "DeleteSet"
+					case "POST":
+						r.name = CreateSetOperation
+						r.summary = "CreateSet"
+						r.operationID = "CreateSet"
 						r.operationGroup = ""
-						r.pathPattern = "/sets/{setId}"
+						r.pathPattern = "/sets"
 						r.args = args
-						r.count = 1
-						return r, true
-					case "GET":
-						r.name = GetSetOperation
-						r.summary = "Get a card set"
-						r.operationID = "GetSet"
-						r.operationGroup = ""
-						r.pathPattern = "/sets/{setId}"
-						r.args = args
-						r.count = 1
+						r.count = 0
 						return r, true
 					default:
 						return
@@ -849,9 +836,9 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						break
 					}
 					switch elem[0] {
-					case 'c': // Prefix: "cards"
-
-						if l := len("cards"); len(elem) >= l && elem[0:l] == "cards" {
+					case 'j': // Prefix: "join"
+						origElem := elem
+						if l := len("join"); len(elem) >= l && elem[0:l] == "join" {
 							elem = elem[l:]
 						} else {
 							break
@@ -860,93 +847,177 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						if len(elem) == 0 {
 							// Leaf node.
 							switch method {
-							case "GET":
-								r.name = GetCardsBySetIDOperation
-								r.summary = "Get cards"
-								r.operationID = "GetCardsBySetID"
+							case "POST":
+								r.name = JoinSetByShareCodeOperation
+								r.summary = "Join a card set by code"
+								r.operationID = "JoinSetByShareCode"
 								r.operationGroup = ""
-								r.pathPattern = "/sets/{setId}/cards"
+								r.pathPattern = "/sets/join"
 								r.args = args
-								r.count = 1
+								r.count = 0
 								return r, true
 							default:
 								return
 							}
 						}
 
-					case 'l': // Prefix: "leaderboard"
+						elem = origElem
+					}
+					// Param: "setId"
+					// Match until "/"
+					idx := strings.IndexByte(elem, '/')
+					if idx < 0 {
+						idx = len(elem)
+					}
+					args[0] = elem[:idx]
+					elem = elem[idx:]
 
-						if l := len("leaderboard"); len(elem) >= l && elem[0:l] == "leaderboard" {
+					if len(elem) == 0 {
+						switch method {
+						case "DELETE":
+							r.name = DeleteSetOperation
+							r.summary = "Delete a card set"
+							r.operationID = "DeleteSet"
+							r.operationGroup = ""
+							r.pathPattern = "/sets/{setId}"
+							r.args = args
+							r.count = 1
+							return r, true
+						case "GET":
+							r.name = GetSetOperation
+							r.summary = "Get a card set"
+							r.operationID = "GetSet"
+							r.operationGroup = ""
+							r.pathPattern = "/sets/{setId}"
+							r.args = args
+							r.count = 1
+							return r, true
+						default:
+							return
+						}
+					}
+					switch elem[0] {
+					case '/': // Prefix: "/"
+
+						if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
 							elem = elem[l:]
 						} else {
 							break
 						}
 
 						if len(elem) == 0 {
-							// Leaf node.
-							switch method {
-							case "GET":
-								r.name = GetSetLeaderboardOperation
-								r.summary = "Get set leaderboard for author"
-								r.operationID = "GetSetLeaderboard"
-								r.operationGroup = ""
-								r.pathPattern = "/sets/{setId}/leaderboard"
-								r.args = args
-								r.count = 1
-								return r, true
-							default:
-								return
-							}
-						}
-
-					case 'p': // Prefix: "plan"
-
-						if l := len("plan"); len(elem) >= l && elem[0:l] == "plan" {
-							elem = elem[l:]
-						} else {
 							break
 						}
+						switch elem[0] {
+						case 'c': // Prefix: "cards"
 
-						if len(elem) == 0 {
-							// Leaf node.
-							switch method {
-							case "GET":
-								r.name = GetSetPlanOperation
-								r.summary = "Get set's facts plan"
-								r.operationID = "GetSetPlan"
-								r.operationGroup = ""
-								r.pathPattern = "/sets/{setId}/plan"
-								r.args = args
-								r.count = 1
-								return r, true
-							default:
-								return
+							if l := len("cards"); len(elem) >= l && elem[0:l] == "cards" {
+								elem = elem[l:]
+							} else {
+								break
 							}
-						}
 
-					case 's': // Prefix: "share"
-
-						if l := len("share"); len(elem) >= l && elem[0:l] == "share" {
-							elem = elem[l:]
-						} else {
-							break
-						}
-
-						if len(elem) == 0 {
-							// Leaf node.
-							switch method {
-							case "GET":
-								r.name = GetSetShareCodeOperation
-								r.summary = "Get share code for a set"
-								r.operationID = "GetSetShareCode"
-								r.operationGroup = ""
-								r.pathPattern = "/sets/{setId}/share"
-								r.args = args
-								r.count = 1
-								return r, true
-							default:
-								return
+							if len(elem) == 0 {
+								// Leaf node.
+								switch method {
+								case "GET":
+									r.name = GetCardsBySetIDOperation
+									r.summary = "Get cards"
+									r.operationID = "GetCardsBySetID"
+									r.operationGroup = ""
+									r.pathPattern = "/sets/{setId}/cards"
+									r.args = args
+									r.count = 1
+									return r, true
+								case "POST":
+									r.name = CreateCardOperation
+									r.summary = "CreateCard"
+									r.operationID = "CreateCard"
+									r.operationGroup = ""
+									r.pathPattern = "/sets/{setId}/cards"
+									r.args = args
+									r.count = 1
+									return r, true
+								default:
+									return
+								}
 							}
+
+						case 'l': // Prefix: "leaderboard"
+
+							if l := len("leaderboard"); len(elem) >= l && elem[0:l] == "leaderboard" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								// Leaf node.
+								switch method {
+								case "GET":
+									r.name = GetSetLeaderboardOperation
+									r.summary = "Get set leaderboard for author"
+									r.operationID = "GetSetLeaderboard"
+									r.operationGroup = ""
+									r.pathPattern = "/sets/{setId}/leaderboard"
+									r.args = args
+									r.count = 1
+									return r, true
+								default:
+									return
+								}
+							}
+
+						case 'p': // Prefix: "plan"
+
+							if l := len("plan"); len(elem) >= l && elem[0:l] == "plan" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								// Leaf node.
+								switch method {
+								case "GET":
+									r.name = GetSetPlanOperation
+									r.summary = "Get set's facts plan"
+									r.operationID = "GetSetPlan"
+									r.operationGroup = ""
+									r.pathPattern = "/sets/{setId}/plan"
+									r.args = args
+									r.count = 1
+									return r, true
+								default:
+									return
+								}
+							}
+
+						case 's': // Prefix: "share"
+
+							if l := len("share"); len(elem) >= l && elem[0:l] == "share" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								// Leaf node.
+								switch method {
+								case "GET":
+									r.name = GetSetShareCodeOperation
+									r.summary = "Get share code for a set"
+									r.operationID = "GetSetShareCode"
+									r.operationGroup = ""
+									r.pathPattern = "/sets/{setId}/share"
+									r.args = args
+									r.count = 1
+									return r, true
+								default:
+									return
+								}
+							}
+
 						}
 
 					}

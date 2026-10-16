@@ -127,13 +127,18 @@ WHERE cards.id = $1
   AND s.author_id = $8
 RETURNING cards.id, cards.fact_id, cards.kind, cards.question, cards.answer_text, cards.explanation, cards.source_quote, cards.source_ref, cards.created_at, cards.updated_at;
 
--- name: DeleteCard :execrows
-DELETE FROM cards c
-USING facts f, sets s
-WHERE c.id = $1
-  AND c.fact_id = f.id
-  AND f.set_id = s.id
-  AND s.author_id = $2;
+-- name: DeleteCard :one
+WITH removed AS (
+    DELETE FROM cards c
+    USING facts f, sets s
+    WHERE c.id = $1 AND c.fact_id = f.id AND f.set_id = s.id AND s.author_id = $2
+    RETURNING c.fact_id
+), cleaned AS (
+    DELETE FROM facts f USING removed r
+    WHERE f.id = r.fact_id
+      AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.fact_id = f.id AND c.id <> $1)
+)
+SELECT COUNT(*) FROM removed;
 
 -- name: DeleteCardOptions :exec
 DELETE FROM card_options WHERE card_id = $1;

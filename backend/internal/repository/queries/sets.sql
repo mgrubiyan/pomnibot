@@ -190,3 +190,6 @@ ranked AS (
 SELECT percentile, rank
 FROM ranked
 WHERE user_id = sqlc.arg('user_id')::BIGINT;
+
+-- name: LockSetForAuthor :one
+SELECT id FROM sets WHERE id = $1 AND author_id = $2 FOR UPDATE;

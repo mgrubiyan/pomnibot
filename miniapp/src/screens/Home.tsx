@@ -122,7 +122,7 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
     const bottomActions = (
         <Flex direction="column" align="stretch" gap={8}>
             <Button size="medium" variant="primary" stretched onClick={onAddNote}>
-                Добавить конспект
+                Создать набор
             </Button>
             <Button size="medium" variant="ghost" stretched onClick={onJoinSet}>
                 Ввести код набора

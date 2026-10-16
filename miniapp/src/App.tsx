@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
+import ManualCreate from './screens/ManualCreate';
+import { Button, Flex, Typography } from '@maxhub/max-ui';
+import { Screen as Page } from './components/Screen';
 import AddNote from './screens/AddNote';
 import CardEdit from './screens/CardEdit';
 import Feed from './screens/Feed';
@@ -27,6 +30,8 @@ type Screen =
     | { name: 'share'; setId: string; setTitle?: string }
     | { name: 'leaderboard'; setId: string; setTitle?: string }
     | { name: 'add' }
+    | { name: 'create-method' }
+    | { name: 'manual'; setId?: string; setTitle?: string }
     | { name: 'join' }
     | {
           name: 'card-edit';
@@ -139,7 +144,7 @@ function App() {
         feedResults?: AnswerResult[],
     ) => {
         try {
-            await api.PUT('/cards/{cardId}', {
+            const { error } = await api.PUT('/cards/{cardId}', {
                 params: { path: { cardId } },
                 body: {
                     kind: patch.kind,
@@ -153,8 +158,10 @@ function App() {
                     sourceRef: patch.sourceRef,
                 },
             });
+            if (error) throw new Error('Failed to update card');
         } catch (err) {
             console.error('Failed to update card:', err);
+            throw err;
         }
 
         setCardPatches((current) => ({ ...current, [cardId]: patch }));
@@ -176,12 +183,27 @@ function App() {
         <Home
             onStart={() => go({ name: 'feed' })}
             onOpenSet={(setId) => go({ name: 'set', setId })}
-            onAddNote={() => go({ name: 'add' })}
+            onAddNote={() => go({ name: 'create-method' })}
             onJoinSet={() => go({ name: 'join' })}
             removedSetIds={removedSetIds}
             onTodayLoaded={handleTodayLoaded}
         />
     );
+
+    if (screen.name === 'create-method') {
+        return <Page><Flex direction="column" align="stretch" gap={16}>
+            <Typography.Text variant="subheader">Создать набор</Typography.Text>
+            <Button onClick={() => go({ name: 'manual' })}>Вручную</Button>
+            <Button variant="secondary" onClick={() => go({ name: 'add' })}>Из конспекта</Button>
+            <Button variant="ghost" onClick={goHome}>Назад</Button>
+        </Flex></Page>;
+    }
+
+    if (screen.name === 'manual') {
+        return <ManualCreate setId={screen.setId} setTitle={screen.setTitle}
+            onExit={() => screen.setId ? go({ name: 'set-cards', setId: screen.setId }) : goHome()}
+            onDone={setId => go({ name: 'set-cards', setId })} />;
+    }
 
     if (screen.name === 'add') {
         return <AddNote onBack={goHome} />;
@@ -306,6 +328,7 @@ function App() {
                 setId={screen.setId}
                 currentUser={currentUser}
                 toast={toast}
+                onAddCard={(setTitle) => go({ name: 'manual', setId: screen.setId, setTitle })}
                 onBack={() => openSet(screen.setId)}
                 onOpenCard={(card, setTitle) =>
                     go({

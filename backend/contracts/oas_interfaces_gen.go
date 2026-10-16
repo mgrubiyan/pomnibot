@@ -9,6 +9,14 @@ type CheckAnswerRes interface {
 	checkAnswerRes()
 }
 
+type CreateCardRes interface {
+	createCardRes()
+}
+
+type CreateSetRes interface {
+	createSetRes()
+}
+
 type DeleteCardRes interface {
 	deleteCardRes()
 }

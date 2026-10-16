@@ -15,11 +15,12 @@ export interface SetCardsProps {
     /** What happened to a card on the way back here. */
     toast?: { kind: 'removed' | 'edited' } | null;
     onBack: () => void;
+    onAddCard: (setTitle: string) => void;
     onOpenCard: (card: Card, setTitle: string) => void;
 }
 
 /** Cards of a set. The author opens one to edit or delete it; members only read. */
-export function SetCards({ setId, currentUser, toast, onBack, onOpenCard }: SetCardsProps) {
+export function SetCards({ setId, currentUser, toast, onBack, onAddCard, onOpenCard }: SetCardsProps) {
     const [status, setStatus] = useState<Status>('loading');
     const [set, setSet] = useState<CardSet | null>(null);
     const [cards, setCards] = useState<Card[]>([]);
@@ -108,6 +109,7 @@ export function SetCards({ setId, currentUser, toast, onBack, onOpenCard }: SetC
                         Нажмите на карточку, чтобы исправить или удалить её
                     </Typography.Text>
                 ) : null}
+                {isOwner && <Button size="medium" onClick={() => onAddCard(set.title)}>Добавить карточку</Button>}
                 <CellList mode="island" filled className={s.list}>
                     {cards.map((card, index) => (
                         <CellSimple
