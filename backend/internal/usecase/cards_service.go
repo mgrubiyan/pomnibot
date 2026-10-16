@@ -118,35 +118,47 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID int64, cardID u
 
 	// If options are provided for choice card, replace them
 	if len(req.Options) > 0 {
-		_ = s.querier.DeleteCardOptions(ctx, pgCardID)
+		if err := s.querier.DeleteCardOptions(ctx, pgCardID); err != nil {
+			return nil, fmt.Errorf("delete card options: %w", err)
+		}
 		for idx, opt := range req.Options {
 			isCorrect := strings.TrimSpace(opt) == strings.TrimSpace(updated.AnswerText.String)
-			_, _ = s.querier.CreateCardOption(ctx, db.CreateCardOptionParams{
+			if _, err := s.querier.CreateCardOption(ctx, db.CreateCardOptionParams{
 				CardID:    pgCardID,
 				Position:  int32(idx),
 				Text:      opt,
 				IsCorrect: isCorrect,
-			})
+			}); err != nil {
+				return nil, fmt.Errorf("create card option %d: %w", idx, err)
+			}
 		}
 	}
 
 	// If table layout is provided, replace columns and items
 	if req.Table.IsSet() {
-		_ = s.querier.DeleteCardTableColumns(ctx, pgCardID)
-		_ = s.querier.DeleteCardTableItems(ctx, pgCardID)
+		if err := s.querier.DeleteCardTableColumns(ctx, pgCardID); err != nil {
+			return nil, fmt.Errorf("delete card table columns: %w", err)
+		}
+		if err := s.querier.DeleteCardTableItems(ctx, pgCardID); err != nil {
+			return nil, fmt.Errorf("delete card table items: %w", err)
+		}
 		for idx, col := range req.Table.Value.Columns {
-			_, _ = s.querier.CreateCardTableColumn(ctx, db.CreateCardTableColumnParams{
+			if _, err := s.querier.CreateCardTableColumn(ctx, db.CreateCardTableColumnParams{
 				CardID:   pgCardID,
 				Position: int32(idx),
 				Name:     col,
-			})
+			}); err != nil {
+				return nil, fmt.Errorf("create card table column %d: %w", idx, err)
+			}
 		}
-		for _, item := range req.Table.Value.Items {
-			_, _ = s.querier.CreateCardTableItem(ctx, db.CreateCardTableItemParams{
+		for idx, item := range req.Table.Value.Items {
+			if _, err := s.querier.CreateCardTableItem(ctx, db.CreateCardTableItemParams{
 				CardID:     pgCardID,
 				ItemText:   item.Text,
 				ColumnName: item.Column,
-			})
+			}); err != nil {
+				return nil, fmt.Errorf("create card table item %d: %w", idx, err)
+			}
 		}
 	}
 

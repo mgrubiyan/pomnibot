@@ -25,7 +25,7 @@ func (h *HomescreenHandler) GetToday(ctx context.Context) (contracts.GetTodayRes
 	userID, _ := UserIDFromContext(ctx)
 	res, err := h.homescreenService.GetToday(ctx, userID)
 	if err != nil {
-		return &contracts.ErrorResponse{Message: err.Error()}, nil
+		return &contracts.ErrorResponse{Message: internalError(ctx, "GetToday", err)}, nil
 	}
 	return res, nil
 }
@@ -35,7 +35,7 @@ func (h *HomescreenHandler) GetFeedQuestions(ctx context.Context) (contracts.Get
 	userID, _ := UserIDFromContext(ctx)
 	cards, err := h.homescreenService.GetFeedQuestions(ctx, userID)
 	if err != nil {
-		return &contracts.ErrorResponse{Message: err.Error()}, nil
+		return &contracts.ErrorResponse{Message: internalError(ctx, "GetFeedQuestions", err)}, nil
 	}
 	if cards == nil {
 		cards = []contracts.Card{}
@@ -55,7 +55,7 @@ func (h *HomescreenHandler) SendResults(ctx context.Context, req contracts.SendR
 		if errors.Is(err, usecase.ErrValidation) || errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
 			return &contracts.SendResultsBadRequest{Message: err.Error()}, nil
 		}
-		return &contracts.SendResultsInternalServerError{Message: err.Error()}, nil
+		return &contracts.SendResultsInternalServerError{Message: internalError(ctx, "SendResults", err)}, nil
 	}
 	return &contracts.SendResultsNoContent{}, nil
 }

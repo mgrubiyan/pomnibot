@@ -35,7 +35,7 @@ func (h *CardsHandler) UpdateCard(ctx context.Context, req *contracts.UpdateCard
 		if errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
 			return &contracts.UpdateCardNotFound{Message: err.Error()}, nil
 		}
-		return &contracts.UpdateCardInternalServerError{Message: err.Error()}, nil
+		return &contracts.UpdateCardInternalServerError{Message: internalError(ctx, "UpdateCard", err)}, nil
 	}
 	return res, nil
 }
@@ -48,7 +48,7 @@ func (h *CardsHandler) DeleteCard(ctx context.Context, params contracts.DeleteCa
 		if errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
 			return &contracts.DeleteCardNotFound{Message: err.Error()}, nil
 		}
-		return &contracts.DeleteCardInternalServerError{Message: err.Error()}, nil
+		return &contracts.DeleteCardInternalServerError{Message: internalError(ctx, "DeleteCard", err)}, nil
 	}
 	return &contracts.DeleteCardNoContent{}, nil
 }
@@ -67,7 +67,7 @@ func (h *CardsHandler) AnswerQuestion(ctx context.Context, req *contracts.Answer
 		if errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
 			return &contracts.AnswerQuestionNotFound{Message: err.Error()}, nil
 		}
-		return &contracts.AnswerQuestionInternalServerError{Message: err.Error()}, nil
+		return &contracts.AnswerQuestionInternalServerError{Message: internalError(ctx, "AnswerQuestion", err)}, nil
 	}
 	return res, nil
 }
@@ -86,7 +86,7 @@ func (h *CardsHandler) CheckAnswer(ctx context.Context, req *contracts.CheckAnsw
 		if errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
 			return &contracts.CheckAnswerNotFound{Message: err.Error()}, nil
 		}
-		return &contracts.CheckAnswerInternalServerError{Message: err.Error()}, nil
+		return &contracts.CheckAnswerInternalServerError{Message: internalError(ctx, "CheckAnswer", err)}, nil
 	}
 	return res, nil
 }
