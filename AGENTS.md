@@ -7,6 +7,13 @@
 - Keep descriptions short, concise, and written in the imperative mood (e.g., `feat: add max bot service`, `fix: update docker deploy path`).
 - Do not add `Co-Authored-By` or AI assistant trailers to commit messages.
 
+## Commands
+
+- `task dev` — run frontend development server
+- `task build` — build frontend
+- `task lint` — run all linters (`miniapp` and `backend`)
+- `task test` — run backend unit tests
+
 ## Code & Quality Standards
 
 - Always run `task lint` before committing (verifies both frontend ESLint and backend `golangci-lint`).
