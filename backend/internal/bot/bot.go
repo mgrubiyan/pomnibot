@@ -61,6 +61,8 @@ type Bot struct {
 	extractor   FileExtractor
 	generator   CardGenerator
 	botUser     *User
+	queue       *generationQueue
+	inflight    sync.WaitGroup
 }
 
 // NewBot creates a new Bot instance.
@@ -91,6 +93,7 @@ func NewBot(
 		setService:  setService,
 		extractor:   extractor,
 		generator:   generator,
+		queue:       newGenerationQueue(generationSlots),
 	}, nil
 }
 
@@ -163,9 +166,15 @@ func (b *Bot) pollLoop(ctx context.Context) {
 		}
 
 		for _, update := range resp.Updates {
-			b.handleUpdate(ctx, update)
+			b.dispatch(ctx, update)
 		}
 	}
+}
+
+// dispatch handles u in its own goroutine, so a document that takes minutes
+// to turn into cards does not hold up other users' messages.
+func (b *Bot) dispatch(ctx context.Context, u Update) {
+	b.inflight.Go(func() { b.handleUpdate(ctx, u) })
 }
 
 func (b *Bot) handleUpdate(ctx context.Context, u Update) {
@@ -298,6 +307,22 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 	if len(files) == 0 {
 		updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
 		return
+	}
+
+	// Files are downloaded before waiting, while their links are fresh;
+	// reading and generation wait for their turn at GigaChat.
+	queued := false
+	release, err := b.queue.acquire(ctx, func(ahead int) {
+		queued = true
+		updateStatus(fmt.Sprintf("📸 Получил %d %s. Сейчас обрабатываю другие конспекты, ты в очереди, перед тобой: %d. Начну, как только освобожусь ⏳", count, plural, ahead))
+	})
+	if err != nil {
+		slog.Warn("stopped waiting for generation slot", "user_id", userID, "error", err)
+		return
+	}
+	defer release()
+	if queued {
+		updateStatus("📸 Твоя очередь! Распознаю текст... ⏳")
 	}
 
 	extracted, err := b.extractor.Extract(ctx, files)
