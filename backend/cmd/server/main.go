@@ -108,8 +108,8 @@ func main() {
 	queries := db.New(pool)
 
 	userService = usecase.NewUserService(queries)
-	setService = usecase.NewSetService(queries, userService)
-	cardService = usecase.NewCardService(queries, userService, usecase.WithGrader(answerGrader))
+	setService = usecase.NewSetService(queries, userService, repository.NewManualStore(pool))
+	cardService = usecase.NewCardService(queries, userService, usecase.WithGrader(answerGrader), usecase.WithManualCards(repository.NewManualStore(pool)))
 	homescreenService = usecase.NewHomescreenService(queries, userService)
 	slog.Info("persistence layer and usecase services wired successfully")
 

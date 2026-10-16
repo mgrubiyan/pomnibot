@@ -22,6 +22,18 @@ type Handler interface {
 	//
 	// POST /cards/{cardId}/check
 	CheckAnswer(ctx context.Context, req *CheckAnswerRequest, params CheckAnswerParams) (CheckAnswerRes, error)
+	// CreateCard implements CreateCard operation.
+	//
+	// CreateCard.
+	//
+	// POST /sets/{setId}/cards
+	CreateCard(ctx context.Context, req *CreateCardRequest, params CreateCardParams) (CreateCardRes, error)
+	// CreateSet implements CreateSet operation.
+	//
+	// CreateSet.
+	//
+	// POST /sets
+	CreateSet(ctx context.Context, req *CreateSetRequest) (CreateSetRes, error)
 	// DeleteCard implements DeleteCard operation.
 	//
 	// Delete a card.

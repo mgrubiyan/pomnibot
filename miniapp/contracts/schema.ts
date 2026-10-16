@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** CreateSet */
+        post: operations["CreateSet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sets/{setId}": {
         parameters: {
             query?: never;
@@ -49,7 +66,8 @@ export interface paths {
         /** Get cards */
         get: operations["GetCardsBySetID"];
         put?: never;
-        post?: never;
+        /** CreateCard */
+        post: operations["CreateCard"];
         delete?: never;
         options?: never;
         head?: never;
@@ -275,6 +293,18 @@ export interface components {
             /** @description topic, used for stats */
             topic: string;
         };
+        CreateSetRequest: {
+            title: string;
+            card: components["schemas"]["CreateCardRequest"];
+        };
+        CreateCardRequest: {
+            kind: components["schemas"]["CardKind"];
+            question: string;
+            answer: components["schemas"]["CardAnswer"];
+            options?: string[];
+            table?: components["schemas"]["TableLayout"];
+            explanation?: string;
+        };
         UpdateCardRequest: {
             kind?: components["schemas"]["CardKind"];
             question?: string;
@@ -451,6 +481,32 @@ export interface operations {
             500: components["responses"]["InternalServerError"];
         };
     };
+    CreateSet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSetRequest"];
+            };
+        };
+        responses: {
+            /** @description Created successfully */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CardSet"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
     GetSet: {
         parameters: {
             query?: never;
@@ -520,6 +576,35 @@ export interface operations {
                     "application/json": components["schemas"]["Card"][];
                 };
             };
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    CreateCard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                setId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCardRequest"];
+            };
+        };
+        responses: {
+            /** @description Created successfully */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Card"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };

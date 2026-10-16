@@ -90,3 +90,19 @@ func (h *CardsHandler) CheckAnswer(ctx context.Context, req *contracts.CheckAnsw
 	}
 	return res, nil
 }
+
+// CreateCard creates manual content for the authenticated author.
+func (h *CardsHandler) CreateCard(ctx context.Context, req *contracts.CreateCardRequest, params contracts.CreateCardParams) (contracts.CreateCardRes, error) {
+	userID, _ := UserIDFromContext(ctx)
+	res, err := h.cardService.CreateCard(ctx, userID, params.SetId, req)
+	if err != nil {
+		if errors.Is(err, usecase.ErrValidation) {
+			return &contracts.CreateCardBadRequest{Message: err.Error()}, nil
+		}
+		if errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
+			return &contracts.CreateCardNotFound{Message: err.Error()}, nil
+		}
+		return &contracts.CreateCardInternalServerError{Message: err.Error()}, nil
+	}
+	return res, nil
+}

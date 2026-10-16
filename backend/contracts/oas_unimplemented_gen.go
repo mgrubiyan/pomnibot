@@ -33,6 +33,24 @@ func (UnimplementedHandler) CheckAnswer(ctx context.Context, req *CheckAnswerReq
 	return r, ht.ErrNotImplemented
 }
 
+// CreateCard implements CreateCard operation.
+//
+// CreateCard.
+//
+// POST /sets/{setId}/cards
+func (UnimplementedHandler) CreateCard(ctx context.Context, req *CreateCardRequest, params CreateCardParams) (r CreateCardRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// CreateSet implements CreateSet operation.
+//
+// CreateSet.
+//
+// POST /sets
+func (UnimplementedHandler) CreateSet(ctx context.Context, req *CreateSetRequest) (r CreateSetRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // DeleteCard implements DeleteCard operation.
 //
 // Delete a card.

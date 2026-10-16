@@ -168,3 +168,19 @@ func (h *APIHandler) SendResults(ctx context.Context, req contracts.SendResultsR
 	}
 	return h.UnimplementedHandler.SendResults(ctx, req)
 }
+
+// CreateSet delegates manual creation.
+func (h *APIHandler) CreateSet(ctx context.Context, req *contracts.CreateSetRequest) (contracts.CreateSetRes, error) {
+	if h.sets != nil {
+		return h.sets.CreateSet(ctx, req)
+	}
+	return h.UnimplementedHandler.CreateSet(ctx, req)
+}
+
+// CreateCard delegates manual creation.
+func (h *APIHandler) CreateCard(ctx context.Context, req *contracts.CreateCardRequest, params contracts.CreateCardParams) (contracts.CreateCardRes, error) {
+	if h.cards != nil {
+		return h.cards.CreateCard(ctx, req, params)
+	}
+	return h.UnimplementedHandler.CreateCard(ctx, req, params)
+}

@@ -147,6 +147,71 @@ func decodeCheckAnswerParams(args [1]string, argsEscaped bool, r *http.Request) 
 	return params, nil
 }
 
+// CreateCardParams is parameters of CreateCard operation.
+type CreateCardParams struct {
+	SetId uuid.UUID
+}
+
+func unpackCreateCardParams(packed middleware.Parameters) (params CreateCardParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "setId",
+			In:   "path",
+		}
+		params.SetId = packed[key].(uuid.UUID)
+	}
+	return params
+}
+
+func decodeCreateCardParams(args [1]string, argsEscaped bool, r *http.Request) (params CreateCardParams, _ error) {
+	// Decode path: setId.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "setId",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToUUID(val)
+				if err != nil {
+					return err
+				}
+
+				params.SetId = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "setId",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // DeleteCardParams is parameters of DeleteCard operation.
 type DeleteCardParams struct {
 	// The ID of the card to delete.

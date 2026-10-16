@@ -17,16 +17,21 @@ import (
 )
 
 type setServiceImpl struct {
+	manual      ManualWriter
 	querier     db.Querier
 	userService UserService
 }
 
 // NewSetService creates a new SetService implementation backed by db.Querier.
-func NewSetService(querier db.Querier, userService UserService) SetService {
-	return &setServiceImpl{
+func NewSetService(querier db.Querier, userService UserService, manual ...ManualWriter) SetService {
+	s := &setServiceImpl{
 		querier:     querier,
 		userService: userService,
 	}
+	if len(manual) > 0 {
+		s.manual = manual[0]
+	}
+	return s
 }
 
 func (s *setServiceImpl) GetSet(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.CardSet, error) {

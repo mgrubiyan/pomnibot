@@ -46,6 +46,7 @@ type Querier interface {
 	IsSetAuthor(ctx context.Context, arg IsSetAuthorParams) (bool, error)
 	JoinSet(ctx context.Context, arg JoinSetParams) (UserSet, error)
 	LeaveSet(ctx context.Context, arg LeaveSetParams) (int64, error)
+	LockSetForAuthor(ctx context.Context, arg LockSetForAuthorParams) (pgtype.UUID, error)
 	RecordAnswerResult(ctx context.Context, arg RecordAnswerResultParams) (AnswerResult, error)
 	UpdateCard(ctx context.Context, arg UpdateCardParams) (Card, error)
 	UpdateFactProgressOnAnswer(ctx context.Context, arg UpdateFactProgressOnAnswerParams) (UserFactProgress, error)

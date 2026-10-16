@@ -13,6 +13,7 @@ import (
 )
 
 type mockSetService struct {
+	usecase.SetService
 	getSetFunc             func(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.CardSet, error)
 	deleteSetFunc          func(ctx context.Context, userID int64, setID uuid.UUID) error
 	getCardsBySetIDFunc    func(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.Card, error)
@@ -789,4 +790,3 @@ func TestSetsHandler_GetSetLeaderboard(t *testing.T) {
 		}
 	})
 }
-

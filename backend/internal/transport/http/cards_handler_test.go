@@ -11,6 +11,7 @@ import (
 )
 
 type mockCardService struct {
+	usecase.CardService
 	updateCardFunc     func(ctx context.Context, userID int64, cardID uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error)
 	deleteCardFunc     func(ctx context.Context, userID int64, cardID uuid.UUID) error
 	answerQuestionFunc func(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error)
