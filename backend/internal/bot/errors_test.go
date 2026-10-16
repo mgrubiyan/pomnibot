@@ -52,7 +52,7 @@ func TestBot_FailuresTellTheStudentWhatHappened(t *testing.T) {
 				}
 				return u
 			},
-			want: "Не получилось скачать файл",
+			want: msgResend,
 		},
 		{
 			name: "unsupported format",
@@ -69,39 +69,39 @@ func TestBot_FailuresTellTheStudentWhatHappened(t *testing.T) {
 		{
 			name:      "extraction fails for an unknown reason",
 			extractor: extractErr(errors.New("boom")),
-			want:      "Не получилось прочитать файл",
+			want:      msgTryLater,
 		},
 		{
 			name: "no text in the files",
 			extractor: &mockFileExtractor{extractFunc: func(context.Context, []ingest.File) (ingest.Result, error) {
 				return ingest.Result{Text: "  \n "}, nil
 			}},
-			want: "Не нашёл в файле текста",
+			want: msgNoText,
 		},
 		{
 			name: "model fails",
 			gen:  failingGen(fmt.Errorf("provider failed on 3 fragments in a row: %w", errors.New("503")), generator.Stats{}),
-			want: "сейчас не отвечает",
+			want: msgTryLater,
 		},
 		{
 			name: "only a table of contents",
 			gen:  failingGen(nil, generator.Stats{Chunks: 2, ChunksFiltered: 2}),
-			want: "оглавление",
+			want: msgOnlyJunk,
 		},
 		{
 			name: "content filter refused every fragment",
 			gen:  failingGen(nil, generator.Stats{Chunks: 3, ChunksFiltered: 1, ChunksRefused: 2}),
-			want: "отказался обрабатывать",
+			want: msgOtherText,
 		},
 		{
 			name: "no card backed by a quote",
 			gen:  failingGen(nil, generator.Stats{Chunks: 2, CardsFromModel: 6, DroppedQuote: 6}),
-			want: "ни одной карточки",
+			want: msgNoCards,
 		},
 		{
 			name:    "saving fails",
 			saveErr: errors.New("db down"),
-			want:    "не получилось их сохранить",
+			want:    msgTryLater,
 		},
 	}
 
@@ -143,6 +143,12 @@ func TestBot_FailuresTellTheStudentWhatHappened(t *testing.T) {
 			}
 			if strings.Contains(got, "Попробуйте еще раз позже") {
 				t.Errorf("last message is the generic error: %q", got)
+			}
+			// The student cannot do anything about our insides.
+			for _, inside := range []string{"сервис", "сохран", "цитат", "GigaChat"} {
+				if strings.Contains(strings.ToLower(got), strings.ToLower(inside)) {
+					t.Errorf("last message talks about %q: %q", inside, got)
+				}
 			}
 		})
 	}

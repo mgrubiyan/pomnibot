@@ -10,18 +10,16 @@ import (
 )
 
 // What the student reads when a document does not become a set. Each text
-// says what went wrong and what to do next, so a wrong file is not mistaken
-// for a broken bot.
+// says only what the student can do next: send the file again, send a
+// different one, or wait. Our own failures, such as the model or the database,
+// are not explained; the student cannot fix them.
 const (
-	msgUnavailable = "😕 Сейчас не могу разобрать конспект: сервис временно недоступен. Попробуй прислать его ещё раз позже."
-	msgDownload    = "😕 Не получилось скачать файл из чата. Пришли его ещё раз."
-	msgExtract     = "😕 Не получилось прочитать файл. Пришли его ещё раз или в другом формате: текст, PDF или фото страниц."
-	msgNoText      = "😕 Не нашёл в файле текста. Если это фото или скан, проверь, что страница целиком в кадре, хорошо освещена и не размыта, и пришли ещё раз."
-	msgModelDown   = "😕 Сервис, который составляет карточки, сейчас не отвечает. Попробуй прислать конспект ещё раз через несколько минут."
-	msgOnlyJunk    = "😕 Не нашёл в тексте материала для карточек: похоже, это оглавление, список литературы или служебный текст. Пришли сам конспект."
-	msgRefused     = "😕 Сервис генерации отказался обрабатывать этот текст. Попробуй прислать другой конспект."
-	msgNoCards     = "😕 Не смог составить по этому тексту ни одной карточки, которую можно подтвердить цитатой из конспекта. Пришли конспект подробнее: определения, свойства, причины и следствия."
-	msgSaveFailed  = "😕 Карточки готовы, но не получилось их сохранить. Пришли конспект ещё раз чуть позже."
+	msgTryLater  = "😕 Не получилось сделать карточки. Пришли конспект ещё раз через пару минут."
+	msgResend    = "😕 Не получилось получить файл. Пришли его ещё раз."
+	msgNoText    = "😕 Не нашёл в файле текста. Если это фото, сними страницу целиком, при хорошем свете и без размытия."
+	msgOnlyJunk  = "😕 Не нашёл в файле материала для карточек. Пришли сам конспект с объяснениями, а не титульный лист, оглавление или список литературы."
+	msgOtherText = "😕 По этому тексту не получилось составить карточки. Попробуй прислать другой конспект."
+	msgNoCards   = "😕 По этому тексту не получилось составить карточки. Пришли конспект подробнее: с определениями, свойствами, причинами и следствиями."
 )
 
 // maxWarningsShown keeps a long scan with many blurry pages from burying the
@@ -34,7 +32,7 @@ const maxWarningsShown = 3
 func extractFailure(err error, files int) string {
 	var ie *ingest.Error
 	if !errors.As(err, &ie) || ie.Message == "" {
-		return msgExtract
+		return msgTryLater
 	}
 	if files > 1 && ie.File != "" {
 		return fmt.Sprintf("😕 Файл «%s»: %s", ie.File, ie.Message)
@@ -42,16 +40,17 @@ func extractFailure(err error, files int) string {
 	return "😕 " + ie.Message
 }
 
-// noCardsReason explains an empty set from what the generator saw: nothing
-// but junk, refusals by the content filter, or cards that did not survive
-// the quote check.
+// noCardsReason picks what to ask for when the set came out empty, from what
+// the generator saw: nothing but junk (send the notes themselves), refusals by
+// the content filter (send other notes), or cards that did not survive the
+// quote check (send more detailed notes).
 func noCardsReason(s generator.Stats) string {
 	sent := s.Chunks - s.ChunksFiltered
 	switch {
 	case s.Chunks > 0 && sent == 0:
 		return msgOnlyJunk
 	case s.ChunksRefused > 0 && s.ChunksRefused == sent:
-		return msgRefused
+		return msgOtherText
 	default:
 		return msgNoCards
 	}
