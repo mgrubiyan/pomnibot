@@ -264,7 +264,7 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 
 	if b.extractor == nil || b.generator == nil {
 		slog.Error("extractor or generator not configured on bot")
-		updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
+		updateStatus(msgUnavailable)
 		return
 	}
 
@@ -278,14 +278,14 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 			downloaded, err := b.client.DownloadFile(ctx, att.url)
 			if err != nil {
 				slog.Error("failed to download attachment", "url", att.url, "error", err)
-				updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
+				updateStatus(msgDownload)
 				return
 			}
 			data = downloaded.Data
 			discoveredName = downloaded.Filename
 		} else {
 			slog.Error("attachment has neither data nor url", "filename", att.filename)
-			updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
+			updateStatus(msgDownload)
 			return
 		}
 
@@ -305,7 +305,7 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 	}
 
 	if len(files) == 0 {
-		updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
+		updateStatus(msgDownload)
 		return
 	}
 
@@ -328,13 +328,13 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 	extracted, err := b.extractor.Extract(ctx, files)
 	if err != nil {
 		slog.Error("failed to extract text from files", "error", err)
-		updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
+		updateStatus(extractFailure(err, len(files)))
 		return
 	}
 
 	if strings.TrimSpace(extracted.Text) == "" {
 		slog.Warn("no text found in files", "files_count", len(files))
-		updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
+		updateStatus(msgNoText)
 		return
 	}
 
@@ -371,20 +371,20 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 	genResult, err := b.generator.Generate(ctx, doc, onBatch)
 	if err != nil {
 		slog.Error("failed to generate cards from document", "error", err)
-		updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
+		updateStatus(msgModelDown)
 		return
 	}
 
 	if len(genResult.Cards) == 0 {
-		slog.Warn("no cards generated from document")
-		updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
+		slog.Warn("no cards generated from document", "stats", genResult.Stats)
+		updateStatus(noCardsReason(genResult.Stats))
 		return
 	}
 
 	cardSet, err := b.setService.SaveGeneratedSet(ctx, userID, title, genResult)
 	if err != nil {
 		slog.Error("failed to save generated set to database", "error", err)
-		updateStatus("К сожалению, произошла ошибка при создании конспекта. Попробуйте еще раз позже.")
+		updateStatus(msgSaveFailed)
 		return
 	}
 
@@ -393,7 +393,8 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 		shareCode = cardSet.ShareCode.Value
 	}
 
-	finalText := fmt.Sprintf("🎉 Набор «%s» успешно создан!\nКод для совместного доступа: %s\n\nОткрой мини-приложение, чтобы начать тренировку:", cardSet.Title, shareCode)
+	finalText := withWarnings(fmt.Sprintf("🎉 Набор «%s» успешно создан!\nКод для совместного доступа: %s", cardSet.Title, shareCode), extracted.Warnings) +
+		"\n\nОткрой мини-приложение, чтобы начать тренировку:"
 	b.editOrSendMessageWithButtons(ctx, mid, chatID, userID, finalText)
 }
 

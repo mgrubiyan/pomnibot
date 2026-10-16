@@ -718,8 +718,8 @@ func TestBot_FileAttachment_GeneratesSet(t *testing.T) {
 		})
 
 		lastMsg := getLastMessage()
-		if !strings.Contains(lastMsg.Text, "ошибка при создании конспекта") {
-			t.Errorf("expected error message sent to user, got: %s", lastMsg.Text)
+		if lastMsg.Text != msgModelDown {
+			t.Errorf("expected the model failure message sent to user, got: %s", lastMsg.Text)
 		}
 	})
 
