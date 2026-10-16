@@ -264,7 +264,7 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 
 	if b.extractor == nil || b.generator == nil {
 		slog.Error("extractor or generator not configured on bot")
-		updateStatus(msgUnavailable)
+		updateStatus(msgTryLater)
 		return
 	}
 
@@ -278,14 +278,14 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 			downloaded, err := b.client.DownloadFile(ctx, att.url)
 			if err != nil {
 				slog.Error("failed to download attachment", "url", att.url, "error", err)
-				updateStatus(msgDownload)
+				updateStatus(msgResend)
 				return
 			}
 			data = downloaded.Data
 			discoveredName = downloaded.Filename
 		} else {
 			slog.Error("attachment has neither data nor url", "filename", att.filename)
-			updateStatus(msgDownload)
+			updateStatus(msgResend)
 			return
 		}
 
@@ -305,7 +305,7 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 	}
 
 	if len(files) == 0 {
-		updateStatus(msgDownload)
+		updateStatus(msgResend)
 		return
 	}
 
@@ -371,7 +371,7 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 	genResult, err := b.generator.Generate(ctx, doc, onBatch)
 	if err != nil {
 		slog.Error("failed to generate cards from document", "error", err)
-		updateStatus(msgModelDown)
+		updateStatus(msgTryLater)
 		return
 	}
 
@@ -384,7 +384,7 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 	cardSet, err := b.setService.SaveGeneratedSet(ctx, userID, title, genResult)
 	if err != nil {
 		slog.Error("failed to save generated set to database", "error", err)
-		updateStatus(msgSaveFailed)
+		updateStatus(msgTryLater)
 		return
 	}
 

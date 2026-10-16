@@ -718,8 +718,8 @@ func TestBot_FileAttachment_GeneratesSet(t *testing.T) {
 		})
 
 		lastMsg := getLastMessage()
-		if lastMsg.Text != msgModelDown {
-			t.Errorf("expected the model failure message sent to user, got: %s", lastMsg.Text)
+		if lastMsg.Text != msgTryLater {
+			t.Errorf("expected the try-later message sent to user, got: %s", lastMsg.Text)
 		}
 	})
 
