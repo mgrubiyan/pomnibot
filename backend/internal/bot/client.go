@@ -12,7 +12,6 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"regexp"
 	"strconv"
@@ -112,13 +111,13 @@ type Client struct {
 }
 
 // NewClient creates a new MAX Bot API client with custom TLS config for Russian Trusted Root CA.
-func NewClient(token string, baseURL string) (*Client, error) {
+func NewClient(token string, baseURL string, skipVerify ...bool) (*Client, error) {
 	baseURL = strings.TrimSuffix(baseURL, "/")
 
 	// Root CA pool including system CAs and bundled Russian Root CA
 	certPool := tlsroot.Pool()
 
-	insecureSkipVerify := os.Getenv("MAX_INSECURE_SKIP_VERIFY") == "true"
+	insecureSkipVerify := len(skipVerify) > 0 && skipVerify[0]
 
 	tlsConfig := &tls.Config{
 		RootCAs:            certPool,

@@ -6,10 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -52,17 +50,26 @@ func NewGeneratorAdapter(g *generator.Generator) CardGenerator {
 	return &generatorAdapter{gen: g}
 }
 
+// NotificationConfig contains the validated review reminder schedule.
+type NotificationConfig struct {
+	Enabled  bool
+	Hour     int
+	Minute   int
+	Location *time.Location
+}
+
 // Bot represents the Pomnibot MAX bot runner.
 type Bot struct {
-	client      *Client
-	appURL      string
-	userService usecase.UserService
-	setService  usecase.SetService
-	extractor   FileExtractor
-	generator   CardGenerator
-	botUser     *User
-	queue       *generationQueue
-	inflight    sync.WaitGroup
+	notifications NotificationConfig
+	client        *Client
+	appURL        string
+	userService   usecase.UserService
+	setService    usecase.SetService
+	extractor     FileExtractor
+	generator     CardGenerator
+	botUser       *User
+	queue         *generationQueue
+	inflight      sync.WaitGroup
 }
 
 // NewBot creates a new Bot instance.
@@ -73,6 +80,7 @@ func NewBot(
 	setService usecase.SetService,
 	extractor FileExtractor,
 	generator CardGenerator,
+	notifications ...NotificationConfig,
 ) (*Bot, error) {
 	if client == nil {
 		return nil, errors.New("bot client is required")
@@ -86,14 +94,19 @@ func NewBot(
 	if appURL == "" {
 		appURL = "https://pomnibot.steins.ru"
 	}
+	schedule := NotificationConfig{Enabled: true, Hour: 10, Location: time.FixedZone("Europe/Moscow", 3*3600)}
+	if len(notifications) > 0 {
+		schedule = notifications[0]
+	}
 	return &Bot{
-		client:      client,
-		appURL:      strings.TrimSuffix(appURL, "/"),
-		userService: userService,
-		setService:  setService,
-		extractor:   extractor,
-		generator:   generator,
-		queue:       newGenerationQueue(generationSlots),
+		notifications: schedule,
+		client:        client,
+		appURL:        strings.TrimSuffix(appURL, "/"),
+		userService:   userService,
+		setService:    setService,
+		extractor:     extractor,
+		generator:     generator,
+		queue:         newGenerationQueue(generationSlots),
 	}, nil
 }
 
@@ -652,10 +665,7 @@ func (b *Bot) SendReviewReminders(ctx context.Context) (int, error) {
 		return 0, errors.New("user service is not configured")
 	}
 
-	tz := os.Getenv("NOTIFICATION_TZ")
-	if tz == "" {
-		tz = "Europe/Moscow"
-	}
+	tz := b.notifications.Location.String()
 
 	userIDs, err := b.userService.GetUsersWithDueFacts(ctx, time.Now(), tz)
 	if err != nil {
@@ -713,41 +723,11 @@ func (b *Bot) SendReviewReminders(ctx context.Context) (int, error) {
 }
 
 func (b *Bot) startNotificationLoop(ctx context.Context) {
-	if os.Getenv("NOTIFICATIONS_ENABLED") == "false" {
-		slog.InfoContext(ctx, "review notifications are disabled via NOTIFICATIONS_ENABLED=false")
+	if !b.notifications.Enabled {
 		return
 	}
-
-	timeStr := os.Getenv("NOTIFICATION_TIME")
-	if timeStr == "" {
-		timeStr = "10:00"
-	}
-
-	targetHour := 10
-	targetMinute := 0
-	parts := strings.Split(timeStr, ":")
-	if len(parts) == 2 {
-		if h, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil && h >= 0 && h < 24 {
-			targetHour = h
-		}
-		if m, err := strconv.Atoi(strings.TrimSpace(parts[1])); err == nil && m >= 0 && m < 60 {
-			targetMinute = m
-		}
-	}
-
-	tzName := os.Getenv("NOTIFICATION_TZ")
-	if tzName == "" {
-		tzName = "Europe/Moscow"
-	}
-
-	loc, err := time.LoadLocation(tzName)
-	if err != nil {
-		slog.WarnContext(ctx, "failed to load timezone for notifications, falling back to MSK (UTC+3)",
-			"tz", tzName,
-			"error", err,
-		)
-		loc = time.FixedZone("MSK", 3*3600)
-	}
+	targetHour, targetMinute := b.notifications.Hour, b.notifications.Minute
+	loc := b.notifications.Location
 
 	slog.InfoContext(ctx, "starting review notifications scheduler",
 		"time", fmt.Sprintf("%02d:%02d", targetHour, targetMinute),

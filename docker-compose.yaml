@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        APP_ENV: ${APP_ENV:-prod}
     image: ${DOCKER_IMAGE}:${IMAGE_TAG}
     restart: unless-stopped
     ports:
@@ -11,6 +13,7 @@ services:
       - path: .env
         required: false
     environment:
+      - APP_ENV=${APP_ENV:-prod}
       - PORT=8080
       - DOMAIN=${DOMAIN}
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable

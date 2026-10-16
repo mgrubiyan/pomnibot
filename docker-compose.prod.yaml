@@ -1,5 +1,10 @@
 services:
   backend:
+    build:
+      args:
+        APP_ENV: prod
+    environment:
+      APP_ENV: prod
     ports: !reset []
     labels:
       - "traefik.enable=true"

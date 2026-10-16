@@ -1,3 +1,4 @@
+import { config } from './config';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@maxhub/max-ui/dist/styles.css';
@@ -16,7 +17,7 @@ declare global {
 }
 
 // Notify MAX messenger that web app is loaded and ready to be displayed
-window.WebApp?.ready?.();
+if (config.maxEnabled) window.WebApp?.ready?.();
 
 createRoot(document.getElementById('root')!).render(
     <StrictMode>

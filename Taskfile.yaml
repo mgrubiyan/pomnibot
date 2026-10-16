@@ -4,10 +4,10 @@ dotenv: ['.env']
 
 includes:
   miniapp:
-    taskfile: ./miniapp/Taskfile.yml
+    taskfile: ./miniapp/Taskfile.yaml
     dir: ./miniapp
   backend:
-    taskfile: ./backend/Taskfile.yml
+    taskfile: ./backend/Taskfile.yaml
     dir: ./backend
   contracts:
     taskfile: ./contracts/Taskfile.yaml
@@ -21,7 +21,17 @@ tasks:
     silent: true
 
   dev:
-    desc: 'Запуск дев-сервера фронтенда'
+    desc: 'Запуск бэкенда и фронтенда для разработки'
+    cmds:
+      - task --parallel --failfast dev:be dev:fe
+
+  dev:be:
+    desc: 'Запуск бэкенда'
+    cmds:
+      - task: backend:dev
+
+  dev:fe:
+    desc: 'Запуск фронтенда'
     cmds:
       - task: miniapp:dev
 
@@ -46,8 +56,6 @@ tasks:
 
   gen:data-api:
     desc: 'Генерация DATA-API.yaml'
-    aliases:
-      - gen:data-api
     cmds:
       - task: contracts:gen-data-api
 
