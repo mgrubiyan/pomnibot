@@ -177,3 +177,21 @@ func TestLineConfirmed(t *testing.T) {
 		}
 	}
 }
+
+// A photo with no notes on it, a bird, comes back as «[неразборчиво]»: the
+// mark says nothing, so the page is empty and the bot asks for a better
+// photo rather than more detailed notes.
+func TestVisionDropsLinesOnlyMarkedIllegible(t *testing.T) {
+	for _, text := range []string{"[неразборчиво]", "[неразборчиво]\n[Неразборчиво]\n"} {
+		model := &fakeModel{texts: []string{text}}
+		pages, err := (&VisionOCR{Model: model}).Recognize(context.Background(), OCRRequest{Data: jpegOf(t, 600, 800), MimeType: "image/jpeg", Pages: 1})
+		if err != nil || len(pages) != 1 || pages[0].Text != "" {
+			t.Errorf("%q: got %+v, %v; want an empty page", text, pages, err)
+		}
+	}
+	model := &fakeModel{texts: []string{"Митоз — [неразборчиво] деление клеток."}}
+	pages, _ := (&VisionOCR{Model: model}).Recognize(context.Background(), OCRRequest{Data: jpegOf(t, 600, 800), MimeType: "image/jpeg", Pages: 1})
+	if len(pages) != 1 || pages[0].Text != "Митоз — [неразборчиво] деление клеток." {
+		t.Errorf("got %+v, want a line with a word marked kept", pages)
+	}
+}
