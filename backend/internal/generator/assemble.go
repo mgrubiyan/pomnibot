@@ -209,7 +209,13 @@ func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok boo
 			choices = append(choices, pendingChoice{card: card, topic: f.Topic, pos: pos, seq: a.seq})
 			continue
 		case card.Kind == cards.KindBoolean:
-			a.balanceClaim(&card, mc.Alt)
+			alt := mc.Alt
+			if alt != "" && (a.questions.isDup(alt) || slices.ContainsFunc(questions[:len(questions)-1], func(q string) bool { return askSame(q, alt) })) {
+				alt = "" // its wrong version was asked already
+			}
+			a.balanceClaim(&card, alt)
+			// The claim the student sees is what later questions must not repeat.
+			questions[len(questions)-1] = card.Question
 		case card.Kind == cards.KindInput && len(strings.Fields(card.Answer)) > maxInputWords:
 			if len(f.Cards) > 1 {
 				a.stats.DroppedVariants++

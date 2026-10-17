@@ -1481,3 +1481,29 @@ func TestUserPromptAsksToSkipPersonalNotesForProseOnly(t *testing.T) {
 		}
 	}
 }
+
+// The wrong version of a claim is checked for repeats like any question: two
+// facts whose wrong versions coincide must not show the student one claim twice.
+func TestGenerateBalanceDoesNotRepeatAClaim(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[:4]...)
+	shared := "Амитоз — непрямое деление соматических клеток."
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		word := firstWord(frag)
+		claim := mc{kind: cards.KindBoolean, q: word + " — верное утверждение.", a: "true",
+			distractors: []string{word + " — неверное утверждение."}}
+		if word == "Мейоз" || word == "Апоптоз" {
+			// The second and the fourth claims go false, and their wrong
+			// versions are the same.
+			claim.distractors = []string{shared}
+		}
+		return factsJSON(fx{quote: firstSentence(frag), cards: []mc{claim}}), nil
+	}}
+	res := generate(t, p, doc, opts)
+	seen := map[string]bool{}
+	for _, c := range res.Cards {
+		if seen[c.Question] {
+			t.Errorf("claim %q shown twice", c.Question)
+		}
+		seen[c.Question] = true
+	}
+}
