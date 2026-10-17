@@ -250,6 +250,7 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 		firstFilename = atts[0].filename
 	}
 	title := resolveSetTitle(caption, firstFilename)
+	log := slog.With("user_id", userID, "chat_id", chatID, "title", title)
 
 	count := len(atts)
 	plural := "файлов"
@@ -264,12 +265,14 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 		Text: statusText,
 	})
 	if err != nil {
-		slog.Error("failed to send initial status message", "error", err)
+		log.Error("failed to send initial status message", "error", err)
 	}
 
 	if chatID != 0 {
 		go func() {
-			_ = b.client.SendAction(context.Background(), chatID, "typing_on")
+			if err := b.client.SendAction(context.Background(), chatID, "typing_on"); err != nil {
+				log.Warn("failed to send typing action", "error", err)
+			}
 		}()
 	}
 
@@ -279,11 +282,13 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 				return
 			}
 		}
-		_, _ = b.client.SendMessage(ctx, chatID, userID, SendMessageRequest{Text: text})
+		if _, err := b.client.SendMessage(ctx, chatID, userID, SendMessageRequest{Text: text}); err != nil {
+			log.Error("failed to send status message", "text", text, "error", err)
+		}
 	}
 
 	if b.extractor == nil || b.generator == nil {
-		slog.Error("extractor or generator not configured on bot")
+		log.Error("extractor or generator not configured on bot")
 		updateStatus(msgTryLater)
 		return
 	}
@@ -297,14 +302,14 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 		} else if att.url != "" {
 			downloaded, err := b.client.DownloadFile(ctx, att.url)
 			if err != nil {
-				slog.Error("failed to download attachment", "url", att.url, "error", err)
+				log.Error("failed to download attachment", "url", att.url, "error", err)
 				updateStatus(msgResend)
 				return
 			}
 			data = downloaded.Data
 			discoveredName = downloaded.Filename
 		} else {
-			slog.Error("attachment has neither data nor url", "filename", att.filename)
+			log.Error("attachment has neither data nor url", "filename", att.filename)
 			updateStatus(msgResend)
 			return
 		}
@@ -325,6 +330,7 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 	}
 
 	if len(files) == 0 {
+		log.Error("no files to read among attachments", "attachments", len(atts))
 		updateStatus(msgResend)
 		return
 	}
@@ -337,7 +343,7 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 		updateStatus(fmt.Sprintf("📸 Получил %d %s. Сейчас обрабатываю другие конспекты, ты в очереди, перед тобой: %d. Начну, как только освобожусь ⏳", count, plural, ahead))
 	})
 	if err != nil {
-		slog.Warn("stopped waiting for generation slot", "user_id", userID, "error", err)
+		log.Warn("stopped waiting for generation slot", "error", err)
 		return
 	}
 	defer release()
@@ -347,13 +353,13 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 
 	extracted, err := b.extractor.Extract(ctx, files)
 	if err != nil {
-		slog.Error("failed to extract text from files", "error", err)
+		log.Error("failed to extract text from files", "error", err)
 		updateStatus(extractFailure(err, len(files)))
 		return
 	}
 
 	if strings.TrimSpace(extracted.Text) == "" {
-		slog.Warn("no text found in files", "files_count", len(files))
+		log.Warn("no text found in files", "files_count", len(files))
 		updateStatus(msgNoText)
 		return
 	}
@@ -382,28 +388,30 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 		}
 		lastEdit = time.Now()
 		if mid != "" {
-			_ = b.client.EditMessage(ctx, mid, SendMessageRequest{
+			if err := b.client.EditMessage(ctx, mid, SendMessageRequest{
 				Text: fmt.Sprintf("🧠 Создаю карточки... Уже готово: %d ⏳", totalCards),
-			})
+			}); err != nil {
+				log.Warn("failed to update progress message", "error", err)
+			}
 		}
 	}
 
 	genResult, err := b.generator.Generate(ctx, doc, onBatch)
 	if err != nil {
-		slog.Error("failed to generate cards from document", "error", err)
+		log.Error("failed to generate cards from document", "error", err)
 		updateStatus(msgTryLater)
 		return
 	}
 
 	if len(genResult.Cards) == 0 {
-		slog.Warn("no cards generated from document", "stats", genResult.Stats)
+		log.Warn("no cards generated from document", "stats", genResult.Stats)
 		updateStatus(noCardsReason(genResult.Stats))
 		return
 	}
 
 	cardSet, err := b.setService.SaveGeneratedSet(ctx, userID, title, genResult)
 	if err != nil {
-		slog.Error("failed to save generated set to database", "error", err)
+		log.Error("failed to save generated set to database", "error", err)
 		updateStatus(msgTryLater)
 		return
 	}

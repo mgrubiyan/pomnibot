@@ -1,9 +1,13 @@
 package bot
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -180,5 +184,36 @@ func TestBot_SuccessMentionsPoorlyReadPages(t *testing.T) {
 	got := server.lastText()
 	if !strings.Contains(got, "успешно создан") || !strings.Contains(got, "Страница 1 распознана плохо") {
 		t.Errorf("last message = %q, want the success text with the page warning", got)
+	}
+}
+
+func TestBot_UndeliveredStatusIsLogged(t *testing.T) {
+	var logs bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	// MAX accepts nothing: every send and edit fails.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(server.Close)
+	client, err := NewClient("test-token", server.URL)
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	gen := &mockCardGenerator{generateFunc: func(context.Context, generator.Document, func(generator.Batch)) (generator.Result, error) {
+		return generator.Result{}, errors.New("model down")
+	}}
+	b, err := NewBot(client, "https://example.test", &mockUserService{}, &mockSetService{}, &mockFileExtractor{}, gen)
+	if err != nil {
+		t.Fatalf("NewBot: %v", err)
+	}
+
+	b.handleUpdate(context.Background(), fileUpdate(7, "notes.pdf"))
+
+	got := logs.String()
+	if !strings.Contains(got, "failed to send status message") || !strings.Contains(got, "user_id=7") {
+		t.Errorf("an undelivered status is not in the log: %q", got)
 	}
 }

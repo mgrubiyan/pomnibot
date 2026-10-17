@@ -29,7 +29,7 @@ func (h *SetsHandler) GetSet(ctx context.Context, params contracts.GetSetParams)
 		if errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
 			return &contracts.GetSetNotFound{Message: err.Error()}, nil
 		}
-		return &contracts.GetSetInternalServerError{Message: err.Error()}, nil
+		return &contracts.GetSetInternalServerError{Message: internalError(ctx, "GetSet", err)}, nil
 	}
 	return res, nil
 }
@@ -42,7 +42,7 @@ func (h *SetsHandler) DeleteSet(ctx context.Context, params contracts.DeleteSetP
 		if errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
 			return &contracts.DeleteSetNotFound{Message: err.Error()}, nil
 		}
-		return &contracts.DeleteSetInternalServerError{Message: err.Error()}, nil
+		return &contracts.DeleteSetInternalServerError{Message: internalError(ctx, "DeleteSet", err)}, nil
 	}
 	return &contracts.DeleteSetNoContent{}, nil
 }
@@ -55,7 +55,7 @@ func (h *SetsHandler) GetCardsBySetID(ctx context.Context, params contracts.GetC
 		if errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
 			return &contracts.GetCardsBySetIDNotFound{Message: err.Error()}, nil
 		}
-		return &contracts.GetCardsBySetIDInternalServerError{Message: err.Error()}, nil
+		return &contracts.GetCardsBySetIDInternalServerError{Message: internalError(ctx, "GetCardsBySetID", err)}, nil
 	}
 	cardsRes := contracts.GetCardsBySetIDOKApplicationJSON(cards)
 	return &cardsRes, nil
@@ -69,7 +69,7 @@ func (h *SetsHandler) GetSetShareCode(ctx context.Context, params contracts.GetS
 		if errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
 			return &contracts.GetSetShareCodeNotFound{Message: err.Error()}, nil
 		}
-		return &contracts.GetSetShareCodeInternalServerError{Message: err.Error()}, nil
+		return &contracts.GetSetShareCodeInternalServerError{Message: internalError(ctx, "GetSetShareCode", err)}, nil
 	}
 	return res, nil
 }
@@ -82,7 +82,7 @@ func (h *SetsHandler) GetSetPlan(ctx context.Context, params contracts.GetSetPla
 		if errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
 			return &contracts.GetSetPlanNotFound{Message: err.Error()}, nil
 		}
-		return &contracts.GetSetPlanInternalServerError{Message: err.Error()}, nil
+		return &contracts.GetSetPlanInternalServerError{Message: internalError(ctx, "GetSetPlan", err)}, nil
 	}
 	planRes := contracts.SetPlanResponse(planItems)
 	return &planRes, nil
@@ -99,7 +99,7 @@ func (h *SetsHandler) GetSetLeaderboard(ctx context.Context, params contracts.Ge
 		if errors.Is(err, usecase.ErrNotFound) {
 			return &contracts.GetSetLeaderboardNotFound{Message: err.Error()}, nil
 		}
-		return &contracts.GetSetLeaderboardInternalServerError{Message: err.Error()}, nil
+		return &contracts.GetSetLeaderboardInternalServerError{Message: internalError(ctx, "GetSetLeaderboard", err)}, nil
 	}
 	return res, nil
 }
@@ -118,7 +118,7 @@ func (h *SetsHandler) JoinSetByShareCode(ctx context.Context, req *contracts.Joi
 		if errors.Is(err, usecase.ErrNotFound) {
 			return &contracts.JoinSetByShareCodeNotFound{Message: err.Error()}, nil
 		}
-		return &contracts.JoinSetByShareCodeInternalServerError{Message: err.Error()}, nil
+		return &contracts.JoinSetByShareCodeInternalServerError{Message: internalError(ctx, "JoinSetByShareCode", err)}, nil
 	}
 	return res, nil
 }

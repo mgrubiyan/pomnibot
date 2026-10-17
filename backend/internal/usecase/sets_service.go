@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 
@@ -57,12 +58,17 @@ func (s *setServiceImpl) GetSet(ctx context.Context, userID int64, setID uuid.UU
 		return nil, err
 	}
 
-	if rating, err := s.querier.GetUserSetRating(ctx, db.GetUserSetRatingParams{
+	// The rating is optional: a set is shown without it when it cannot be read.
+	rating, err := s.querier.GetUserSetRating(ctx, db.GetUserSetRatingParams{
 		SetID:  pgUUID,
 		UserID: userID,
-	}); err == nil {
+	})
+	switch {
+	case err == nil:
 		res.UserRank.SetTo(int(rating.Rank))
 		res.UserPercentile.SetTo(int(rating.Percentile))
+	case !errors.Is(err, pgx.ErrNoRows):
+		slog.WarnContext(ctx, "failed to get user set rating", "set_id", setID, "user_id", userID, "error", err)
 	}
 
 	return res, nil
