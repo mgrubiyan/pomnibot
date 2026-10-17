@@ -9,13 +9,15 @@
 // unless the key is a service account's), which also turns them upright;
 // -ocr yandex reads them with Yandex alone.
 //
-// -provider yandexgpt writes the cards with the backup model instead, to
-// compare it with GigaChat on the same notes (YC_API_KEY, YC_FOLDER_ID,
-// YC_LLM_MODEL).
+// -provider yandexgpt writes the cards with YandexGPT instead, to compare it
+// with GigaChat on the same notes (YC_API_KEY, YC_FOLDER_ID, YC_LLM_MODEL).
+// -vision-provider qwen reads the photos with Qwen on Yandex AI Studio
+// (YC_VISION_MODEL) instead of GigaChat, still checked by Yandex OCR.
 //
 //	task cardsgen -- notes.txt
 //	task cardsgen -- -model GigaChat-2-Max -chunk 2000 -limit 30 -json lecture.pdf page2.pdf > run.json
 //	task cardsgen -- -provider yandexgpt -ocr yandex lecture.pdf
+//	task cardsgen -- -extract -vision-provider qwen page1.jpg page2.jpg
 //
 // Credentials come from GIGACHAT_* and YC_* variables: task passes the ones
 // from .env in the repository root.
@@ -41,6 +43,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest/yandex"
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers/aistudio"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/yandexgpt"
 )
@@ -65,6 +68,7 @@ func run() error {
 		concurrency = flag.Int("concurrency", generator.DefaultConcurrency, "parallel model calls; freemium allows 1")
 		timeout     = flag.Duration("call-timeout", generator.DefaultCallTimeout, "timeout per model call")
 		ocrMode     = flag.String("ocr", "vision", "how photos and scans are read: vision (GigaChat, checked by Yandex OCR) or yandex (Yandex OCR alone)")
+		visionBy    = flag.String("vision-provider", "gigachat", "who reads photos with -ocr vision: gigachat or qwen")
 		ocrModel    = flag.String("ocr-model", os.Getenv("YC_OCR_MODEL"), "Yandex OCR model for every page (handwritten, page...); default: handwritten for photos, page for scans")
 		extractOnly = flag.Bool("extract", false, "only extract the text of the notes and print it, no cards")
 		asJSON      = flag.Bool("json", false, "print the result as JSON to stdout")
@@ -95,11 +99,14 @@ func run() error {
 	if *provider != "gigachat" && *provider != "yandexgpt" {
 		return fmt.Errorf("-provider %q: want gigachat or yandexgpt", *provider)
 	}
+	if *visionBy != "gigachat" && *visionBy != "qwen" {
+		return fmt.Errorf("-vision-provider %q: want gigachat or qwen", *visionBy)
+	}
 	// GigaChat writes the cards, unless -provider yandexgpt, and reads the
 	// photos, unless -ocr yandex.
 	var client *gigachat.Client
 	modelName := "GigaChat-3-Ultra"
-	if (!*extractOnly && *provider == "gigachat") || *ocrMode == "vision" {
+	if (!*extractOnly && *provider == "gigachat") || (*ocrMode == "vision" && *visionBy == "gigachat") {
 		cfg, err := gigachat.ConfigFromEnv()
 		if err != nil {
 			return err
@@ -129,7 +136,16 @@ func run() error {
 	}
 
 	var vision providers.Provider
-	if *ocrMode == "vision" {
+	switch {
+	case *ocrMode == "vision" && *visionBy == "qwen":
+		cfg, err := aistudio.ConfigFromEnv()
+		if err != nil {
+			return err
+		}
+		if vision, err = aistudio.New(cfg); err != nil {
+			return err
+		}
+	case *ocrMode == "vision":
 		vision = client
 	}
 	notes, err := extract(ctx, paths, *ocrModel, vision)
