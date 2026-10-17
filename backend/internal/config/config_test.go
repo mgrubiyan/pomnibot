@@ -61,7 +61,7 @@ func setProdEnv(t *testing.T) {
 	for key, value := range values {
 		t.Setenv(key, value)
 	}
-	for _, key := range []string{"YC_LLM_MODEL", "YC_LLM_BASE_URL", "YC_LLM_MAX_TOKENS", "YC_VISION_MODEL", "LLM_PRIMARY", "LLM_PRIMARY_TIMEOUT", "LLM_COOLDOWN"} {
+	for _, key := range []string{"YC_LLM_MODEL", "YC_LLM_BASE_URL", "YC_LLM_MAX_TOKENS", "LLM_PRIMARY", "LLM_PRIMARY_TIMEOUT", "LLM_COOLDOWN"} {
 		t.Setenv(key, "")
 	}
 }
@@ -86,38 +86,38 @@ func TestLoadProd(t *testing.T) {
 
 }
 
-// YandexGPT is on by default and goes first: it serves more requests at once
-// than the GigaChat plan, and its key and folder are the OCR's.
-func TestLoadProdDefaultsToYandexGPTFirst(t *testing.T) {
+// Qwen on Yandex AI Studio does it all by default: it serves two requests at
+// once against the GigaChat plan's one, and its key and folder are the OCR's.
+func TestLoadProdDefaultsToQwenFirst(t *testing.T) {
 	setProdEnv(t)
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.YandexGPT == nil || cfg.YandexGPT.Model != "yandexgpt-5.1" || cfg.YandexGPT.APIKey != "test-key" ||
-		cfg.YandexGPT.FolderID != "test-folder" {
-		t.Errorf("YandexGPT = %+v, want yandexgpt-5.1 with the shared Yandex Cloud key and folder", cfg.YandexGPT)
+	if cfg.AIStudio == nil || cfg.AIStudio.Model != "qwen3.6-35b-a3b" || cfg.AIStudio.APIKey != "test-key" ||
+		cfg.AIStudio.FolderID != "test-folder" {
+		t.Errorf("AIStudio = %+v, want Qwen with the shared Yandex Cloud key and folder", cfg.AIStudio)
 	}
-	if cfg.LLM.Primary != PrimaryYandexGPT || cfg.LLM.PrimaryTimeout != time.Minute || cfg.LLM.Cooldown != 10*time.Minute {
-		t.Errorf("LLM = %+v, want YandexGPT first and the default timings", cfg.LLM)
+	if cfg.LLM.Primary != PrimaryAIStudio || cfg.LLM.PrimaryTimeout != time.Minute || cfg.LLM.Cooldown != 10*time.Minute {
+		t.Errorf("LLM = %+v, want AI Studio first and the default timings", cfg.LLM)
 	}
 }
 
-func TestLoadProdWithoutYandexGPT(t *testing.T) {
+func TestLoadProdWithoutAIStudio(t *testing.T) {
 	setProdEnv(t)
 	t.Setenv("YC_LLM_MODEL", "off")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.YandexGPT != nil || cfg.LLM.Primary != PrimaryGigaChat {
-		t.Errorf("YandexGPT = %+v, primary %q; want GigaChat alone", cfg.YandexGPT, cfg.LLM.Primary)
+	if cfg.AIStudio != nil || cfg.LLM.Primary != PrimaryGigaChat {
+		t.Errorf("AIStudio = %+v, primary %q; want GigaChat alone", cfg.AIStudio, cfg.LLM.Primary)
 	}
 }
 
 func TestLoadProdLLMSettings(t *testing.T) {
 	setProdEnv(t)
-	t.Setenv("YC_LLM_MODEL", "yandexgpt-5-pro")
+	t.Setenv("YC_LLM_MODEL", "gemma-3-27b-it")
 	t.Setenv("LLM_PRIMARY", "gigachat")
 	t.Setenv("LLM_PRIMARY_TIMEOUT", "45s")
 	t.Setenv("LLM_COOLDOWN", "5m")
@@ -125,8 +125,8 @@ func TestLoadProdLLMSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.YandexGPT == nil || cfg.YandexGPT.Model != "yandexgpt-5-pro" {
-		t.Errorf("YandexGPT = %+v", cfg.YandexGPT)
+	if cfg.AIStudio == nil || cfg.AIStudio.Model != "gemma-3-27b-it" {
+		t.Errorf("AIStudio = %+v", cfg.AIStudio)
 	}
 	if cfg.LLM.Primary != PrimaryGigaChat || cfg.LLM.PrimaryTimeout != 45*time.Second || cfg.LLM.Cooldown != 5*time.Minute {
 		t.Errorf("LLM = %+v", cfg.LLM)
@@ -139,7 +139,7 @@ func TestLoadProdValidatesLLMSettings(t *testing.T) {
 		{"LLM_PRIMARY_TIMEOUT", "0s"},
 		{"LLM_COOLDOWN", "-1m"},
 		{"YC_LLM_MAX_TOKENS", "many"},
-		{"LLM_PRIMARY", "openai"},
+		{"LLM_PRIMARY", "yandexgpt"},
 	} {
 		t.Run(tc.key+"="+tc.val, func(t *testing.T) {
 			setProdEnv(t)
@@ -151,42 +151,11 @@ func TestLoadProdValidatesLLMSettings(t *testing.T) {
 	}
 }
 
-func TestLoadProdRejectsYandexGPTFirstWhenOff(t *testing.T) {
+func TestLoadProdRejectsAIStudioFirstWhenOff(t *testing.T) {
 	setProdEnv(t)
 	t.Setenv("YC_LLM_MODEL", "off")
-	t.Setenv("LLM_PRIMARY", "yandexgpt")
+	t.Setenv("LLM_PRIMARY", "aistudio")
 	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "LLM_PRIMARY") {
 		t.Errorf("Load() error = %v, want one naming LLM_PRIMARY", err)
-	}
-}
-
-// Qwen reads photos first by default: on handwritten notes it reads more
-// than GigaChat, and its key and folder are the OCR's.
-func TestLoadProdDefaultsToQwenForPhotos(t *testing.T) {
-	setProdEnv(t)
-	cfg, err := Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Vision == nil || cfg.Vision.Model != "qwen3.6-35b-a3b" || cfg.Vision.APIKey != "test-key" ||
-		cfg.Vision.FolderID != "test-folder" {
-		t.Errorf("Vision = %+v, want Qwen with the shared Yandex Cloud key and folder", cfg.Vision)
-	}
-}
-
-func TestLoadProdPhotoModelSettings(t *testing.T) {
-	setProdEnv(t)
-	t.Setenv("YC_VISION_MODEL", "off")
-	cfg, err := Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Vision != nil {
-		t.Errorf("Vision = %+v, want nil: photos to GigaChat", cfg.Vision)
-	}
-
-	t.Setenv("YC_VISION_MODEL", "gemma-3-27b-it")
-	if cfg, err = Load(); err != nil || cfg.Vision == nil || cfg.Vision.Model != "gemma-3-27b-it" {
-		t.Errorf("Load() = %+v, %v; want the given model", cfg.Vision, err)
 	}
 }

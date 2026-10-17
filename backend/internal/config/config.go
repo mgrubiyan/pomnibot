@@ -13,7 +13,6 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest/yandex"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/aistudio"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
-	"github.com/mgrubiyan/pomnibot/backend/internal/providers/yandexgpt"
 )
 
 // Environment selects the local or production runtime.
@@ -36,27 +35,25 @@ type Config struct {
 	MaxInsecureSkipVerify bool
 	Notifications         bot.NotificationConfig
 	GigaChat              gigachat.Config
-	// YandexGPT is the main text model, GigaChat its backup (see LLM); nil
+	// AIStudio is the main model, Qwen by default: it writes the cards,
+	// grades answers and reads photos, GigaChat backs it up (see LLM). nil
 	// with YC_LLM_MODEL=off.
-	YandexGPT *yandexgpt.Config
-	// Vision reads photos of notes first, GigaChat then; nil with
-	// YC_VISION_MODEL=off.
-	Vision *aistudio.Config
-	LLM    LLMConfig
-	OCR    yandex.Config
+	AIStudio *aistudio.Config
+	LLM      LLMConfig
+	OCR      yandex.Config
 }
 
-// Text models that can go first, see LLMConfig.Primary.
+// Models that can go first, see LLMConfig.Primary.
 const (
-	PrimaryYandexGPT = "yandexgpt"
-	PrimaryGigaChat  = "gigachat"
+	PrimaryAIStudio = "aistudio"
+	PrimaryGigaChat = "gigachat"
 )
 
-// LLMConfig sets which text model goes first and when requests move to the
-// other one.
+// LLMConfig sets which model goes first and when requests move to the other
+// one.
 type LLMConfig struct {
-	// Primary is PrimaryYandexGPT or PrimaryGigaChat; GigaChat without
-	// YandexGPT.
+	// Primary is PrimaryAIStudio or PrimaryGigaChat; GigaChat without AI
+	// Studio.
 	Primary string
 	// PrimaryTimeout bounds one call to the primary, its retries included,
 	// so that a primary that hangs leaves time for the backup. It counts as
@@ -118,16 +115,11 @@ func Load() (Config, error) {
 	cfg.OCR, err = yandex.ConfigFromEnv()
 	errs = append(errs, err)
 	if value("YC_LLM_MODEL", "") != "off" {
-		yc, err := yandexgpt.ConfigFromEnv()
-		cfg.YandexGPT = &yc
+		studio, err := aistudio.ConfigFromEnv()
+		cfg.AIStudio = &studio
 		errs = append(errs, err)
 	}
-	if value("YC_VISION_MODEL", "") != "off" {
-		vision, err := aistudio.ConfigFromEnv()
-		cfg.Vision = &vision
-		errs = append(errs, err)
-	}
-	cfg.LLM, err = llmFromEnv(cfg.YandexGPT != nil)
+	cfg.LLM, err = llmFromEnv(cfg.AIStudio != nil)
 	errs = append(errs, err)
 	cfg.Notifications, err = notificationsFromEnv()
 	errs = append(errs, err)
@@ -150,19 +142,19 @@ func notificationsFromEnv() (bot.NotificationConfig, error) {
 	return bot.NotificationConfig{Enabled: enabled, Hour: at.Hour(), Minute: at.Minute(), Location: loc}, nil
 }
 
-func llmFromEnv(withYandexGPT bool) (LLMConfig, error) {
+func llmFromEnv(withAIStudio bool) (LLMConfig, error) {
 	var cfg LLMConfig
 	var errs []error
 
 	switch primary := value("LLM_PRIMARY", ""); {
-	case primary == "" && withYandexGPT, primary == PrimaryYandexGPT && withYandexGPT:
-		cfg.Primary = PrimaryYandexGPT
+	case primary == "" && withAIStudio, primary == PrimaryAIStudio && withAIStudio:
+		cfg.Primary = PrimaryAIStudio
 	case primary == "", primary == PrimaryGigaChat:
 		cfg.Primary = PrimaryGigaChat
-	case primary == PrimaryYandexGPT:
-		errs = append(errs, errors.New("LLM_PRIMARY = yandexgpt, but YC_LLM_MODEL = off"))
+	case primary == PrimaryAIStudio:
+		errs = append(errs, errors.New("LLM_PRIMARY = aistudio, but YC_LLM_MODEL = off"))
 	default:
-		errs = append(errs, fmt.Errorf("LLM_PRIMARY = %q, want yandexgpt or gigachat", primary))
+		errs = append(errs, fmt.Errorf("LLM_PRIMARY = %q, want aistudio or gigachat", primary))
 	}
 	for _, d := range []struct {
 		name, fallback string

@@ -20,7 +20,6 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/aistudio"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
-	"github.com/mgrubiyan/pomnibot/backend/internal/providers/yandexgpt"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 	httptransport "github.com/mgrubiyan/pomnibot/backend/internal/transport/http"
@@ -90,61 +89,48 @@ type models struct {
 	slots  int                // documents turned into cards at once
 }
 
-// yandexGPTSlots is how many requests YandexGPT serves at once without a
+// aiStudioSlots is how many requests AI Studio serves at once without a
 // subscription.
-const yandexGPTSlots = 2
+const aiStudioSlots = 2
 
-// newModels returns YandexGPT backed by GigaChat for text, or the other way
-// round with LLM_PRIMARY=gigachat, and Qwen backed by GigaChat for photos;
-// when both fail on a photo, the OCR reads it. Without the Yandex models,
-// GigaChat does it all.
+// newModels returns Qwen backed by GigaChat for everything, or the other way
+// round with LLM_PRIMARY=gigachat; a photo neither of them reads goes to the
+// OCR. One chain serves cards, grading and photos, so a model that is down is
+// skipped by all of them at once. Without AI Studio, GigaChat does it all.
 func newModels(cfg config.Config) (models, error) {
 	giga, err := gigachat.New(cfg.GigaChat)
 	if err != nil {
 		return models{}, fmt.Errorf("initialize GigaChat: %w", err)
 	}
-	// Photos of two documents, or text and a photo that fell back, would
-	// reach GigaChat at once; its plan answers the second with 429.
+	// Two documents, or a photo and the cards of another, would reach
+	// GigaChat at once; its plan answers the second with 429.
 	gigaOne := providers.Limit(giga, 1)
-	m := models{text: gigaOne, slots: 1}
 
-	if cfg.YandexGPT == nil {
-		slog.Warn("YandexGPT is off: GigaChat writes the cards, no backup when it is down")
-	} else {
-		yc, err := yandexgpt.New(*cfg.YandexGPT)
-		if err != nil {
-			return models{}, fmt.Errorf("initialize YandexGPT: %w", err)
-		}
-		first, second := providers.Backend{Name: "yandexgpt", Provider: yc}, providers.Backend{Name: "gigachat", Provider: gigaOne}
-		if cfg.LLM.Primary == config.PrimaryGigaChat {
-			first, second = second, first
-		} else {
-			m.slots = yandexGPTSlots
-		}
-		first.Timeout = cfg.LLM.PrimaryTimeout
-		m.text = providers.NewFallback(cfg.LLM.Cooldown, first, second)
+	if cfg.AIStudio == nil {
+		slog.Warn("AI Studio is off: GigaChat does it all, no backup when it is down")
+		// GigaChat alone still gets a timeout on photos, so that a hang
+		// leaves the OCR time.
+		photos := providers.NewFallback(cfg.LLM.Cooldown,
+			providers.Backend{Name: "gigachat", Provider: gigaOne, Timeout: cfg.LLM.PrimaryTimeout})
+		return models{text: gigaOne, vision: photos, slots: 1}, nil
+	}
+	studio, err := aistudio.New(*cfg.AIStudio)
+	if err != nil {
+		return models{}, fmt.Errorf("initialize AI Studio: %w", err)
 	}
 
-	// GigaChat alone still gets a timeout, so that a hang leaves the OCR time.
-	gigaPhotos := providers.Backend{Name: "gigachat", Provider: gigaOne, Timeout: cfg.LLM.PrimaryTimeout}
-	if cfg.Vision == nil {
-		slog.Warn("Qwen is off: GigaChat reads the photos")
-		m.vision = providers.NewFallback(cfg.LLM.Cooldown, gigaPhotos)
-	} else {
-		qwen, err := aistudio.New(*cfg.Vision)
-		if err != nil {
-			return models{}, fmt.Errorf("initialize Qwen: %w", err)
-		}
-		gigaPhotos.Timeout = 0
-		m.vision = providers.NewFallback(cfg.LLM.Cooldown,
-			providers.Backend{Name: "qwen", Provider: qwen, Timeout: cfg.LLM.PrimaryTimeout},
-			gigaPhotos,
-		)
+	first := providers.Backend{Name: "aistudio", Provider: studio}
+	second := providers.Backend{Name: "gigachat", Provider: gigaOne}
+	slots := aiStudioSlots
+	if cfg.LLM.Primary == config.PrimaryGigaChat {
+		first, second, slots = second, first, 1
 	}
+	first.Timeout = cfg.LLM.PrimaryTimeout
+	chain := providers.NewFallback(cfg.LLM.Cooldown, first, second)
 
-	slog.Info("models", "text_primary", cfg.LLM.Primary, "yandexgpt", cfg.YandexGPT != nil, "qwen", cfg.Vision != nil,
-		"primary_timeout", cfg.LLM.PrimaryTimeout, "cooldown", cfg.LLM.Cooldown, "documents_at_once", m.slots)
-	return m, nil
+	slog.Info("models", "primary", cfg.LLM.Primary, "aistudio_model", cfg.AIStudio.Model,
+		"primary_timeout", cfg.LLM.PrimaryTimeout, "cooldown", cfg.LLM.Cooldown, "documents_at_once", slots)
+	return models{text: chain, vision: chain, slots: slots}, nil
 }
 
 func startBot(ctx context.Context, cfg config.Config, llm models, users usecase.UserService, sets usecase.SetService) error {

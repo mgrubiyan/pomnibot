@@ -348,7 +348,7 @@ func setYandexEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("YC_API_KEY", "api-key")
 	t.Setenv("YC_FOLDER_ID", "b1gfolder")
-	t.Setenv("YC_LLM_MODEL", "yandexgpt-5.1")
+	t.Setenv("YC_YANDEXGPT_MODEL", "yandexgpt-5.1")
 	t.Setenv("YC_LLM_BASE_URL", "https://llm.test/")
 	t.Setenv("YC_LLM_MAX_TOKENS", "4000")
 }
@@ -368,7 +368,8 @@ func TestConfigFromEnv(t *testing.T) {
 
 func TestConfigDefaults(t *testing.T) {
 	setYandexEnv(t)
-	t.Setenv("YC_LLM_MODEL", "")
+	t.Setenv("YC_YANDEXGPT_MODEL", "")
+	t.Setenv("YC_LLM_MODEL", "qwen3.6-35b-a3b") // the app's model, not this one
 	t.Setenv("YC_LLM_BASE_URL", "")
 	t.Setenv("YC_LLM_MAX_TOKENS", "")
 	cfg, err := ConfigFromEnv()

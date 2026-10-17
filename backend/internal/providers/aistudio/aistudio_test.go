@@ -263,18 +263,41 @@ func TestRequestErrorsAreNotUnavailable(t *testing.T) {
 func TestConfigFromEnv(t *testing.T) {
 	t.Setenv("YC_API_KEY", "api-key")
 	t.Setenv("YC_FOLDER_ID", "b1gfolder")
-	t.Setenv("YC_VISION_MODEL", "")
+	t.Setenv("YC_LLM_MODEL", "")
 	t.Setenv("YC_LLM_BASE_URL", "")
+	t.Setenv("YC_LLM_MAX_TOKENS", "")
 	cfg, err := ConfigFromEnv()
 	if err != nil {
 		t.Fatalf("ConfigFromEnv() error = %v", err)
 	}
-	if cfg.Model != DefaultModel || cfg.BaseURL != DefaultBaseURL || cfg.MaxTokens != DefaultMaxTokens {
-		t.Errorf("config = %+v, want the defaults", cfg)
+	if cfg.Model != "qwen3.6-35b-a3b" || cfg.BaseURL != DefaultBaseURL || cfg.MaxTokens != 8000 {
+		t.Errorf("config = %+v, want Qwen, the default URL and 8000 tokens: a fragment's cards take that", cfg)
 	}
 
-	t.Setenv("YC_FOLDER_ID", "")
-	if _, err := ConfigFromEnv(); err == nil || !strings.Contains(err.Error(), "YC_FOLDER_ID") {
-		t.Errorf("ConfigFromEnv() error = %v, want one naming YC_FOLDER_ID", err)
+	t.Setenv("YC_LLM_MODEL", "gemma-3-27b-it")
+	t.Setenv("YC_LLM_MAX_TOKENS", "4000")
+	if cfg, err = ConfigFromEnv(); err != nil || cfg.Model != "gemma-3-27b-it" || cfg.MaxTokens != 4000 {
+		t.Errorf("ConfigFromEnv() = %+v, %v; want the given model and token cap", cfg, err)
+	}
+}
+
+func TestConfigErrors(t *testing.T) {
+	for _, tc := range []struct{ key, val string }{
+		{"YC_API_KEY", ""},
+		{"YC_FOLDER_ID", ""},
+		{"YC_LLM_BASE_URL", "llm.test"},
+		{"YC_LLM_MAX_TOKENS", "many"},
+		{"YC_LLM_MAX_TOKENS", "0"},
+	} {
+		t.Run(tc.key+"="+tc.val, func(t *testing.T) {
+			t.Setenv("YC_API_KEY", "api-key")
+			t.Setenv("YC_FOLDER_ID", "b1gfolder")
+			t.Setenv("YC_LLM_BASE_URL", "")
+			t.Setenv("YC_LLM_MAX_TOKENS", "")
+			t.Setenv(tc.key, tc.val)
+			if _, err := ConfigFromEnv(); err == nil || !strings.Contains(err.Error(), tc.key) {
+				t.Errorf("ConfigFromEnv() error = %v, want one naming %s", err, tc.key)
+			}
+		})
 	}
 }
