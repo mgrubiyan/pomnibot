@@ -159,6 +159,17 @@ func TestLineConfirmed(t *testing.T) {
 			t.Errorf("lineConfirmed(%q) = %v (judged %v), want %v", line, got, judged, want)
 		}
 	}
+	// A transcription is not checked: the OCR reads phonetic signs anyhow,
+	// and the stress marks ˈ and ˌ count as letters, gluing syllables.
+	vocabulary := checkWords("7 vulnerability [,vлln(ə)rə'biləti] – уязвимость")
+	for line, want := range map[string]bool{
+		"7 vulnerability [ˌvʌln(ə)rəˈbɪləti] – уязвимость":  true,
+		"7 vulnerability [ˌvʌln(ə)rəˈbɪləti] – беззащитный": false,
+	} {
+		if got, judged := lineConfirmed(line, vocabulary); !judged || got != want {
+			t.Errorf("lineConfirmed(%q) = %v (judged %v), want %v", line, got, judged, want)
+		}
+	}
 	// Formulas and single words give nothing to judge by.
 	for _, line := range []string{"sin 30° = 1/2", "Билет №19", ""} {
 		if _, judged := lineConfirmed(line, checker); judged {

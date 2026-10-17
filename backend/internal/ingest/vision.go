@@ -280,8 +280,14 @@ func keepConfirmed(text string, w checkerWords) (kept string, confirmed, judged 
 }
 
 // lineWords are the words of three letters or more, lowercased, ё as е.
+// reTranscription is a phonetic transcription, «[ˈdɔːntɪŋ]»: the OCR reads its
+// signs anyhow, and the stress marks ˈ and ˌ count as letters, gluing
+// syllables into words the checker never has.
+var reTranscription = regexp.MustCompile(`\[[^\]\n]*\]`)
+
 func lineWords(s string) []string {
 	var out []string
+	s = reTranscription.ReplaceAllString(s, " ")
 	for _, f := range strings.FieldsFunc(strings.ToLower(s), func(r rune) bool { return !unicode.IsLetter(r) }) {
 		if len([]rune(f)) >= 3 {
 			out = append(out, strings.ReplaceAll(f, "ё", "е"))

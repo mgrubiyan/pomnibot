@@ -238,6 +238,21 @@ func tooShort(q string) bool {
 	return n < minQuoteRunes && (n < minFormulaRunes || !strings.ContainsRune(q, '='))
 }
 
+// wholeLine reports whether the folded quote q is a whole line of the
+// fragment, at least minFormulaRunes long. A line of a vocabulary list,
+// «1 daunting – пугающий», is short but says what no other line does.
+func wholeLine(fragment, q string) bool {
+	if utf8.RuneCountInString(q) < minFormulaRunes {
+		return false
+	}
+	for _, line := range strings.Split(fragment, "\n") {
+		if trimQuote(fold(line).s) == q {
+			return true
+		}
+	}
+	return false
+}
+
 // findQuote looks for the model's quote in the fragment text, ignoring case,
 // ё, quote marks, dashes and whitespace. It returns the matching span of the
 // fragment itself, so the card shows the notes and not the model's copy.
@@ -258,7 +273,7 @@ func findQuote(fragment, quote string) (string, bool) {
 // locateQuote is findQuote giving the byte offsets of the span in fragment.
 func locateQuote(fragment, quote string) (start, end int, ok bool) {
 	q := trimQuote(fold(quote).s)
-	if tooShort(q) {
+	if tooShort(q) && !wholeLine(fragment, q) {
 		return 0, 0, false
 	}
 	f := fold(fragment)

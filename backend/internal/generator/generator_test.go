@@ -1194,3 +1194,80 @@ func TestGenerateKeepsExplanationsToTheFragment(t *testing.T) {
 		t.Errorf("TrimmedExplanations = %d, want 1", res.Stats.TrimmedExplanations)
 	}
 }
+
+// A vocabulary list holds a fact in every line, far more than a fragment of
+// prose: the cap on facts rises to the number of term lines, so no word of
+// the list is lost.
+func TestGenerateTakesEveryWordOfAVocabularyList(t *testing.T) {
+	words := []string{"daunting", "to troubleshoot", "to configure", "seamless", "vulnerability", "to brim with", "to embark", "hands-on"}
+	meanings := []string{"пугающий", "выявлять неисправности", "настраивать", "непрерывный", "уязвимость", "быть наполненным", "начинать", "практический"}
+	var lines []string
+	for i := range words {
+		lines = append(lines, fmt.Sprintf("%d %s – %s", i+1, words[i], meanings[i]))
+	}
+	doc := Document{Title: "Unit 3", Text: strings.Join(lines, "\n")}
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		var facts []fx
+		for i, line := range strings.Split(frag, "\n") {
+			facts = append(facts, fx{quote: line, cards: []mc{{
+				kind: cards.KindFlip, q: fmt.Sprintf("Как переводится «%s»?", words[i]), a: meanings[i],
+			}}})
+		}
+		return factsJSON(facts...), nil
+	}}
+
+	res := generate(t, p, doc, Options{})
+	if res.Stats.Facts != len(words) {
+		t.Errorf("%d facts, want %d: one per word (%+v)", res.Stats.Facts, len(words), res.Stats)
+	}
+	if req := p.calls()[0]; !strings.Contains(req.System, fmt.Sprintf("до %d ключевых фактов", len(words))) {
+		t.Errorf("system prompt does not raise the cap to %d", len(words))
+	}
+}
+
+func TestGenerateKeepsTheFactCapForProse(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[0])
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		return answerJSON(mc{kind: cards.KindFlip, q: "Что такое митоз?", a: "Непрямое деление.", quote: firstSentence(frag)}), nil
+	}}
+	generate(t, p, doc, opts)
+	if req := p.calls()[0]; !strings.Contains(req.System, fmt.Sprintf("до %d ключевых фактов", DefaultMaxFactsPerChunk)) {
+		t.Errorf("system prompt changed the cap for prose")
+	}
+}
+
+// A flip card asking the choice card's question gives the answer away just as
+// an input card would.
+func TestGenerateDropsChoiceRepeatedByFlip(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[0])
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		return factsJSON(fx{quote: firstSentence(frag), cards: []mc{
+			{kind: cards.KindChoice, q: "Как называется непрямое деление соматических клеток?", a: "Митоз",
+				distractors: []string{"Амитоз", "Эндомитоз", "Шизогония"}},
+			{kind: cards.KindFlip, q: "Как называется непрямое деление соматических клеток?", a: "Митоз."},
+		}}), nil
+	}}
+
+	res := generate(t, p, doc, opts)
+	if len(res.Cards) != 1 || res.Cards[0].Kind != cards.KindFlip {
+		t.Errorf("cards = %+v, want the flip card alone", res.Cards)
+	}
+}
+
+// A flip card that asks for the same translation in other words is a card of
+// its own: only the very same question repeats the choice card.
+func TestGenerateKeepsChoiceBesideASimilarFlip(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[0])
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		return factsJSON(fx{quote: firstSentence(frag), cards: []mc{
+			{kind: cards.KindChoice, q: "Как называется непрямое деление соматических клеток?", a: "Митоз",
+				distractors: []string{"Амитоз", "Эндомитоз", "Шизогония"}},
+			{kind: cards.KindFlip, q: "Назовите непрямое деление соматических клеток.", a: "Митоз."},
+		}}), nil
+	}}
+
+	res := generate(t, p, doc, opts)
+	if len(res.Cards) != 2 {
+		t.Errorf("cards = %+v, want both", res.Cards)
+	}
+}
