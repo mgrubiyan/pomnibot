@@ -121,7 +121,9 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
 
     const bottomActions = (
         <Flex direction="column" align="stretch" gap={8}>
-            <Button size="medium" variant="secondary" stretched onClick={onAddNote}>
+            {/* With «Начать» on screen it is the main action of the day; without it
+                this one is. */}
+            <Button size="medium" variant={hasSets && dueCount > 0 ? 'secondary' : 'primary'} stretched onClick={onAddNote}>
                 Создать набор
             </Button>
             <Button size="medium" variant="ghost" stretched onClick={onJoinSet}>

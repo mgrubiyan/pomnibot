@@ -19,6 +19,8 @@
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: none;
+    /* The fade falls on this space, not on the last line, once scrolled down. */
+    padding-bottom: 16px;
     -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 16px), transparent);
     mask-image: linear-gradient(to bottom, black calc(100% - 16px), transparent);
 }

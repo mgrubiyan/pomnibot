@@ -5,9 +5,8 @@ import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
 import { IconChevronLeft, IconOffline, IconShare, IconTrash } from '../components/Icons';
-import { estimateMinutes } from '../utils/estimate';
 import { loadCards, loadSet } from '../utils/sets';
-import { aboutMinutesLabel, cardsLabel } from '../utils/plural';
+import { cardsLabel } from '../utils/plural';
 import { formatAuthorName } from '../utils/user';
 import s from './SetScreen.module.css';
 
@@ -224,7 +223,8 @@ export function SetScreen({
                     <>
                         {hasDue ? (
                             <Button size="medium" variant="primary" stretched onClick={() => onStart(set.id, set.title)}>
-                                Повторить {cardsLabel(dueCount)} · {aboutMinutesLabel(estimateMinutes(dueCount))}
+                                {/* The minutes do not fit a phone-wide button: «…около 3 ми…» */}
+                                Повторить {cardsLabel(dueCount)}
                             </Button>
                         ) : (
                             <Button size="medium" variant="secondary" stretched disabled>
