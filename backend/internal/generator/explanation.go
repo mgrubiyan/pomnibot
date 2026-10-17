@@ -64,10 +64,21 @@ var explanationStopWords = map[string]bool{
 	"однако": true, "тогда": true, "здесь": true, "таким": true, "образом": true, "т": true, "е": true,
 }
 
+// mathWords: notes write the abbreviation, explanations the word.
+var mathWords = map[string]string{
+	"sin": "синус", "cos": "косинус", "tg": "тангенс", "tan": "тангенс", "ctg": "котангенс", "cot": "котангенс",
+	"log": "логарифм", "lg": "логарифм", "ln": "логарифм", "lim": "предел",
+}
+
 // cleanExplanation returns the explanation without lead-ins naming the
 // notes and without sentences about the notes or from outside them.
 func cleanExplanation(explanation, fragment string) string {
 	have := contentWords(fragment)
+	for _, w := range have {
+		if word, ok := mathWords[string(w)]; ok {
+			have = append(have, []rune(word))
+		}
+	}
 	var kept []string
 	for _, s := range explanationSentences(explanation) {
 		if body := reNotesLeadIn.ReplaceAllString(s, ""); body != s {

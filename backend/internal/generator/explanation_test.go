@@ -87,3 +87,17 @@ func TestCleanExplanation(t *testing.T) {
 		})
 	}
 }
+
+// Math notes write sin and cos where explanations say «синус» and
+// «косинус»: the same words for the check.
+func TestCleanExplanationReadsMathAbbreviations(t *testing.T) {
+	fragment := "Тригонометрические функции тупого угла: cos(180° − α) = −cos α, sin(180° − α) = sin α. tg 45° = 1."
+	for _, in := range []string{
+		"Косинус тупого угла меняет знак, а синус тупого угла нет.",
+		"Тангенс угла 45° равен 1.",
+	} {
+		if got := cleanExplanation(in, fragment); got != in {
+			t.Errorf("cleanExplanation(%q) = %q, want it kept", in, got)
+		}
+	}
+}
