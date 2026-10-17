@@ -32,6 +32,7 @@ type chunkResult struct {
 	cardsFromModel     int
 	droppedInvalid     int
 	droppedQuote       int
+	droppedPersonal    int
 	droppedUnsupported int
 	trimmedExplains    int
 	usage              providers.Usage
@@ -427,6 +428,7 @@ func (a *assembler) count(r chunkResult) {
 	s.DroppedInvalid += r.droppedInvalid
 	s.DroppedQuote += r.droppedQuote
 	s.DroppedUnsupported += r.droppedUnsupported
+	s.DroppedPersonal += r.droppedPersonal
 	s.TrimmedExplanations += r.trimmedExplains
 
 	if r.calls > 0 {

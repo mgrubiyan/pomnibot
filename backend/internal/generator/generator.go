@@ -299,6 +299,11 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, total int, r
 			continue
 		}
 		f.Quote = r.chunk.Text[start:end]
+		if personalData(f.Quote) {
+			r.droppedPersonal += len(f.Cards)
+			log.Info("cards: fact with personal data dropped", "topic", f.Topic)
+			continue
+		}
 		f.Start, f.End = r.chunk.Start+start, r.chunk.Start+end
 		f.ID = factID(doc.ID, f.Quote)
 

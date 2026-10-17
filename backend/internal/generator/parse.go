@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
 
@@ -192,6 +193,7 @@ func parseFact(data json.RawMessage) (modelFact, int) {
 		c, ok := parseCard(cardFields)
 		if !ok {
 			invalid++
+			slog.Debug("cards: card breaks the rules", "card", string(item))
 			continue
 		}
 		f.Cards = append(f.Cards, c)
@@ -346,9 +348,9 @@ func countCards(item json.RawMessage) int {
 }
 
 // reAboutNotesQuestion: a question about the notes, not the subject, «Какое
-// определение дано клетке во фрагменте?». Only with a preposition: «фрагменты
-// Оказаки» are the subject of a biology lecture.
-var reAboutNotesQuestion = regexp.MustCompile(`(?i)(?:^|[^\p{L}])(?:в|во|из|по|согласно)\s+(?:конспект|фрагмент|тексте|тексту|текста|лекци)\p{L}*`)
+// определение дано клетке во фрагменте?». «Фрагмент» and «текст» only with a
+// preposition: «фрагменты Оказаки» are the subject of a biology lecture.
+var reAboutNotesQuestion = regexp.MustCompile(`(?i)(?:^|[^\p{L}])(?:(?:в|во|из|по|согласно)\s+(?:конспект|фрагмент|тексте|тексту|текста|лекци)|конспект)\p{L}*`)
 
 // reTrueLeadIn matches "Верно ли, что" and its kin: a boolean statement the
 // model turned into a question.

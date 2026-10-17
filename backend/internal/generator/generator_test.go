@@ -171,7 +171,7 @@ func checkStats(t *testing.T, res Result) {
 	if s.Cards != len(res.Cards) {
 		t.Errorf("Stats.Cards = %d, len(Cards) = %d", s.Cards, len(res.Cards))
 	}
-	accounted := s.DroppedInvalid + s.DroppedQuote + s.DroppedUnsupported + s.DroppedDuplicate + s.DroppedByLimit + s.DroppedVariants + s.Cards
+	accounted := s.DroppedInvalid + s.DroppedQuote + s.DroppedPersonal + s.DroppedUnsupported + s.DroppedDuplicate + s.DroppedByLimit + s.DroppedVariants + s.Cards
 	if s.CardsFromModel != accounted {
 		t.Errorf("CardsFromModel = %d, but dropped + returned = %d (%+v)", s.CardsFromModel, accounted, s)
 	}
@@ -1331,6 +1331,9 @@ func TestFactCapReadsLinesWithTranscriptions(t *testing.T) {
 	if got := factCap(strings.Join(lines, "\n"), DefaultMaxFactsPerChunk); got != len(lines) {
 		t.Errorf("factCap = %d, want %d", got, len(lines))
 	}
+	if isTermLine("Позвонить маме в 18:00") {
+		t.Error("a time taken for «term: meaning»")
+	}
 }
 
 func TestFactCapReadsTablesAndArrows(t *testing.T) {
@@ -1409,6 +1412,7 @@ func TestParseDropsQuestionsAboutTheNotes(t *testing.T) {
 		"Какой пример активного транспорта указан в конспекте?",
 		"Что сказано в тексте о мейозе?",
 		"Назовите два примера товаров первой необходимости из текста.",
+		"Как характеризует типаж Евгения Онегина конспект?",
 	} {
 		body, _ := json.Marshal(q)
 		answer := `{"facts":[{"quote":"Q","topic":"T","cards":[{"kind":"flip","question":` + string(body) + `,"answer":"A","explanation":"E"}]}]}`
@@ -1419,5 +1423,61 @@ func TestParseDropsQuestionsAboutTheNotes(t *testing.T) {
 	answer := `{"facts":[{"quote":"Q","topic":"T","cards":[{"kind":"flip","question":"Какой текст называют гипертекстом?","answer":"A","explanation":"E"}]}]}`
 	if facts, _, _ := parseAnswer([]byte(answer), 3); cardCount(facts) != 1 {
 		t.Error("a question about texts as the subject was dropped")
+	}
+}
+
+// Notes may carry a password or a phone number between the lines: no card
+// is made of a fact whose quote holds personal data, whatever the model did.
+func TestGenerateDropsFactsWithPersonalData(t *testing.T) {
+	para := "Ген — участок ДНК, кодирующий белок. Пароль от вайфая в общаге 89631234, Маше позвонить +7 912 345-67-89. Аллели — формы одного гена."
+	doc, opts := testDoc(t, para)
+	p := &fakeProvider{answer: func(int, string, providers.Request) (string, error) {
+		return factsJSON(
+			fx{quote: "Ген — участок ДНК, кодирующий белок.", cards: []mc{{kind: cards.KindFlip, q: "Что такое ген?", a: "Участок ДНК, кодирующий белок."}}},
+			fx{quote: "Пароль от вайфая в общаге 89631234", cards: []mc{{kind: cards.KindFlip, q: "Какой пароль от вайфая в общаге?", a: "89631234"}}},
+			fx{quote: "Маше позвонить +7 912 345-67-89", cards: []mc{{kind: cards.KindFlip, q: "Какой номер у Маши?", a: "+7 912 345-67-89"}}},
+		), nil
+	}}
+
+	res := generate(t, p, doc, opts)
+	if len(res.Cards) != 1 || res.Cards[0].Question != "Что такое ген?" {
+		t.Errorf("cards = %+v, want the gene card alone", res.Cards)
+	}
+	if res.Stats.DroppedPersonal != 2 {
+		t.Errorf("DroppedPersonal = %d, want 2", res.Stats.DroppedPersonal)
+	}
+}
+
+func TestPersonalData(t *testing.T) {
+	for s, want := range map[string]bool{
+		"пароль от вайфая 12345678":            true,
+		"Password: qwerty":                     true,
+		"позвонить +7 912 345-67-89":           true,
+		"звонить 8 (912) 345 67 89":            true,
+		"пиши на masha@mail.ru":                true,
+		"карта 4276 1234 5678 9012":            true,
+		"В 1812 году Наполеон вошёл в Москву.": false,
+		"Частота 60–80 ударов в минуту.":       false,
+		"ISBN 978-5-9704-5307-8":               false,
+	} {
+		if got := personalData(s); got != want {
+			t.Errorf("personalData(%q) = %v, want %v", s, got, want)
+		}
+	}
+}
+
+// The request to skip personal notes goes with prose only: next to a sheet of
+// formulas or a vocabulary list the model took them for no study material.
+func TestUserPromptAsksToSkipPersonalNotesForProseOnly(t *testing.T) {
+	for text, want := range map[string]bool{
+		"Купить молоко, хлеб, позвонить маме в 18:00.":                     true,
+		"Митоз — непрямое деление клеток. Мейоз уменьшает число хромосом.": true,
+		"v = s / t\na = (v − v0) / t\nF = m · a":                           false,
+		"cat – кошка\ndog – собака\nhouse – дом":                           false,
+	} {
+		got := strings.Contains(buildUserPrompt("", chunk{Text: text}, 1, false), notStudyNote)
+		if got != want {
+			t.Errorf("%q: note sent = %v, want %v", text, got, want)
+		}
 	}
 }

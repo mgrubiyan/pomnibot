@@ -164,7 +164,7 @@ func junkReason(text string, whole bool) string {
 		return junkDigitsDots
 	}
 	// A vocabulary list is short lines by nature: «cat – кошка».
-	if len(lines) >= minLinesForAvg && avgLine < minAvgLineLen && 2*termLines(lines) < len(lines) {
+	if len(lines) >= minLinesForAvg && avgLine < minAvgLineLen && !vocabulary(lines) {
 		return junkShortLines
 	}
 	return ""

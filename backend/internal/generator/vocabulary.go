@@ -14,7 +14,7 @@ const maxListFacts = 15
 // настраивать», «seamless: непрерывный», a table row «Митоз | непрямое
 // деление», a tab between, or a reaction «CaCO₃ → CaO + CO₂», a fact a line
 // too. Not «=»: «sin 30° = 1/2» lines are formulas, often a fragment full.
-var reTermLine = regexp.MustCompile(`^\s*(?:\d{1,3}[.)]?\s+)?[^–—:=|→\t\n]{1,80}?(?:\s[–—-]\s+|\s*[:|→]\s*|\t+)[^=\n]{1,150}$`)
+var reTermLine = regexp.MustCompile(`^\s*(?:\d{1,3}[.)]?\s+)?[^–—:=|→\t\n]{1,80}?(?:\s[–—-]\s+|\s*:\s+|\s*[|→]\s*|\t+)[^=\n]{1,150}$`)
 
 // reBracketed is a transcription or a note in brackets, «['dɔ:ntɪŋ]»: it may
 // hold a colon that is no separator.
@@ -31,6 +31,13 @@ func isTermLine(line string) bool {
 // base.
 func factCap(fragment string, base int) int {
 	return max(base, min(termLines(strings.Split(fragment, "\n")), maxListFacts))
+}
+
+// vocabulary reports a fragment that is mostly a vocabulary list or
+// glossary, of three term lines at least.
+func vocabulary(lines []string) bool {
+	n := termLines(lines)
+	return n >= 3 && 2*n >= len(lines)
 }
 
 // termLines counts the lines of a vocabulary list or glossary.
