@@ -250,11 +250,11 @@ func tooShort(q string) bool {
 
 // wholeLine reports whether the folded quote q is a whole line of the
 // fragment, at least minFormulaRunes long, or minLineFormulaRunes for an
-// equation. A line of a vocabulary list, «1 daunting – пугающий», or of a
+// equation or a reaction. A line of a vocabulary list, «1 daunting – пугающий», or of a
 // sheet of formulas, «F = m · a», is short but says what no other line does.
 func wholeLine(fragment, q string) bool {
 	n := utf8.RuneCountInString(q)
-	if n < minFormulaRunes && (n < minLineFormulaRunes || !strings.ContainsRune(q, '=')) {
+	if n < minFormulaRunes && (n < minLineFormulaRunes || !strings.ContainsAny(q, "=→")) {
 		return false
 	}
 	for _, line := range strings.Split(fragment, "\n") {

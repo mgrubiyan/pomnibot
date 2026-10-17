@@ -11,9 +11,10 @@ const maxListFacts = 15
 
 // reTermLine is a line of a vocabulary list or glossary: an optional number,
 // a short term, a separator and its meaning: «5 to configure [kən'fɪɡə] –
-// настраивать», «seamless: непрерывный», or a tab between. Not «=»: that is a
-// formula, «sin 30° = 1/2».
-var reTermLine = regexp.MustCompile(`^\s*(?:\d{1,3}[.)]?\s+)?[^–—:=\t\n]{1,80}?(?:\s[–—-]\s+|\s*:\s+|\t+)[^=\n]{1,150}$`)
+// настраивать», «seamless: непрерывный», a table row «Митоз | непрямое
+// деление», a tab between, or a reaction «CaCO₃ → CaO + CO₂», a fact a line
+// too. Not «=»: «sin 30° = 1/2» lines are formulas, often a fragment full.
+var reTermLine = regexp.MustCompile(`^\s*(?:\d{1,3}[.)]?\s+)?[^–—:=|→\t\n]{1,80}?(?:\s[–—-]\s+|\s*[:|→]\s*|\t+)[^=\n]{1,150}$`)
 
 // reBracketed is a transcription or a note in brackets, «['dɔ:ntɪŋ]»: it may
 // hold a colon that is no separator.

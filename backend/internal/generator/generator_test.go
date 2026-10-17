@@ -1332,3 +1332,25 @@ func TestFactCapReadsLinesWithTranscriptions(t *testing.T) {
 		t.Errorf("factCap = %d, want %d", got, len(lines))
 	}
 }
+
+func TestFactCapReadsTablesAndArrows(t *testing.T) {
+	for name, lines := range map[string][]string{
+		"table": {"Митоз | непрямое деление", "Мейоз | редукционное деление", "Амитоз | прямое деление ядра",
+			"Цитокинез | разделение цитоплазмы", "Апоптоз | программируемая гибель", "Интерфаза | период между делениями"},
+		"reactions": {"2H₂ + O₂ → 2H₂O", "CaCO₃ → CaO + CO₂", "2Na + Cl₂ → 2NaCl", "Zn + 2HCl → ZnCl₂ + H₂",
+			"CuO + H₂ → Cu + H₂O", "NaOH + HCl → NaCl + H₂O"},
+	} {
+		if got := factCap(strings.Join(lines, "\n"), DefaultMaxFactsPerChunk); got != len(lines) {
+			t.Errorf("%s: factCap = %d, want %d", name, got, len(lines))
+		}
+	}
+}
+
+// Subscripts and superscripts are part of a formula: «H₂O» is one word, so
+// «2H₂O» is not named in «Что получается из 2H₂ + O₂?».
+func TestAnswerCheckReadsSubscripts(t *testing.T) {
+	c := modelCard{Kind: cards.KindChoice, Question: "Что образуется в реакции 2H₂ + O₂ → ?", Answer: "2H₂O"}
+	if !answerSupported(c, "2H₂ + O₂ → 2H₂O") {
+		t.Errorf("answer %q taken for named in the question %q", c.Answer, c.Question)
+	}
+}

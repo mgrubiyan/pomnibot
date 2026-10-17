@@ -77,6 +77,11 @@ N = A / t`,
 			want: "",
 		},
 		{
+			name: "sheet of reactions",
+			text: "2H₂ + O₂ → 2H₂O\nCaCO₃ → CaO + CO₂\n2Na + Cl₂ → 2NaCl\nZn + 2HCl → ZnCl₂ + H₂\nCuO + H₂ → Cu + H₂O\nNaOH + HCl → NaCl + H₂O\nFe + S → FeS",
+			want: "",
+		},
+		{
 			name: "vocabulary with short lines",
 			text: "apple – яблоко\norange – апельсин\nlemon – лимон\ncherry – вишня\npeach – персик\ngrape – виноград\nmelon – дыня\nplum – слива\npear – груша",
 			want: "",

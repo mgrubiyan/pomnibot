@@ -99,8 +99,8 @@ var (
 // whether it holds anything to learn.
 //
 // A sheet of symbolic formulas (v = s / t, Eк = m · v² / 2) is study material
-// though it has few letters and short lines; worked numbers (F = 12,5 · 9,81
-// = 122,6 Н) are still junk.
+// though it has few letters and short lines, and so is a sheet of reactions;
+// worked numbers (F = 12,5 · 9,81 = 122,6 Н) are still junk.
 func junkReason(text string, whole bool) string {
 	var letters, digitsDots, nonSpace int
 	for _, r := range text {
@@ -170,12 +170,13 @@ func junkReason(text string, whole bool) string {
 	return ""
 }
 
-// symbolicFormulas counts lines with an equation in letters rather than
-// numbers: «Eк = m · v² / 2», not «F = 12,5 · 9,81».
+// symbolicFormulas counts lines with an equation or a reaction in letters
+// rather than numbers: «Eк = m · v² / 2», «CaCO₃ → CaO + CO₂», not «F = 12,5 ·
+// 9,81».
 func symbolicFormulas(lines []string) int {
 	n := 0
 	for _, line := range lines {
-		if !strings.ContainsRune(line, '=') {
+		if !strings.ContainsAny(line, "=→") {
 			continue
 		}
 		var letters, digits int
