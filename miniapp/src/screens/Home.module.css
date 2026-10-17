@@ -11,11 +11,20 @@
     overflow-wrap: anywhere;
 }
 
+/* The list scrolls inside the screen: no scrollbar painted over the cards,
+   and the last lines fade out above the buttons instead of being cut. */
 .body {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 16px), transparent);
+    mask-image: linear-gradient(to bottom, black calc(100% - 16px), transparent);
+}
+
+.body::-webkit-scrollbar {
+    display: none;
 }
 
 /* The «На сегодня» card */
@@ -44,7 +53,17 @@
     padding-right: 0;
 }
 
+/* Rows keep one height whether or not they name an author, and a long title
+   takes two lines at most. */
+.setRow {
+    min-height: 64px;
+}
+
 .setTitle {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
     overflow-wrap: anywhere;
 }
 

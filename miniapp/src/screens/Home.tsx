@@ -121,7 +121,7 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
 
     const bottomActions = (
         <Flex direction="column" align="stretch" gap={8}>
-            <Button size="medium" variant="primary" stretched onClick={onAddNote}>
+            <Button size="medium" variant="secondary" stretched onClick={onAddNote}>
                 Создать набор
             </Button>
             <Button size="medium" variant="ghost" stretched onClick={onJoinSet}>
@@ -133,12 +133,12 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
     return (
         <Screen>
             <Flex justify="space-between" align="baseline" gap={12} className={s.header}>
-                <Typography.Text variant="subheader" asChild>
+                <Typography.Text variant="description" color="secondary" asChild>
                     <h1 className={s.greeting}>Привет, {formatGreetingName(today.user)}</h1>
                 </Typography.Text>
             </Flex>
 
-            <Flex direction="column" align="stretch" gap={16} className={s.body}>
+            <Flex direction="column" align="stretch" gap={20} className={s.body}>
                 {hasSets ? (
                     <>
                         <Flex direction="column" align="stretch" gap={4} className={s.todayCard}>
@@ -171,7 +171,7 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
                         </Flex>
 
                         <Flex direction="column" align="stretch" gap={8} className={s.setsSection}>
-                            <CellHeader>Мои наборы</CellHeader>
+                            <CellHeader titleStyle="normal">Мои наборы</CellHeader>
                             <CellList mode="island" filled className={s.setsList}>
                                 {sets.map((set, index) => (
                                     <CellSimple
@@ -179,6 +179,7 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
                                         as="button"
                                         separator={index > 0}
                                         showChevron
+                                        className={s.setRow}
                                         onClick={() => onOpenSet(set.id)}
                                         title={<span className={s.setTitle}>{set.title}</span>}
                                         subtitle={

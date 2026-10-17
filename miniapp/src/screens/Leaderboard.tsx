@@ -123,7 +123,7 @@ export function Leaderboard({ setId, setTitle, onBack }: LeaderboardProps) {
 
             <Flex direction="column" align="stretch" gap={16} className={s.body}>
                 <Flex direction="column" align="stretch" gap={8}>
-                    <CellHeader>Участники · {items.length}</CellHeader>
+                    <CellHeader titleStyle="normal">Участники · {items.length}</CellHeader>
                     {items.length === 0 ? (
                         <div className={s.empty}>
                             <Typography.Text color="secondary">
