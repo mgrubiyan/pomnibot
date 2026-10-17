@@ -168,6 +168,12 @@ func (e *Extractor) Extract(ctx context.Context, files []File) (Result, error) {
 			pages = []string{e.readText(&res, i, f)}
 		case KindPDF:
 			pages, err = e.readPDF(ctx, &res, i, f)
+		case KindDOCX:
+			var text string
+			text, err = e.readWord(&res, i, f)
+			pages = []string{text}
+		case KindPPTX:
+			pages, err = e.readSlides(&res, i, f)
 		case KindJPEG, KindPNG, KindWebP:
 			var text string
 			text, err = e.readImage(ctx, &res, i, f)
@@ -176,7 +182,7 @@ func (e *Extractor) Extract(ctx context.Context, files []File) (Result, error) {
 			// The detected type goes to the log: a messenger may send a page
 			// or a HEIC photo where a JPEG was expected.
 			err = &Error{File: f.Name, Err: fmt.Errorf("%w: %s", ErrUnsupported, http.DetectContentType(f.Data)),
-				Message: "Формат не поддерживается: пришлите текст, PDF или фото страниц."}
+				Message: "Формат не поддерживается: пришлите текст, PDF, Word, PowerPoint или фото страниц."}
 		}
 		if err != nil {
 			return Result{}, err
@@ -227,6 +233,30 @@ func (e *Extractor) readText(res *Result, file int, f File) string {
 		Chars:  countChars(text),
 	})
 	return text
+}
+
+// readWord takes the text of a Word document as one page.
+func (e *Extractor) readWord(res *Result, file int, f File) (string, error) {
+	text, err := docxText(f.Data)
+	if err != nil {
+		return "", &Error{File: f.Name, Err: fmt.Errorf("%w: word: %w", ErrUnsupported, err),
+			Message: "Не удалось открыть документ Word: сохраните его заново или пришлите PDF."}
+	}
+	res.Pages = append(res.Pages, PageInfo{Number: len(res.Pages) + 1, File: file, Page: 1, Source: SourceText, Chars: countChars(text)})
+	return text, nil
+}
+
+// readSlides takes the text of each slide of a deck as a page of its own.
+func (e *Extractor) readSlides(res *Result, file int, f File) ([]string, error) {
+	slides, err := pptxSlides(f.Data)
+	if err != nil {
+		return nil, &Error{File: f.Name, Err: fmt.Errorf("%w: powerpoint: %w", ErrUnsupported, err),
+			Message: "Не удалось открыть презентацию: сохраните её заново или пришлите PDF."}
+	}
+	for k, text := range slides {
+		res.Pages = append(res.Pages, PageInfo{Number: len(res.Pages) + 1, File: file, Page: k + 1, Source: SourceText, Chars: countChars(text)})
+	}
+	return slides, nil
 }
 
 // readPDF takes the text layer page by page and returns the text of each

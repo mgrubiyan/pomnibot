@@ -462,7 +462,7 @@ func (b *Bot) getAllFileAttachments(m *Message) []attachmentInfo {
 		if !isDocOrImage && filename != "" {
 			ext := strings.ToLower(filepath.Ext(filename))
 			switch ext {
-			case ".txt", ".pdf", ".png", ".jpg", ".jpeg", ".webp", ".doc", ".docx":
+			case ".txt", ".pdf", ".png", ".jpg", ".jpeg", ".webp", ".doc", ".docx", ".pptx":
 				isDocOrImage = true
 			}
 		}
