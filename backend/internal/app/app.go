@@ -17,7 +17,9 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/grader"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest/yandex"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers/yandexgpt"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 	httptransport "github.com/mgrubiyan/pomnibot/backend/internal/transport/http"
@@ -27,12 +29,12 @@ import (
 // Run starts the application and shuts it down when ctx is cancelled.
 func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 	cardOptions := []usecase.CardServiceOption{}
-	var model *gigachat.Client
+	var model providers.Provider
 	if cfg.Environment == config.Prod {
 		var err error
-		model, err = gigachat.New(cfg.GigaChat)
+		model, err = newModel(cfg)
 		if err != nil {
-			return fmt.Errorf("initialize GigaChat: %w", err)
+			return err
 		}
 		cardOptions = append(cardOptions, usecase.WithGrader(&grader.Grader{Model: model}))
 	}
@@ -80,7 +82,31 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 	return serve(ctx, server)
 }
 
-func startBot(ctx context.Context, cfg config.Config, model *gigachat.Client, users usecase.UserService, sets usecase.SetService) error {
+// newModel returns GigaChat, backed by YandexGPT when it is configured: the
+// generator, the grader and the photo reader share it, so they all stop
+// waiting on a GigaChat that is down at once.
+func newModel(cfg config.Config) (providers.Provider, error) {
+	primary, err := gigachat.New(cfg.GigaChat)
+	if err != nil {
+		return nil, fmt.Errorf("initialize GigaChat: %w", err)
+	}
+	if cfg.YandexGPT == nil {
+		slog.Warn("no backup model: set YC_LLM_MODEL to use YandexGPT when GigaChat is down")
+		return primary, nil
+	}
+	backup, err := yandexgpt.New(*cfg.YandexGPT)
+	if err != nil {
+		return nil, fmt.Errorf("initialize YandexGPT: %w", err)
+	}
+	slog.Info("backup model enabled", "model", cfg.YandexGPT.Model,
+		"primary_timeout", cfg.LLM.PrimaryTimeout, "cooldown", cfg.LLM.Cooldown)
+	return providers.NewFallback(cfg.LLM.Cooldown,
+		providers.Backend{Name: "gigachat", Provider: primary, Timeout: cfg.LLM.PrimaryTimeout},
+		providers.Backend{Name: "yandexgpt", Provider: backup},
+	), nil
+}
+
+func startBot(ctx context.Context, cfg config.Config, model providers.Provider, users usecase.UserService, sets usecase.SetService) error {
 	client, err := bot.NewClient(cfg.BotToken, cfg.MaxAPIURL, cfg.MaxInsecureSkipVerify)
 	if err != nil {
 		return fmt.Errorf("initialize MAX client: %w", err)

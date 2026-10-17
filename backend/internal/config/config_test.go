@@ -3,6 +3,7 @@ package config
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoadLocal(t *testing.T) {
@@ -44,7 +45,8 @@ func TestLoadValidatesPort(t *testing.T) {
 	}
 }
 
-func TestLoadProd(t *testing.T) {
+func setProdEnv(t *testing.T) {
+	t.Helper()
 	values := map[string]string{
 		"APP_ENV": "prod", "PORT": "8081", "DATABASE_URL": "postgres://localhost/pomnibot",
 		"BOT_TOKEN": "test-token", "DOMAIN": "example.test", "MAX_API_URL": "https://max.example.test",
@@ -59,6 +61,13 @@ func TestLoadProd(t *testing.T) {
 	for key, value := range values {
 		t.Setenv(key, value)
 	}
+	for _, key := range []string{"YC_LLM_MODEL", "YC_LLM_BASE_URL", "YC_LLM_MAX_TOKENS", "LLM_PRIMARY_TIMEOUT", "LLM_COOLDOWN"} {
+		t.Setenv(key, "")
+	}
+}
+
+func TestLoadProd(t *testing.T) {
+	setProdEnv(t)
 	if _, err := Load(); err != nil {
 		t.Fatal(err)
 	}
@@ -75,4 +84,54 @@ func TestLoadProd(t *testing.T) {
 		}
 	}
 
+}
+
+func TestLoadProdWithoutBackupModel(t *testing.T) {
+	setProdEnv(t)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.YandexGPT != nil {
+		t.Errorf("YandexGPT = %+v, want nil without YC_LLM_MODEL", cfg.YandexGPT)
+	}
+	if cfg.LLM.PrimaryTimeout != time.Minute || cfg.LLM.Cooldown != 10*time.Minute {
+		t.Errorf("LLM = %+v, want the defaults", cfg.LLM)
+	}
+}
+
+func TestLoadProdWithBackupModel(t *testing.T) {
+	setProdEnv(t)
+	t.Setenv("YC_LLM_MODEL", "yandexgpt-5.1")
+	t.Setenv("LLM_PRIMARY_TIMEOUT", "45s")
+	t.Setenv("LLM_COOLDOWN", "5m")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.YandexGPT == nil || cfg.YandexGPT.Model != "yandexgpt-5.1" || cfg.YandexGPT.APIKey != "test-key" ||
+		cfg.YandexGPT.FolderID != "test-folder" {
+		t.Errorf("YandexGPT = %+v, want the model with the shared Yandex Cloud key and folder", cfg.YandexGPT)
+	}
+	if cfg.LLM.PrimaryTimeout != 45*time.Second || cfg.LLM.Cooldown != 5*time.Minute {
+		t.Errorf("LLM = %+v", cfg.LLM)
+	}
+}
+
+func TestLoadProdValidatesLLMSettings(t *testing.T) {
+	for _, tc := range []struct{ key, val string }{
+		{"LLM_PRIMARY_TIMEOUT", "soon"},
+		{"LLM_PRIMARY_TIMEOUT", "0s"},
+		{"LLM_COOLDOWN", "-1m"},
+		{"YC_LLM_MAX_TOKENS", "many"},
+	} {
+		t.Run(tc.key+"="+tc.val, func(t *testing.T) {
+			setProdEnv(t)
+			t.Setenv("YC_LLM_MODEL", "yandexgpt-5.1")
+			t.Setenv(tc.key, tc.val)
+			if _, err := Load(); err == nil || !strings.Contains(err.Error(), tc.key) {
+				t.Errorf("Load() error = %v, want one naming %s", err, tc.key)
+			}
+		})
+	}
 }

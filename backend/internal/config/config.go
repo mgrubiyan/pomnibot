@@ -12,6 +12,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/bot"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest/yandex"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers/yandexgpt"
 )
 
 // Environment selects the local or production runtime.
@@ -34,7 +35,20 @@ type Config struct {
 	MaxInsecureSkipVerify bool
 	Notifications         bot.NotificationConfig
 	GigaChat              gigachat.Config
-	OCR                   yandex.Config
+	// YandexGPT is the backup model for when GigaChat is down; nil without
+	// YC_LLM_MODEL.
+	YandexGPT *yandexgpt.Config
+	LLM       LLMConfig
+	OCR       yandex.Config
+}
+
+// LLMConfig sets how requests move from GigaChat to the backup model.
+type LLMConfig struct {
+	// PrimaryTimeout bounds one GigaChat call, its retries included, so that
+	// a GigaChat that hangs leaves time for the backup. It counts as down then.
+	PrimaryTimeout time.Duration
+	// Cooldown is how long a provider that is down gets no requests.
+	Cooldown time.Duration
 }
 
 func value(key, fallback string) string {
@@ -88,6 +102,13 @@ func Load() (Config, error) {
 	errs = append(errs, err)
 	cfg.OCR, err = yandex.ConfigFromEnv()
 	errs = append(errs, err)
+	if value("YC_LLM_MODEL", "") != "" {
+		backup, err := yandexgpt.ConfigFromEnv()
+		cfg.YandexGPT = &backup
+		errs = append(errs, err)
+	}
+	cfg.LLM, err = llmFromEnv()
+	errs = append(errs, err)
 	cfg.Notifications, err = notificationsFromEnv()
 	errs = append(errs, err)
 	return cfg, errors.Join(errs...)
@@ -107,4 +128,24 @@ func notificationsFromEnv() (bot.NotificationConfig, error) {
 		return bot.NotificationConfig{}, fmt.Errorf("NOTIFICATION_TZ: %w", err)
 	}
 	return bot.NotificationConfig{Enabled: enabled, Hour: at.Hour(), Minute: at.Minute(), Location: loc}, nil
+}
+
+func llmFromEnv() (LLMConfig, error) {
+	var cfg LLMConfig
+	var errs []error
+	for _, d := range []struct {
+		name, fallback string
+		dst            *time.Duration
+	}{
+		{"LLM_PRIMARY_TIMEOUT", "1m", &cfg.PrimaryTimeout},
+		{"LLM_COOLDOWN", "10m", &cfg.Cooldown},
+	} {
+		v, err := time.ParseDuration(value(d.name, d.fallback))
+		if err != nil || v <= 0 {
+			errs = append(errs, fmt.Errorf("%s = %q, want a positive duration such as %s", d.name, value(d.name, d.fallback), d.fallback))
+			continue
+		}
+		*d.dst = v
+	}
+	return cfg, errors.Join(errs...)
 }

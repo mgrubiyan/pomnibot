@@ -155,7 +155,7 @@ cp .env.example .env
 | `MAX_API_URL` | `https://platform-api2.max.ru` | адрес MAX Bot API |
 | `MAX_INSECURE_SKIP_VERIFY` | `false` | `true` отключает проверку TLS-сертификата MAX API; только для отладки |
 
-**GigaChat**: генерация карточек, чтение фото, проверка ответов по смыслу
+**GigaChat**: генерация карточек, чтение фото, проверка ответов по смыслу. Если GigaChat недоступен, эти запросы берёт YandexGPT (см. ниже)
 
 | Переменная | .env.example | Назначение |
 |---|---|---|
@@ -172,11 +172,21 @@ cp .env.example .env
 
 | Переменная | .env.example | Назначение |
 |---|---|---|
-| `YC_API_KEY` | — | API-ключ сервисного аккаунта с ролью `ai.vision.user` (секрет) |
+| `YC_API_KEY` | — | API-ключ сервисного аккаунта с ролью `ai.vision.user`, для резервной модели также `ai.languageModels.user` (секрет) |
 | `YC_FOLDER_ID` | — | каталог Yandex Cloud |
 | `YC_OCR_BASE_URL` | `https://ai.api.cloud.yandex.net` | адрес API распознавания |
 | `YC_OCR_OPERATION_URL` | `https://operation.api.cloud.yandex.net` | адрес API отслеживания асинхронных операций |
 | `YC_OCR_MODEL` | - | модель распознавания для всех страниц; в `.env.example` отсутствует, задавать только для переопределения |
+
+**YandexGPT**: резервная модель на случай недоступности GigaChat. Включается, когда задана `YC_LLM_MODEL`; ключ и каталог общие с Yandex Vision OCR. Фото YandexGPT не читает: при недоступном GigaChat их распознаёт Yandex Vision OCR
+
+| Переменная | .env.example | Назначение |
+|---|---|---|
+| `YC_LLM_MODEL` | `yandexgpt-5.1` | модель (или полный URI `gpt://<каталог>/<модель>`); пустое значение отключает резерв |
+| `YC_LLM_BASE_URL` | `https://ai.api.cloud.yandex.net` | адрес API генерации текста |
+| `YC_LLM_MAX_TOKENS` | `8000` | предел длины ответа модели за один вызов |
+| `LLM_PRIMARY_TIMEOUT` | `1m` | сколько ждать GigaChat, повторы включительно, прежде чем отдать запрос резервной модели |
+| `LLM_COOLDOWN` | `10m` | сколько не слать запросы провайдеру, который недоступен |
 
 **Напоминания о повторе**
 
@@ -202,7 +212,7 @@ cp .env.example .env
 | 5432 | `postgres` | PostgreSQL, открыт на хосте для отладки. Меняется переменной `POSTGRES_PORT`; в продакшене наружу не публикуется |
 | 5173 | — | дев-сервер Vite, только при разработке мини-приложения (`task dev`), в Docker не используется |
 
-Исходящие соединения из контейнера `backend`: `platform-api2.max.ru:443` (MAX), `api.giga.chat:443` и `ngw.devices.sberbank.ru:9443` (GigaChat), `ai.api.cloud.yandex.net:443` и `operation.api.cloud.yandex.net:443` (Yandex OCR) — только если соответствующие ключи заданы.
+Исходящие соединения из контейнера `backend`: `platform-api2.max.ru:443` (MAX), `api.giga.chat:443` и `ngw.devices.sberbank.ru:9443` (GigaChat), `ai.api.cloud.yandex.net:443` и `operation.api.cloud.yandex.net:443` (Yandex OCR и YandexGPT) — только если соответствующие ключи заданы.
 
 ## Зависимости
 
@@ -230,6 +240,7 @@ cp .env.example .env
 | **MAX** (Bot API и платформа мини-приложений) | бот принимает конспекты и шлёт напоминания; мини-приложение открывается внутри MAX и получает от него подписанные данные пользователя (`initData`) | токен бота в `BOT_TOKEN`; для открытия мини-приложения внутри MAX — публичный HTTPS-адрес, указанный в настройках бота |
 | **GigaChat** (Сбер) | генерация карточек из конспекта, чтение фото и сканов, проверка печатного ответа по смыслу | ключ в `GIGACHAT_AUTH_KEY` (или пара `GIGACHAT_CLIENT_ID` / `GIGACHAT_CLIENT_SECRET`) с доступом к выбранной модели; сетевой доступ к `api.giga.chat` и `ngw.devices.sberbank.ru` |
 | **Yandex Vision OCR** | переворачивает фото и перепроверяет прочитанный GigaChat текст | `YC_API_KEY` и `YC_FOLDER_ID` сервисного аккаунта с ролью `ai.vision.user` |
+| **YandexGPT** (Yandex AI Studio) | резерв: генерирует карточки и проверяет ответы, когда GigaChat недоступен | `YC_LLM_MODEL`; тот же сервисный аккаунт с ролью `ai.languageModels.user` |
 
 Проверить весь основной сценарий с генерацией можно в работающей версии — в боте по ссылке [в начале](#помнибот): там все ключи уже заданы.
 
