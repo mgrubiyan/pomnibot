@@ -3,6 +3,7 @@ package config
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoadLocal(t *testing.T) {
@@ -44,7 +45,8 @@ func TestLoadValidatesPort(t *testing.T) {
 	}
 }
 
-func TestLoadProd(t *testing.T) {
+func setProdEnv(t *testing.T) {
+	t.Helper()
 	values := map[string]string{
 		"APP_ENV": "prod", "PORT": "8081", "DATABASE_URL": "postgres://localhost/pomnibot",
 		"BOT_TOKEN": "test-token", "DOMAIN": "example.test", "MAX_API_URL": "https://max.example.test",
@@ -59,6 +61,13 @@ func TestLoadProd(t *testing.T) {
 	for key, value := range values {
 		t.Setenv(key, value)
 	}
+	for _, key := range []string{"YC_LLM_MODEL", "YC_LLM_BASE_URL", "YC_LLM_MAX_TOKENS", "LLM_PRIMARY", "LLM_PRIMARY_TIMEOUT", "LLM_COOLDOWN"} {
+		t.Setenv(key, "")
+	}
+}
+
+func TestLoadProd(t *testing.T) {
+	setProdEnv(t)
 	if _, err := Load(); err != nil {
 		t.Fatal(err)
 	}
@@ -75,4 +84,78 @@ func TestLoadProd(t *testing.T) {
 		}
 	}
 
+}
+
+// Qwen on Yandex AI Studio does it all by default: it serves two requests at
+// once against the GigaChat plan's one, and its key and folder are the OCR's.
+func TestLoadProdDefaultsToQwenFirst(t *testing.T) {
+	setProdEnv(t)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AIStudio == nil || cfg.AIStudio.Model != "qwen3.6-35b-a3b" || cfg.AIStudio.APIKey != "test-key" ||
+		cfg.AIStudio.FolderID != "test-folder" {
+		t.Errorf("AIStudio = %+v, want Qwen with the shared Yandex Cloud key and folder", cfg.AIStudio)
+	}
+	if cfg.LLM.Primary != PrimaryAIStudio || cfg.LLM.PrimaryTimeout != time.Minute || cfg.LLM.Cooldown != 10*time.Minute {
+		t.Errorf("LLM = %+v, want AI Studio first and the default timings", cfg.LLM)
+	}
+}
+
+func TestLoadProdWithoutAIStudio(t *testing.T) {
+	setProdEnv(t)
+	t.Setenv("YC_LLM_MODEL", "off")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AIStudio != nil || cfg.LLM.Primary != PrimaryGigaChat {
+		t.Errorf("AIStudio = %+v, primary %q; want GigaChat alone", cfg.AIStudio, cfg.LLM.Primary)
+	}
+}
+
+func TestLoadProdLLMSettings(t *testing.T) {
+	setProdEnv(t)
+	t.Setenv("YC_LLM_MODEL", "gemma-3-27b-it")
+	t.Setenv("LLM_PRIMARY", "gigachat")
+	t.Setenv("LLM_PRIMARY_TIMEOUT", "45s")
+	t.Setenv("LLM_COOLDOWN", "5m")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AIStudio == nil || cfg.AIStudio.Model != "gemma-3-27b-it" {
+		t.Errorf("AIStudio = %+v", cfg.AIStudio)
+	}
+	if cfg.LLM.Primary != PrimaryGigaChat || cfg.LLM.PrimaryTimeout != 45*time.Second || cfg.LLM.Cooldown != 5*time.Minute {
+		t.Errorf("LLM = %+v", cfg.LLM)
+	}
+}
+
+func TestLoadProdValidatesLLMSettings(t *testing.T) {
+	for _, tc := range []struct{ key, val string }{
+		{"LLM_PRIMARY_TIMEOUT", "soon"},
+		{"LLM_PRIMARY_TIMEOUT", "0s"},
+		{"LLM_COOLDOWN", "-1m"},
+		{"YC_LLM_MAX_TOKENS", "many"},
+		{"LLM_PRIMARY", "yandexgpt"},
+	} {
+		t.Run(tc.key+"="+tc.val, func(t *testing.T) {
+			setProdEnv(t)
+			t.Setenv(tc.key, tc.val)
+			if _, err := Load(); err == nil || !strings.Contains(err.Error(), tc.key) {
+				t.Errorf("Load() error = %v, want one naming %s", err, tc.key)
+			}
+		})
+	}
+}
+
+func TestLoadProdRejectsAIStudioFirstWhenOff(t *testing.T) {
+	setProdEnv(t)
+	t.Setenv("YC_LLM_MODEL", "off")
+	t.Setenv("LLM_PRIMARY", "aistudio")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "LLM_PRIMARY") {
+		t.Errorf("Load() error = %v, want one naming LLM_PRIMARY", err)
+	}
 }

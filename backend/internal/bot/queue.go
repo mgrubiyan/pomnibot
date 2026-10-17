@@ -6,8 +6,9 @@ import (
 )
 
 // generationSlots is how many documents are read and turned into cards at
-// once. Both steps call GigaChat, and its freemium plan serves exactly one
-// request at a time; a second one gets 429.
+// once by default. Both steps call the model, and the GigaChat freemium plan
+// serves exactly one request at a time; a second one gets 429. A model with
+// more room raises it with Bot.SetGenerationSlots.
 const generationSlots = 1
 
 // generationQueue lets a fixed number of documents through at a time; the

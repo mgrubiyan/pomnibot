@@ -110,6 +110,13 @@ func NewBot(
 	}, nil
 }
 
+// SetGenerationSlots sets how many documents are turned into cards at once,
+// at least one: as many requests as the main model serves in parallel. Call
+// it before Start.
+func (b *Bot) SetGenerationSlots(n int) {
+	b.queue = newGenerationQueue(max(n, 1))
+}
+
 // Start initializes the bot and starts the polling loop.
 func (b *Bot) Start(ctx context.Context) error {
 	// 1. Fetch bot profile

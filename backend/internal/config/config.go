@@ -11,6 +11,7 @@ import (
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/bot"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest/yandex"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers/aistudio"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
 )
 
@@ -34,7 +35,32 @@ type Config struct {
 	MaxInsecureSkipVerify bool
 	Notifications         bot.NotificationConfig
 	GigaChat              gigachat.Config
-	OCR                   yandex.Config
+	// AIStudio is the main model, Qwen by default: it writes the cards,
+	// grades answers and reads photos, GigaChat backs it up (see LLM). nil
+	// with YC_LLM_MODEL=off.
+	AIStudio *aistudio.Config
+	LLM      LLMConfig
+	OCR      yandex.Config
+}
+
+// Models that can go first, see LLMConfig.Primary.
+const (
+	PrimaryAIStudio = "aistudio"
+	PrimaryGigaChat = "gigachat"
+)
+
+// LLMConfig sets which model goes first and when requests move to the other
+// one.
+type LLMConfig struct {
+	// Primary is PrimaryAIStudio or PrimaryGigaChat; GigaChat without AI
+	// Studio.
+	Primary string
+	// PrimaryTimeout bounds one call to the primary, its retries included,
+	// so that a primary that hangs leaves time for the backup. It counts as
+	// down then.
+	PrimaryTimeout time.Duration
+	// Cooldown is how long a provider that is down gets no requests.
+	Cooldown time.Duration
 }
 
 func value(key, fallback string) string {
@@ -88,6 +114,13 @@ func Load() (Config, error) {
 	errs = append(errs, err)
 	cfg.OCR, err = yandex.ConfigFromEnv()
 	errs = append(errs, err)
+	if value("YC_LLM_MODEL", "") != "off" {
+		studio, err := aistudio.ConfigFromEnv()
+		cfg.AIStudio = &studio
+		errs = append(errs, err)
+	}
+	cfg.LLM, err = llmFromEnv(cfg.AIStudio != nil)
+	errs = append(errs, err)
 	cfg.Notifications, err = notificationsFromEnv()
 	errs = append(errs, err)
 	return cfg, errors.Join(errs...)
@@ -107,4 +140,35 @@ func notificationsFromEnv() (bot.NotificationConfig, error) {
 		return bot.NotificationConfig{}, fmt.Errorf("NOTIFICATION_TZ: %w", err)
 	}
 	return bot.NotificationConfig{Enabled: enabled, Hour: at.Hour(), Minute: at.Minute(), Location: loc}, nil
+}
+
+func llmFromEnv(withAIStudio bool) (LLMConfig, error) {
+	var cfg LLMConfig
+	var errs []error
+
+	switch primary := value("LLM_PRIMARY", ""); {
+	case primary == "" && withAIStudio, primary == PrimaryAIStudio && withAIStudio:
+		cfg.Primary = PrimaryAIStudio
+	case primary == "", primary == PrimaryGigaChat:
+		cfg.Primary = PrimaryGigaChat
+	case primary == PrimaryAIStudio:
+		errs = append(errs, errors.New("LLM_PRIMARY = aistudio, but YC_LLM_MODEL = off"))
+	default:
+		errs = append(errs, fmt.Errorf("LLM_PRIMARY = %q, want aistudio or gigachat", primary))
+	}
+	for _, d := range []struct {
+		name, fallback string
+		dst            *time.Duration
+	}{
+		{"LLM_PRIMARY_TIMEOUT", "1m", &cfg.PrimaryTimeout},
+		{"LLM_COOLDOWN", "10m", &cfg.Cooldown},
+	} {
+		v, err := time.ParseDuration(value(d.name, d.fallback))
+		if err != nil || v <= 0 {
+			errs = append(errs, fmt.Errorf("%s = %q, want a positive duration such as %s", d.name, value(d.name, d.fallback), d.fallback))
+			continue
+		}
+		*d.dst = v
+	}
+	return cfg, errors.Join(errs...)
 }

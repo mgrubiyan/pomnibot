@@ -194,6 +194,12 @@ jobs:
           YC_OCR_MODEL: ${{ vars.YC_OCR_MODEL || secrets.YC_OCR_MODEL }}
           YC_OCR_BASE_URL: ${{ vars.YC_OCR_BASE_URL || secrets.YC_OCR_BASE_URL }}
           YC_OCR_OPERATION_URL: ${{ vars.YC_OCR_OPERATION_URL || secrets.YC_OCR_OPERATION_URL }}
+          YC_LLM_MODEL: ${{ vars.YC_LLM_MODEL || secrets.YC_LLM_MODEL }}
+          YC_LLM_BASE_URL: ${{ vars.YC_LLM_BASE_URL || secrets.YC_LLM_BASE_URL }}
+          YC_LLM_MAX_TOKENS: ${{ vars.YC_LLM_MAX_TOKENS || secrets.YC_LLM_MAX_TOKENS }}
+          LLM_PRIMARY: ${{ vars.LLM_PRIMARY || secrets.LLM_PRIMARY }}
+          LLM_PRIMARY_TIMEOUT: ${{ vars.LLM_PRIMARY_TIMEOUT || secrets.LLM_PRIMARY_TIMEOUT }}
+          LLM_COOLDOWN: ${{ vars.LLM_COOLDOWN || secrets.LLM_COOLDOWN }}
           MAX_API_URL: ${{ vars.MAX_API_URL || secrets.MAX_API_URL }}
           MAX_INSECURE_SKIP_VERIFY: ${{ vars.MAX_INSECURE_SKIP_VERIFY || secrets.MAX_INSECURE_SKIP_VERIFY }}
           NOTIFICATIONS_ENABLED: ${{ vars.NOTIFICATIONS_ENABLED || secrets.NOTIFICATIONS_ENABLED }}
@@ -232,6 +238,12 @@ jobs:
             YC_OCR_MODEL
             YC_OCR_BASE_URL
             YC_OCR_OPERATION_URL
+            YC_LLM_MODEL
+            YC_LLM_BASE_URL
+            YC_LLM_MAX_TOKENS
+            LLM_PRIMARY
+            LLM_PRIMARY_TIMEOUT
+            LLM_COOLDOWN
             MAX_API_URL
             MAX_INSECURE_SKIP_VERIFY
             NOTIFICATIONS_ENABLED

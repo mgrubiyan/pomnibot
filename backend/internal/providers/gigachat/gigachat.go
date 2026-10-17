@@ -250,7 +250,18 @@ func (e transportError) Unwrap() error { return e.err }
 // with exponential backoff; if the model stays unavailable, the fallback
 // model gets the request. The answer is returned as is: with or without
 // structured output, the caller validates it.
+//
+// When GigaChat cannot answer anyone for a while, the error wraps
+// providers.ErrUnavailable, so another provider can take over.
 func (c *Client) Complete(ctx context.Context, req providers.Request) (providers.Response, error) {
+	resp, err := c.complete(ctx, req)
+	if err != nil && unavailable(err) {
+		return providers.Response{}, fmt.Errorf("%w: %w", err, providers.ErrUnavailable)
+	}
+	return resp, err
+}
+
+func (c *Client) complete(ctx context.Context, req providers.Request) (providers.Response, error) {
 	var fileID string
 	if req.Image != nil {
 		id, err := c.upload(ctx, req.Image)
@@ -522,6 +533,21 @@ func shouldFallback(err error) bool {
 	}
 	apiErr := chatError(err)
 	return apiErr != nil && (isQuotaOrAccess(err) || apiErr.Status >= 500)
+}
+
+// unavailable: GigaChat will not answer anyone for a while: it keeps failing
+// on the server or the network after the retries, the models are out of
+// quota, or OAuth or the credentials fail. A bad request, a broken answer or
+// the content filter are about one request only.
+func unavailable(err error) bool {
+	if retryable(err) || isQuotaOrAccess(err) {
+		return true
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && (apiErr.op == opToken || apiErr.Status == http.StatusUnauthorized)
 }
 
 func (c *Client) backoffFor(attempt int, err error) time.Duration {

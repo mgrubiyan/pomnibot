@@ -9,11 +9,19 @@
 // unless the key is a service account's), which also turns them upright;
 // -ocr yandex reads them with Yandex alone.
 //
+// -provider yandexgpt writes the cards with YandexGPT instead, to compare it
+// with GigaChat on the same notes (YC_API_KEY, YC_FOLDER_ID,
+// YC_YANDEXGPT_MODEL). -vision-provider qwen reads the photos with the app's
+// AI Studio model (YC_LLM_MODEL, Qwen by default) instead of GigaChat, still
+// checked by Yandex OCR.
+//
 //	task cardsgen -- notes.txt
 //	task cardsgen -- -model GigaChat-2-Max -chunk 2000 -limit 30 -json lecture.pdf page2.pdf > run.json
+//	task cardsgen -- -provider yandexgpt -ocr yandex lecture.pdf
+//	task cardsgen -- -extract -vision-provider qwen page1.jpg page2.jpg
 //
-// Credentials come from GIGACHAT_* variables: task passes the ones from .env
-// in the repository root.
+// Credentials come from GIGACHAT_* and YC_* variables: task passes the ones
+// from .env in the repository root.
 package main
 
 import (
@@ -36,7 +44,9 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest/yandex"
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers/aistudio"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers/yandexgpt"
 )
 
 func main() {
@@ -50,7 +60,8 @@ func run() error {
 	var (
 		file        = flag.String("file", "", "file with the notes; more files can follow as arguments")
 		title       = flag.String("title", "", "document title for sourceRef (default: first file name)")
-		model       = flag.String("model", "", "model, overrides GIGACHAT_MODEL")
+		provider    = flag.String("provider", "gigachat", "who writes the cards: gigachat or yandexgpt, the backup model")
+		model       = flag.String("model", "", "model, overrides GIGACHAT_MODEL or YC_YANDEXGPT_MODEL")
 		chunk       = flag.Int("chunk", generator.DefaultChunkSize, "fragment size in characters")
 		overlap     = flag.Int("overlap", generator.DefaultChunkOverlap, "fragment overlap in characters, -1 for none")
 		limit       = flag.Int("limit", 0, "max facts per document, 0 for no limit")
@@ -58,6 +69,7 @@ func run() error {
 		concurrency = flag.Int("concurrency", generator.DefaultConcurrency, "parallel model calls; freemium allows 1")
 		timeout     = flag.Duration("call-timeout", generator.DefaultCallTimeout, "timeout per model call")
 		ocrMode     = flag.String("ocr", "vision", "how photos and scans are read: vision (GigaChat, checked by Yandex OCR) or yandex (Yandex OCR alone)")
+		visionBy    = flag.String("vision-provider", "gigachat", "who reads photos with -ocr vision: gigachat or qwen")
 		ocrModel    = flag.String("ocr-model", os.Getenv("YC_OCR_MODEL"), "Yandex OCR model for every page (handwritten, page...); default: handwritten for photos, page for scans")
 		extractOnly = flag.Bool("extract", false, "only extract the text of the notes and print it, no cards")
 		asJSON      = flag.Bool("json", false, "print the result as JSON to stdout")
@@ -85,15 +97,22 @@ func run() error {
 	if *ocrMode != "vision" && *ocrMode != "yandex" {
 		return fmt.Errorf("-ocr %q: want vision or yandex", *ocrMode)
 	}
-	// GigaChat writes the cards and, unless -ocr yandex, reads the photos.
+	if *provider != "gigachat" && *provider != "yandexgpt" {
+		return fmt.Errorf("-provider %q: want gigachat or yandexgpt", *provider)
+	}
+	if *visionBy != "gigachat" && *visionBy != "qwen" {
+		return fmt.Errorf("-vision-provider %q: want gigachat or qwen", *visionBy)
+	}
+	// GigaChat writes the cards, unless -provider yandexgpt, and reads the
+	// photos, unless -ocr yandex.
 	var client *gigachat.Client
 	modelName := "GigaChat-3-Ultra"
-	if !*extractOnly || *ocrMode == "vision" {
+	if (!*extractOnly && *provider == "gigachat") || (*ocrMode == "vision" && *visionBy == "gigachat") {
 		cfg, err := gigachat.ConfigFromEnv()
 		if err != nil {
 			return err
 		}
-		if *model != "" {
+		if *model != "" && *provider == "gigachat" {
 			cfg.Model = *model
 		}
 		modelName = or(cfg.Model, modelName)
@@ -102,9 +121,32 @@ func run() error {
 		}
 		defer client.Close()
 	}
+	var writer providers.Provider = client
+	if !*extractOnly && *provider == "yandexgpt" {
+		cfg, err := yandexgpt.ConfigFromEnv()
+		if err != nil {
+			return err
+		}
+		if *model != "" {
+			cfg.Model = *model
+		}
+		modelName = cfg.Model
+		if writer, err = yandexgpt.New(cfg); err != nil {
+			return err
+		}
+	}
 
 	var vision providers.Provider
-	if *ocrMode == "vision" {
+	switch {
+	case *ocrMode == "vision" && *visionBy == "qwen":
+		cfg, err := aistudio.ConfigFromEnv()
+		if err != nil {
+			return err
+		}
+		if vision, err = aistudio.New(cfg); err != nil {
+			return err
+		}
+	case *ocrMode == "vision":
 		vision = client
 	}
 	notes, err := extract(ctx, paths, *ocrModel, vision)
@@ -127,7 +169,7 @@ func run() error {
 
 	began := time.Now()
 	delivered := 0
-	gen := generator.NewGenerator(client, generator.Options{
+	gen := generator.NewGenerator(writer, generator.Options{
 		Concurrency:      *concurrency,
 		ChunkSize:        *chunk,
 		ChunkOverlap:     *overlap,
