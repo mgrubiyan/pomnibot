@@ -168,13 +168,13 @@ func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok boo
 			a.stats.DroppedDuplicate++
 			continue
 		}
-		// A choice card asking the question of the fact's input card would
-		// show it again with the answer among the options. The choice card
-		// goes: it may yet be dropped for want of distractors, and the input
-		// card asks for the harder recall.
-		if mc.Kind == cards.KindChoice && repeatsInput(f, mc.Question) {
+		// A choice card asking the question of the fact's input or flip card
+		// would show it again with the answer among the options. The choice
+		// card goes: it may yet be dropped for want of distractors, and the
+		// other card asks for the harder recall.
+		if mc.Kind == cards.KindChoice && repeatsRecall(f, mc.Question) {
 			a.stats.DroppedVariants++
-			slog.Debug("cards: choice asks what the fact's input asks", "question", mc.Question)
+			slog.Debug("cards: choice asks what another card of the fact asks", "question", mc.Question)
 			continue
 		}
 		// Indexed after the loop: cards of one fact are checked against
@@ -230,10 +230,19 @@ func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok boo
 	return ready, true
 }
 
-// repeatsInput reports whether q asks what an input card of f asks.
-func repeatsInput(f modelFact, q string) bool {
+// repeatsRecall reports whether q asks what an input card of f asks, or
+// what a flip card asks word for word. A flip card asking for the same
+// answer in other words, «Переведите "to configure"» beside «Как переводится
+// "to configure"?», is a card of its own.
+func repeatsRecall(f modelFact, q string) bool {
 	return slices.ContainsFunc(f.Cards, func(c modelCard) bool {
-		return c.Kind == cards.KindInput && askSame(c.Question, q)
+		switch c.Kind {
+		case cards.KindInput:
+			return askSame(c.Question, q)
+		case cards.KindFlip:
+			return slices.Equal(questionWords(c.Question), questionWords(q))
+		}
+		return false
 	})
 }
 

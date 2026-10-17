@@ -234,6 +234,7 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, total int, r
 	log := slog.With("fragment", r.chunk.Index+1)
 	r.models = map[string]int{}
 
+	maxFacts := factCap(r.chunk.Text, g.opts.MaxFactsPerChunk)
 	req := providers.Request{
 		System:      g.system,
 		Schema:      g.schema,
@@ -243,6 +244,9 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, total int, r
 	answered := false
 	for attempt := range answerAttempts {
 		req.User = buildUserPrompt(doc.Title, r.chunk, total, attempt > 0)
+		if attempt == 0 && maxFacts != g.opts.MaxFactsPerChunk {
+			req.System, req.Schema = buildSystemPrompt(maxFacts), cardSchema(maxFacts)
+		}
 		callCtx, cancel := context.WithTimeout(ctx, g.opts.CallTimeout)
 		resp, err := g.provider.Complete(callCtx, req)
 		cancel()
@@ -268,7 +272,7 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, total int, r
 		}
 		r.models[model]++
 
-		facts, invalid, err := parseAnswer(resp.Content, g.opts.MaxFactsPerChunk)
+		facts, invalid, err := parseAnswer(resp.Content, maxFacts)
 		if err != nil {
 			r.invalidResponses++
 			log.Warn("cards: invalid model answer",
