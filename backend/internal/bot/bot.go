@@ -14,6 +14,7 @@ import (
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
+	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
@@ -409,6 +410,11 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 		return
 	}
 
+	if isGenericTitle(title) {
+		if t := titleFromTopics(genResult.Facts); t != "" {
+			title = t
+		}
+	}
 	cardSet, err := b.setService.SaveGeneratedSet(ctx, userID, title, genResult)
 	if err != nil {
 		log.Error("failed to save generated set to database", "error", err)
@@ -479,7 +485,10 @@ func (b *Bot) getAllFileAttachments(m *Message) []attachmentInfo {
 	return results
 }
 
-var genericFileRegex = regexp.MustCompile(`^(file_\d+|photo_\d+\.jpg)$`)
+// genericFileRegex matches names cameras, messengers and screenshots give
+// files, «IMG_1489.HEIC», «photo_2026-10-17 19.34.40.jpeg», «Снимок экрана …»:
+// they say nothing about the notes.
+var genericFileRegex = regexp.MustCompile(`(?i)^(file_\d+|photo[_ -].*|img[_-]?\d.*|image(?:[_ -]?\d+)?(?:\.\w+)?|scan[_ -]?\d.*|снимок экрана.*|screenshot.*|dsc[_-]?\w*\d.*|изображение.*)$`)
 
 func isGenericFilename(name string) bool {
 	name = strings.TrimSpace(name)
@@ -495,6 +504,23 @@ func isGenericTitle(title string) bool {
 		return true
 	}
 	return false
+}
+
+// titleFromTopics names a set after its commonest topic, the first on a tie,
+// or returns "" when the facts have none.
+func titleFromTopics(facts []cards.Fact) string {
+	counts := map[string]int{}
+	best := ""
+	for _, f := range facts {
+		if f.Topic == "" {
+			continue
+		}
+		counts[f.Topic]++
+		if counts[f.Topic] > counts[best] {
+			best = f.Topic
+		}
+	}
+	return best
 }
 
 func extractURL(att Attachment) string {
@@ -548,7 +574,7 @@ func resolveSetTitle(caption, filename string) string {
 		}
 		return title
 	}
-	if filename != "" {
+	if filename != "" && !isGenericFilename(filename) {
 		base := strings.TrimSuffix(filename, filepath.Ext(filename))
 		base = strings.TrimSpace(base)
 		if base != "" {

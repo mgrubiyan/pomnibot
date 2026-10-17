@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
+	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 )
 
 func TestGenerationQueue_FreeSlotDoesNotWait(t *testing.T) {
@@ -257,5 +258,37 @@ func TestBot_GenerationSlots(t *testing.T) {
 		if got := cap(b.queue.slots); got != tc.want {
 			t.Errorf("SetGenerationSlots(%d): slots = %d, want %d", tc.set, got, tc.want)
 		}
+	}
+}
+
+// Phone cameras and screenshots name files by date or number: such a name
+// says nothing about the notes.
+func TestIsGenericFilename(t *testing.T) {
+	for name, want := range map[string]bool{
+		"file_12":                        true,
+		"photo_123.jpg":                  true,
+		"IMG_1489.HEIC":                  true,
+		"photo_2026-10-17 19.34.40.jpeg": true,
+		"Снимок экрана 2026-10-17 в 21.18.32.png": true,
+		"Screenshot 2026-10-17 at 21.18.32.png":   true,
+		"scan0001.pdf":                            true,
+		"Лекция 3. Клеточный цикл.pdf":            false,
+		"konspekt.txt":                            false,
+	} {
+		if got := isGenericFilename(name); got != want {
+			t.Errorf("isGenericFilename(%q) = %v, want %v", name, got, want)
+		}
+	}
+}
+
+// A set made from photos with no caption is named after its commonest topic,
+// not «Новый конспект (17.10 23:55)».
+func TestTitleFromTopics(t *testing.T) {
+	facts := []cards.Fact{{Topic: "Фазы митоза"}, {Topic: ""}, {Topic: "Клеточный цикл"}, {Topic: "Фазы митоза"}}
+	if got := titleFromTopics(facts); got != "Фазы митоза" {
+		t.Errorf("titleFromTopics = %q, want the commonest topic", got)
+	}
+	if got := titleFromTopics([]cards.Fact{{Topic: ""}}); got != "" {
+		t.Errorf("titleFromTopics = %q, want none without topics", got)
 	}
 }
