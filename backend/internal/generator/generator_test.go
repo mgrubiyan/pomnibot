@@ -1292,7 +1292,7 @@ func TestFactCapCountsTermLines(t *testing.T) {
 // переводится "cat"?» — «cat». It goes, and the choice card it repeats stays.
 func TestGenerateDropsFlipAnsweredByItsQuestion(t *testing.T) {
 	doc := Document{Title: "Unit 1", Text: "cat – кошка\ndog – собака\nhouse – дом\ntree – дерево"}
-	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+	p := &fakeProvider{answer: func(int, string, providers.Request) (string, error) {
 		return factsJSON(fx{quote: "cat – кошка", cards: []mc{
 			{kind: cards.KindChoice, q: `Как переводится "cat"?`, a: "кошка", distractors: []string{"собака", "дом", "дерево"}},
 			{kind: cards.KindFlip, q: `Как переводится "cat"?`, a: "cat"},
