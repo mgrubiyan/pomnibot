@@ -1271,3 +1271,19 @@ func TestGenerateKeepsChoiceBesideASimilarFlip(t *testing.T) {
 		t.Errorf("cards = %+v, want both", res.Cards)
 	}
 }
+
+func TestFactCapCountsTermLines(t *testing.T) {
+	for _, tc := range []struct {
+		name, sep string
+	}{{"dash", " – "}, {"colon", ": "}, {"equals", " = "}, {"tab", "\t"}} {
+		t.Run(tc.name, func(t *testing.T) {
+			var lines []string
+			for i := range 9 {
+				lines = append(lines, fmt.Sprintf("word%d%sслово%d", i, tc.sep, i))
+			}
+			if got := factCap(strings.Join(lines, "\n"), DefaultMaxFactsPerChunk); got != 9 {
+				t.Errorf("factCap = %d, want 9: one per term line", got)
+			}
+		})
+	}
+}

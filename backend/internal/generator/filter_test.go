@@ -65,6 +65,23 @@ Ep = m · g · h = 2,4 · 9,81 · 11,8 = 277,8 Дж
 			want: junkFewLetters,
 		},
 		{
+			name: "sheet of formulas",
+			text: `v = s / t
+a = (v − v0) / t
+F = m · a
+P = m · g
+Eк = m · v² / 2
+Eп = m · g · h
+A = F · s
+N = A / t`,
+			want: "",
+		},
+		{
+			name: "vocabulary with short lines",
+			text: "apple – яблоко\norange – апельсин\nlemon – лимон\ncherry – вишня\npeach – персик\ngrape – виноград\nmelon – дыня\nplum – слива\npear – груша",
+			want: "",
+		},
+		{
 			name: "page number",
 			text: "Стр. 14",
 			want: junkTooShort,
@@ -140,7 +157,7 @@ Ep = m · g · h = 2,4 · 9,81 · 11,8 = 277,8 Дж
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := junkReason(tt.text); got != tt.want {
+			if got := junkReason(tt.text, false); got != tt.want {
 				t.Errorf("junkReason() = %q, want %q", got, tt.want)
 			}
 		})
@@ -151,7 +168,7 @@ func TestJunkFilterOnKonspekt(t *testing.T) {
 	text := normalizeText(loadKonspekt(t))
 	var kept, dropped []string
 	for _, c := range splitChunks(text, DefaultChunkSize, DefaultChunkOverlap) {
-		if reason := junkReason(c.Text); reason != "" {
+		if reason := junkReason(c.Text, false); reason != "" {
 			dropped = append(dropped, reason)
 		} else {
 			kept = append(kept, c.Text)
@@ -194,5 +211,23 @@ func TestJunkRunBreaks(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("line %d %q: break = %v, want %v", i, lines[i], got[i], want[i])
 		}
+	}
+}
+
+// A short document as a whole is a student's page, not a stray scrap of a
+// long one: the model decides whether it holds anything to learn.
+func TestJunkReasonWholeDocument(t *testing.T) {
+	vocabulary := "cat – кошка\ndog – собака\nhouse – дом\ntree – дерево\nwater – вода\nbook – книга\nwindow – окно\nchair – стул"
+	definitions := "Митоз — непрямое деление.\nМейоз — редукционное деление."
+	for _, text := range []string{vocabulary, definitions} {
+		if got := junkReason(text, true); got != "" {
+			t.Errorf("junkReason(%q, whole) = %q, want it sent to the model", text, got)
+		}
+		if got := junkReason(text, false); got != junkTooShort {
+			t.Errorf("junkReason(%q, fragment) = %q, want %q: a scrap of a long document", text, got, junkTooShort)
+		}
+	}
+	if got := junkReason("15", true); got != junkTooShort {
+		t.Errorf("a bare page number = %q, want %q even alone", got, junkTooShort)
 	}
 }

@@ -98,7 +98,7 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (Result, error) 
 	}
 	var work []chunk
 	for _, c := range all {
-		if reason := junkReason(c.Text); reason != "" {
+		if reason := junkReason(c.Text, len(all) == 1); reason != "" {
 			stats.ChunksFiltered++
 			stats.FilteredBy[reason]++
 			log.Debug("cards: fragment filtered", "fragment", c.Index+1, "reason", reason)

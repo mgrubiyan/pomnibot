@@ -19,6 +19,8 @@ import (
 // paragraph next to a short list still passes.
 const (
 	minLetters       = 80   // fewer letters than this: nothing to ask about
+	minLettersWhole  = 10   // the same for a document that is one fragment: a short page is still a page
+	minFormulas      = 2    // symbolic formula lines that make a fragment a sheet of formulas
 	minLetterRatio   = 0.5  // letters / non-space characters; formulas and number tables fall below
 	maxDigitDotRatio = 0.3  // (digits + dots) / non-space characters
 	minAvgLineLen    = 16   // characters per line, checked from minLinesForAvg lines: bare headings, formulas
@@ -92,8 +94,14 @@ var (
 )
 
 // junkReason returns why a fragment should not be sent to the model, or ""
-// if it should.
-func junkReason(text string) string {
+// if it should. whole is a fragment that is the entire document: a short
+// page a student sent is not a scrap of a long one, so the model decides
+// whether it holds anything to learn.
+//
+// A sheet of symbolic formulas (v = s / t, Eк = m · v² / 2) is study material
+// though it has few letters and short lines; worked numbers (F = 12,5 · 9,81
+// = 122,6 Н) are still junk.
+func junkReason(text string, whole bool) string {
 	var letters, digitsDots, nonSpace int
 	for _, r := range text {
 		switch {
@@ -106,11 +114,15 @@ func junkReason(text string) string {
 		}
 		nonSpace++
 	}
-	if letters < minLetters {
+	lines := nonEmptyLines(text)
+	formulas := symbolicFormulas(lines) >= minFormulas
+	switch {
+	case letters < minLettersWhole:
+		return junkTooShort
+	case letters < minLetters && !whole && !formulas:
 		return junkTooShort
 	}
 
-	lines := nonEmptyLines(text)
 	var tocHead, bibHead bool
 	for _, line := range lines {
 		tocHead = tocHead || reTOCHead.MatchString(line)
@@ -142,16 +154,44 @@ func junkReason(text string) string {
 			return junkBibliography
 		}
 	}
+	if formulas {
+		return ""
+	}
 	if share(letters, nonSpace) < minLetterRatio {
 		return junkFewLetters
 	}
 	if share(digitsDots, nonSpace) > maxDigitDotRatio {
 		return junkDigitsDots
 	}
-	if len(lines) >= minLinesForAvg && avgLine < minAvgLineLen {
+	// A vocabulary list is short lines by nature: «cat – кошка».
+	if len(lines) >= minLinesForAvg && avgLine < minAvgLineLen && 2*termLines(lines) < len(lines) {
 		return junkShortLines
 	}
 	return ""
+}
+
+// symbolicFormulas counts lines with an equation in letters rather than
+// numbers: «Eк = m · v² / 2», not «F = 12,5 · 9,81».
+func symbolicFormulas(lines []string) int {
+	n := 0
+	for _, line := range lines {
+		if !strings.ContainsRune(line, '=') {
+			continue
+		}
+		var letters, digits int
+		for _, r := range line {
+			switch {
+			case unicode.IsLetter(r):
+				letters++
+			case unicode.IsDigit(r):
+				digits++
+			}
+		}
+		if letters > digits {
+			n++
+		}
+	}
+	return n
 }
 
 type lineClass int
