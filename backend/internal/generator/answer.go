@@ -23,7 +23,9 @@ import (
 //
 // Words are compared up to their endings (sameWord), since the answer and the
 // quote rarely share a grammatical case. Boolean and flip answers are
-// sentences that rephrase the quote, so they are left to the quote check.
+// sentences that rephrase the quote, so they are left to the quote check;
+// only a flip answer its own question names whole («Как переводится "cat"?»
+// — «cat») is dropped.
 
 // Word matching: a word of shortWord letters or less must match exactly
 // ("G1", "90", "ДНК"); a longer one may differ in the last endingRunes letters

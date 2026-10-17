@@ -304,7 +304,7 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, total int, r
 
 		kept := f.Cards[:0]
 		for _, c := range f.Cards {
-			if answerChecked(c.Kind) && !answerSupported(c, f.Quote) {
+			if answerChecked(c.Kind) && !answerSupported(c, f.Quote) || c.Kind == cards.KindFlip && namedIn(c.Answer, c.Question) {
 				r.droppedUnsupported++
 				log.Info("cards: answer not in the quote or given in the question",
 					"kind", c.Kind, "question", c.Question, "answer", c.Answer)

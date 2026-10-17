@@ -1275,7 +1275,7 @@ func TestGenerateKeepsChoiceBesideASimilarFlip(t *testing.T) {
 func TestFactCapCountsTermLines(t *testing.T) {
 	for _, tc := range []struct {
 		name, sep string
-	}{{"dash", " – "}, {"colon", ": "}, {"equals", " = "}, {"tab", "\t"}} {
+	}{{"dash", " – "}, {"colon", ": "}, {"tab", "\t"}} {
 		t.Run(tc.name, func(t *testing.T) {
 			var lines []string
 			for i := range 9 {
@@ -1285,5 +1285,50 @@ func TestFactCapCountsTermLines(t *testing.T) {
 				t.Errorf("factCap = %d, want 9: one per term line", got)
 			}
 		})
+	}
+}
+
+// A flip card whose answer its own question names asks nothing: «Как
+// переводится "cat"?» — «cat». It goes, and the choice card it repeats stays.
+func TestGenerateDropsFlipAnsweredByItsQuestion(t *testing.T) {
+	doc := Document{Title: "Unit 1", Text: "cat – кошка\ndog – собака\nhouse – дом\ntree – дерево"}
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		return factsJSON(fx{quote: "cat – кошка", cards: []mc{
+			{kind: cards.KindChoice, q: `Как переводится "cat"?`, a: "кошка", distractors: []string{"собака", "дом", "дерево"}},
+			{kind: cards.KindFlip, q: `Как переводится "cat"?`, a: "cat"},
+		}}), nil
+	}}
+
+	res := generate(t, p, doc, Options{})
+	if len(res.Cards) != 1 || res.Cards[0].Kind != cards.KindChoice {
+		t.Errorf("cards = %+v, want the choice card alone", res.Cards)
+	}
+	if res.Stats.DroppedUnsupported != 1 {
+		t.Errorf("DroppedUnsupported = %d, want 1", res.Stats.DroppedUnsupported)
+	}
+}
+
+// Formulas are not a vocabulary: «sin 30° = 1/2» lines must not raise the
+// cap, or the answer outgrows the model's token budget and comes cut short.
+func TestFactCapIgnoresFormulas(t *testing.T) {
+	lines := []string{"sin 30° = 1/2", "sin 45° = √2/2", "sin 60° = √3/2", "cos 30° = √3/2", "cos 45° = √2/2", "cos 60° = 1/2", "tg 45° = 1"}
+	if got := factCap(strings.Join(lines, "\n"), DefaultMaxFactsPerChunk); got != DefaultMaxFactsPerChunk {
+		t.Errorf("factCap = %d, want %d", got, DefaultMaxFactsPerChunk)
+	}
+}
+
+// A transcription in brackets may hold a colon, «['dɔ:ntɪŋ]»: the line is
+// still a term line, not «term: meaning».
+func TestFactCapReadsLinesWithTranscriptions(t *testing.T) {
+	lines := []string{
+		"1 entry-level job – работа начального уровня",
+		"2 daunting ['dɔ:ntɪŋ] – пугающий",
+		"3 to troubleshoot ['trʌblˌʃu:t] – выявлять неисправности",
+		"4 seamless ['si:mləs] communication – непрерывная связь",
+		"5 to embark [ɪm'bɑ:k] on a new career path – начать новый карьерный путь",
+		"6 to configure [kən'fɪɡə] – настраивать",
+	}
+	if got := factCap(strings.Join(lines, "\n"), DefaultMaxFactsPerChunk); got != len(lines) {
+		t.Errorf("factCap = %d, want %d", got, len(lines))
 	}
 }
