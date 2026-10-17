@@ -30,6 +30,9 @@ type modelCard struct {
 	Answer      string
 	Explanation string
 	Distractors []string // choice only; may be missing, the pool then fills in
+	// Alt is, for boolean only, the claim with the opposite answer: the
+	// assembler shows one of the two so that true and false stay even.
+	Alt string
 }
 
 // maxCardsPerFact is one card of each kind.
@@ -254,6 +257,13 @@ func parseCard(fields map[string]json.RawMessage) (modelCard, bool) {
 			return modelCard{}, false
 		}
 		c.Question, c.Answer = statement, answer
+		// The other way round comes in distractors; a broken one only costs
+		// the balance, not the card.
+		if alts := stringList(fields, fieldDistractors); len(alts) > 0 {
+			if alt, ok := booleanStatement(alts[0]); ok && !askSame(alt, statement) {
+				c.Alt = alt
+			}
+		}
 	default:
 		return modelCard{}, false
 	}
@@ -336,15 +346,22 @@ func countCards(item json.RawMessage) int {
 // model turned into a question.
 var reTrueLeadIn = regexp.MustCompile(`(?i)^(верно|правда|так|действительно)\s+ли\s*,?\s*что\s+`)
 
-// booleanStatement returns the text of a boolean card as a statement: the
-// student says true or false to a claim, not yes or no to a question.
+// booleanStatement returns the text of a boolean card as a statement ending
+// with a full stop: the student says true or false to a claim, not yes or no
+// to a question.
 // "Верно ли, что анафаза — самая короткая фаза?" becomes "Анафаза — самая
 // короткая фаза."; any other question, such as "Является ли …?", cannot be
 // turned into a claim safely and is rejected.
 func booleanStatement(s string) (string, bool) {
 	body := reTrueLeadIn.ReplaceAllString(s, "")
 	if body == s {
-		return s, !strings.HasSuffix(s, "?")
+		if strings.HasSuffix(s, "?") {
+			return "", false
+		}
+		if !strings.HasSuffix(s, ".") && !strings.HasSuffix(s, "!") && !strings.HasSuffix(s, "…") {
+			s += "."
+		}
+		return s, true
 	}
 	body = strings.TrimRight(body, " ?.!")
 	if body == "" {

@@ -2,6 +2,8 @@ package generator
 
 import (
 	"fmt"
+	"log/slog"
+	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -31,6 +33,7 @@ type chunkResult struct {
 	droppedInvalid     int
 	droppedQuote       int
 	droppedUnsupported int
+	trimmedExplains    int
 	usage              providers.Usage
 	models             map[string]int
 	elapsed            time.Duration
@@ -81,6 +84,9 @@ type assembler struct {
 	reserve   []reserved
 	placed    []placedCard
 	seq       int
+
+	trueClaims, falseClaims int    // boolean cards delivered, see balanceClaim
+	lastClaim               string // answer of the last one
 
 	timeSum   time.Duration
 	timeCount int
@@ -162,8 +168,17 @@ func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok boo
 			a.stats.DroppedDuplicate++
 			continue
 		}
-		// Indexed after the loop: choice and input of one fact often share
-		// the question, and that is not a duplicate.
+		// A choice card asking the question of the fact's input card would
+		// show it again with the answer among the options. The choice card
+		// goes: it may yet be dropped for want of distractors, and the input
+		// card asks for the harder recall.
+		if mc.Kind == cards.KindChoice && repeatsInput(f, mc.Question) {
+			a.stats.DroppedVariants++
+			slog.Debug("cards: choice asks what the fact's input asks", "question", mc.Question)
+			continue
+		}
+		// Indexed after the loop: cards of one fact are checked against
+		// earlier facts, not against each other.
 		questions = append(questions, mc.Question)
 
 		card := cards.Card{
@@ -187,6 +202,8 @@ func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok boo
 			}
 			choices = append(choices, pendingChoice{card: card, topic: f.Topic, pos: pos, seq: a.seq})
 			continue
+		case card.Kind == cards.KindBoolean:
+			a.balanceClaim(&card, mc.Alt)
 		case card.Kind == cards.KindInput && len(strings.Fields(card.Answer)) > maxInputWords:
 			if len(f.Cards) > 1 {
 				a.stats.DroppedVariants++
@@ -211,6 +228,38 @@ func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok boo
 	}
 	a.pending = append(a.pending, choices...)
 	return ready, true
+}
+
+// repeatsInput reports whether q asks what an input card of f asks.
+func repeatsInput(f modelFact, q string) bool {
+	return slices.ContainsFunc(f.Cards, func(c modelCard) bool {
+		return c.Kind == cards.KindInput && askSame(c.Question, q)
+	})
+}
+
+// balanceClaim shows a boolean card's claim true or false so that the
+// document keeps both about even. Models lean one way: YandexGPT writes
+// nearly every claim false, Qwen nearly every one true, and a student soon
+// answers by the habit instead of the fact. A claim the model gave one way
+// only stays that way, and the next ones make up for it.
+func (a *assembler) balanceClaim(c *cards.Card, alt string) {
+	want := cards.AnswerTrue
+	switch {
+	case a.trueClaims > a.falseClaims:
+		want = cards.AnswerFalse
+	case a.trueClaims == a.falseClaims && a.lastClaim == cards.AnswerTrue:
+		want = cards.AnswerFalse
+	case a.trueClaims < a.falseClaims:
+	}
+	if c.Answer != want && alt != "" {
+		c.Question, c.Answer = alt, want
+	}
+	if c.Answer == cards.AnswerTrue {
+		a.trueClaims++
+	} else {
+		a.falseClaims++
+	}
+	a.lastClaim = c.Answer
 }
 
 // finish fills what is left of the budget from the reserve and settles
@@ -332,6 +381,7 @@ func (a *assembler) count(r chunkResult) {
 	s.DroppedInvalid += r.droppedInvalid
 	s.DroppedQuote += r.droppedQuote
 	s.DroppedUnsupported += r.droppedUnsupported
+	s.TrimmedExplanations += r.trimmedExplains
 
 	if r.calls > 0 {
 		a.timeSum += r.elapsed

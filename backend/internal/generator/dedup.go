@@ -40,6 +40,14 @@ var stopWords = map[string]bool{
 	"под": true, "над": true, "не": true, "ни": true, "то": true,
 }
 
+// askSame reports whether a and b ask the same thing by the rules of
+// questionIndex.
+func askSame(a, b string) bool {
+	x := newQuestionIndex()
+	x.add(a)
+	return x.isDup(b)
+}
+
 type questionIndex struct {
 	exact map[string]bool
 	stems []map[string]bool

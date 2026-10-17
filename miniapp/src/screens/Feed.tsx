@@ -706,9 +706,11 @@ export function Feed({
 
                         <div className={s.divider} />
 
-                        <Typography.Text variant="body" asChild>
-                            <p className={s.explanation}>{card.explanation}</p>
-                        </Typography.Text>
+                        {card.explanation ? (
+                            <Typography.Text variant="body" asChild>
+                                <p className={s.explanation}>{card.explanation}</p>
+                            </Typography.Text>
+                        ) : null}
 
                         <figure className={s.source}>
                             <Flex direction="column" align="stretch" gap={4}>

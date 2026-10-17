@@ -9,11 +9,11 @@
 // unless the key is a service account's), which also turns them upright;
 // -ocr yandex reads them with Yandex alone.
 //
-// -provider yandexgpt writes the cards with YandexGPT instead, to compare it
-// with GigaChat on the same notes (YC_API_KEY, YC_FOLDER_ID,
-// YC_YANDEXGPT_MODEL). -vision-provider qwen reads the photos with the app's
-// AI Studio model (YC_LLM_MODEL, Qwen by default) instead of GigaChat, still
-// checked by Yandex OCR.
+// -provider yandexgpt or qwen writes the cards with a Yandex AI Studio model
+// instead, to compare it with GigaChat on the same notes (YC_API_KEY,
+// YC_FOLDER_ID, YC_YANDEXGPT_MODEL for YandexGPT, YC_LLM_MODEL for the app's
+// model, Qwen by default). -vision-provider qwen reads the photos with the
+// app's model instead of GigaChat, still checked by Yandex OCR.
 //
 //	task cardsgen -- notes.txt
 //	task cardsgen -- -model GigaChat-2-Max -chunk 2000 -limit 30 -json lecture.pdf page2.pdf > run.json
@@ -60,8 +60,8 @@ func run() error {
 	var (
 		file        = flag.String("file", "", "file with the notes; more files can follow as arguments")
 		title       = flag.String("title", "", "document title for sourceRef (default: first file name)")
-		provider    = flag.String("provider", "gigachat", "who writes the cards: gigachat or yandexgpt, the backup model")
-		model       = flag.String("model", "", "model, overrides GIGACHAT_MODEL or YC_YANDEXGPT_MODEL")
+		provider    = flag.String("provider", "gigachat", "who writes the cards: gigachat, yandexgpt or qwen")
+		model       = flag.String("model", "", "model, overrides GIGACHAT_MODEL, YC_YANDEXGPT_MODEL or YC_LLM_MODEL")
 		chunk       = flag.Int("chunk", generator.DefaultChunkSize, "fragment size in characters")
 		overlap     = flag.Int("overlap", generator.DefaultChunkOverlap, "fragment overlap in characters, -1 for none")
 		limit       = flag.Int("limit", 0, "max facts per document, 0 for no limit")
@@ -97,8 +97,8 @@ func run() error {
 	if *ocrMode != "vision" && *ocrMode != "yandex" {
 		return fmt.Errorf("-ocr %q: want vision or yandex", *ocrMode)
 	}
-	if *provider != "gigachat" && *provider != "yandexgpt" {
-		return fmt.Errorf("-provider %q: want gigachat or yandexgpt", *provider)
+	if *provider != "gigachat" && *provider != "yandexgpt" && *provider != "qwen" {
+		return fmt.Errorf("-provider %q: want gigachat, yandexgpt or qwen", *provider)
 	}
 	if *visionBy != "gigachat" && *visionBy != "qwen" {
 		return fmt.Errorf("-vision-provider %q: want gigachat or qwen", *visionBy)
@@ -132,6 +132,19 @@ func run() error {
 		}
 		modelName = cfg.Model
 		if writer, err = yandexgpt.New(cfg); err != nil {
+			return err
+		}
+	}
+	if !*extractOnly && *provider == "qwen" {
+		cfg, err := aistudio.ConfigFromEnv()
+		if err != nil {
+			return err
+		}
+		if *model != "" {
+			cfg.Model = *model
+		}
+		modelName = cfg.Model
+		if writer, err = aistudio.New(cfg); err != nil {
 			return err
 		}
 	}
@@ -338,6 +351,7 @@ func formatStats(s generator.Stats) string {
 	fmt.Fprintf(&w, "  choice → flip:       %d (мало дистракторов)\n", s.DowngradedToFlip)
 	fmt.Fprintf(&w, "Отброшено вариантов:   %d (есть в цитате или вопросе)\n", s.DroppedDistractors)
 	fmt.Fprintf(&w, "  input → flip:        %d (длинный ответ)\n", s.InputToFlip)
+	fmt.Fprintf(&w, "Объяснений урезано:   %d (о конспекте или не из него)\n", s.TrimmedExplanations)
 	fmt.Fprintf(&w, "Итого карточек:        %d\n", s.Cards)
 	fmt.Fprintf(&w, "Время на фрагмент:     среднее %s, максимум %s\n", sec(s.ChunkTimeAvg), sec(s.ChunkTimeMax))
 	fmt.Fprintf(&w, "Первая карточка через: %s\n", sec(s.FirstCardAfter))

@@ -306,6 +306,11 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, total int, r
 					"kind", c.Kind, "question", c.Question, "answer", c.Answer)
 				continue
 			}
+			if clean := cleanExplanation(c.Explanation, r.chunk.Text); clean != c.Explanation {
+				r.trimmedExplains++
+				log.Debug("cards: explanation trimmed to the fragment", "was", c.Explanation, "now", clean)
+				c.Explanation = clean
+			}
 			kept = append(kept, c)
 		}
 		if f.Cards = kept; len(f.Cards) > 0 {
