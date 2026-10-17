@@ -348,7 +348,7 @@ func countCards(item json.RawMessage) int {
 // reAboutNotesQuestion: a question about the notes, not the subject, «Какое
 // определение дано клетке во фрагменте?». Only with a preposition: «фрагменты
 // Оказаки» are the subject of a biology lecture.
-var reAboutNotesQuestion = regexp.MustCompile(`(?i)(?:^|[^\p{L}])(?:в|во|из|по|согласно)\s+(?:конспект|фрагмент|тексте|тексту|лекци)\p{L}*`)
+var reAboutNotesQuestion = regexp.MustCompile(`(?i)(?:^|[^\p{L}])(?:в|во|из|по|согласно)\s+(?:конспект|фрагмент|тексте|тексту|текста|лекци)\p{L}*`)
 
 // reTrueLeadIn matches "Верно ли, что" and its kin: a boolean statement the
 // model turned into a question.

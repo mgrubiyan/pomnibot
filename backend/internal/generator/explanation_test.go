@@ -65,6 +65,21 @@ func TestCleanExplanation(t *testing.T) {
 			want: "sin 30° = 1/2.",
 		},
 		{
+			name: "a tail with an adverb",
+			in:   "При возрастании угла синус возрастает, что прямо указано в тексте.",
+			want: "При возрастании угла синус возрастает.",
+		},
+		{
+			name: "a sentence saying it is written in the text",
+			in:   "Синус возрастает при возрастании угла. Это дословно указано в тексте: 'sin возрастает'.",
+			want: "Синус возрастает при возрастании угла.",
+		},
+		{
+			name: "as the text says",
+			in:   "Синус возрастает при возрастании угла, как прямо указано в тексте.",
+			want: "Синус возрастает при возрастании угла.",
+		},
+		{
 			name: "a formula without words stays",
 			in:   "sin 60° = √3/2.",
 			want: "sin 60° = √3/2.",

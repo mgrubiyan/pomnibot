@@ -1408,6 +1408,7 @@ func TestParseDropsQuestionsAboutTheNotes(t *testing.T) {
 		"Какое определение дано клетке во фрагменте?",
 		"Какой пример активного транспорта указан в конспекте?",
 		"Что сказано в тексте о мейозе?",
+		"Назовите два примера товаров первой необходимости из текста.",
 	} {
 		body, _ := json.Marshal(q)
 		answer := `{"facts":[{"quote":"Q","topic":"T","cards":[{"kind":"flip","question":` + string(body) + `,"answer":"A","explanation":"E"}]}]}`
