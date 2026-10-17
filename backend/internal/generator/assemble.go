@@ -167,6 +167,7 @@ func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok boo
 	for _, mc := range f.Cards {
 		if a.questions.isDup(mc.Question) {
 			a.stats.DroppedDuplicate++
+			slog.Debug("cards: question repeats an earlier one", "question", mc.Question)
 			continue
 		}
 		// A choice card asking the question of the fact's input or flip card

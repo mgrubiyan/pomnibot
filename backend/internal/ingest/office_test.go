@@ -44,10 +44,7 @@ func TestExtractWordDocument(t *testing.T) {
 	if kind := DetectKind(data); kind != KindDOCX {
 		t.Fatalf("DetectKind = %q, want docx", kind)
 	}
-	ex, err := NewExtractor(nil, Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ex := newExtractor(t, &fakePDF{})
 	res, err := ex.Extract(context.Background(), []File{{Name: "lecture.docx", Data: data}})
 	if err != nil {
 		t.Fatalf("Extract() error = %v", err)
@@ -80,7 +77,7 @@ func TestExtractPresentation(t *testing.T) {
 	if kind := DetectKind(data); kind != KindPPTX {
 		t.Fatalf("DetectKind = %q, want pptx", kind)
 	}
-	ex, _ := NewExtractor(nil, Options{})
+	ex := newExtractor(t, &fakePDF{})
 	res, err := ex.Extract(context.Background(), []File{{Name: "lecture.pptx", Data: data}})
 	if err != nil {
 		t.Fatalf("Extract() error = %v", err)
@@ -95,7 +92,7 @@ func TestExtractPresentation(t *testing.T) {
 
 func TestExtractRejectsOtherArchives(t *testing.T) {
 	data := zipOf(t, map[string]string{"photos/1.jpg": "x"})
-	ex, _ := NewExtractor(nil, Options{})
+	ex := newExtractor(t, &fakePDF{})
 	_, err := ex.Extract(context.Background(), []File{{Name: "archive.zip", Data: data}})
 	if err == nil || !strings.Contains(err.Error(), "unsupported") {
 		t.Errorf("Extract() error = %v, want unsupported", err)
