@@ -243,3 +243,19 @@ func TestBot_DocumentInProgressDoesNotBlockOthers(t *testing.T) {
 		t.Errorf("saved sets = %q, want [first second] in arrival order", saved)
 	}
 }
+
+func TestBot_GenerationSlots(t *testing.T) {
+	b, err := NewBot(&Client{}, "https://example.test", &mockUserService{}, &mockSetService{}, &mockFileExtractor{}, &mockCardGenerator{})
+	if err != nil {
+		t.Fatalf("NewBot: %v", err)
+	}
+	if got := cap(b.queue.slots); got != 1 {
+		t.Errorf("default slots = %d, want 1: GigaChat serves one request at a time", got)
+	}
+	for _, tc := range []struct{ set, want int }{{2, 2}, {0, 1}, {-3, 1}} {
+		b.SetGenerationSlots(tc.set)
+		if got := cap(b.queue.slots); got != tc.want {
+			t.Errorf("SetGenerationSlots(%d): slots = %d, want %d", tc.set, got, tc.want)
+		}
+	}
+}
