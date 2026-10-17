@@ -73,6 +73,10 @@ type Stats struct {
 	InputToFlip        int `json:"inputToFlip"`        // input with an answer too long to type, the fact's only card
 	Cards              int `json:"cards"`              // cards returned
 
+	// TrimmedExplanations lost a lead-in naming the notes or sentences
+	// about the notes or from outside them; the cards stay.
+	TrimmedExplanations int `json:"trimmedExplanations"`
+
 	ChunkTimeAvg   time.Duration `json:"chunkTimeAvg"` // model time per fragment, retries included
 	ChunkTimeMax   time.Duration `json:"chunkTimeMax"`
 	FirstCardAfter time.Duration `json:"firstCardAfter"` // from Generate start to the first OnBatch batch

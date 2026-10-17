@@ -85,6 +85,7 @@ type mc struct {
 	q, a, quote string
 	topic       string
 	distractors []string // factsJSON only
+	explanation string   // factsJSON only; empty: a stock one
 }
 
 func answerJSON(cards ...mc) string {
@@ -750,6 +751,9 @@ func factsJSON(facts ...fx) string {
 				"kind": string(c.kind), "question": c.q, "answer": c.a,
 				"explanation": "Так устроен процесс. Это следует из материала.",
 			}
+			if c.explanation != "" {
+				card["explanation"] = c.explanation
+			}
 			if c.distractors != nil {
 				card["distractors"] = c.distractors
 			}
@@ -787,7 +791,7 @@ func TestGenerateFactVariantsShareFactID(t *testing.T) {
 		return factsJSON(
 			fx{quote: firstSentence(frag), name: "Непрямое деление клеток", cards: []mc{
 				{kind: cards.KindChoice, q: "Как называется непрямое деление соматических клеток?", a: "Митоз"},
-				{kind: cards.KindInput, q: "Как называется непрямое деление соматических клеток?", a: "митоз"},
+				{kind: cards.KindInput, q: "При каком делении из материнской клетки образуются две дочерние?", a: "митоз"},
 				{kind: cards.KindBoolean, q: "Митоз — прямое деление соматических клеток", a: "false"},
 				{kind: cards.KindFlip, q: "Что происходит при митозе с набором хромосом?", a: "Дочерние клетки получают такой же набор."},
 			}},
@@ -1021,9 +1025,8 @@ func TestGenerateChoiceWithoutDistractorsDroppedWhenFactHasOtherCards(t *testing
 	for _, c := range res.Cards {
 		kinds = append(kinds, c.Kind)
 	}
-	// No other fragments, no distractors: the choice card goes, the fact
-	// stays covered by input and flip. Sharing a question with the input
-	// card does not make either a duplicate.
+	// The choice card asks what the input card asks, so it goes, and the
+	// fact stays covered by input and flip.
 	if !slices.Equal(kinds, []cards.Kind{cards.KindInput, cards.KindFlip}) {
 		t.Errorf("kinds = %v, want [input flip]", kinds)
 	}
@@ -1071,5 +1074,123 @@ func TestGenerateDropsUnsupportedAnswers(t *testing.T) {
 	}
 	if res.Stats.DroppedUnsupported != 2 {
 		t.Errorf("DroppedUnsupported = %d, want 2", res.Stats.DroppedUnsupported)
+	}
+}
+
+// Models lean one way on true or false: YandexGPT writes nearly every claim
+// false, Qwen nearly every one true. The model gives the claim both ways, and
+// the cards alternate, so a student cannot guess the answer from the habit.
+func TestGenerateBalancesTrueAndFalseClaims(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[:4]...)
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		word := firstWord(frag)
+		return factsJSON(fx{quote: firstSentence(frag), cards: []mc{{
+			kind: cards.KindBoolean, q: word + " — верное утверждение.", a: "true",
+			distractors: []string{word + " — неверное утверждение."},
+		}}}), nil
+	}}
+
+	res := generate(t, p, doc, opts)
+	var got []string
+	for _, c := range res.Cards {
+		got = append(got, c.Question+" "+c.Answer)
+	}
+	want := []string{
+		"Митоз — верное утверждение. true",
+		"Мейоз — неверное утверждение. false",
+		"Цитокинез — верное утверждение. true",
+		"Апоптоз — неверное утверждение. false",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("claims = %q, want %q", got, want)
+	}
+}
+
+// A claim the model gave one way only is shown that way, and the next ones
+// make up for it.
+func TestGenerateBalancesAroundOneSidedClaims(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[:3]...)
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		word := firstWord(frag)
+		card := mc{kind: cards.KindBoolean, q: word + " — верное утверждение.", a: "true",
+			distractors: []string{word + " — неверное утверждение."}}
+		if word == "Митоз" {
+			card = mc{kind: cards.KindBoolean, q: word + " — неверное утверждение.", a: "false"}
+		}
+		return factsJSON(fx{quote: firstSentence(frag), cards: []mc{card}}), nil
+	}}
+
+	res := generate(t, p, doc, opts)
+	var answers []string
+	for _, c := range res.Cards {
+		answers = append(answers, c.Answer)
+	}
+	if want := []string{"false", "true", "false"}; !slices.Equal(answers, want) {
+		t.Errorf("answers = %v, want %v", answers, want)
+	}
+}
+
+// Choice and input cards of a fact asking the very same question show the
+// student a question seen before with the answer among the options. The
+// choice card goes: it may yet be dropped for want of distractors, and the
+// input card asks for the harder recall.
+func TestGenerateDropsChoiceRepeatedByInput(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[0], paragraphs[1])
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		if firstWord(frag) == "Митоз" {
+			return factsJSON(fx{quote: firstSentence(frag), cards: []mc{
+				{kind: cards.KindChoice, q: "Как называется непрямое деление соматических клеток?", a: "Митоз",
+					distractors: []string{"Амитоз", "Эндомитоз", "Шизогония"}},
+				{kind: cards.KindInput, q: "Как называется непрямое деление соматических клеток?", a: "Митоз"},
+			}}), nil
+		}
+		return factsJSON(fx{quote: firstSentence(frag), cards: []mc{
+			{kind: cards.KindChoice, q: "Как называется деление, при котором число хромосом уменьшается вдвое?", a: "Мейоз",
+				distractors: []string{"Амитоз", "Эндомитоз", "Шизогония"}},
+			{kind: cards.KindInput, q: "Какое деление уменьшает число хромосом в дочерних клетках вдвое?", a: "Мейоз"},
+		}}), nil
+	}}
+
+	res := generate(t, p, doc, opts)
+	var kinds []string
+	for _, c := range res.Cards {
+		kinds = append(kinds, string(c.Kind)+": "+c.Question)
+	}
+	want := []string{
+		"input: Как называется непрямое деление соматических клеток?",
+		"choice: Как называется деление, при котором число хромосом уменьшается вдвое?",
+		"input: Какое деление уменьшает число хромосом в дочерних клетках вдвое?",
+	}
+	slices.Sort(kinds)
+	slices.Sort(want)
+	if !slices.Equal(kinds, want) {
+		t.Errorf("cards = %q, want %q", kinds, want)
+	}
+	if res.Stats.DroppedVariants != 1 {
+		t.Errorf("DroppedVariants = %d, want 1", res.Stats.DroppedVariants)
+	}
+}
+
+// The explanation keeps to the fragment: a lead-in naming the notes is cut
+// off, a sentence from outside them dropped.
+func TestGenerateKeepsExplanationsToTheFragment(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[0])
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		return factsJSON(fx{quote: firstSentence(frag), cards: []mc{{
+			kind: cards.KindFlip, q: "Что образуется из одной материнской клетки при митозе?", a: "Две дочерние клетки.",
+			explanation: "В конспекте указано, что из одной материнской клетки образуются две дочерние. " +
+				"Это фундаментальный процесс роста всех многоклеточных организмов планеты.",
+		}}}), nil
+	}}
+
+	res := generate(t, p, doc, opts)
+	if len(res.Cards) != 1 {
+		t.Fatalf("got %d cards, want 1", len(res.Cards))
+	}
+	if got, want := res.Cards[0].Explanation, "Из одной материнской клетки образуются две дочерние."; got != want {
+		t.Errorf("explanation = %q, want %q", got, want)
+	}
+	if res.Stats.TrimmedExplanations != 1 {
+		t.Errorf("TrimmedExplanations = %d, want 1", res.Stats.TrimmedExplanations)
 	}
 }
