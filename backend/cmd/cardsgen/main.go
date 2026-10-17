@@ -9,11 +9,16 @@
 // unless the key is a service account's), which also turns them upright;
 // -ocr yandex reads them with Yandex alone.
 //
+// -provider yandexgpt writes the cards with the backup model instead, to
+// compare it with GigaChat on the same notes (YC_API_KEY, YC_FOLDER_ID,
+// YC_LLM_MODEL).
+//
 //	task cardsgen -- notes.txt
 //	task cardsgen -- -model GigaChat-2-Max -chunk 2000 -limit 30 -json lecture.pdf page2.pdf > run.json
+//	task cardsgen -- -provider yandexgpt -ocr yandex lecture.pdf
 //
-// Credentials come from GIGACHAT_* variables: task passes the ones from .env
-// in the repository root.
+// Credentials come from GIGACHAT_* and YC_* variables: task passes the ones
+// from .env in the repository root.
 package main
 
 import (
@@ -37,6 +42,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers/yandexgpt"
 )
 
 func main() {
@@ -50,7 +56,8 @@ func run() error {
 	var (
 		file        = flag.String("file", "", "file with the notes; more files can follow as arguments")
 		title       = flag.String("title", "", "document title for sourceRef (default: first file name)")
-		model       = flag.String("model", "", "model, overrides GIGACHAT_MODEL")
+		provider    = flag.String("provider", "gigachat", "who writes the cards: gigachat or yandexgpt, the backup model")
+		model       = flag.String("model", "", "model, overrides GIGACHAT_MODEL or YC_LLM_MODEL")
 		chunk       = flag.Int("chunk", generator.DefaultChunkSize, "fragment size in characters")
 		overlap     = flag.Int("overlap", generator.DefaultChunkOverlap, "fragment overlap in characters, -1 for none")
 		limit       = flag.Int("limit", 0, "max facts per document, 0 for no limit")
@@ -85,15 +92,19 @@ func run() error {
 	if *ocrMode != "vision" && *ocrMode != "yandex" {
 		return fmt.Errorf("-ocr %q: want vision or yandex", *ocrMode)
 	}
-	// GigaChat writes the cards and, unless -ocr yandex, reads the photos.
+	if *provider != "gigachat" && *provider != "yandexgpt" {
+		return fmt.Errorf("-provider %q: want gigachat or yandexgpt", *provider)
+	}
+	// GigaChat writes the cards, unless -provider yandexgpt, and reads the
+	// photos, unless -ocr yandex.
 	var client *gigachat.Client
 	modelName := "GigaChat-3-Ultra"
-	if !*extractOnly || *ocrMode == "vision" {
+	if (!*extractOnly && *provider == "gigachat") || *ocrMode == "vision" {
 		cfg, err := gigachat.ConfigFromEnv()
 		if err != nil {
 			return err
 		}
-		if *model != "" {
+		if *model != "" && *provider == "gigachat" {
 			cfg.Model = *model
 		}
 		modelName = or(cfg.Model, modelName)
@@ -101,6 +112,20 @@ func run() error {
 			return err
 		}
 		defer client.Close()
+	}
+	var writer providers.Provider = client
+	if !*extractOnly && *provider == "yandexgpt" {
+		cfg, err := yandexgpt.ConfigFromEnv()
+		if err != nil {
+			return err
+		}
+		if *model != "" {
+			cfg.Model = *model
+		}
+		modelName = cfg.Model
+		if writer, err = yandexgpt.New(cfg); err != nil {
+			return err
+		}
 	}
 
 	var vision providers.Provider
@@ -127,7 +152,7 @@ func run() error {
 
 	began := time.Now()
 	delivered := 0
-	gen := generator.NewGenerator(client, generator.Options{
+	gen := generator.NewGenerator(writer, generator.Options{
 		Concurrency:      *concurrency,
 		ChunkSize:        *chunk,
 		ChunkOverlap:     *overlap,
