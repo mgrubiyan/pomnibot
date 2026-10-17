@@ -352,6 +352,7 @@ func formatStats(s generator.Stats) string {
 	fmt.Fprintf(&w, "Отброшено вариантов:   %d (есть в цитате или вопросе)\n", s.DroppedDistractors)
 	fmt.Fprintf(&w, "  input → flip:        %d (длинный ответ)\n", s.InputToFlip)
 	fmt.Fprintf(&w, "Объяснений урезано:   %d (о конспекте или не из него)\n", s.TrimmedExplanations)
+	fmt.Fprintf(&w, "Личные данные:        %d карточек отброшено\n", s.DroppedPersonal)
 	fmt.Fprintf(&w, "Итого карточек:        %d\n", s.Cards)
 	fmt.Fprintf(&w, "Время на фрагмент:     среднее %s, максимум %s\n", sec(s.ChunkTimeAvg), sec(s.ChunkTimeMax))
 	fmt.Fprintf(&w, "Первая карточка через: %s\n", sec(s.FirstCardAfter))

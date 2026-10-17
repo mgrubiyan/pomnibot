@@ -98,7 +98,7 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (Result, error) 
 	}
 	var work []chunk
 	for _, c := range all {
-		if reason := junkReason(c.Text); reason != "" {
+		if reason := junkReason(c.Text, len(all) == 1); reason != "" {
 			stats.ChunksFiltered++
 			stats.FilteredBy[reason]++
 			log.Debug("cards: fragment filtered", "fragment", c.Index+1, "reason", reason)
@@ -299,12 +299,17 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, total int, r
 			continue
 		}
 		f.Quote = r.chunk.Text[start:end]
+		if personalData(f.Quote) {
+			r.droppedPersonal += len(f.Cards)
+			log.Info("cards: fact with personal data dropped", "topic", f.Topic)
+			continue
+		}
 		f.Start, f.End = r.chunk.Start+start, r.chunk.Start+end
 		f.ID = factID(doc.ID, f.Quote)
 
 		kept := f.Cards[:0]
 		for _, c := range f.Cards {
-			if answerChecked(c.Kind) && !answerSupported(c, f.Quote) {
+			if answerChecked(c.Kind) && !answerSupported(c, f.Quote) || c.Kind == cards.KindFlip && namedIn(c.Answer, c.Question) {
 				r.droppedUnsupported++
 				log.Info("cards: answer not in the quote or given in the question",
 					"kind", c.Kind, "question", c.Question, "answer", c.Answer)

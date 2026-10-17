@@ -32,6 +32,7 @@ type chunkResult struct {
 	cardsFromModel     int
 	droppedInvalid     int
 	droppedQuote       int
+	droppedPersonal    int
 	droppedUnsupported int
 	trimmedExplains    int
 	usage              providers.Usage
@@ -87,6 +88,7 @@ type assembler struct {
 
 	trueClaims, falseClaims int    // boolean cards delivered, see balanceClaim
 	lastClaim               string // answer of the last one
+	lastTopic               string // the last topic that gave no answer away, see shownAs
 
 	timeSum   time.Duration
 	timeCount int
@@ -166,6 +168,7 @@ func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok boo
 	for _, mc := range f.Cards {
 		if a.questions.isDup(mc.Question) {
 			a.stats.DroppedDuplicate++
+			slog.Debug("cards: question repeats an earlier one", "question", mc.Question)
 			continue
 		}
 		// A choice card asking the question of the fact's input or flip card
@@ -195,6 +198,9 @@ func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok boo
 		case card.Kind == cards.KindChoice:
 			options, named, ok := modelOptions(card, mc.Distractors)
 			a.stats.DroppedDistractors += named
+			if !ok {
+				slog.Debug("cards: model distractors not enough", "question", card.Question, "answer", card.Answer, "distractors", mc.Distractors)
+			}
 			if ok {
 				card.Answer = optionForm(card.Answer)
 				card.Options = options
@@ -203,7 +209,13 @@ func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok boo
 			choices = append(choices, pendingChoice{card: card, topic: f.Topic, pos: pos, seq: a.seq})
 			continue
 		case card.Kind == cards.KindBoolean:
-			a.balanceClaim(&card, mc.Alt)
+			alt := mc.Alt
+			if alt != "" && (a.questions.isDup(alt) || slices.ContainsFunc(questions[:len(questions)-1], func(q string) bool { return askSame(q, alt) })) {
+				alt = "" // its wrong version was asked already
+			}
+			a.balanceClaim(&card, alt)
+			// The claim the student sees is what later questions must not repeat.
+			questions[len(questions)-1] = card.Question
 		case card.Kind == cards.KindInput && len(strings.Fields(card.Answer)) > maxInputWords:
 			if len(f.Cards) > 1 {
 				a.stats.DroppedVariants++
@@ -221,13 +233,44 @@ func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok boo
 		return nil, false
 	}
 
-	a.facts[f.ID] = cards.Fact{ID: f.ID, Name: f.Name, Topic: f.Topic}
+	name, topic := a.shownAs(f)
+	a.facts[f.ID] = cards.Fact{ID: f.ID, Name: name, Topic: topic}
 	a.accepted.Add(1)
 	for i := range choices {
 		choices[i].hasSiblings = len(ready) > 0
 	}
 	a.pending = append(a.pending, choices...)
 	return ready, true
+}
+
+// shownAs returns the name and topic a fact is shown with. The feed shows the
+// topic above every card of the fact, so one that names the answer of a
+// recall card gives it away: topic «Мейоз» over «Как называется деление, при
+// котором число хромосом уменьшается вдвое?». The name stands in when it does
+// not, else the last clean topic of the document, else none.
+func (a *assembler) shownAs(f modelFact) (name, topic string) {
+	leaks := func(s string) bool {
+		return slices.ContainsFunc(f.Cards, func(c modelCard) bool {
+			recall := c.Kind == cards.KindChoice || c.Kind == cards.KindInput ||
+				c.Kind == cards.KindFlip && len(strings.Fields(c.Answer)) <= maxInputWords
+			return recall && namedIn(strings.TrimRight(c.Answer, "."), s)
+		})
+	}
+	name, topic = f.Name, f.Topic
+	switch {
+	case !leaks(topic):
+		a.lastTopic = topic
+	case !leaks(name):
+		topic = name
+	case a.lastTopic != "":
+		topic = a.lastTopic
+	default:
+		topic = ""
+	}
+	if leaks(name) && topic != "" {
+		name = topic
+	}
+	return name, topic
 }
 
 // repeatsRecall reports whether q asks what an input card of f asks, or
@@ -345,6 +388,7 @@ func (a *assembler) settle(pos int, final bool) []cards.Card {
 			p.card.Options = shuffleOptions(p.card.Question, answer, options)
 		case timeUp && p.hasSiblings:
 			a.stats.DroppedVariants++
+			slog.Debug("cards: choice dropped for want of distractors", "question", p.card.Question, "options", options)
 			continue
 		case timeUp:
 			p.card.Kind = cards.KindFlip
@@ -390,6 +434,7 @@ func (a *assembler) count(r chunkResult) {
 	s.DroppedInvalid += r.droppedInvalid
 	s.DroppedQuote += r.droppedQuote
 	s.DroppedUnsupported += r.droppedUnsupported
+	s.DroppedPersonal += r.droppedPersonal
 	s.TrimmedExplanations += r.trimmedExplains
 
 	if r.calls > 0 {

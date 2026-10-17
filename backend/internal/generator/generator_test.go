@@ -171,7 +171,7 @@ func checkStats(t *testing.T, res Result) {
 	if s.Cards != len(res.Cards) {
 		t.Errorf("Stats.Cards = %d, len(Cards) = %d", s.Cards, len(res.Cards))
 	}
-	accounted := s.DroppedInvalid + s.DroppedQuote + s.DroppedUnsupported + s.DroppedDuplicate + s.DroppedByLimit + s.DroppedVariants + s.Cards
+	accounted := s.DroppedInvalid + s.DroppedQuote + s.DroppedPersonal + s.DroppedUnsupported + s.DroppedDuplicate + s.DroppedByLimit + s.DroppedVariants + s.Cards
 	if s.CardsFromModel != accounted {
 		t.Errorf("CardsFromModel = %d, but dropped + returned = %d (%+v)", s.CardsFromModel, accounted, s)
 	}
@@ -1269,5 +1269,241 @@ func TestGenerateKeepsChoiceBesideASimilarFlip(t *testing.T) {
 	res := generate(t, p, doc, opts)
 	if len(res.Cards) != 2 {
 		t.Errorf("cards = %+v, want both", res.Cards)
+	}
+}
+
+func TestFactCapCountsTermLines(t *testing.T) {
+	for _, tc := range []struct {
+		name, sep string
+	}{{"dash", " – "}, {"colon", ": "}, {"tab", "\t"}} {
+		t.Run(tc.name, func(t *testing.T) {
+			var lines []string
+			for i := range 9 {
+				lines = append(lines, fmt.Sprintf("word%d%sслово%d", i, tc.sep, i))
+			}
+			if got := factCap(strings.Join(lines, "\n"), DefaultMaxFactsPerChunk); got != 9 {
+				t.Errorf("factCap = %d, want 9: one per term line", got)
+			}
+		})
+	}
+}
+
+// A flip card whose answer its own question names asks nothing: «Как
+// переводится "cat"?» — «cat». It goes, and the choice card it repeats stays.
+func TestGenerateDropsFlipAnsweredByItsQuestion(t *testing.T) {
+	doc := Document{Title: "Unit 1", Text: "cat – кошка\ndog – собака\nhouse – дом\ntree – дерево"}
+	p := &fakeProvider{answer: func(int, string, providers.Request) (string, error) {
+		return factsJSON(fx{quote: "cat – кошка", cards: []mc{
+			{kind: cards.KindChoice, q: `Как переводится "cat"?`, a: "кошка", distractors: []string{"собака", "дом", "дерево"}},
+			{kind: cards.KindFlip, q: `Как переводится "cat"?`, a: "cat"},
+		}}), nil
+	}}
+
+	res := generate(t, p, doc, Options{})
+	if len(res.Cards) != 1 || res.Cards[0].Kind != cards.KindChoice {
+		t.Errorf("cards = %+v, want the choice card alone", res.Cards)
+	}
+	if res.Stats.DroppedUnsupported != 1 {
+		t.Errorf("DroppedUnsupported = %d, want 1", res.Stats.DroppedUnsupported)
+	}
+}
+
+// Formulas are not a vocabulary: «sin 30° = 1/2» lines must not raise the
+// cap, or the answer outgrows the model's token budget and comes cut short.
+func TestFactCapIgnoresFormulas(t *testing.T) {
+	lines := []string{"sin 30° = 1/2", "sin 45° = √2/2", "sin 60° = √3/2", "cos 30° = √3/2", "cos 45° = √2/2", "cos 60° = 1/2", "tg 45° = 1"}
+	if got := factCap(strings.Join(lines, "\n"), DefaultMaxFactsPerChunk); got != DefaultMaxFactsPerChunk {
+		t.Errorf("factCap = %d, want %d", got, DefaultMaxFactsPerChunk)
+	}
+}
+
+// A transcription in brackets may hold a colon, «['dɔ:ntɪŋ]»: the line is
+// still a term line, not «term: meaning».
+func TestFactCapReadsLinesWithTranscriptions(t *testing.T) {
+	lines := []string{
+		"1 entry-level job – работа начального уровня",
+		"2 daunting ['dɔ:ntɪŋ] – пугающий",
+		"3 to troubleshoot ['trʌblˌʃu:t] – выявлять неисправности",
+		"4 seamless ['si:mləs] communication – непрерывная связь",
+		"5 to embark [ɪm'bɑ:k] on a new career path – начать новый карьерный путь",
+		"6 to configure [kən'fɪɡə] – настраивать",
+	}
+	if got := factCap(strings.Join(lines, "\n"), DefaultMaxFactsPerChunk); got != len(lines) {
+		t.Errorf("factCap = %d, want %d", got, len(lines))
+	}
+	if isTermLine("Позвонить маме в 18:00") {
+		t.Error("a time taken for «term: meaning»")
+	}
+}
+
+func TestFactCapReadsTablesAndArrows(t *testing.T) {
+	for name, lines := range map[string][]string{
+		"table": {"Митоз | непрямое деление", "Мейоз | редукционное деление", "Амитоз | прямое деление ядра",
+			"Цитокинез | разделение цитоплазмы", "Апоптоз | программируемая гибель", "Интерфаза | период между делениями"},
+		"reactions": {"2H₂ + O₂ → 2H₂O", "CaCO₃ → CaO + CO₂", "2Na + Cl₂ → 2NaCl", "Zn + 2HCl → ZnCl₂ + H₂",
+			"CuO + H₂ → Cu + H₂O", "NaOH + HCl → NaCl + H₂O"},
+	} {
+		if got := factCap(strings.Join(lines, "\n"), DefaultMaxFactsPerChunk); got != len(lines) {
+			t.Errorf("%s: factCap = %d, want %d", name, got, len(lines))
+		}
+	}
+}
+
+// Subscripts and superscripts are part of a formula: «H₂O» is one word, so
+// «2H₂O» is not named in «Что получается из 2H₂ + O₂?».
+func TestAnswerCheckReadsSubscripts(t *testing.T) {
+	c := modelCard{Kind: cards.KindChoice, Question: "Что образуется в реакции 2H₂ + O₂ → ?", Answer: "2H₂O"}
+	if !answerSupported(c, "2H₂ + O₂ → 2H₂O") {
+		t.Errorf("answer %q taken for named in the question %q", c.Answer, c.Question)
+	}
+}
+
+// A formula is compared whole: a distractor that rearranges the symbols of
+// the right one is wrong, not "named in the quote".
+func TestNamedInComparesFormulasWhole(t *testing.T) {
+	quote := "Ed = (ΔQ / Q) / (ΔP / P)"
+	if namedIn("Ed = (ΔP / P) / (ΔQ / Q)", quote) {
+		t.Error("a rearranged formula taken for named in the quote")
+	}
+	if !namedIn("Ed = (ΔQ / Q) / (ΔP / P)", quote) {
+		t.Error("the formula itself not found in the quote")
+	}
+	if !namedIn("CaO + CO₂", "CaCO₃ → CaO + CO₂") {
+		t.Error("the products of a reaction not found in it")
+	}
+}
+
+// The feed shows the fact's topic above every card: a topic that names the
+// answer of a recall card gives it away. The name stands in when it does
+// not, else the last clean topic, else none.
+func TestGenerateKeepsAnswersOutOfTopics(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[0], paragraphs[1], paragraphs[2])
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		f := fx{quote: firstSentence(frag)}
+		switch firstWord(frag) {
+		case "Митоз": // the topic leaks, the name does not
+			f.topic, f.name = "Митоз", "Непрямое деление клеток"
+			f.cards = []mc{{kind: cards.KindInput, q: "Как называется непрямое деление соматических клеток?", a: "митоз"}}
+		case "Мейоз": // a clean topic
+			f.topic, f.name = "Деление клеток", "Редукционное деление"
+			f.cards = []mc{{kind: cards.KindFlip, q: "Что происходит с числом хромосом при мейозе?", a: "Оно уменьшается вдвое."}}
+		default: // both leak: the last clean topic stands in
+			f.topic, f.name = "Цитокинез", "Цитокинез"
+			f.cards = []mc{{kind: cards.KindFlip, q: "Как называется разделение цитоплазмы после деления ядра?", a: "Цитокинез."}}
+		}
+		return factsJSON(f), nil
+	}}
+
+	res := generate(t, p, doc, opts)
+	var topics []string
+	for _, f := range res.Facts {
+		topics = append(topics, f.Topic)
+	}
+	if want := []string{"Непрямое деление клеток", "Деление клеток", "Деление клеток"}; !slices.Equal(topics, want) {
+		t.Errorf("topics = %q, want %q", topics, want)
+	}
+}
+
+// A question about the notes rather than the subject means nothing on its
+// own in the feed: «Какое определение дано клетке во фрагменте?».
+func TestParseDropsQuestionsAboutTheNotes(t *testing.T) {
+	for _, q := range []string{
+		"Какое определение дано клетке во фрагменте?",
+		"Какой пример активного транспорта указан в конспекте?",
+		"Что сказано в тексте о мейозе?",
+		"Назовите два примера товаров первой необходимости из текста.",
+		"Как характеризует типаж Евгения Онегина конспект?",
+	} {
+		body, _ := json.Marshal(q)
+		answer := `{"facts":[{"quote":"Q","topic":"T","cards":[{"kind":"flip","question":` + string(body) + `,"answer":"A","explanation":"E"}]}]}`
+		if facts, invalid, _ := parseAnswer([]byte(answer), 3); cardCount(facts) != 0 || invalid != 1 {
+			t.Errorf("%q: kept, want the card dropped", q)
+		}
+	}
+	answer := `{"facts":[{"quote":"Q","topic":"T","cards":[{"kind":"flip","question":"Какой текст называют гипертекстом?","answer":"A","explanation":"E"}]}]}`
+	if facts, _, _ := parseAnswer([]byte(answer), 3); cardCount(facts) != 1 {
+		t.Error("a question about texts as the subject was dropped")
+	}
+}
+
+// Notes may carry a password or a phone number between the lines: no card
+// is made of a fact whose quote holds personal data, whatever the model did.
+func TestGenerateDropsFactsWithPersonalData(t *testing.T) {
+	para := "Ген — участок ДНК, кодирующий белок. Пароль от вайфая в общаге 89631234, Маше позвонить +7 912 345-67-89. Аллели — формы одного гена."
+	doc, opts := testDoc(t, para)
+	p := &fakeProvider{answer: func(int, string, providers.Request) (string, error) {
+		return factsJSON(
+			fx{quote: "Ген — участок ДНК, кодирующий белок.", cards: []mc{{kind: cards.KindFlip, q: "Что такое ген?", a: "Участок ДНК, кодирующий белок."}}},
+			fx{quote: "Пароль от вайфая в общаге 89631234", cards: []mc{{kind: cards.KindFlip, q: "Какой пароль от вайфая в общаге?", a: "89631234"}}},
+			fx{quote: "Маше позвонить +7 912 345-67-89", cards: []mc{{kind: cards.KindFlip, q: "Какой номер у Маши?", a: "+7 912 345-67-89"}}},
+		), nil
+	}}
+
+	res := generate(t, p, doc, opts)
+	if len(res.Cards) != 1 || res.Cards[0].Question != "Что такое ген?" {
+		t.Errorf("cards = %+v, want the gene card alone", res.Cards)
+	}
+	if res.Stats.DroppedPersonal != 2 {
+		t.Errorf("DroppedPersonal = %d, want 2", res.Stats.DroppedPersonal)
+	}
+}
+
+func TestPersonalData(t *testing.T) {
+	for s, want := range map[string]bool{
+		"пароль от вайфая 12345678":            true,
+		"Password: qwerty":                     true,
+		"позвонить +7 912 345-67-89":           true,
+		"звонить 8 (912) 345 67 89":            true,
+		"пиши на masha@mail.ru":                true,
+		"карта 4276 1234 5678 9012":            true,
+		"В 1812 году Наполеон вошёл в Москву.": false,
+		"Частота 60–80 ударов в минуту.":       false,
+		"ISBN 978-5-9704-5307-8":               false,
+	} {
+		if got := personalData(s); got != want {
+			t.Errorf("personalData(%q) = %v, want %v", s, got, want)
+		}
+	}
+}
+
+// The request to skip personal notes goes with prose only: next to a sheet of
+// formulas or a vocabulary list the model took them for no study material.
+func TestUserPromptAsksToSkipPersonalNotesForProseOnly(t *testing.T) {
+	for text, want := range map[string]bool{
+		"Купить молоко, хлеб, позвонить маме в 18:00.":                     true,
+		"Митоз — непрямое деление клеток. Мейоз уменьшает число хромосом.": true,
+		"v = s / t\na = (v − v0) / t\nF = m · a":                           false,
+		"cat – кошка\ndog – собака\nhouse – дом":                           false,
+	} {
+		got := strings.Contains(buildUserPrompt("", chunk{Text: text}, 1, false), notStudyNote)
+		if got != want {
+			t.Errorf("%q: note sent = %v, want %v", text, got, want)
+		}
+	}
+}
+
+// The wrong version of a claim is checked for repeats like any question: two
+// facts whose wrong versions coincide must not show the student one claim twice.
+func TestGenerateBalanceDoesNotRepeatAClaim(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[:4]...)
+	shared := "Амитоз — непрямое деление соматических клеток."
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		word := firstWord(frag)
+		claim := mc{kind: cards.KindBoolean, q: word + " — верное утверждение.", a: "true",
+			distractors: []string{word + " — неверное утверждение."}}
+		if word == "Мейоз" || word == "Апоптоз" {
+			// The second and the fourth claims go false, and their wrong
+			// versions are the same.
+			claim.distractors = []string{shared}
+		}
+		return factsJSON(fx{quote: firstSentence(frag), cards: []mc{claim}}), nil
+	}}
+	res := generate(t, p, doc, opts)
+	seen := map[string]bool{}
+	for _, c := range res.Cards {
+		if seen[c.Question] {
+			t.Errorf("claim %q shown twice", c.Question)
+		}
+		seen[c.Question] = true
 	}
 }

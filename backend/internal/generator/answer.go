@@ -23,7 +23,9 @@ import (
 //
 // Words are compared up to their endings (sameWord), since the answer and the
 // quote rarely share a grammatical case. Boolean and flip answers are
-// sentences that rephrase the quote, so they are left to the quote check.
+// sentences that rephrase the quote, so they are left to the quote check;
+// only a flip answer its own question names whole («Как переводится "cat"?»
+// — «cat») is dropped.
 
 // Word matching: a word of shortWord letters or less must match exactly
 // ("G1", "90", "ДНК"); a longer one may differ in the last endingRunes letters
@@ -47,7 +49,7 @@ func answerSupported(c modelCard, quote string) bool {
 // namedIn reports whether text names s: code as a whole string, other
 // answers word by word up to endings.
 func namedIn(s, text string) bool {
-	if isCode(s) {
+	if isCode(s) || isFormula(s) {
 		return codeWithin(s, text)
 	}
 	return stemsWithin(s, text)
@@ -80,6 +82,13 @@ const codeSymbols = "():;<>=*+#/\\[]{}&|!%^~._"
 
 // codeWithin reports whether code occurs in text with all whitespace
 // ignored: pdftotext spaces out the letters of listings, "c o u t".
+// isFormula reports an equation or a reaction, «Ed = (ΔQ / Q) / (ΔP / P)»,
+// «CaO + CO₂»: compared as a whole, since a wrong option made of the same
+// symbols rearranged would pass word by word for one the text names.
+func isFormula(s string) bool {
+	return strings.ContainsAny(s, "=→≤≥") || strings.Contains(s, " + ")
+}
+
 func codeWithin(code, text string) bool {
 	code, text = squeeze(code), squeeze(text)
 	return code != "" && strings.Contains(text, code)

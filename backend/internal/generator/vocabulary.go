@@ -10,20 +10,43 @@ import (
 const maxListFacts = 15
 
 // reTermLine is a line of a vocabulary list or glossary: an optional number,
-// a short term, a dash and its meaning, «5 to configure [kən'fɪɡə] –
-// настраивать».
-var reTermLine = regexp.MustCompile(`^\s*(?:\d{1,3}[.)]?\s+)?[^–—\n]{1,80}?\s[–—-]\s+\S.{0,150}$`)
+// a short term, a separator and its meaning: «5 to configure [kən'fɪɡə] –
+// настраивать», «seamless: непрерывный», a table row «Митоз | непрямое
+// деление», a tab between, or a reaction «CaCO₃ → CaO + CO₂», a fact a line
+// too. Not «=»: «sin 30° = 1/2» lines are formulas, often a fragment full.
+var reTermLine = regexp.MustCompile(`^\s*(?:\d{1,3}[.)]?\s+)?[^–—:=|→\t\n]{1,80}?(?:\s[–—-]\s+|\s*:\s+|\s*[|→]\s*|\t+)[^=\n]{1,150}$`)
+
+// reBracketed is a transcription or a note in brackets, «['dɔ:ntɪŋ]»: it may
+// hold a colon that is no separator.
+var reBracketed = regexp.MustCompile(`\[[^\]\n]*\]`)
+
+// isTermLine reports a line of a vocabulary list or glossary.
+func isTermLine(line string) bool {
+	return reTermLine.MatchString(reBracketed.ReplaceAllString(line, ""))
+}
 
 // factCap is how many facts the model may return for a fragment. A
 // vocabulary list holds a fact in every line, far more than prose, so the
 // cap rises to the number of term lines, up to maxListFacts; otherwise it is
 // base.
 func factCap(fragment string, base int) int {
-	terms := 0
-	for _, line := range strings.Split(fragment, "\n") {
-		if reTermLine.MatchString(line) {
-			terms++
+	return max(base, min(termLines(strings.Split(fragment, "\n")), maxListFacts))
+}
+
+// vocabulary reports a fragment that is mostly a vocabulary list or
+// glossary, of three term lines at least.
+func vocabulary(lines []string) bool {
+	n := termLines(lines)
+	return n >= 3 && 2*n >= len(lines)
+}
+
+// termLines counts the lines of a vocabulary list or glossary.
+func termLines(lines []string) int {
+	n := 0
+	for _, line := range lines {
+		if isTermLine(line) {
+			n++
 		}
 	}
-	return max(base, min(terms, maxListFacts))
+	return n
 }

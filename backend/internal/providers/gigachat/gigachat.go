@@ -255,7 +255,16 @@ func (e transportError) Unwrap() error { return e.err }
 // providers.ErrUnavailable, so another provider can take over.
 func (c *Client) Complete(ctx context.Context, req providers.Request) (providers.Response, error) {
 	resp, err := c.complete(ctx, req)
-	if err != nil && unavailable(err) {
+	switch {
+	case err == nil:
+	case ctx.Err() != nil:
+		// The caller gave up, whatever the last answer was: the provider is
+		// not to blame.
+		if !errors.Is(err, ctx.Err()) {
+			err = fmt.Errorf("gigachat: %w (last error: %w)", ctx.Err(), err)
+		}
+		return providers.Response{}, err
+	case unavailable(err):
 		return providers.Response{}, fmt.Errorf("%w: %w", err, providers.ErrUnavailable)
 	}
 	return resp, err

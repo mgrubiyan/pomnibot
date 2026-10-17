@@ -99,10 +99,17 @@ func (x *questionIndex) add(q string) {
 
 // questionWords folds q and splits it into words, dropping punctuation.
 func questionWords(q string) []string {
-	return strings.FieldsFunc(fold(q).s, func(r rune) bool {
+	return strings.FieldsFunc(plainDigits.Replace(fold(q).s), func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
 	})
 }
+
+// plainDigits turns subscripts and superscripts into digits, so «H₂O» is one
+// word, the same as «H2O», and «v²» the same as «v2».
+var plainDigits = strings.NewReplacer(
+	"₀", "0", "₁", "1", "₂", "2", "₃", "3", "₄", "4", "₅", "5", "₆", "6", "₇", "7", "₈", "8", "₉", "9",
+	"⁰", "0", "¹", "1", "²", "2", "³", "3", "⁴", "4", "⁵", "5", "⁶", "6", "⁷", "7", "⁸", "8", "⁹", "9",
+)
 
 func stemSet(words []string) map[string]bool {
 	set := make(map[string]bool, len(words))

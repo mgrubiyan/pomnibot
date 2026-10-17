@@ -194,7 +194,21 @@ func (v *VisionOCR) read(ctx context.Context, data []byte, rotate int) (string, 
 		}
 		texts = append(texts, dropLaTeXDollars(strings.TrimSpace(string(resp.Content))))
 	}
-	return joinHalves(texts), nil
+	return dropIllegibleLines(joinHalves(texts)), nil
+}
+
+// dropIllegibleLines drops lines that are nothing but the «[неразборчиво]»
+// mark: a photo with no notes on it, a bird or a blank sheet, comes back as
+// just that, and the page is empty rather than a text with nothing to learn.
+func dropIllegibleLines(text string) string {
+	var out []string
+	for _, line := range strings.Split(text, "\n") {
+		if strings.EqualFold(strings.Trim(line, " []."), "неразборчиво") {
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.TrimSpace(strings.Join(out, "\n"))
 }
 
 // reLaTeXMath is a formula the model wrapped in LaTeX dollars despite the

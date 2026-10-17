@@ -279,14 +279,33 @@ func TestTrimQuote(t *testing.T) {
 // A line of a vocabulary list is short but says something no other line
 // does: as a whole line it passes, as a scrap of one it does not.
 func TestLocateQuoteTakesAShortWholeLine(t *testing.T) {
-	fragment := "1 daunting – пугающий\n2 to brim with – быть наполненным\nКлетка делится митозом."
+	fragment := "1 daunting – пугающий\n2 to brim with – быть наполненным\nКлетка делится митозом.\nF = m · a\nFe + S → FeS\nили"
 	for quote, want := range map[string]bool{
 		"1 daunting – пугающий": true,
+		"F = m · a":             true, // a formula on its own line
+		"Fe + S → FeS":          true, // a reaction on its own line
+		"или":                   false,
 		"daunting – пугающий":   false, // not the whole line
 		"Клетка делится":        false,
 	} {
 		if _, _, ok := locateQuote(fragment, quote); ok != want {
 			t.Errorf("locateQuote(%q) ok = %v, want %v", quote, ok, want)
 		}
+	}
+}
+
+// Lines of a vocabulary list start with a lowercase word, yet each is an
+// entry of its own, not the rest of the line before.
+func TestNormalizeTextKeepsVocabularyLines(t *testing.T) {
+	for _, in := range []string{
+		"cat – кошка\ndog – собака\nhouse – дом",
+		"to configure: настраивать\nto troubleshoot: выявлять неисправности",
+	} {
+		if got := normalizeText(in); got != in {
+			t.Errorf("normalizeText(%q) = %q, want the lines kept", in, got)
+		}
+	}
+	if got := normalizeText("клетка делится на G1, S\nи постсинтетический период"); strings.Contains(got, "\n") {
+		t.Errorf("a wrapped line was not joined: %q", got)
 	}
 }

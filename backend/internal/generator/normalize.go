@@ -77,7 +77,13 @@ const minWrappedLine = 60
 // lowercase letter ("и\nпостсинтетический"), or prev is a long line cut off
 // after a lowercase letter or a comma and line is not a list item
 // ("белки и\nРНК").
+//
+// Two lines of a vocabulary list are entries of their own, though the next
+// one starts lowercase: «cat – кошка\ndog – собака».
 func continuesLine(prev, line string) bool {
+	if isTermLine(prev) && isTermLine(line) {
+		return false
+	}
 	first, _ := utf8.DecodeRuneInString(line)
 	if unicode.IsLower(first) {
 		return !reLetterItem.MatchString(line)
@@ -232,6 +238,10 @@ const minQuoteRunes = 20
 // √2/2" is no phrase every fragment has.
 const minFormulaRunes = 8
 
+// minLineFormulaRunes is the shortest equation that passes as a whole line:
+// «a=b» proves nothing, «f=m·a» on a line of its own does.
+const minLineFormulaRunes = 5
+
 // tooShort reports a folded quote too short to prove anything.
 func tooShort(q string) bool {
 	n := utf8.RuneCountInString(q)
@@ -239,10 +249,12 @@ func tooShort(q string) bool {
 }
 
 // wholeLine reports whether the folded quote q is a whole line of the
-// fragment, at least minFormulaRunes long. A line of a vocabulary list,
-// «1 daunting – пугающий», is short but says what no other line does.
+// fragment, at least minFormulaRunes long, or minLineFormulaRunes for an
+// equation or a reaction. A line of a vocabulary list, «1 daunting – пугающий», or of a
+// sheet of formulas, «F = m · a», is short but says what no other line does.
 func wholeLine(fragment, q string) bool {
-	if utf8.RuneCountInString(q) < minFormulaRunes {
+	n := utf8.RuneCountInString(q)
+	if n < minFormulaRunes && (n < minLineFormulaRunes || !strings.ContainsAny(q, "=→")) {
 		return false
 	}
 	for _, line := range strings.Split(fragment, "\n") {

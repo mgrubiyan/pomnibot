@@ -64,7 +64,8 @@ type Stats struct {
 	CardsFromModel     int `json:"cardsFromModel"`     // cards in parsed responses
 	DroppedInvalid     int `json:"droppedInvalid"`     // card breaks the schema: empty field, unknown kind
 	DroppedQuote       int `json:"droppedQuote"`       // its fact's quote not found in the fragment
-	DroppedUnsupported int `json:"droppedUnsupported"` // choice or input answer not in the quote, or given in the question
+	DroppedPersonal    int `json:"droppedPersonal"`    // its fact's quote holds a password, a phone number or the like
+	DroppedUnsupported int `json:"droppedUnsupported"` // choice or input answer not in the quote, or given in the question; a flip answer its question names
 	DroppedDuplicate   int `json:"droppedDuplicate"`   // same fact or same question as earlier
 	DroppedByLimit     int `json:"droppedByLimit"`     // its fact is over MaxFactsPerDoc
 	DroppedVariants    int `json:"droppedVariants"`    // could not keep its kind, other cards cover the fact
