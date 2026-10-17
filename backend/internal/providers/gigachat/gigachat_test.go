@@ -477,6 +477,91 @@ func TestDoesNotRetryBadCredentials(t *testing.T) {
 	}
 }
 
+// When GigaChat cannot answer anyone for a while, the error says so, and
+// providers.Fallback hands requests to another provider.
+func TestReportsUnavailable(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		chat   func(int, chatRequest) chatReply
+		oauth  int
+		closed bool // the chat host refuses connections
+	}{
+		{name: "server errors on every model", chat: func(int, chatRequest) chatReply { return fail(http.StatusServiceUnavailable) }},
+		{name: "rate limited after retries", chat: func(int, chatRequest) chatReply {
+			r := fail(http.StatusTooManyRequests)
+			r.header = map[string]string{"Retry-After": "0"}
+			return r
+		}},
+		{name: "every model out of quota", chat: func(int, chatRequest) chatReply { return fail(http.StatusPaymentRequired) }},
+		{name: "credentials rejected", chat: func(int, chatRequest) chatReply { return fail(http.StatusUnauthorized) }},
+		{name: "OAuth rejects the key", oauth: http.StatusUnauthorized},
+		{name: "OAuth is down", oauth: http.StatusBadGateway},
+		{name: "host unreachable", closed: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := &fakeAPI{chat: tc.chat}
+			if tc.chat == nil {
+				api.chat = func(int, chatRequest) chatReply { return ok(`{}`) }
+			}
+			api.oauthStatus.Store(int32(tc.oauth))
+			c := newTestClient(t, api)
+			if tc.closed {
+				down := httptest.NewServer(http.NotFoundHandler())
+				c.cfg.BaseURL = down.URL + "/v1"
+				down.Close()
+			}
+
+			_, err := c.Complete(context.Background(), request())
+			if !errors.Is(err, providers.ErrUnavailable) {
+				t.Errorf("Complete() error = %v, want providers.ErrUnavailable", err)
+			}
+		})
+	}
+}
+
+// Errors about one request say nothing of GigaChat as a whole: another
+// request may pass, so it stays in service.
+func TestRequestErrorsAreNotUnavailable(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		chat func(int, chatRequest) chatReply
+	}{
+		{name: "bad request", chat: func(int, chatRequest) chatReply { return fail(http.StatusBadRequest) }},
+		{name: "undecodable answer", chat: func(int, chatRequest) chatReply {
+			return chatReply{status: http.StatusOK, body: "<html>proxy error</html>"}
+		}},
+		{name: "content filter", chat: func(int, chatRequest) chatReply { return blacklisted() }},
+		{name: "one model down, the other refuses", chat: func(_ int, req chatRequest) chatReply {
+			if req.Model == "GigaChat-3-Ultra" {
+				return fail(http.StatusPaymentRequired)
+			}
+			return blacklisted()
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := newTestClient(t, &fakeAPI{chat: tc.chat})
+			_, err := c.Complete(context.Background(), request())
+			if err == nil || errors.Is(err, providers.ErrUnavailable) {
+				t.Errorf("Complete() error = %v, want an error that is not providers.ErrUnavailable", err)
+			}
+		})
+	}
+}
+
+func TestCallerCancelIsNotUnavailable(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	api := &fakeAPI{chat: func(int, chatRequest) chatReply {
+		cancel()
+		return fail(http.StatusServiceUnavailable)
+	}}
+	c := newTestClient(t, api)
+
+	_, err := c.Complete(ctx, request())
+	if !errors.Is(err, context.Canceled) || errors.Is(err, providers.ErrUnavailable) {
+		t.Errorf("Complete() error = %v, want context.Canceled only", err)
+	}
+}
+
 func setGigaChatEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("GIGACHAT_AUTH_KEY", "aWQ6c2VjcmV0")
