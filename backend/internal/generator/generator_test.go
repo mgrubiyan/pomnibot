@@ -1354,3 +1354,69 @@ func TestAnswerCheckReadsSubscripts(t *testing.T) {
 		t.Errorf("answer %q taken for named in the question %q", c.Answer, c.Question)
 	}
 }
+
+// A formula is compared whole: a distractor that rearranges the symbols of
+// the right one is wrong, not "named in the quote".
+func TestNamedInComparesFormulasWhole(t *testing.T) {
+	quote := "Ed = (ΔQ / Q) / (ΔP / P)"
+	if namedIn("Ed = (ΔP / P) / (ΔQ / Q)", quote) {
+		t.Error("a rearranged formula taken for named in the quote")
+	}
+	if !namedIn("Ed = (ΔQ / Q) / (ΔP / P)", quote) {
+		t.Error("the formula itself not found in the quote")
+	}
+	if !namedIn("CaO + CO₂", "CaCO₃ → CaO + CO₂") {
+		t.Error("the products of a reaction not found in it")
+	}
+}
+
+// The feed shows the fact's topic above every card: a topic that names the
+// answer of a recall card gives it away. The name stands in when it does
+// not, else the last clean topic, else none.
+func TestGenerateKeepsAnswersOutOfTopics(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[0], paragraphs[1], paragraphs[2])
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		f := fx{quote: firstSentence(frag)}
+		switch firstWord(frag) {
+		case "Митоз": // the topic leaks, the name does not
+			f.topic, f.name = "Митоз", "Непрямое деление клеток"
+			f.cards = []mc{{kind: cards.KindInput, q: "Как называется непрямое деление соматических клеток?", a: "митоз"}}
+		case "Мейоз": // a clean topic
+			f.topic, f.name = "Деление клеток", "Редукционное деление"
+			f.cards = []mc{{kind: cards.KindFlip, q: "Что происходит с числом хромосом при мейозе?", a: "Оно уменьшается вдвое."}}
+		default: // both leak: the last clean topic stands in
+			f.topic, f.name = "Цитокинез", "Цитокинез"
+			f.cards = []mc{{kind: cards.KindFlip, q: "Как называется разделение цитоплазмы после деления ядра?", a: "Цитокинез."}}
+		}
+		return factsJSON(f), nil
+	}}
+
+	res := generate(t, p, doc, opts)
+	var topics []string
+	for _, f := range res.Facts {
+		topics = append(topics, f.Topic)
+	}
+	if want := []string{"Непрямое деление клеток", "Деление клеток", "Деление клеток"}; !slices.Equal(topics, want) {
+		t.Errorf("topics = %q, want %q", topics, want)
+	}
+}
+
+// A question about the notes rather than the subject means nothing on its
+// own in the feed: «Какое определение дано клетке во фрагменте?».
+func TestParseDropsQuestionsAboutTheNotes(t *testing.T) {
+	for _, q := range []string{
+		"Какое определение дано клетке во фрагменте?",
+		"Какой пример активного транспорта указан в конспекте?",
+		"Что сказано в тексте о мейозе?",
+	} {
+		body, _ := json.Marshal(q)
+		answer := `{"facts":[{"quote":"Q","topic":"T","cards":[{"kind":"flip","question":` + string(body) + `,"answer":"A","explanation":"E"}]}]}`
+		if facts, invalid, _ := parseAnswer([]byte(answer), 3); cardCount(facts) != 0 || invalid != 1 {
+			t.Errorf("%q: kept, want the card dropped", q)
+		}
+	}
+	answer := `{"facts":[{"quote":"Q","topic":"T","cards":[{"kind":"flip","question":"Какой текст называют гипертекстом?","answer":"A","explanation":"E"}]}]}`
+	if facts, _, _ := parseAnswer([]byte(answer), 3); cardCount(facts) != 1 {
+		t.Error("a question about texts as the subject was dropped")
+	}
+}

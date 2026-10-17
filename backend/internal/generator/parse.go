@@ -242,6 +242,9 @@ func parseCard(fields map[string]json.RawMessage) (modelCard, bool) {
 		*f.dst = v
 	}
 
+	if reAboutNotesQuestion.MatchString(c.Question) {
+		return modelCard{}, false
+	}
 	c.Kind = cards.Kind(strings.ToLower(kind))
 	switch c.Kind {
 	case cards.KindChoice:
@@ -341,6 +344,11 @@ func countCards(item json.RawMessage) int {
 	}
 	return 1
 }
+
+// reAboutNotesQuestion: a question about the notes, not the subject, «Какое
+// определение дано клетке во фрагменте?». Only with a preposition: «фрагменты
+// Оказаки» are the subject of a biology lecture.
+var reAboutNotesQuestion = regexp.MustCompile(`(?i)(?:^|[^\p{L}])(?:в|во|из|по|согласно)\s+(?:конспект|фрагмент|тексте|тексту|лекци)\p{L}*`)
 
 // reTrueLeadIn matches "Верно ли, что" and its kin: a boolean statement the
 // model turned into a question.

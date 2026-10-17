@@ -87,6 +87,7 @@ type assembler struct {
 
 	trueClaims, falseClaims int    // boolean cards delivered, see balanceClaim
 	lastClaim               string // answer of the last one
+	lastTopic               string // the last topic that gave no answer away, see shownAs
 
 	timeSum   time.Duration
 	timeCount int
@@ -195,6 +196,9 @@ func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok boo
 		case card.Kind == cards.KindChoice:
 			options, named, ok := modelOptions(card, mc.Distractors)
 			a.stats.DroppedDistractors += named
+			if !ok {
+				slog.Debug("cards: model distractors not enough", "question", card.Question, "answer", card.Answer, "distractors", mc.Distractors)
+			}
 			if ok {
 				card.Answer = optionForm(card.Answer)
 				card.Options = options
@@ -221,13 +225,44 @@ func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok boo
 		return nil, false
 	}
 
-	a.facts[f.ID] = cards.Fact{ID: f.ID, Name: f.Name, Topic: f.Topic}
+	name, topic := a.shownAs(f)
+	a.facts[f.ID] = cards.Fact{ID: f.ID, Name: name, Topic: topic}
 	a.accepted.Add(1)
 	for i := range choices {
 		choices[i].hasSiblings = len(ready) > 0
 	}
 	a.pending = append(a.pending, choices...)
 	return ready, true
+}
+
+// shownAs returns the name and topic a fact is shown with. The feed shows the
+// topic above every card of the fact, so one that names the answer of a
+// recall card gives it away: topic «Мейоз» over «Как называется деление, при
+// котором число хромосом уменьшается вдвое?». The name stands in when it does
+// not, else the last clean topic of the document, else none.
+func (a *assembler) shownAs(f modelFact) (name, topic string) {
+	leaks := func(s string) bool {
+		return slices.ContainsFunc(f.Cards, func(c modelCard) bool {
+			recall := c.Kind == cards.KindChoice || c.Kind == cards.KindInput ||
+				c.Kind == cards.KindFlip && len(strings.Fields(c.Answer)) <= maxInputWords
+			return recall && namedIn(strings.TrimRight(c.Answer, "."), s)
+		})
+	}
+	name, topic = f.Name, f.Topic
+	switch {
+	case !leaks(topic):
+		a.lastTopic = topic
+	case !leaks(name):
+		topic = name
+	case a.lastTopic != "":
+		topic = a.lastTopic
+	default:
+		topic = ""
+	}
+	if leaks(name) && topic != "" {
+		name = topic
+	}
+	return name, topic
 }
 
 // repeatsRecall reports whether q asks what an input card of f asks, or
@@ -345,6 +380,7 @@ func (a *assembler) settle(pos int, final bool) []cards.Card {
 			p.card.Options = shuffleOptions(p.card.Question, answer, options)
 		case timeUp && p.hasSiblings:
 			a.stats.DroppedVariants++
+			slog.Debug("cards: choice dropped for want of distractors", "question", p.card.Question, "options", options)
 			continue
 		case timeUp:
 			p.card.Kind = cards.KindFlip
