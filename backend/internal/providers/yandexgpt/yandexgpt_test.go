@@ -368,14 +368,15 @@ func TestConfigFromEnv(t *testing.T) {
 
 func TestConfigDefaults(t *testing.T) {
 	setYandexEnv(t)
+	t.Setenv("YC_LLM_MODEL", "")
 	t.Setenv("YC_LLM_BASE_URL", "")
 	t.Setenv("YC_LLM_MAX_TOKENS", "")
 	cfg, err := ConfigFromEnv()
 	if err != nil {
 		t.Fatalf("ConfigFromEnv() error = %v", err)
 	}
-	if cfg.BaseURL != DefaultBaseURL || cfg.MaxTokens != DefaultMaxTokens {
-		t.Errorf("config = %+v, want the default URL and token cap", cfg)
+	if cfg.Model != DefaultModel || cfg.BaseURL != DefaultBaseURL || cfg.MaxTokens != DefaultMaxTokens {
+		t.Errorf("config = %+v, want the default model, URL and token cap", cfg)
 	}
 }
 
@@ -383,7 +384,6 @@ func TestConfigErrors(t *testing.T) {
 	for _, tc := range []struct{ key, val string }{
 		{"YC_API_KEY", ""},
 		{"YC_FOLDER_ID", ""},
-		{"YC_LLM_MODEL", ""},
 		{"YC_LLM_BASE_URL", "llm.test"},
 		{"YC_LLM_MAX_TOKENS", "many"},
 		{"YC_LLM_MAX_TOKENS", "0"},

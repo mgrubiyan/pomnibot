@@ -30,6 +30,7 @@ import (
 
 // Defaults for the optional settings.
 const (
+	DefaultModel     = "yandexgpt-5.1"
 	DefaultBaseURL   = "https://ai.api.cloud.yandex.net"
 	DefaultMaxTokens = 8000
 )
@@ -63,8 +64,8 @@ func env(key string) string {
 	return strings.TrimSpace(os.Getenv(key))
 }
 
-// ConfigFromEnv reads YC_API_KEY and YC_FOLDER_ID, shared with the OCR,
-// YC_LLM_MODEL, and optionally YC_LLM_BASE_URL and YC_LLM_MAX_TOKENS.
+// ConfigFromEnv reads YC_API_KEY and YC_FOLDER_ID, shared with the OCR, and
+// optionally YC_LLM_MODEL, YC_LLM_BASE_URL and YC_LLM_MAX_TOKENS.
 func ConfigFromEnv() (Config, error) {
 	cfg := Config{
 		APIKey:   env("YC_API_KEY"),
@@ -74,10 +75,12 @@ func ConfigFromEnv() (Config, error) {
 	}
 
 	var errs []error
+	if cfg.Model == "" {
+		cfg.Model = DefaultModel
+	}
 	for _, r := range []struct{ name, val string }{
 		{"YC_API_KEY", cfg.APIKey},
 		{"YC_FOLDER_ID", cfg.FolderID},
-		{"YC_LLM_MODEL", cfg.Model},
 	} {
 		if r.val == "" {
 			errs = append(errs, fmt.Errorf("%s is required but empty", r.name))

@@ -69,7 +69,7 @@
 | `backend/cmd/server` | точка входа сервиса: HTTP-сервер, бот, миграции, автозаливка демо-данных |
 | `backend/internal/bot` | клиент MAX Bot API, long polling, приём файлов, напоминания |
 | `backend/internal/ingest` | извлечение текста: `pdftotext` для PDF с текстовым слоем, OCR для фото и сканов |
-| `backend/internal/generator` | нарезка конспекта на фрагменты и генерация карточек через GigaChat с проверкой цитат |
+| `backend/internal/generator` | нарезка конспекта на фрагменты и генерация карточек через модель (YandexGPT или GigaChat) с проверкой цитат |
 | `backend/internal/grader` | проверка печатного ответа: локальное сравнение, затем модель по смыслу |
 | `backend/internal/transport/http` | роутер, авторизация по `initData` от MAX, отдача статики |
 | `backend/internal/usecase` | бизнес-логика: наборы, лента, результаты, интервальные повторения |
@@ -155,14 +155,14 @@ cp .env.example .env
 | `MAX_API_URL` | `https://platform-api2.max.ru` | адрес MAX Bot API |
 | `MAX_INSECURE_SKIP_VERIFY` | `false` | `true` отключает проверку TLS-сертификата MAX API; только для отладки |
 
-**GigaChat**: генерация карточек, чтение фото, проверка ответов по смыслу. Если GigaChat недоступен, эти запросы берёт YandexGPT (см. ниже)
+**GigaChat**: чтение фото и сканов, в том числе рукописных; резерв для генерации карточек и проверки ответов, если YandexGPT недоступен
 
 | Переменная | .env.example | Назначение |
 |---|---|---|
 | `GIGACHAT_AUTH_KEY` | — | ключ авторизации из личного кабинета GigaChat (секрет). Вместо него можно задать пару `GIGACHAT_CLIENT_ID` + `GIGACHAT_CLIENT_SECRET` |
 | `GIGACHAT_CLIENT_ID`, `GIGACHAT_CLIENT_SECRET` | — | идентификатор и секрет клиента (ключ — это base64 от `client_id:client_secret`) |
 | `GIGACHAT_SCOPE` | `GIGACHAT_API_PERS` | тип доступа к API |
-| `GIGACHAT_MODEL` | `GigaChat-3-Ultra` | основная модель для генерации карточек |
+| `GIGACHAT_MODEL` | `GigaChat-3-Ultra` | основная модель GigaChat |
 | `GIGACHAT_FALLBACK_MODEL` | `GigaChat-2-Max` | запасная модель на случай исчерпанной квоты или отказов основной |
 | `GIGACHAT_BASE_URL` | `https://api.giga.chat/v1` | адрес API; GigaChat-3-Ultra доступна только здесь |
 | `GIGACHAT_AUTH_URL` | `https://ngw.devices.sberbank.ru:9443/api/v2/oauth` | адрес получения токена |
@@ -178,15 +178,16 @@ cp .env.example .env
 | `YC_OCR_OPERATION_URL` | `https://operation.api.cloud.yandex.net` | адрес API отслеживания асинхронных операций |
 | `YC_OCR_MODEL` | - | модель распознавания для всех страниц; в `.env.example` отсутствует, задавать только для переопределения |
 
-**YandexGPT**: резервная модель на случай недоступности GigaChat. Включается, когда задана `YC_LLM_MODEL`; ключ и каталог общие с Yandex Vision OCR. Фото YandexGPT не читает: при недоступном GigaChat их распознаёт Yandex Vision OCR
+**YandexGPT**: генерация карточек и проверка ответов по смыслу; если YandexGPT недоступен, их берёт GigaChat. Ключ и каталог общие с Yandex Vision OCR. Фото YandexGPT не читает, они идут в GigaChat, а при его недоступности — в Yandex Vision OCR. YandexGPT обслуживает 2 запроса одновременно, поэтому бот обрабатывает 2 конспекта параллельно; запросы к GigaChat идут строго по одному
 
 | Переменная | .env.example | Назначение |
 |---|---|---|
-| `YC_LLM_MODEL` | `yandexgpt-5.1` | модель (или полный URI `gpt://<каталог>/<модель>`); пустое значение отключает резерв |
+| `YC_LLM_MODEL` | `yandexgpt-5.1` | модель (или полный URI `gpt://<каталог>/<модель>`); `off` отключает YandexGPT, и всё работает на GigaChat |
 | `YC_LLM_BASE_URL` | `https://ai.api.cloud.yandex.net` | адрес API генерации текста |
 | `YC_LLM_MAX_TOKENS` | `8000` | предел длины ответа модели за один вызов |
-| `LLM_PRIMARY_TIMEOUT` | `1m` | сколько ждать GigaChat, повторы включительно, прежде чем отдать запрос резервной модели |
-| `LLM_COOLDOWN` | `10m` | сколько не слать запросы провайдеру, который недоступен |
+| `LLM_PRIMARY` | `yandexgpt` | какая модель пишет карточки первой: `yandexgpt` или `gigachat` (тогда обратно 1 конспект за раз) |
+| `LLM_PRIMARY_TIMEOUT` | `1m` | сколько ждать первую модель, повторы включительно, прежде чем отдать запрос второй |
+| `LLM_COOLDOWN` | `10m` | сколько не слать запросы модели, которая недоступна |
 
 **Напоминания о повторе**
 
@@ -238,9 +239,9 @@ cp .env.example .env
 | Сервис | Зачем | Условия для проверки |
 |---|---|---|
 | **MAX** (Bot API и платформа мини-приложений) | бот принимает конспекты и шлёт напоминания; мини-приложение открывается внутри MAX и получает от него подписанные данные пользователя (`initData`) | токен бота в `BOT_TOKEN`; для открытия мини-приложения внутри MAX — публичный HTTPS-адрес, указанный в настройках бота |
-| **GigaChat** (Сбер) | генерация карточек из конспекта, чтение фото и сканов, проверка печатного ответа по смыслу | ключ в `GIGACHAT_AUTH_KEY` (или пара `GIGACHAT_CLIENT_ID` / `GIGACHAT_CLIENT_SECRET`) с доступом к выбранной модели; сетевой доступ к `api.giga.chat` и `ngw.devices.sberbank.ru` |
+| **GigaChat** (Сбер) | чтение фото и сканов, резерв для генерации карточек и проверки ответов | ключ в `GIGACHAT_AUTH_KEY` (или пара `GIGACHAT_CLIENT_ID` / `GIGACHAT_CLIENT_SECRET`) с доступом к выбранной модели; сетевой доступ к `api.giga.chat` и `ngw.devices.sberbank.ru` |
 | **Yandex Vision OCR** | переворачивает фото и перепроверяет прочитанный GigaChat текст | `YC_API_KEY` и `YC_FOLDER_ID` сервисного аккаунта с ролью `ai.vision.user` |
-| **YandexGPT** (Yandex AI Studio) | резерв: генерирует карточки и проверяет ответы, когда GigaChat недоступен | `YC_LLM_MODEL`; тот же сервисный аккаунт с ролью `ai.languageModels.user` |
+| **YandexGPT** (Yandex AI Studio) | генерация карточек из конспекта, проверка печатного ответа по смыслу | тот же сервисный аккаунт, что у OCR, с ролью `ai.languageModels.user` |
 
 Проверить весь основной сценарий с генерацией можно в работающей версии — в боте по ссылке [в начале](#помнибот): там все ключи уже заданы.
 

@@ -35,17 +35,28 @@ type Config struct {
 	MaxInsecureSkipVerify bool
 	Notifications         bot.NotificationConfig
 	GigaChat              gigachat.Config
-	// YandexGPT is the backup model for when GigaChat is down; nil without
-	// YC_LLM_MODEL.
+	// YandexGPT is the main text model, GigaChat its backup (see LLM); nil
+	// with YC_LLM_MODEL=off.
 	YandexGPT *yandexgpt.Config
 	LLM       LLMConfig
 	OCR       yandex.Config
 }
 
-// LLMConfig sets how requests move from GigaChat to the backup model.
+// Text models that can go first, see LLMConfig.Primary.
+const (
+	PrimaryYandexGPT = "yandexgpt"
+	PrimaryGigaChat  = "gigachat"
+)
+
+// LLMConfig sets which text model goes first and when requests move to the
+// other one. Photos always go to GigaChat: YandexGPT reads text only.
 type LLMConfig struct {
-	// PrimaryTimeout bounds one GigaChat call, its retries included, so that
-	// a GigaChat that hangs leaves time for the backup. It counts as down then.
+	// Primary is PrimaryYandexGPT or PrimaryGigaChat; GigaChat without
+	// YandexGPT.
+	Primary string
+	// PrimaryTimeout bounds one call to the primary, its retries included,
+	// so that a primary that hangs leaves time for the backup. It counts as
+	// down then.
 	PrimaryTimeout time.Duration
 	// Cooldown is how long a provider that is down gets no requests.
 	Cooldown time.Duration
@@ -102,12 +113,12 @@ func Load() (Config, error) {
 	errs = append(errs, err)
 	cfg.OCR, err = yandex.ConfigFromEnv()
 	errs = append(errs, err)
-	if value("YC_LLM_MODEL", "") != "" {
-		backup, err := yandexgpt.ConfigFromEnv()
-		cfg.YandexGPT = &backup
+	if value("YC_LLM_MODEL", "") != "off" {
+		yc, err := yandexgpt.ConfigFromEnv()
+		cfg.YandexGPT = &yc
 		errs = append(errs, err)
 	}
-	cfg.LLM, err = llmFromEnv()
+	cfg.LLM, err = llmFromEnv(cfg.YandexGPT != nil)
 	errs = append(errs, err)
 	cfg.Notifications, err = notificationsFromEnv()
 	errs = append(errs, err)
@@ -130,9 +141,20 @@ func notificationsFromEnv() (bot.NotificationConfig, error) {
 	return bot.NotificationConfig{Enabled: enabled, Hour: at.Hour(), Minute: at.Minute(), Location: loc}, nil
 }
 
-func llmFromEnv() (LLMConfig, error) {
+func llmFromEnv(withYandexGPT bool) (LLMConfig, error) {
 	var cfg LLMConfig
 	var errs []error
+
+	switch primary := value("LLM_PRIMARY", ""); {
+	case primary == "" && withYandexGPT, primary == PrimaryYandexGPT && withYandexGPT:
+		cfg.Primary = PrimaryYandexGPT
+	case primary == "", primary == PrimaryGigaChat:
+		cfg.Primary = PrimaryGigaChat
+	case primary == PrimaryYandexGPT:
+		errs = append(errs, errors.New("LLM_PRIMARY = yandexgpt, but YC_LLM_MODEL = off"))
+	default:
+		errs = append(errs, fmt.Errorf("LLM_PRIMARY = %q, want yandexgpt or gigachat", primary))
+	}
 	for _, d := range []struct {
 		name, fallback string
 		dst            *time.Duration

@@ -29,14 +29,14 @@ import (
 // Run starts the application and shuts it down when ctx is cancelled.
 func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 	cardOptions := []usecase.CardServiceOption{}
-	var model providers.Provider
+	var llm models
 	if cfg.Environment == config.Prod {
 		var err error
-		model, err = newModel(cfg)
+		llm, err = newModels(cfg)
 		if err != nil {
 			return err
 		}
-		cardOptions = append(cardOptions, usecase.WithGrader(&grader.Grader{Model: model}))
+		cardOptions = append(cardOptions, usecase.WithGrader(&grader.Grader{Model: llm.text}))
 	}
 
 	if err := repository.RunMigrations(ctx, cfg.DatabaseURL); err != nil {
@@ -67,7 +67,7 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	if cfg.Environment == config.Prod {
-		if err := startBot(ctx, cfg, model, users, sets); err != nil {
+		if err := startBot(ctx, cfg, llm, users, sets); err != nil {
 			return err
 		}
 	}
@@ -82,31 +82,56 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 	return serve(ctx, server)
 }
 
-// newModel returns GigaChat, backed by YandexGPT when it is configured: the
-// generator, the grader and the photo reader share it, so they all stop
-// waiting on a GigaChat that is down at once.
-func newModel(cfg config.Config) (providers.Provider, error) {
-	primary, err := gigachat.New(cfg.GigaChat)
-	if err != nil {
-		return nil, fmt.Errorf("initialize GigaChat: %w", err)
-	}
-	if cfg.YandexGPT == nil {
-		slog.Warn("no backup model: set YC_LLM_MODEL to use YandexGPT when GigaChat is down")
-		return primary, nil
-	}
-	backup, err := yandexgpt.New(*cfg.YandexGPT)
-	if err != nil {
-		return nil, fmt.Errorf("initialize YandexGPT: %w", err)
-	}
-	slog.Info("backup model enabled", "model", cfg.YandexGPT.Model,
-		"primary_timeout", cfg.LLM.PrimaryTimeout, "cooldown", cfg.LLM.Cooldown)
-	return providers.NewFallback(cfg.LLM.Cooldown,
-		providers.Backend{Name: "gigachat", Provider: primary, Timeout: cfg.LLM.PrimaryTimeout},
-		providers.Backend{Name: "yandexgpt", Provider: backup},
-	), nil
+// models are the model clients the app shares.
+type models struct {
+	text   providers.Provider // writes cards and grades answers
+	vision providers.Provider // reads photos of notes
+	slots  int                // documents turned into cards at once
 }
 
-func startBot(ctx context.Context, cfg config.Config, model providers.Provider, users usecase.UserService, sets usecase.SetService) error {
+// yandexGPTSlots is how many requests YandexGPT serves at once without a
+// subscription.
+const yandexGPTSlots = 2
+
+// newModels returns YandexGPT backed by GigaChat for text, or the other way
+// round with LLM_PRIMARY=gigachat. Photos go to GigaChat first either way,
+// as YandexGPT reads text only: when GigaChat is down, YandexGPT turns a
+// photo down at once and the OCR reads it.
+func newModels(cfg config.Config) (models, error) {
+	giga, err := gigachat.New(cfg.GigaChat)
+	if err != nil {
+		return models{}, fmt.Errorf("initialize GigaChat: %w", err)
+	}
+	if cfg.YandexGPT == nil {
+		slog.Warn("YandexGPT is off: GigaChat alone, no backup when it is down")
+		return models{text: giga, vision: giga, slots: 1}, nil
+	}
+	yc, err := yandexgpt.New(*cfg.YandexGPT)
+	if err != nil {
+		return models{}, fmt.Errorf("initialize YandexGPT: %w", err)
+	}
+	// Photos of two documents, or a photo and text that fell back, would
+	// reach GigaChat at once; its plan answers the second with 429.
+	gigaOne := providers.Limit(giga, 1)
+
+	gigaFirst := providers.NewFallback(cfg.LLM.Cooldown,
+		providers.Backend{Name: "gigachat", Provider: gigaOne, Timeout: cfg.LLM.PrimaryTimeout},
+		providers.Backend{Name: "yandexgpt", Provider: yc},
+	)
+	m := models{text: gigaFirst, vision: gigaFirst, slots: 1}
+	if cfg.LLM.Primary == config.PrimaryYandexGPT {
+		m.text = providers.NewFallback(cfg.LLM.Cooldown,
+			providers.Backend{Name: "yandexgpt", Provider: yc, Timeout: cfg.LLM.PrimaryTimeout},
+			providers.Backend{Name: "gigachat", Provider: gigaOne},
+		)
+		m.slots = yandexGPTSlots
+	}
+	slog.Info("text models", "primary", cfg.LLM.Primary, "yandexgpt", cfg.YandexGPT.Model,
+		"primary_timeout", cfg.LLM.PrimaryTimeout, "cooldown", cfg.LLM.Cooldown, "documents_at_once", m.slots)
+	return m, nil
+}
+
+func startBot(ctx context.Context, cfg config.Config, llm models, users usecase.UserService, sets usecase.SetService) error {
 	client, err := bot.NewClient(cfg.BotToken, cfg.MaxAPIURL, cfg.MaxInsecureSkipVerify)
 	if err != nil {
 		return fmt.Errorf("initialize MAX client: %w", err)
@@ -115,15 +140,16 @@ func startBot(ctx context.Context, cfg config.Config, model providers.Provider, 
 	if err != nil {
 		return fmt.Errorf("initialize OCR: %w", err)
 	}
-	extractor, err := ingest.NewExtractor(&ingest.VisionOCR{Model: model, Checker: ocr}, ingest.Options{})
+	extractor, err := ingest.NewExtractor(&ingest.VisionOCR{Model: llm.vision, Checker: ocr}, ingest.Options{})
 	if err != nil {
 		return fmt.Errorf("initialize extractor: %w", err)
 	}
-	cardGenerator := bot.NewGeneratorAdapter(generator.NewGenerator(model, generator.Options{}))
+	cardGenerator := bot.NewGeneratorAdapter(generator.NewGenerator(llm.text, generator.Options{}))
 	runner, err := bot.NewBot(client, cfg.AppURL, users, sets, extractor, cardGenerator, cfg.Notifications)
 	if err != nil {
 		return fmt.Errorf("initialize MAX bot: %w", err)
 	}
+	runner.SetGenerationSlots(llm.slots)
 	if err := runner.Start(ctx); err != nil {
 		return fmt.Errorf("start MAX bot: %w", err)
 	}
