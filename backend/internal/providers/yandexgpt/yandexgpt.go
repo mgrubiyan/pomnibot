@@ -1,9 +1,8 @@
 // Package yandexgpt is a providers.Provider for YandexGPT on the Yandex AI
 // Studio Text Generation API, on plain net/http.
 //
-// It is the backup to GigaChat: another company and another data center, in
-// the same Yandex Cloud folder as the OCR. It reads text only: a request with
-// an image fails at once, so the caller can turn to its OCR.
+// cardsgen compares it with the app's models on the same notes. It reads
+// text only: a request with an image fails at once.
 package yandexgpt
 
 import (
@@ -65,12 +64,12 @@ func env(key string) string {
 }
 
 // ConfigFromEnv reads YC_API_KEY and YC_FOLDER_ID, shared with the OCR, and
-// optionally YC_LLM_MODEL, YC_LLM_BASE_URL and YC_LLM_MAX_TOKENS.
+// optionally YC_YANDEXGPT_MODEL, YC_LLM_BASE_URL and YC_LLM_MAX_TOKENS.
 func ConfigFromEnv() (Config, error) {
 	cfg := Config{
 		APIKey:   env("YC_API_KEY"),
 		FolderID: env("YC_FOLDER_ID"),
-		Model:    env("YC_LLM_MODEL"),
+		Model:    env("YC_YANDEXGPT_MODEL"),
 		BaseURL:  strings.TrimSuffix(env("YC_LLM_BASE_URL"), "/"),
 	}
 

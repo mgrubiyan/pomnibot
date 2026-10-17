@@ -10,9 +10,10 @@
 // -ocr yandex reads them with Yandex alone.
 //
 // -provider yandexgpt writes the cards with YandexGPT instead, to compare it
-// with GigaChat on the same notes (YC_API_KEY, YC_FOLDER_ID, YC_LLM_MODEL).
-// -vision-provider qwen reads the photos with Qwen on Yandex AI Studio
-// (YC_VISION_MODEL) instead of GigaChat, still checked by Yandex OCR.
+// with GigaChat on the same notes (YC_API_KEY, YC_FOLDER_ID,
+// YC_YANDEXGPT_MODEL). -vision-provider qwen reads the photos with the app's
+// AI Studio model (YC_LLM_MODEL, Qwen by default) instead of GigaChat, still
+// checked by Yandex OCR.
 //
 //	task cardsgen -- notes.txt
 //	task cardsgen -- -model GigaChat-2-Max -chunk 2000 -limit 30 -json lecture.pdf page2.pdf > run.json
@@ -60,7 +61,7 @@ func run() error {
 		file        = flag.String("file", "", "file with the notes; more files can follow as arguments")
 		title       = flag.String("title", "", "document title for sourceRef (default: first file name)")
 		provider    = flag.String("provider", "gigachat", "who writes the cards: gigachat or yandexgpt, the backup model")
-		model       = flag.String("model", "", "model, overrides GIGACHAT_MODEL or YC_LLM_MODEL")
+		model       = flag.String("model", "", "model, overrides GIGACHAT_MODEL or YC_YANDEXGPT_MODEL")
 		chunk       = flag.Int("chunk", generator.DefaultChunkSize, "fragment size in characters")
 		overlap     = flag.Int("overlap", generator.DefaultChunkOverlap, "fragment overlap in characters, -1 for none")
 		limit       = flag.Int("limit", 0, "max facts per document, 0 for no limit")

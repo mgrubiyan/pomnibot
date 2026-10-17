@@ -2,8 +2,8 @@
 // Studio, such as Qwen, on its OpenAI-compatible chat completions API, plain
 // net/http.
 //
-// Unlike YandexGPT, Qwen3.6 reads images: it is tried on photos of
-// handwritten notes, in the same Yandex Cloud folder as the OCR.
+// Qwen3.6 writes the cards, grades answers and reads photos of handwritten
+// notes, in the same Yandex Cloud folder as the OCR.
 package aistudio
 
 import (
@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -32,7 +33,7 @@ import (
 const (
 	DefaultModel     = "qwen3.6-35b-a3b"
 	DefaultBaseURL   = "https://ai.api.cloud.yandex.net"
-	DefaultMaxTokens = 4000
+	DefaultMaxTokens = 8000 // a fragment's cards take up to this
 )
 
 const (
@@ -61,12 +62,12 @@ func env(key string) string {
 }
 
 // ConfigFromEnv reads YC_API_KEY and YC_FOLDER_ID, shared with the OCR, and
-// optionally YC_VISION_MODEL and YC_LLM_BASE_URL.
+// optionally YC_LLM_MODEL, YC_LLM_BASE_URL and YC_LLM_MAX_TOKENS.
 func ConfigFromEnv() (Config, error) {
 	cfg := Config{
 		APIKey:    env("YC_API_KEY"),
 		FolderID:  env("YC_FOLDER_ID"),
-		Model:     env("YC_VISION_MODEL"),
+		Model:     env("YC_LLM_MODEL"),
 		BaseURL:   strings.TrimSuffix(env("YC_LLM_BASE_URL"), "/"),
 		MaxTokens: DefaultMaxTokens,
 	}
@@ -87,6 +88,13 @@ func ConfigFromEnv() (Config, error) {
 		cfg.BaseURL = DefaultBaseURL
 	} else if u, err := url.Parse(cfg.BaseURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		errs = append(errs, fmt.Errorf("YC_LLM_BASE_URL = %q, want a valid http(s) URL", cfg.BaseURL))
+	}
+	if v := env("YC_LLM_MAX_TOKENS"); v != "" {
+		if n, err := strconv.Atoi(v); err != nil || n <= 0 {
+			errs = append(errs, fmt.Errorf("YC_LLM_MAX_TOKENS = %q, want a positive number", v))
+		} else {
+			cfg.MaxTokens = n
+		}
 	}
 	if len(errs) > 0 {
 		return Config{}, fmt.Errorf("aistudio config: %w", errors.Join(errs...))
