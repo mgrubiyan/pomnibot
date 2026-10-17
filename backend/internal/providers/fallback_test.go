@@ -298,3 +298,43 @@ func TestFallbackIsSafeForConcurrentUse(t *testing.T) {
 		t.Errorf("concurrent call: %v", err)
 	}
 }
+
+// A backend whose timeout fires while the request still waits for a slot is
+// busy with our own requests, not down: the next backend takes this one, and
+// the busy one stays first in line.
+func TestFallbackWaitingForASlotIsNotUnavailable(t *testing.T) {
+	release := make(chan struct{})
+	slow := &fakeProvider{reply: func(_ context.Context, call int) (Response, error) {
+		if call == 1 {
+			<-release
+		}
+		return answer("GigaChat-3-Ultra")
+	}}
+	primary := Limit(slow, 1)
+	secondary := answers("yandexgpt")
+	f, _ := newTestFallback(
+		Backend{Name: "gigachat", Provider: primary, Timeout: 20 * time.Millisecond},
+		Backend{Name: "yandexgpt", Provider: secondary},
+	)
+
+	busy := make(chan struct{})
+	go func() {
+		defer close(busy)
+		_, _ = primary.Complete(context.Background(), testRequest())
+	}()
+	for slow.callCount() == 0 {
+		time.Sleep(time.Millisecond)
+	}
+
+	resp, err := f.Complete(context.Background(), testRequest())
+	if err != nil || resp.Model != "yandexgpt" {
+		t.Fatalf("got %+v, %v; want the secondary's answer", resp, err)
+	}
+	close(release)
+	<-busy
+
+	resp, err = f.Complete(context.Background(), testRequest())
+	if err != nil || resp.Model != "GigaChat-3-Ultra" {
+		t.Errorf("next call: got %+v, %v; want the primary, not cooled down", resp, err)
+	}
+}

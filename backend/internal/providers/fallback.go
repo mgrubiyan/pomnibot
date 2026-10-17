@@ -79,7 +79,8 @@ func (f *Fallback) Complete(ctx context.Context, req Request) (Response, error) 
 }
 
 // call runs one backend under its own timeout. A timeout that fires before
-// the caller's deadline means the backend hangs: it counts as unavailable.
+// the caller's deadline means the backend hangs: it counts as unavailable,
+// unless the request was still waiting for a slot (ErrBusy).
 func (f *Fallback) call(ctx context.Context, b Backend, req Request) (Response, error) {
 	if b.Timeout <= 0 {
 		return b.Provider.Complete(ctx, req)
@@ -87,7 +88,7 @@ func (f *Fallback) call(ctx context.Context, b Backend, req Request) (Response, 
 	callCtx, cancel := context.WithTimeout(ctx, b.Timeout)
 	defer cancel()
 	resp, err := b.Provider.Complete(callCtx, req)
-	if err != nil && ctx.Err() == nil && errors.Is(callCtx.Err(), context.DeadlineExceeded) {
+	if err != nil && ctx.Err() == nil && errors.Is(callCtx.Err(), context.DeadlineExceeded) && !errors.Is(err, ErrBusy) {
 		err = fmt.Errorf("%s: no answer in %s: %w (%w)", b.Name, b.Timeout, ErrUnavailable, err)
 	}
 	return resp, err
