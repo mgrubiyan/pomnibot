@@ -282,8 +282,9 @@ jobs:
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST || secrets.SSH_HOST }}
-          username: ${{ secrets.VPS_USER || vars.VPS_USER || secrets.SSH_USER || vars.SSH_USER || 'deployer' }}
-          key: ${{ secrets.VPS_SSH_KEY || secrets.SSH_KEY }}
+          username: ${{ secrets.VPS_USER || vars.VPS_USER || secrets.VPS_USERNAME || vars.VPS_USERNAME || secrets.SSH_USER || vars.SSH_USER || secrets.SSH_USERNAME || vars.SSH_USERNAME || 'deployer' }}
+          key: ${{ secrets.VPS_SSH_KEY || secrets.VPS_SSH_PRIVATE_KEY || secrets.SSH_PRIVATE_KEY || secrets.SSH_KEY }}
+          passphrase: ${{ secrets.VPS_SSH_PASSPHRASE || secrets.SSH_PASSPHRASE }}
           port: ${{ vars.VPS_PORT || secrets.VPS_PORT || vars.SSH_PORT || secrets.SSH_PORT || 22 }}
           source: 'docker-compose.yaml,docker-compose.prod.yaml,.env'
           target: ${{ secrets.DEPLOY_PATH || vars.DEPLOY_PATH || '/home/deployer/pomnibot' }}
@@ -292,8 +293,9 @@ jobs:
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST || secrets.SSH_HOST }}
-          username: ${{ secrets.VPS_USER || vars.VPS_USER || secrets.SSH_USER || vars.SSH_USER || 'deployer' }}
-          key: ${{ secrets.VPS_SSH_KEY || secrets.SSH_KEY }}
+          username: ${{ secrets.VPS_USER || vars.VPS_USER || secrets.VPS_USERNAME || vars.VPS_USERNAME || secrets.SSH_USER || vars.SSH_USER || secrets.SSH_USERNAME || vars.SSH_USERNAME || 'deployer' }}
+          key: ${{ secrets.VPS_SSH_KEY || secrets.VPS_SSH_PRIVATE_KEY || secrets.SSH_PRIVATE_KEY || secrets.SSH_KEY }}
+          passphrase: ${{ secrets.VPS_SSH_PASSPHRASE || secrets.SSH_PASSPHRASE }}
           port: ${{ vars.VPS_PORT || secrets.VPS_PORT || vars.SSH_PORT || secrets.SSH_PORT || 22 }}
           script: |
             set -e
