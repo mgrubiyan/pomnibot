@@ -61,7 +61,7 @@ func setProdEnv(t *testing.T) {
 	for key, value := range values {
 		t.Setenv(key, value)
 	}
-	for _, key := range []string{"YC_LLM_MODEL", "YC_LLM_BASE_URL", "YC_LLM_MAX_TOKENS", "LLM_PRIMARY", "LLM_PRIMARY_TIMEOUT", "LLM_COOLDOWN"} {
+	for _, key := range []string{"YC_LLM_MODEL", "YC_LLM_BASE_URL", "YC_LLM_MAX_TOKENS", "YC_VISION_MODEL", "LLM_PRIMARY", "LLM_PRIMARY_TIMEOUT", "LLM_COOLDOWN"} {
 		t.Setenv(key, "")
 	}
 }
@@ -157,5 +157,36 @@ func TestLoadProdRejectsYandexGPTFirstWhenOff(t *testing.T) {
 	t.Setenv("LLM_PRIMARY", "yandexgpt")
 	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "LLM_PRIMARY") {
 		t.Errorf("Load() error = %v, want one naming LLM_PRIMARY", err)
+	}
+}
+
+// Qwen reads photos first by default: on handwritten notes it reads more
+// than GigaChat, and its key and folder are the OCR's.
+func TestLoadProdDefaultsToQwenForPhotos(t *testing.T) {
+	setProdEnv(t)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Vision == nil || cfg.Vision.Model != "qwen3.6-35b-a3b" || cfg.Vision.APIKey != "test-key" ||
+		cfg.Vision.FolderID != "test-folder" {
+		t.Errorf("Vision = %+v, want Qwen with the shared Yandex Cloud key and folder", cfg.Vision)
+	}
+}
+
+func TestLoadProdPhotoModelSettings(t *testing.T) {
+	setProdEnv(t)
+	t.Setenv("YC_VISION_MODEL", "off")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Vision != nil {
+		t.Errorf("Vision = %+v, want nil: photos to GigaChat", cfg.Vision)
+	}
+
+	t.Setenv("YC_VISION_MODEL", "gemma-3-27b-it")
+	if cfg, err = Load(); err != nil || cfg.Vision == nil || cfg.Vision.Model != "gemma-3-27b-it" {
+		t.Errorf("Load() = %+v, %v; want the given model", cfg.Vision, err)
 	}
 }

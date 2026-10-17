@@ -18,10 +18,10 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
-// VisionOCR reads pages with a language model that sees images, GigaChat in
-// practice. On handwriting and formulas it reads far more than a classic OCR,
-// but where it cannot make a word out it writes a plausible one, and on a
-// sideways photo it makes up a whole page.
+// VisionOCR reads pages with a language model that sees images, Qwen or
+// GigaChat in practice. On handwriting and formulas it reads far more than a
+// classic OCR, but where it cannot make a word out it writes a plausible one,
+// and on a sideways photo it makes up a whole page.
 //
 // So a Checker, a classic OCR such as Yandex, reads the same page first: it
 // tells how the page is rotated, and lines of the model's reading whose words

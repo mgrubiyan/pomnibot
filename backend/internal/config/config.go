@@ -11,6 +11,7 @@ import (
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/bot"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest/yandex"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers/aistudio"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/yandexgpt"
 )
@@ -38,8 +39,11 @@ type Config struct {
 	// YandexGPT is the main text model, GigaChat its backup (see LLM); nil
 	// with YC_LLM_MODEL=off.
 	YandexGPT *yandexgpt.Config
-	LLM       LLMConfig
-	OCR       yandex.Config
+	// Vision reads photos of notes first, GigaChat then; nil with
+	// YC_VISION_MODEL=off.
+	Vision *aistudio.Config
+	LLM    LLMConfig
+	OCR    yandex.Config
 }
 
 // Text models that can go first, see LLMConfig.Primary.
@@ -49,7 +53,7 @@ const (
 )
 
 // LLMConfig sets which text model goes first and when requests move to the
-// other one. Photos always go to GigaChat: YandexGPT reads text only.
+// other one.
 type LLMConfig struct {
 	// Primary is PrimaryYandexGPT or PrimaryGigaChat; GigaChat without
 	// YandexGPT.
@@ -116,6 +120,11 @@ func Load() (Config, error) {
 	if value("YC_LLM_MODEL", "") != "off" {
 		yc, err := yandexgpt.ConfigFromEnv()
 		cfg.YandexGPT = &yc
+		errs = append(errs, err)
+	}
+	if value("YC_VISION_MODEL", "") != "off" {
+		vision, err := aistudio.ConfigFromEnv()
+		cfg.Vision = &vision
 		errs = append(errs, err)
 	}
 	cfg.LLM, err = llmFromEnv(cfg.YandexGPT != nil)

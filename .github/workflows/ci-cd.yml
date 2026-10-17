@@ -195,6 +195,7 @@ jobs:
           YC_OCR_BASE_URL: ${{ vars.YC_OCR_BASE_URL || secrets.YC_OCR_BASE_URL }}
           YC_OCR_OPERATION_URL: ${{ vars.YC_OCR_OPERATION_URL || secrets.YC_OCR_OPERATION_URL }}
           YC_LLM_MODEL: ${{ vars.YC_LLM_MODEL || secrets.YC_LLM_MODEL }}
+          YC_VISION_MODEL: ${{ vars.YC_VISION_MODEL || secrets.YC_VISION_MODEL }}
           YC_LLM_BASE_URL: ${{ vars.YC_LLM_BASE_URL || secrets.YC_LLM_BASE_URL }}
           YC_LLM_MAX_TOKENS: ${{ vars.YC_LLM_MAX_TOKENS || secrets.YC_LLM_MAX_TOKENS }}
           LLM_PRIMARY: ${{ vars.LLM_PRIMARY || secrets.LLM_PRIMARY }}
@@ -239,6 +240,7 @@ jobs:
             YC_OCR_BASE_URL
             YC_OCR_OPERATION_URL
             YC_LLM_MODEL
+            YC_VISION_MODEL
             YC_LLM_BASE_URL
             YC_LLM_MAX_TOKENS
             LLM_PRIMARY
