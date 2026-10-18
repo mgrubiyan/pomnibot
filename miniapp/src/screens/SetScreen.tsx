@@ -5,7 +5,7 @@ import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusScreen } from '../components/StatusScreen';
-import { IconOffline, IconShare, IconTrash } from '../components/Icons';
+import { IconCheck, IconOffline, IconShare, IconTrash } from '../components/Icons';
 import { loadCards, loadSet } from '../utils/sets';
 import { cardsLabel } from '../utils/plural';
 import { formatAuthorName } from '../utils/user';
@@ -175,16 +175,6 @@ export function SetScreen({
                     />
                 </CellList>
 
-                <Button
-                    size="medium"
-                    variant="secondary"
-                    stretched
-                    iconBefore={<IconShare size={20} />}
-                    onClick={() => onShare(set.id, set.title)}
-                >
-                    Поделиться
-                </Button>
-
             </Flex>
 
             <Flex direction="column" align="stretch" gap={8}>
@@ -222,10 +212,25 @@ export function SetScreen({
                                 Повторить {cardsLabel(dueCount)}
                             </Button>
                         ) : (
-                            <Button size="medium" variant="secondary" stretched disabled>
-                                Все карточки повторены
-                            </Button>
+                            // A status, not a button: there is nothing to press.
+                            <Flex align="center" justify="center" gap={8} className={s.done}>
+                                <IconCheck size={20} tone="positive" />
+                                <Typography.Text variant="body" color="secondary">
+                                    Все карточки повторены
+                                </Typography.Text>
+                            </Flex>
                         )}
+
+                        {/* With nothing left to review, sharing is what is left to do. */}
+                        <Button
+                            size="medium"
+                            variant={hasDue ? 'secondary' : 'primary'}
+                            stretched
+                            iconBefore={<IconShare size={20} />}
+                            onClick={() => onShare(set.id, set.title)}
+                        >
+                            Поделиться
+                        </Button>
 
                         <Button
                             size="small"

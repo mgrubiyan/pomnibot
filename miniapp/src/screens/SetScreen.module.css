@@ -1,4 +1,5 @@
-/* Set screen. The middle scrolls, the header and the button stay put. */
+/* Set screen: what the set holds at the top, what can be done at the bottom.
+   The middle scrolls, the header and the buttons stay put. */
 
 .body {
     flex: 1;
@@ -37,4 +38,9 @@
 
 .confirmText {
     text-wrap: pretty;
+}
+
+/* The same height as the button it stands in for. */
+.done {
+    min-height: 52px;
 }
