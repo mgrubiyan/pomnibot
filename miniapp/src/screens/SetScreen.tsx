@@ -5,10 +5,13 @@ import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusScreen } from '../components/StatusScreen';
+import { WhyItWorks } from '../components/WhyItWorks';
 import { IconCheck, IconOffline, IconShare, IconTrash } from '../components/Icons';
 import { loadCards, loadSet } from '../utils/sets';
 import { cardsLabel } from '../utils/plural';
 import { formatAuthorName } from '../utils/user';
+import { cx } from '../utils/cx';
+import { useMoreBelow } from '../utils/useMoreBelow';
 import s from './SetScreen.module.css';
 
 type Status = 'loading' | 'error' | 'ready';
@@ -50,6 +53,7 @@ export function SetScreen({
     const [feedCards, setFeedCards] = useState<Card[]>([]);
     const [attempt, setAttempt] = useState(0);
     const [confirmingRemove, setConfirmingRemove] = useState(false);
+    const [bodyRef, moreBelow] = useMoreBelow<HTMLDivElement>(status === 'ready');
 
     useEffect(() => {
         let cancelled = false;
@@ -129,7 +133,7 @@ export function SetScreen({
                 onBack={onBack}
             />
 
-            <Flex direction="column" align="stretch" gap={16} className={s.body}>
+            <Flex ref={bodyRef} direction="column" align="stretch" gap={16} className={cx(s.body, moreBelow && s.moreBelow)}>
                 <Flex direction="column" align="stretch" gap={12} className={s.ratingCard}>
                     <Flex justify="space-between" align="baseline">
                         <Typography.Text variant="body" color="secondary">
@@ -175,6 +179,8 @@ export function SetScreen({
                     />
                 </CellList>
 
+                {/* Moved here from home: read once, by someone about to review. */}
+                <WhyItWorks />
             </Flex>
 
             <Flex direction="column" align="stretch" gap={8}>
