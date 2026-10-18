@@ -1,14 +1,6 @@
 /* Set code entry screen. There is no mockup — the composition follows
    the other screens: header, content in the middle, button at the bottom. */
 
-.header {
-    padding: 8px 0 0;
-}
-
-.title {
-    margin: 0;
-}
-
 .body {
     flex: 1;
     min-height: 0;
