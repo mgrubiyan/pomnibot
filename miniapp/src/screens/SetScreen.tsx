@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Button, CellList, CellSimple, Flex, IconButton, Spinner, Typography } from '@maxhub/max-ui';
+import { Button, CellList, CellSimple, Flex, Spinner, Typography } from '@maxhub/max-ui';
 import type { Card, CardSet, User } from '../types';
 import { api } from '../api';
 import { Screen } from '../components/Screen';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusScreen } from '../components/StatusScreen';
-import { IconChevronLeft, IconOffline, IconShare, IconTrash } from '../components/Icons';
+import { IconOffline, IconShare, IconTrash } from '../components/Icons';
 import { loadCards, loadSet } from '../utils/sets';
 import { cardsLabel } from '../utils/plural';
 import { formatAuthorName } from '../utils/user';
@@ -118,21 +119,15 @@ export function SetScreen({
 
     return (
         <Screen>
-            <Flex align="center" gap={8} className={s.header}>
-                <IconButton size="small" variant="ghost" aria-label="Назад" onClick={onBack}>
-                    <IconChevronLeft size={20} />
-                </IconButton>
-                <Flex direction="column" align="stretch" gap={2} className={s.headerText}>
-                    <Typography.Text variant="subheader" asChild>
-                        <h1 className={s.title}>{set.title}</h1>
-                    </Typography.Text>
-                    <Typography.Text variant="description" color="secondary">
-                        {cardsLabel(cards.length)}
-                        {hasDue ? ` · ${dueCount} на повтор` : ''}
-                        {shared && set.author ? ` · автор: ${formatAuthorName(set.author)}` : ''}
-                    </Typography.Text>
-                </Flex>
-            </Flex>
+            <ScreenHeader
+                title={set.title}
+                subtitle={<>
+                    {cardsLabel(cards.length)}
+                    {hasDue ? ` · ${dueCount} на повтор` : ''}
+                    {shared && set.author ? ` · автор: ${formatAuthorName(set.author)}` : ''}
+                </>}
+                onBack={onBack}
+            />
 
             <Flex direction="column" align="stretch" gap={16} className={s.body}>
                 <Flex direction="column" align="stretch" gap={12} className={s.ratingCard}>

@@ -3,19 +3,15 @@ import { Button, Flex, IconButton, Input, Radio, Typography } from '@maxhub/max-
 import type { Card, CardKind, TableItem, TableLayout } from '../types';
 import { AutoTextarea } from '../components/AutoTextarea';
 import { Screen } from '../components/Screen';
-import { IconChevronLeft, IconCross, IconDoc, IconPlus, IconTrash } from '../components/Icons';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { CARD_KINDS } from '../utils/kinds';
+import { IconCross, IconDoc, IconPlus, IconTrash } from '../components/Icons';
 import type { CardPatch } from '../utils/cards';
 import { cx } from '../utils/cx';
 import { sourceRefLabel } from '../utils/source';
 import s from './CardEdit.module.css';
 
-const KIND_OPTIONS: { value: CardKind; label: string }[] = [
-    { value: 'choice', label: 'Выбор ответа (Тест)' },
-    { value: 'boolean', label: 'Верно / Неверно' },
-    { value: 'input', label: 'Ввод текста' },
-    { value: 'flip', label: 'Флип-карточка' },
-    { value: 'table', label: 'Таблица (сортировка)' },
-];
+const KIND_OPTIONS = CARD_KINDS.map(({ kind, label }) => ({ value: kind, label }));
 
 export interface CardFormProps {
     card?: Partial<Card>;
@@ -238,19 +234,11 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
     return (
         <Screen aria-busy={saving}>
             <fieldset disabled={saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: 'contents' }}>
-                <Flex align="center" gap={8} className={s.header}>
-                    <IconButton size="small" variant="ghost" aria-label="Назад" onClick={() => { if (!savingRef.current) { if (creationKind) onBack(); else leave(onBack); } }}>
-                        <IconChevronLeft size={20} />
-                    </IconButton>
-                    <Flex direction="column" align="stretch" gap={2}>
-                        <Typography.Text variant="subheader" asChild>
-                            <h1 className={s.title}>{creationKind ? 'Создать карточку' : 'Исправить карточку'}</h1>
-                        </Typography.Text>
-                        <Typography.Text variant="description" color="secondary">
-                            {setTitle}
-                        </Typography.Text>
-                    </Flex>
-                </Flex>
+                <ScreenHeader
+                    title={creationKind ? 'Создать карточку' : 'Исправить карточку'}
+                    subtitle={setTitle}
+                    onBack={() => { if (!savingRef.current) { if (creationKind) onBack(); else leave(onBack); } }}
+                />
 
                 <Flex direction="column" align="stretch" gap={16} className={s.form}>
                     {/* Card kind Combobox */}

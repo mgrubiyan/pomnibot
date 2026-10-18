@@ -1,18 +1,5 @@
 /* Set screen. The middle scrolls, the header and the button stay put. */
 
-.header {
-    padding: 8px 0 0;
-}
-
-.headerText {
-    min-width: 0;
-}
-
-.title {
-    margin: 0;
-    overflow-wrap: anywhere;
-}
-
 .body {
     flex: 1;
     min-height: 0;
@@ -47,7 +34,6 @@
     padding-left: 0;
     padding-right: 0;
 }
-
 
 .confirmText {
     text-wrap: pretty;

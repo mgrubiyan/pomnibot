@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Button, CellList, CellSimple, Flex, IconButton, Spinner, Typography } from '@maxhub/max-ui';
+import { Button, CellList, CellSimple, Flex, Spinner, Typography } from '@maxhub/max-ui';
 import type { Card, CardSet, User } from '../types';
 import { Screen } from '../components/Screen';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusScreen } from '../components/StatusScreen';
-import { IconChevronLeft, IconOffline } from '../components/Icons';
+import { IconOffline } from '../components/Icons';
 import { loadCards, loadSet } from '../utils/sets';
 import s from './SetCards.module.css';
 
@@ -89,19 +90,7 @@ export function SetCards({ setId, currentUser, toast, onBack, onAddCard, onOpenC
 
     return (
         <Screen>
-            <Flex align="center" gap={8} className={s.header}>
-                <IconButton size="small" variant="ghost" aria-label="Назад" onClick={onBack}>
-                    <IconChevronLeft size={20} />
-                </IconButton>
-                <Flex direction="column" align="stretch" gap={2} className={s.headerText}>
-                    <Typography.Text variant="subheader" asChild>
-                        <h1 className={s.title}>Карточки · {cards.length}</h1>
-                    </Typography.Text>
-                    <Typography.Text variant="description" color="secondary" className={s.setTitle}>
-                        {set.title}
-                    </Typography.Text>
-                </Flex>
-            </Flex>
+            <ScreenHeader title={`Карточки · ${cards.length}`} subtitle={set.title} onBack={onBack} />
 
             <Flex direction="column" align="stretch" gap={8} className={s.body}>
                 {isOwner ? (

@@ -6,15 +6,10 @@ import CardForm from './CardForm';
 import type { CardKind } from '../types';
 import type { CardPatch } from '../utils/cards';
 import { api } from '../api';
+import { CARD_KINDS } from '../utils/kinds';
 import s from './ManualCreate.module.css';
 
-const kinds: { kind: CardKind; label: string; hint: string }[] = [
-    { kind: 'flip', label: 'Флип-карточка', hint: 'Вопрос на лицевой стороне, ответ на обороте' },
-    { kind: 'choice', label: 'Выбор ответа', hint: 'Один верный вариант среди нескольких' },
-    { kind: 'boolean', label: 'Верно / Неверно', hint: 'Утверждение, которое нужно оценить' },
-    { kind: 'input', label: 'Ввод текста', hint: 'Ответ вписывают словом или числом' },
-    { kind: 'table', label: 'Таблица', hint: 'Понятия раскладывают по колонкам' },
-];
+const kinds = CARD_KINDS;
 
 export default function ManualCreate({ setId: initialSetId, setTitle: initialTitle = '', onExit, onDone }: {
     setId?: string; setTitle?: string; onExit: () => void; onDone: (setId: string) => void;
