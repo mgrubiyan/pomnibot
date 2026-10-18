@@ -8,7 +8,6 @@ import { CARD_KINDS } from '../utils/kinds';
 import { IconCross, IconDoc, IconPlus, IconTrash } from '../components/Icons';
 import type { CardPatch } from '../utils/cards';
 import { cx } from '../utils/cx';
-import { sourceRefLabel } from '../utils/source';
 import s from './CardEdit.module.css';
 
 const KIND_OPTIONS = CARD_KINDS.map(({ kind, label }) => ({ value: kind, label }));
@@ -512,7 +511,7 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                                             <IconDoc size={14} tone="muted" className={s.sourceIcon} />
                                             <span>
                                                 Источник
-                                                {card.sourceRef ? ` · ${sourceRefLabel(card.sourceRef)}` : ''}
+                                                {card.sourceRef ? ` · ${card.sourceRef}` : ''}
                                             </span>
                                         </Flex>
                                     </figcaption>

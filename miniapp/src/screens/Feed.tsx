@@ -15,7 +15,6 @@ import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
 import { Result } from './Result';
 import { cx } from '../utils/cx';
-import { sourceRefLabel } from '../utils/source';
 import {
     IconCheck,
     IconChevronLeft,
@@ -739,7 +738,7 @@ export function Feed({
                                             <IconDoc size={14} tone="muted" className={s.sourceIcon} />
                                             <span>
                                                 Из вашего конспекта
-                                                {card.sourceRef ? ` · ${sourceRefLabel(card.sourceRef)}` : ''}
+                                                {card.sourceRef ? ` · ${card.sourceRef}` : ''}
                                             </span>
                                         </Flex>
                                     </figcaption>
