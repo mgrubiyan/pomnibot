@@ -133,7 +133,7 @@ export function Share({ setId, setTitle: initialTitle, cardsCount: initialCardsC
                 </IconButton>
             </Flex>
 
-            <Flex direction="column" justify="center" className={s.body}>
+            <Flex direction="column" justify="center" gap={12} className={s.body}>
                 <Flex direction="column" align="center" gap={8} className={s.codeCard}>
                     <Typography.Text variant="body" color="secondary">
                         Код набора
@@ -145,6 +145,9 @@ export function Share({ setId, setTitle: initialTitle, cardsCount: initialCardsC
                         {title} · {cardsLabel(cardsCount)}
                     </Typography.Text>
                 </Flex>
+                <Typography.Text variant="description" color="secondary" className={s.hint}>
+                    Отправьте приглашение в чат группы. Одногруппники введут код на главном экране и будут учить тот же набор.
+                </Typography.Text>
             </Flex>
 
             <Flex direction="column" align="stretch">

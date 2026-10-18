@@ -32,3 +32,9 @@
 .meta {
     overflow-wrap: anywhere;
 }
+
+.hint {
+    padding: 0 8px;
+    text-align: center;
+    text-wrap: pretty;
+}
