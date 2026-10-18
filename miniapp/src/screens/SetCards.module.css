@@ -35,11 +35,12 @@
 }
 
 .cardTitle {
-    /* A long question is ellipsized onto a single line. */
-    display: block;
+    /* Two lines tell one question from another; a longer one is cut. */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
 }
 
 /* The outcome of an edit. The library has no component for it, so it is
