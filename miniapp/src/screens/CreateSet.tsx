@@ -1,4 +1,4 @@
-import { Avatar, CellList, CellSimple, Flex } from '@maxhub/max-ui';
+import { Avatar, CellList, CellSimple, Flex, Typography } from '@maxhub/max-ui';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { IconDoc, IconPlus } from '../components/Icons';
@@ -10,12 +10,19 @@ export interface CreateSetProps {
     onBack: () => void;
 }
 
-/** Two ways to a new set; the notes come first, they are what Помнибот is for. */
+/**
+ * Two ways to a new set; the notes come first, they are what Помнибот is for.
+ * They are actions, so they sit at the bottom under the thumb, like the
+ * main button on every other screen.
+ */
 export function CreateSet({ onFromNotes, onManual, onBack }: CreateSetProps) {
     return (
         <Screen>
             <ScreenHeader title="Новый набор" onBack={onBack} />
-            <Flex direction="column" align="stretch" className={s.body}>
+            <Flex direction="column" align="stretch" justify="end" gap={12} className={s.body}>
+                <Typography.Text variant="body" color="secondary" className={s.hint}>
+                    Как соберём карточки?
+                </Typography.Text>
                 <CellList mode="island" filled className={s.list}>
                     <CellSimple
                         as="button"

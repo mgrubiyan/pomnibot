@@ -3,6 +3,10 @@
     min-height: 0;
 }
 
+.hint {
+    padding: 0 4px;
+}
+
 /* In island mode CellList adds its own side padding inside the screen frame. */
 .list {
     padding-left: 0;
