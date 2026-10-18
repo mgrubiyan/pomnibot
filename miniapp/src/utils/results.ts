@@ -37,3 +37,9 @@ export function scoreByTopic(cards: Card[], results: AnswerResult[]): TopicScore
 export function topicsWithErrors(cards: Card[], results: AnswerResult[]): TopicScore[] {
     return scoreByTopic(cards, results).filter((topic) => topic.wrong > 0);
 }
+
+/** A run without a single error. Judged by the answers, not the topics: a
+    card without a topic is left out of them, and its error would read as none. */
+export function allCorrect(results: AnswerResult[]): boolean {
+    return results.length > 0 && results.every((result) => result.correct);
+}

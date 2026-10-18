@@ -3,7 +3,7 @@ import type { AnswerResult, Card } from '../types';
 import { Screen } from '../components/Screen';
 import { IconCalendar, IconCheck } from '../components/Icons';
 import { errorsLabel } from '../utils/plural';
-import { topicsWithErrors } from '../utils/results';
+import { allCorrect, topicsWithErrors } from '../utils/results';
 import s from './Result.module.css';
 
 export interface ResultProps {
@@ -20,6 +20,7 @@ export interface ResultProps {
 export function Result({ setTitle, cards, results, onExit, onShare }: ResultProps) {
     const correct = results.filter((result) => result.correct).length;
     const topics = topicsWithErrors(cards, results);
+    const allRight = allCorrect(results);
 
     return (
         <Screen>
@@ -38,12 +39,14 @@ export function Result({ setTitle, cards, results, onExit, onShare }: ResultProp
                     </Typography.Text>
                 </Flex>
 
-                {topics.length === 0 ? (
+                {allRight ? (
                     <Flex align="center" gap={12} className={s.allRight}>
                         <IconCheck size={24} tone="positive" />
                         <Typography.Text variant="body">Без ошибок: все ответы верные</Typography.Text>
                     </Flex>
-                ) : (
+                ) : null}
+
+                {topics.length > 0 ? (
                     <Flex direction="column" align="stretch" gap={8}>
                         <Typography.Text variant="label-strong" color="secondary" asChild>
                             <h2 className={s.sectionTitle}>Темы с ошибками</h2>
@@ -69,7 +72,7 @@ export function Result({ setTitle, cards, results, onExit, onShare }: ResultProp
                             ))}
                         </ul>
                     </Flex>
-                )}
+                ) : null}
 
                 {/* The date is a placeholder until the backend returns the
                     review schedule; with no errors there is nothing to return to. */}
