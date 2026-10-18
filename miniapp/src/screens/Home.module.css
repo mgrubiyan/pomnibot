@@ -11,11 +11,30 @@
     overflow-wrap: anywhere;
 }
 
+.date {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+/* The list scrolls inside the screen: no scrollbar painted over the cards,
+   and the last lines fade out above the buttons instead of being cut. */
 .body {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
+    scrollbar-width: none;
+    /* Transparent until there is more below; then a line marks the edge. */
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s;
+}
+
+.moreBelow {
+    border-bottom-color: var(--divider-primary);
+}
+
+.body::-webkit-scrollbar {
+    display: none;
 }
 
 /* The «На сегодня» card */
@@ -25,6 +44,13 @@
     padding: 20px;
     border-radius: 16px;
     background: var(--background-card);
+}
+
+/* The count of cards due is the first thing the eye should find. */
+.dueNumber {
+    font-size: 40px;
+    line-height: 44px;
+    font-variant-numeric: tabular-nums;
 }
 
 .startButton {
@@ -44,8 +70,29 @@
     padding-right: 0;
 }
 
-.setTitle {
-    overflow-wrap: anywhere;
+/* Rows keep one height whether or not they name an author, and a long title
+   takes two lines at most. */
+.setRow {
+    min-height: 64px;
+}
+
+/* A long title must not squeeze the avatar: the text of every row starts at
+   the same line. */
+.setAvatar {
+    flex-shrink: 0;
+}
+
+.dueCounter {
+    margin-right: 4px;
+}
+
+/* A row is one line of title and one of details, whatever their length:
+   the list keeps its rhythm. */
+.oneLine {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Empty state */
@@ -56,5 +103,11 @@
 }
 
 .emptyText {
+    text-wrap: pretty;
+}
+
+/* What the research says, in one quiet line; the details are on a set's screen. */
+.why {
+    padding: 0 16px 8px;
     text-wrap: pretty;
 }

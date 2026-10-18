@@ -28,7 +28,7 @@ const FACTS: Fact[] = [
 export function WhyItWorks() {
     return (
         <Flex direction="column" align="stretch" gap={8}>
-            <CellHeader>Почему это работает</CellHeader>
+            <CellHeader titleStyle="normal">Почему это работает</CellHeader>
             <CellList mode="island" filled className={s.factsList}>
                 {FACTS.map((fact, index) => (
                     <CellSimple

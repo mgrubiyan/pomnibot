@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Button, CellHeader, CellList, CellSimple, Flex, IconButton, Spinner, Typography } from '@maxhub/max-ui';
+import { Button, CellHeader, CellList, CellSimple, Flex, Spinner, Typography } from '@maxhub/max-ui';
 import type { LeaderboardEntry } from '../types';
 import { api } from '../api';
 import { Screen } from '../components/Screen';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusScreen } from '../components/StatusScreen';
-import { IconChevronLeft, IconOffline } from '../components/Icons';
+import { IconOffline } from '../components/Icons';
 import { formatAuthorName } from '../utils/user';
 import s from './Leaderboard.module.css';
 
@@ -105,25 +106,11 @@ export function Leaderboard({ setId, setTitle, onBack }: LeaderboardProps) {
 
     return (
         <Screen>
-            <Flex align="center" gap={8} className={s.header}>
-                <IconButton size="small" variant="ghost" aria-label="Назад" onClick={onBack}>
-                    <IconChevronLeft size={20} />
-                </IconButton>
-                <Flex direction="column" align="stretch" gap={2} className={s.headerText}>
-                    <Typography.Text variant="subheader" asChild>
-                        <h1 className={s.title}>Таблица лидеров</h1>
-                    </Typography.Text>
-                    {setTitle ? (
-                        <Typography.Text variant="description" color="secondary">
-                            {setTitle}
-                        </Typography.Text>
-                    ) : null}
-                </Flex>
-            </Flex>
+            <ScreenHeader title="Таблица лидеров" subtitle={setTitle} onBack={onBack} />
 
             <Flex direction="column" align="stretch" gap={16} className={s.body}>
                 <Flex direction="column" align="stretch" gap={8}>
-                    <CellHeader>Участники · {items.length}</CellHeader>
+                    <CellHeader titleStyle="normal">Участники · {items.length}</CellHeader>
                     {items.length === 0 ? (
                         <div className={s.empty}>
                             <Typography.Text color="secondary">

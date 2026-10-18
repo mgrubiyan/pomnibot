@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Button, Flex, IconButton, Input, Typography } from '@maxhub/max-ui';
+import { Button, Flex, Input, Typography } from '@maxhub/max-ui';
 import type { CardSet } from '../types';
 import { api } from '../api';
 import { Screen } from '../components/Screen';
-import { IconChevronLeft, IconCross } from '../components/Icons';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { IconCross } from '../components/Icons';
 import { formatCode } from '../utils/code';
 import s from './JoinSet.module.css';
 
@@ -55,14 +56,7 @@ export function JoinSet({ onBack, onOpenSet }: JoinSetProps) {
 
     return (
         <Screen>
-            <Flex align="center" gap={8} className={s.header}>
-                <IconButton size="small" variant="ghost" aria-label="Назад" onClick={onBack}>
-                    <IconChevronLeft size={20} />
-                </IconButton>
-                <Typography.Text variant="subheader" asChild>
-                    <h1 className={s.title}>Код набора</h1>
-                </Typography.Text>
-            </Flex>
+            <ScreenHeader title="Код набора" onBack={onBack} />
 
             <Flex direction="column" align="stretch" gap={12} className={s.body}>
                 <Typography.Text variant="body" color="secondary" className={s.hint}>

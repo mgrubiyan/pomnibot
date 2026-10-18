@@ -129,6 +129,7 @@
 }
 
 .question {
+    margin: 0;
     text-wrap: pretty;
 }
 
@@ -190,6 +191,12 @@
 
 .source {
     margin: 0;
+}
+
+/* The icon sits on the first line of a caption that wraps. */
+.sourceIcon {
+    flex-shrink: 0;
+    margin-top: 1px;
 }
 
 .quote {

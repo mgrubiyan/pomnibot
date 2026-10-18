@@ -1,19 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Flex, IconButton, Input, Radio, Textarea, Typography } from '@maxhub/max-ui';
+import { Button, Flex, IconButton, Input, Radio, Typography } from '@maxhub/max-ui';
 import type { Card, CardKind, TableItem, TableLayout } from '../types';
+import { AutoTextarea } from '../components/AutoTextarea';
 import { Screen } from '../components/Screen';
-import { IconChevronLeft, IconCross, IconDoc, IconPlus, IconTrash } from '../components/Icons';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { CARD_KINDS } from '../utils/kinds';
+import { IconCross, IconDoc, IconPlus, IconTrash } from '../components/Icons';
 import type { CardPatch } from '../utils/cards';
 import { cx } from '../utils/cx';
 import s from './CardEdit.module.css';
 
-const KIND_OPTIONS: { value: CardKind; label: string }[] = [
-    { value: 'choice', label: 'Выбор ответа (Тест)' },
-    { value: 'boolean', label: 'Верно / Неверно' },
-    { value: 'input', label: 'Ввод текста' },
-    { value: 'flip', label: 'Флип-карточка' },
-    { value: 'table', label: 'Таблица (сортировка)' },
-];
+const KIND_OPTIONS = CARD_KINDS.map(({ kind, label }) => ({ value: kind, label }));
 
 export interface CardFormProps {
     card?: Partial<Card>;
@@ -236,19 +233,11 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
     return (
         <Screen aria-busy={saving}>
             <fieldset disabled={saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: 'contents' }}>
-                <Flex align="center" gap={8} className={s.header}>
-                    <IconButton size="small" variant="ghost" aria-label="Назад" onClick={() => { if (!savingRef.current) { if (creationKind) onBack(); else leave(onBack); } }}>
-                        <IconChevronLeft size={20} />
-                    </IconButton>
-                    <Flex direction="column" align="stretch" gap={2}>
-                        <Typography.Text variant="subheader" asChild>
-                            <h1 className={s.title}>{creationKind ? 'Создать карточку' : 'Исправить карточку'}</h1>
-                        </Typography.Text>
-                        <Typography.Text variant="description" color="secondary">
-                            {setTitle}
-                        </Typography.Text>
-                    </Flex>
-                </Flex>
+                <ScreenHeader
+                    title={creationKind ? 'Создать карточку' : 'Исправить карточку'}
+                    subtitle={setTitle}
+                    onBack={() => { if (!savingRef.current) { if (creationKind) onBack(); else leave(onBack); } }}
+                />
 
                 <Flex direction="column" align="stretch" gap={16} className={s.form}>
                     {/* Card kind Combobox */}
@@ -294,7 +283,7 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                         <Typography.Text variant="label" color="tertiary" asChild>
                             <label htmlFor="card-question">Вопрос</label>
                         </Typography.Text>
-                        <Textarea
+                        <AutoTextarea
                             id="card-question"
                             rows={2}
                             value={question}
@@ -320,13 +309,16 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                                         aria-label={`Отметить вариант ${index + 1} как верный`}
                                         onChange={() => setCorrectOptionIndex(index)}
                                     />
-                                    <Input
-                                        value={option}
-                                        aria-label={`Вариант ${index + 1}`}
-                                        className={s.optionInput}
-                                        placeholder={`Вариант ${index + 1}`}
-                                        onChange={(event) => handleOptionChange(index, event.target.value)}
-                                    />
+                                    {/* MAX UI wraps the field in a div of its own; this one is
+                                        the flex item that takes the free width. */}
+                                    <div className={s.optionInput}>
+                                        <Input
+                                            value={option}
+                                            aria-label={`Вариант ${index + 1}`}
+                                            placeholder={`Вариант ${index + 1}`}
+                                            onChange={(event) => handleOptionChange(index, event.target.value)}
+                                        />
+                                    </div>
                                     <IconButton
                                         size="small"
                                         variant="ghost"
@@ -382,7 +374,7 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                                 <label htmlFor="card-answer">Верный ответ</label>
                             </Typography.Text>
                             {kind === 'flip' ? (
-                                <Textarea
+                                <AutoTextarea
                                     id="card-answer"
                                     rows={3}
                                     value={textAnswer}
@@ -498,7 +490,7 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                         <Typography.Text variant="label" color="tertiary" asChild>
                             <label htmlFor="card-explanation">Объяснение (необязательно)</label>
                         </Typography.Text>
-                        <Textarea
+                        <AutoTextarea
                             id="card-explanation"
                             rows={3}
                             value={explanation}
@@ -508,18 +500,19 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                         />
                     </Flex>
 
-                    <div className={s.divider} />
-
                     {/* Read-only Source quote from notes */}
-                    {card.sourceQuote ? (
+                    {card.sourceQuote ? (<>
+                        <div className={s.divider} />
                         <figure className={s.source}>
                             <Flex direction="column" align="stretch" gap={4}>
                                 <Typography.Text variant="label-strong" color="tertiary" asChild>
                                     <figcaption>
-                                        <Flex align="center" gap={4}>
-                                            <IconDoc size={14} tone="muted" />
-                                            Источник
-                                            {card.sourceRef ? ` · ${card.sourceRef}` : ''}
+                                        <Flex align="flex-start" gap={4}>
+                                            <IconDoc size={14} tone="muted" className={s.sourceIcon} />
+                                            <span>
+                                                Источник
+                                                {card.sourceRef ? ` · ${card.sourceRef}` : ''}
+                                            </span>
                                         </Flex>
                                     </figcaption>
                                 </Typography.Text>
@@ -528,7 +521,7 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                                 </Typography.Text>
                             </Flex>
                         </figure>
-                    ) : null}
+                    </>) : null}
                 </Flex>
 
                 {/* Bottom Actions */}

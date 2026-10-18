@@ -281,6 +281,20 @@ func TestIsGenericFilename(t *testing.T) {
 	}
 }
 
+// A file name becomes a title with spaces, not underscores.
+func TestResolveSetTitleFromFilename(t *testing.T) {
+	for name, want := range map[string]string{
+		"лекция_биология.pdf": "лекция биология",
+		"Этапы обработки кода программы на C++_ пространства имён и локали.pdf": "Этапы обработки кода программы на C++ пространства имён и локали",
+		"__Лекция__4__.docx":           "Лекция 4",
+		"Лекция 3. Клеточный цикл.pdf": "Лекция 3. Клеточный цикл",
+	} {
+		if got := resolveSetTitle("", name); got != want {
+			t.Errorf("resolveSetTitle(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
+
 // A set made from photos with no caption is named after its commonest topic,
 // not «Новый конспект (17.10 23:55)».
 func TestTitleFromTopics(t *testing.T) {

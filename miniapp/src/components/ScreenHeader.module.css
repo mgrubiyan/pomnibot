@@ -1,0 +1,22 @@
+.header {
+    padding: 8px 0 0;
+}
+
+/* The 40px button centred on the 24px first line of the title. */
+.back {
+    flex-shrink: 0;
+    margin-top: -8px;
+}
+
+.text {
+    min-width: 0;
+}
+
+.title {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.subtitle {
+    overflow-wrap: anywhere;
+}

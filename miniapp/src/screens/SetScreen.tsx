@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Button, CellList, CellSimple, Flex, IconButton, Spinner, Typography } from '@maxhub/max-ui';
+import { Button, CellList, CellSimple, Flex, Spinner, Typography } from '@maxhub/max-ui';
 import type { Card, CardSet, User } from '../types';
 import { api } from '../api';
 import { Screen } from '../components/Screen';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusScreen } from '../components/StatusScreen';
-import { IconChevronLeft, IconOffline, IconShare, IconTrash } from '../components/Icons';
-import { estimateMinutes } from '../utils/estimate';
+import { WhyItWorks } from '../components/WhyItWorks';
+import { IconCheck, IconOffline, IconShare, IconTrash } from '../components/Icons';
 import { loadCards, loadSet } from '../utils/sets';
-import { aboutMinutesLabel, cardsLabel } from '../utils/plural';
+import { cardsLabel } from '../utils/plural';
 import { formatAuthorName } from '../utils/user';
+import { cx } from '../utils/cx';
+import { useMoreBelow } from '../utils/useMoreBelow';
 import s from './SetScreen.module.css';
 
 type Status = 'loading' | 'error' | 'ready';
@@ -50,6 +53,7 @@ export function SetScreen({
     const [feedCards, setFeedCards] = useState<Card[]>([]);
     const [attempt, setAttempt] = useState(0);
     const [confirmingRemove, setConfirmingRemove] = useState(false);
+    const [bodyRef, moreBelow] = useMoreBelow<HTMLDivElement>(status === 'ready');
 
     useEffect(() => {
         let cancelled = false;
@@ -119,23 +123,17 @@ export function SetScreen({
 
     return (
         <Screen>
-            <Flex align="center" gap={8} className={s.header}>
-                <IconButton size="small" variant="ghost" aria-label="Назад" onClick={onBack}>
-                    <IconChevronLeft size={20} />
-                </IconButton>
-                <Flex direction="column" align="stretch" gap={2} className={s.headerText}>
-                    <Typography.Text variant="subheader" asChild>
-                        <h1 className={s.title}>{set.title}</h1>
-                    </Typography.Text>
-                    <Typography.Text variant="description" color="secondary">
-                        {cardsLabel(cards.length)}
-                        {hasDue ? ` · ${dueCount} на повтор` : ''}
-                        {shared && set.author ? ` · автор: ${formatAuthorName(set.author)}` : ''}
-                    </Typography.Text>
-                </Flex>
-            </Flex>
+            <ScreenHeader
+                title={set.title}
+                subtitle={<>
+                    {cardsLabel(cards.length)}
+                    {hasDue ? ` · ${dueCount} на повтор` : ''}
+                    {shared && set.author ? ` · автор: ${formatAuthorName(set.author)}` : ''}
+                </>}
+                onBack={onBack}
+            />
 
-            <Flex direction="column" align="stretch" gap={16} className={s.body}>
+            <Flex ref={bodyRef} direction="column" align="stretch" gap={16} className={cx(s.body, moreBelow && s.moreBelow)}>
                 <Flex direction="column" align="stretch" gap={12} className={s.ratingCard}>
                     <Flex justify="space-between" align="baseline">
                         <Typography.Text variant="body" color="secondary">
@@ -181,16 +179,8 @@ export function SetScreen({
                     />
                 </CellList>
 
-                <Button
-                    size="medium"
-                    variant="secondary"
-                    stretched
-                    iconBefore={<IconShare size={20} />}
-                    onClick={() => onShare(set.id, set.title)}
-                >
-                    Поделиться
-                </Button>
-
+                {/* Moved here from home: read once, by someone about to review. */}
+                <WhyItWorks />
             </Flex>
 
             <Flex direction="column" align="stretch" gap={8}>
@@ -224,13 +214,29 @@ export function SetScreen({
                     <>
                         {hasDue ? (
                             <Button size="medium" variant="primary" stretched onClick={() => onStart(set.id, set.title)}>
-                                Повторить {cardsLabel(dueCount)} · {aboutMinutesLabel(estimateMinutes(dueCount))}
+                                {/* The minutes do not fit a phone-wide button: «…около 3 ми…» */}
+                                Повторить {cardsLabel(dueCount)}
                             </Button>
                         ) : (
-                            <Button size="medium" variant="secondary" stretched disabled>
-                                Все карточки повторены
-                            </Button>
+                            // A status, not a button: there is nothing to press.
+                            <Flex align="center" justify="center" gap={8} className={s.done}>
+                                <IconCheck size={20} tone="positive" />
+                                <Typography.Text variant="body" color="secondary">
+                                    Все карточки повторены
+                                </Typography.Text>
+                            </Flex>
                         )}
+
+                        {/* With nothing left to review, sharing is what is left to do. */}
+                        <Button
+                            size="medium"
+                            variant={hasDue ? 'secondary' : 'primary'}
+                            stretched
+                            iconBefore={<IconShare size={20} />}
+                            onClick={() => onShare(set.id, set.title)}
+                        >
+                            Поделиться
+                        </Button>
 
                         <Button
                             size="small"

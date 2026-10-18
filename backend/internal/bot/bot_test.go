@@ -531,11 +531,11 @@ func TestBot_FileAttachment_GeneratesSet(t *testing.T) {
 		if capturedUserID != 12345 {
 			t.Errorf("expected userID 12345, got %d", capturedUserID)
 		}
-		if capturedTitle != "лекция_биология" {
-			t.Errorf("expected title 'лекция_биология', got %q", capturedTitle)
+		if capturedTitle != "лекция биология" {
+			t.Errorf("expected title 'лекция биология', got %q", capturedTitle)
 		}
 		lastMsg := getLastMessage()
-		if !strings.Contains(lastMsg.Text, "🎉 Набор «лекция_биология» успешно создан!") {
+		if !strings.Contains(lastMsg.Text, "🎉 Набор «лекция биология» успешно создан!") {
 			t.Errorf("expected confirmation text, got: %s", lastMsg.Text)
 		}
 		if !strings.Contains(lastMsg.Text, "Код для совместного доступа: 654321") {
@@ -752,11 +752,11 @@ func TestBot_FileAttachment_GeneratesSet(t *testing.T) {
 			},
 		})
 
-		if capturedTitle != "лекция_биология" {
-			t.Errorf("expected title 'лекция_биология', got %q", capturedTitle)
+		if capturedTitle != "лекция биология" {
+			t.Errorf("expected title 'лекция биология', got %q", capturedTitle)
 		}
 		lastMsg := getLastMessage()
-		if !strings.Contains(lastMsg.Text, "🎉 Набор «лекция_биология» успешно создан!") {
+		if !strings.Contains(lastMsg.Text, "🎉 Набор «лекция биология» успешно создан!") {
 			t.Errorf("expected confirmation text with title, got: %s", lastMsg.Text)
 		}
 	})
@@ -791,8 +791,8 @@ func TestBot_FileAttachment_GeneratesSet(t *testing.T) {
 			},
 		})
 
-		if capturedTitle != "лекция_биология" {
-			t.Errorf("expected title 'лекция_биология', got %q", capturedTitle)
+		if capturedTitle != "лекция биология" {
+			t.Errorf("expected title 'лекция биология', got %q", capturedTitle)
 		}
 
 		// Double URL-encoded

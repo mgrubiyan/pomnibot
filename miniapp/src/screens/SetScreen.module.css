@@ -1,23 +1,23 @@
-/* Set screen. The middle scrolls, the header and the button stay put. */
-
-.header {
-    padding: 8px 0 0;
-}
-
-.headerText {
-    min-width: 0;
-}
-
-.title {
-    margin: 0;
-    overflow-wrap: anywhere;
-}
+/* Set screen: what the set holds at the top, what can be done at the bottom.
+   The middle scrolls, the header and the buttons stay put. */
 
 .body {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
+    scrollbar-width: none;
+    /* Transparent until there is more below; then a line marks the edge. */
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s;
+}
+
+.body::-webkit-scrollbar {
+    display: none;
+}
+
+.moreBelow {
+    border-bottom-color: var(--divider-primary);
 }
 
 /* Personal progress card showing percentile and rank in set */
@@ -48,7 +48,11 @@
     padding-right: 0;
 }
 
-
 .confirmText {
     text-wrap: pretty;
+}
+
+/* The same height as the button it stands in for. */
+.done {
+    min-height: 52px;
 }

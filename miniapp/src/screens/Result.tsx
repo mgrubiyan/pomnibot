@@ -1,9 +1,9 @@
 import { Button, Flex, Typography } from '@maxhub/max-ui';
 import type { AnswerResult, Card } from '../types';
 import { Screen } from '../components/Screen';
-import { IconCalendar } from '../components/Icons';
+import { IconCalendar, IconCheck } from '../components/Icons';
 import { errorsLabel } from '../utils/plural';
-import { scoreByTopic } from '../utils/results';
+import { allCorrect, topicsWithErrors } from '../utils/results';
 import s from './Result.module.css';
 
 export interface ResultProps {
@@ -19,7 +19,8 @@ export interface ResultProps {
 /** End of a run: the score and the topics that went worst. */
 export function Result({ setTitle, cards, results, onExit, onShare }: ResultProps) {
     const correct = results.filter((result) => result.correct).length;
-    const topics = scoreByTopic(cards, results);
+    const topics = topicsWithErrors(cards, results);
+    const allRight = allCorrect(results);
 
     return (
         <Screen>
@@ -38,31 +39,40 @@ export function Result({ setTitle, cards, results, onExit, onShare }: ResultProp
                     </Typography.Text>
                 </Flex>
 
-                <Flex direction="column" align="stretch" gap={8}>
-                    <Typography.Text variant="label-strong" color="secondary" asChild>
-                        <h2 className={s.sectionTitle}>Доля ошибок по темам</h2>
-                    </Typography.Text>
-                    <ul className={s.topics}>
-                        {topics.map((topic) => (
-                            <li key={topic.topic} className={s.topic}>
-                                <Flex justify="space-between" align="baseline" gap={12}>
-                                    <Typography.Text variant="body" className={s.topicName}>
-                                        {topic.topic}
-                                    </Typography.Text>
-                                    <Typography.Text variant="label" color="secondary" className={s.topicCount}>
-                                        {errorsLabel(topic.wrong)} из {topic.total}
-                                    </Typography.Text>
-                                </Flex>
-                                <div className={s.bar} aria-hidden="true">
-                                    <div
-                                        className={s.barFill}
-                                        style={{ width: `${(topic.wrong / topic.total) * 100}%` }}
-                                    />
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
-                </Flex>
+                {allRight ? (
+                    <Flex align="center" gap={12} className={s.allRight}>
+                        <IconCheck size={24} tone="positive" />
+                        <Typography.Text variant="body">Без ошибок: все ответы верные</Typography.Text>
+                    </Flex>
+                ) : null}
+
+                {topics.length > 0 ? (
+                    <Flex direction="column" align="stretch" gap={8}>
+                        <Typography.Text variant="label-strong" color="secondary" asChild>
+                            <h2 className={s.sectionTitle}>Темы с ошибками</h2>
+                        </Typography.Text>
+                        <ul className={s.topics}>
+                            {topics.map((topic) => (
+                                <li key={topic.topic} className={s.topic}>
+                                    <Flex justify="space-between" align="baseline" gap={12}>
+                                        <Typography.Text variant="body" className={s.topicName}>
+                                            {topic.topic}
+                                        </Typography.Text>
+                                        <Typography.Text variant="label" color="secondary" className={s.topicCount}>
+                                            {errorsLabel(topic.wrong)} из {topic.total}
+                                        </Typography.Text>
+                                    </Flex>
+                                    <div className={s.bar} aria-hidden="true">
+                                        <div
+                                            className={s.barFill}
+                                            style={{ width: `${(topic.wrong / topic.total) * 100}%` }}
+                                        />
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    </Flex>
+                ) : null}
 
                 {/* The date is a placeholder until the backend returns the
                     review schedule; with no errors there is nothing to return to. */}

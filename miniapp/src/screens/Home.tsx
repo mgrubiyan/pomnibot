@@ -1,15 +1,28 @@
 import { useEffect, useState } from 'react';
-import { Button, CellHeader, CellList, CellSimple, Flex, Spinner, Typography } from '@maxhub/max-ui';
+import {
+    Avatar,
+    Button,
+    CellHeader,
+    CellList,
+    CellSimple,
+    Counter,
+    Flex,
+    Spinner,
+    Typography,
+    type AvatarTextGradient,
+} from '@maxhub/max-ui';
 import type { Card, CardSet, TodayData } from '../types';
 import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
-import { WhyItWorks } from '../components/WhyItWorks';
-import { IconDoc, IconOffline } from '../components/Icons';
+import { IconCheck, IconDoc, IconOffline } from '../components/Icons';
 import { estimateMinutes } from '../utils/estimate';
-import { aboutMinutesLabel, cardsLabel } from '../utils/plural';
+import { aboutMinutesLabel, cardsLabel, cardsWord } from '../utils/plural';
+import { formatTodayDate } from '../utils/today';
 import { formatAuthorName, formatGreetingName } from '../utils/user';
 import { formatNextReviewSubtitle } from '../utils/reviewDate';
+import { cx } from '../utils/cx';
+import { useMoreBelow } from '../utils/useMoreBelow';
 import s from './Home.module.css';
 
 type Status = 'loading' | 'error' | 'ready';
@@ -30,11 +43,28 @@ async function loadFeed(): Promise<Card[]> {
     return data;
 }
 
-/** «24 карточки · 8 на повтор», without the tail when nothing is due. */
-function setSummary(set: CardSet, feedDueCount?: number): string {
-    const total = cardsLabel(set.cardsTotal);
-    const due = feedDueCount !== undefined ? feedDueCount : set.cardsDue;
-    return due > 0 ? `${total} · ${due} на повтор` : total;
+/** Cards of a set due today: from the feed when it has loaded, else the set's own count. */
+function setDue(set: CardSet, feedDueCount?: number): number {
+    return feedDueCount ?? set.cardsDue;
+}
+
+const avatarGradients: AvatarTextGradient[] = ['blue', 'green', 'purple', 'orange', 'red'];
+
+/**
+ * A set looks like a chat in MAX: the first letter of its title on one of the
+ * avatar colors, the same for a set every time.
+ */
+function SetAvatar({ set }: { set: CardSet }) {
+    const letter = (set.title.match(/[\p{L}\p{N}]/u)?.[0] ?? '·').toUpperCase();
+    let hash = 0;
+    for (const ch of set.id) {
+        hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+    }
+    return (
+        <Avatar.Container size={44} form="squircle">
+            <Avatar.Text gradient={avatarGradients[hash % avatarGradients.length]}>{letter}</Avatar.Text>
+        </Avatar.Container>
+    );
 }
 
 export interface HomeProps {
@@ -55,6 +85,7 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
     const [today, setToday] = useState<TodayData | null>(null);
     const [feedCards, setFeedCards] = useState<Card[]>([]);
     const [attempt, setAttempt] = useState(0);
+    const [bodyRef, moreBelow] = useMoreBelow<HTMLDivElement>(status === 'ready');
 
     useEffect(() => {
         let cancelled = false;
@@ -121,7 +152,9 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
 
     const bottomActions = (
         <Flex direction="column" align="stretch" gap={8}>
-            <Button size="medium" variant="primary" stretched onClick={onAddNote}>
+            {/* With «Начать» on screen it is the main action of the day; without it
+                this one is. */}
+            <Button size="medium" variant={hasSets && dueCount > 0 ? 'secondary' : 'primary'} stretched onClick={onAddNote}>
                 Создать набор
             </Button>
             <Button size="medium" variant="ghost" stretched onClick={onJoinSet}>
@@ -133,21 +166,29 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
     return (
         <Screen>
             <Flex justify="space-between" align="baseline" gap={12} className={s.header}>
-                <Typography.Text variant="subheader" asChild>
+                <Typography.Text variant="description" color="secondary" asChild>
                     <h1 className={s.greeting}>Привет, {formatGreetingName(today.user)}</h1>
+                </Typography.Text>
+                <Typography.Text variant="description" color="tertiary" className={s.date}>
+                    {formatTodayDate()}
                 </Typography.Text>
             </Flex>
 
-            <Flex direction="column" align="stretch" gap={16} className={s.body}>
+            <Flex ref={bodyRef} direction="column" align="stretch" gap={20} className={cx(s.body, moreBelow && s.moreBelow)}>
                 {hasSets ? (
                     <>
                         <Flex direction="column" align="stretch" gap={4} className={s.todayCard}>
                             {dueCount > 0 ? (
                                 <>
                                     <Typography.Text variant="subheader">На сегодня</Typography.Text>
-                                    <Typography.Text variant="body" color="secondary">
-                                        {cardsLabel(dueCount)} · {aboutMinutesLabel(estimateMinutes(dueCount))}
-                                    </Typography.Text>
+                                    <Flex align="baseline" gap={8} wrap="wrap">
+                                        <Typography.Text variant="hero" className={s.dueNumber}>
+                                            {dueCount}
+                                        </Typography.Text>
+                                        <Typography.Text variant="body" color="secondary">
+                                            {cardsWord(dueCount)} · {aboutMinutesLabel(estimateMinutes(dueCount))}
+                                        </Typography.Text>
+                                    </Flex>
                                     <Button
                                         size="medium"
                                         variant="primary"
@@ -160,7 +201,10 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
                                 </>
                             ) : (
                                 <>
-                                    <Typography.Text variant="subheader">На сегодня всё</Typography.Text>
+                                    <Flex align="center" gap={8}>
+                                        <IconCheck size={24} tone="positive" />
+                                        <Typography.Text variant="subheader">На сегодня всё</Typography.Text>
+                                    </Flex>
                                     {nextReviewSubtitle ? (
                                         <Typography.Text variant="body" color="secondary">
                                             {nextReviewSubtitle}
@@ -171,30 +215,33 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
                         </Flex>
 
                         <Flex direction="column" align="stretch" gap={8} className={s.setsSection}>
-                            <CellHeader>Мои наборы</CellHeader>
+                            <CellHeader titleStyle="normal">Мои наборы</CellHeader>
                             <CellList mode="island" filled className={s.setsList}>
-                                {sets.map((set, index) => (
-                                    <CellSimple
-                                        key={set.id}
-                                        as="button"
-                                        separator={index > 0}
-                                        showChevron
-                                        onClick={() => onOpenSet(set.id)}
-                                        title={<span className={s.setTitle}>{set.title}</span>}
-                                        subtitle={
-                                            <Flex direction="column" align="stretch">
-                                                <Typography.Text variant="description" color="secondary">
-                                                    {setSummary(set, setDueMap.get(set.id))}
-                                                </Typography.Text>
-                                                {set.author && set.author.id !== today.user.id ? (
-                                                    <Typography.Text variant="label" color="tertiary">
-                                                        Автор: {formatAuthorName(set.author)}
-                                                    </Typography.Text>
-                                                ) : null}
-                                            </Flex>
-                                        }
-                                    />
-                                ))}
+                                {sets.map((set, index) => {
+                                    const due = setDue(set, setDueMap.get(set.id));
+                                    return (
+                                        <CellSimple
+                                            key={set.id}
+                                            as="button"
+                                            separator={index > 0}
+                                            showChevron
+                                            className={s.setRow}
+                                            onClick={() => onOpenSet(set.id)}
+                                            before={<SetAvatar set={set} />}
+                                            innerClassNames={{ before: s.setAvatar }}
+                                            after={due > 0 ? <Counter value={due} variant="primary" className={s.dueCounter} aria-label={`${cardsLabel(due)} на повтор`} /> : null}
+                                            title={<span className={s.oneLine}>{set.title}</span>}
+                                            subtitle={
+                                                <span className={s.oneLine}>
+                                                    {cardsLabel(set.cardsTotal)}
+                                                    {set.author && set.author.id !== today.user.id
+                                                        ? ` · ${formatAuthorName(set.author)}`
+                                                        : ''}
+                                                </span>
+                                            }
+                                        />
+                                    );
+                                })}
                             </CellList>
                         </Flex>
                     </>
@@ -207,7 +254,9 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
                     </Flex>
                 )}
 
-                <WhyItWorks />
+                <Typography.Text variant="label" color="tertiary" className={s.why}>
+                    Карточка возвращается, когда вы начинаете её забывать: так запоминается надолго
+                </Typography.Text>
             </Flex>
 
             {bottomActions}

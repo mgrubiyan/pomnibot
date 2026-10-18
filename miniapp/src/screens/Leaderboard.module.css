@@ -1,15 +1,4 @@
-.header {
-    padding: 8px 0 0;
-}
 
-.headerText {
-    min-width: 0;
-}
-
-.title {
-    margin: 0;
-    overflow-wrap: anywhere;
-}
 
 .body {
     flex: 1;

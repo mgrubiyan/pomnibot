@@ -576,7 +576,9 @@ func resolveSetTitle(caption, filename string) string {
 	}
 	if filename != "" && !isGenericFilename(filename) {
 		base := strings.TrimSuffix(filename, filepath.Ext(filename))
-		base = strings.TrimSpace(base)
+		// «Лекция_4_ОРГ» reads as «Лекция 4 ОРГ»: the title is shown on
+		// the home screen and under every quote.
+		base = strings.Join(strings.Fields(strings.ReplaceAll(base, "_", " ")), " ")
 		if base != "" {
 			runes := []rune(base)
 			if len(runes) > 80 {
