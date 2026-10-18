@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import ManualCreate from './screens/ManualCreate';
-import { Button, Flex, Typography } from '@maxhub/max-ui';
-import { Screen as Page } from './components/Screen';
 import AddNote from './screens/AddNote';
+import CreateSet from './screens/CreateSet';
 import CardEdit from './screens/CardEdit';
 import Feed from './screens/Feed';
 import Home from './screens/Home';
@@ -190,12 +189,7 @@ function App() {
     );
 
     if (screen.name === 'create-method') {
-        return <Page><Flex direction="column" align="stretch" gap={16}>
-            <Typography.Text variant="subheader">Создать набор</Typography.Text>
-            <Button onClick={() => go({ name: 'manual' })}>Вручную</Button>
-            <Button variant="secondary" onClick={() => go({ name: 'add' })}>Из конспекта</Button>
-            <Button variant="ghost" onClick={goHome}>Назад</Button>
-        </Flex></Page>;
+        return <CreateSet onFromNotes={() => go({ name: 'add' })} onManual={() => go({ name: 'manual' })} onBack={goHome} />;
     }
 
     if (screen.name === 'manual') {

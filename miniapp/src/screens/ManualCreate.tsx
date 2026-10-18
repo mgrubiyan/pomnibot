@@ -1,17 +1,19 @@
 import { useState } from 'react';
-import { Button, Flex, Input, Typography } from '@maxhub/max-ui';
+import { Button, CellList, CellSimple, Flex, Input, Typography } from '@maxhub/max-ui';
 import { Screen } from '../components/Screen';
+import { ScreenHeader } from '../components/ScreenHeader';
 import CardForm from './CardForm';
 import type { CardKind } from '../types';
 import type { CardPatch } from '../utils/cards';
 import { api } from '../api';
+import s from './ManualCreate.module.css';
 
-const kinds: { kind: CardKind; label: string }[] = [
-    { kind: 'flip', label: 'Флип-карточка' },
-    { kind: 'choice', label: 'Выбор ответа (Тест)' },
-    { kind: 'boolean', label: 'Верно / Неверно' },
-    { kind: 'input', label: 'Ввод текста' },
-    { kind: 'table', label: 'Таблица (сортировка)' },
+const kinds: { kind: CardKind; label: string; hint: string }[] = [
+    { kind: 'flip', label: 'Флип-карточка', hint: 'Вопрос на лицевой стороне, ответ на обороте' },
+    { kind: 'choice', label: 'Выбор ответа', hint: 'Один верный вариант среди нескольких' },
+    { kind: 'boolean', label: 'Верно / Неверно', hint: 'Утверждение, которое нужно оценить' },
+    { kind: 'input', label: 'Ввод текста', hint: 'Ответ вписывают словом или числом' },
+    { kind: 'table', label: 'Таблица', hint: 'Понятия раскладывают по колонкам' },
 ];
 
 export default function ManualCreate({ setId: initialSetId, setTitle: initialTitle = '', onExit, onDone }: {
@@ -43,14 +45,30 @@ export default function ManualCreate({ setId: initialSetId, setTitle: initialTit
         setVersion(v => v + 1);
     };
     return <>
-        {step !== 'card' && <Screen><Flex direction="column" align="stretch" gap={16}>
-            <Typography.Text variant="subheader">{step === 'title' ? 'Название набора' : 'Тип карточки'}</Typography.Text>
-            {step === 'title' ? <>
-                <Input aria-label="Название набора" placeholder="Название набора" value={title} onChange={e => setTitle(e.target.value)} />
-                <Button disabled={!title.trim()} onClick={() => setStep('kind')}>Далее</Button>
-            </> : kinds.map(item => <Button key={item.kind} variant="secondary" onClick={() => { setKind(item.kind); setStarted(true); setStep('card'); }}>{item.label}</Button>)}
-            <Button variant="ghost" onClick={() => step === 'kind' && !setId ? setStep('title') : exit()}>Назад</Button>
-        </Flex></Screen>}
+        {step === 'title' && <Screen>
+            <ScreenHeader title="Новый набор" onBack={exit} />
+            <Flex direction="column" align="stretch" gap={12} className={s.body}>
+                <Typography.Text variant="body" color="secondary" className={s.hint}>
+                    Как назовёте набор? Название увидят все, с кем вы им поделитесь.
+                </Typography.Text>
+                <Input size="large" aria-label="Название набора" placeholder="Например, Органическая химия"
+                    value={title} maxLength={120} onChange={e => setTitle(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && title.trim()) setStep('kind'); }} />
+            </Flex>
+            <Flex direction="column" align="stretch">
+                <Button size="medium" stretched disabled={!title.trim()} onClick={() => setStep('kind')}>Далее</Button>
+            </Flex>
+        </Screen>}
+        {step === 'kind' && <Screen>
+            <ScreenHeader title="Тип карточки" onBack={() => setId ? exit() : setStep('title')} />
+            <Flex direction="column" align="stretch" className={s.list}>
+                <CellList mode="island" filled className={s.cells}>
+                    {kinds.map((item, index) => <CellSimple key={item.kind} as="button" showChevron separator={index > 0}
+                        title={item.label} subtitle={item.hint}
+                        onClick={() => { setKind(item.kind); setStarted(true); setStep('card'); }} />)}
+                </CellList>
+            </Flex>
+        </Screen>}
         {started && <div hidden={step !== 'card'}><CardForm key={version}
             setTitle={title} creationKind={kind} onKindChange={setKind} onDirtyChange={setDirty}
             onSave={save} onBack={() => {

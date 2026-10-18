@@ -1,0 +1,14 @@
+.body {
+    flex: 1;
+    min-height: 0;
+}
+
+/* In island mode CellList adds its own side padding inside the screen frame. */
+.list {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.icon {
+    flex-shrink: 0;
+}

@@ -15,8 +15,8 @@ export function AddNote({ onBack }: AddNoteProps) {
     return (
         <StatusScreen
             icon={<IconDoc size={48} tone="muted" />}
-            title="Конспект отправляют боту"
-            text="Пришлите ему PDF или текст в чат — он соберёт карточки и пришлёт готовый набор сюда"
+            title="Пришлите конспект боту"
+            text="Отправьте в чат с ботом текст, PDF, Word, презентацию или фото страниц. Когда карточки будут готовы, набор появится здесь"
             action={
                 <Flex direction="column" align="stretch" gap={8}>
                     <Button size="medium" variant="primary" stretched onClick={onBack}>

@@ -1,0 +1,9 @@
+.header {
+    padding: 8px 0 0;
+}
+
+.title {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
