@@ -61,6 +61,16 @@
     min-height: 64px;
 }
 
+/* A long title must not squeeze the avatar: the text of every row starts at
+   the same line. */
+.setAvatar {
+    flex-shrink: 0;
+}
+
+.dueCounter {
+    margin-right: 4px;
+}
+
 .setTitle {
     display: -webkit-box;
     -webkit-box-orient: vertical;

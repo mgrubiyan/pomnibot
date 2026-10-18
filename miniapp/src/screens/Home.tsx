@@ -1,5 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Button, CellHeader, CellList, CellSimple, Flex, Spinner, Typography } from '@maxhub/max-ui';
+import {
+    Avatar,
+    Button,
+    CellHeader,
+    CellList,
+    CellSimple,
+    Counter,
+    Flex,
+    Spinner,
+    Typography,
+    type AvatarTextGradient,
+} from '@maxhub/max-ui';
 import type { Card, CardSet, TodayData } from '../types';
 import { api } from '../api';
 import { Screen } from '../components/Screen';
@@ -31,10 +42,28 @@ async function loadFeed(): Promise<Card[]> {
 }
 
 /** «24 карточки · 8 на повтор», without the tail when nothing is due. */
-function setSummary(set: CardSet, feedDueCount?: number): string {
-    const total = cardsLabel(set.cardsTotal);
-    const due = feedDueCount !== undefined ? feedDueCount : set.cardsDue;
-    return due > 0 ? `${total} · ${due} на повтор` : total;
+/** Cards of a set due today: from the feed when it has loaded, else the set's own count. */
+function setDue(set: CardSet, feedDueCount?: number): number {
+    return feedDueCount !== undefined ? feedDueCount : set.cardsDue;
+}
+
+const avatarGradients: AvatarTextGradient[] = ['blue', 'green', 'purple', 'orange', 'red'];
+
+/**
+ * A set looks like a chat in MAX: the first letter of its title on one of the
+ * avatar colors, the same for a set every time.
+ */
+function SetAvatar({ set }: { set: CardSet }) {
+    const letter = (set.title.match(/[\p{L}\p{N}]/u)?.[0] ?? '·').toUpperCase();
+    let hash = 0;
+    for (const ch of set.id) {
+        hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+    }
+    return (
+        <Avatar.Container size={44} form="squircle">
+            <Avatar.Text gradient={avatarGradients[hash % avatarGradients.length]}>{letter}</Avatar.Text>
+        </Avatar.Container>
+    );
 }
 
 export interface HomeProps {
@@ -175,29 +204,35 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
                         <Flex direction="column" align="stretch" gap={8} className={s.setsSection}>
                             <CellHeader titleStyle="normal">Мои наборы</CellHeader>
                             <CellList mode="island" filled className={s.setsList}>
-                                {sets.map((set, index) => (
-                                    <CellSimple
-                                        key={set.id}
-                                        as="button"
-                                        separator={index > 0}
-                                        showChevron
-                                        className={s.setRow}
-                                        onClick={() => onOpenSet(set.id)}
-                                        title={<span className={s.setTitle}>{set.title}</span>}
-                                        subtitle={
-                                            <Flex direction="column" align="stretch">
-                                                <Typography.Text variant="description" color="secondary">
-                                                    {setSummary(set, setDueMap.get(set.id))}
-                                                </Typography.Text>
-                                                {set.author && set.author.id !== today.user.id ? (
-                                                    <Typography.Text variant="label" color="tertiary">
-                                                        Автор: {formatAuthorName(set.author)}
+                                {sets.map((set, index) => {
+                                    const due = setDue(set, setDueMap.get(set.id));
+                                    return (
+                                        <CellSimple
+                                            key={set.id}
+                                            as="button"
+                                            separator={index > 0}
+                                            showChevron
+                                            className={s.setRow}
+                                            onClick={() => onOpenSet(set.id)}
+                                            before={<SetAvatar set={set} />}
+                                            innerClassNames={{ before: s.setAvatar }}
+                                            after={due > 0 ? <Counter value={due} variant="primary" className={s.dueCounter} aria-label={`${cardsLabel(due)} на повтор`} /> : null}
+                                            title={<span className={s.setTitle}>{set.title}</span>}
+                                            subtitle={
+                                                <Flex direction="column" align="stretch">
+                                                    <Typography.Text variant="description" color="secondary">
+                                                        {cardsLabel(set.cardsTotal)}
                                                     </Typography.Text>
-                                                ) : null}
-                                            </Flex>
-                                        }
-                                    />
-                                ))}
+                                                    {set.author && set.author.id !== today.user.id ? (
+                                                        <Typography.Text variant="label" color="tertiary">
+                                                            Автор: {formatAuthorName(set.author)}
+                                                        </Typography.Text>
+                                                    ) : null}
+                                                </Flex>
+                                            }
+                                        />
+                                    );
+                                })}
                             </CellList>
                         </Flex>
                     </>
