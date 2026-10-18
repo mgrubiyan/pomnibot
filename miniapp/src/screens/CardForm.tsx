@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Flex, IconButton, Input, Radio, Textarea, Typography } from '@maxhub/max-ui';
+import { Button, Flex, IconButton, Input, Radio, Typography } from '@maxhub/max-ui';
 import type { Card, CardKind, TableItem, TableLayout } from '../types';
+import { AutoTextarea } from '../components/AutoTextarea';
 import { Screen } from '../components/Screen';
 import { IconChevronLeft, IconCross, IconDoc, IconPlus, IconTrash } from '../components/Icons';
 import type { CardPatch } from '../utils/cards';
@@ -294,7 +295,7 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                         <Typography.Text variant="label" color="tertiary" asChild>
                             <label htmlFor="card-question">Вопрос</label>
                         </Typography.Text>
-                        <Textarea
+                        <AutoTextarea
                             id="card-question"
                             rows={2}
                             value={question}
@@ -382,7 +383,7 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                                 <label htmlFor="card-answer">Верный ответ</label>
                             </Typography.Text>
                             {kind === 'flip' ? (
-                                <Textarea
+                                <AutoTextarea
                                     id="card-answer"
                                     rows={3}
                                     value={textAnswer}
@@ -498,7 +499,7 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                         <Typography.Text variant="label" color="tertiary" asChild>
                             <label htmlFor="card-explanation">Объяснение (необязательно)</label>
                         </Typography.Text>
-                        <Textarea
+                        <AutoTextarea
                             id="card-explanation"
                             rows={3}
                             value={explanation}
@@ -508,10 +509,9 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                         />
                     </Flex>
 
-                    <div className={s.divider} />
-
                     {/* Read-only Source quote from notes */}
-                    {card.sourceQuote ? (
+                    {card.sourceQuote ? (<>
+                        <div className={s.divider} />
                         <figure className={s.source}>
                             <Flex direction="column" align="stretch" gap={4}>
                                 <Typography.Text variant="label-strong" color="tertiary" asChild>
@@ -528,7 +528,7 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                                 </Typography.Text>
                             </Flex>
                         </figure>
-                    ) : null}
+                    </>) : null}
                 </Flex>
 
                 {/* Bottom Actions */}
