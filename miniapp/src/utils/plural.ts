@@ -16,8 +16,10 @@ export function plural(count: number, forms: [string, string, string]): string {
     return forms[2];
 }
 
-export const cardsLabel = (count: number) =>
-    `${count} ${plural(count, ['карточка', 'карточки', 'карточек'])}`;
+/** «карточек» alone, for when the number is set apart: «35» over «карточек». */
+export const cardsWord = (count: number) => plural(count, ['карточка', 'карточки', 'карточек']);
+
+export const cardsLabel = (count: number) => `${count} ${cardsWord(count)}`;
 
 export const daysLabel = (count: number) =>
     `${count} ${plural(count, ['день', 'дня', 'дней'])}`;

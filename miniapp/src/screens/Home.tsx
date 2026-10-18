@@ -16,9 +16,10 @@ import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
 import { WhyItWorks } from '../components/WhyItWorks';
-import { IconDoc, IconOffline } from '../components/Icons';
+import { IconCheck, IconDoc, IconOffline } from '../components/Icons';
 import { estimateMinutes } from '../utils/estimate';
-import { aboutMinutesLabel, cardsLabel } from '../utils/plural';
+import { aboutMinutesLabel, cardsLabel, cardsWord } from '../utils/plural';
+import { formatTodayDate } from '../utils/today';
 import { formatAuthorName, formatGreetingName } from '../utils/user';
 import { formatNextReviewSubtitle } from '../utils/reviewDate';
 import s from './Home.module.css';
@@ -167,6 +168,9 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
                 <Typography.Text variant="description" color="secondary" asChild>
                     <h1 className={s.greeting}>Привет, {formatGreetingName(today.user)}</h1>
                 </Typography.Text>
+                <Typography.Text variant="description" color="tertiary" className={s.date}>
+                    {formatTodayDate()}
+                </Typography.Text>
             </Flex>
 
             <Flex direction="column" align="stretch" gap={20} className={s.body}>
@@ -176,9 +180,14 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
                             {dueCount > 0 ? (
                                 <>
                                     <Typography.Text variant="subheader">На сегодня</Typography.Text>
-                                    <Typography.Text variant="body" color="secondary">
-                                        {cardsLabel(dueCount)} · {aboutMinutesLabel(estimateMinutes(dueCount))}
-                                    </Typography.Text>
+                                    <Flex align="baseline" gap={8} wrap="wrap">
+                                        <Typography.Text variant="hero" className={s.dueNumber}>
+                                            {dueCount}
+                                        </Typography.Text>
+                                        <Typography.Text variant="body" color="secondary">
+                                            {cardsWord(dueCount)} · {aboutMinutesLabel(estimateMinutes(dueCount))}
+                                        </Typography.Text>
+                                    </Flex>
                                     <Button
                                         size="medium"
                                         variant="primary"
@@ -191,7 +200,10 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
                                 </>
                             ) : (
                                 <>
-                                    <Typography.Text variant="subheader">На сегодня всё</Typography.Text>
+                                    <Flex align="center" gap={8}>
+                                        <IconCheck size={24} tone="positive" />
+                                        <Typography.Text variant="subheader">На сегодня всё</Typography.Text>
+                                    </Flex>
                                     {nextReviewSubtitle ? (
                                         <Typography.Text variant="body" color="secondary">
                                             {nextReviewSubtitle}

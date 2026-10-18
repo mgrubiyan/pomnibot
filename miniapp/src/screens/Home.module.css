@@ -11,6 +11,11 @@
     overflow-wrap: anywhere;
 }
 
+.date {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
 /* The list scrolls inside the screen: no scrollbar painted over the cards,
    and the last lines fade out above the buttons instead of being cut. */
 .body {
@@ -36,6 +41,13 @@
     padding: 20px;
     border-radius: 16px;
     background: var(--background-card);
+}
+
+/* The count of cards due is the first thing the eye should find. */
+.dueNumber {
+    font-size: 40px;
+    line-height: 44px;
+    font-variant-numeric: tabular-nums;
 }
 
 .startButton {
