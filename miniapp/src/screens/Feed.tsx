@@ -98,10 +98,6 @@ const TASKS: Record<Card['kind'], string> = {
     table: 'Разложите по колонкам',
 };
 
-function taskOf(card: Card): string {
-    return TASKS[card.kind] ?? '';
-}
-
 function optionsOf(card: Card): Option[] {
     if (card.kind === 'boolean') {
         return BOOLEAN_OPTIONS;
@@ -609,7 +605,7 @@ export function Feed({
                     >
                         <Flex direction="column" align="stretch" gap={8}>
                             <Typography.Text variant="label" color="tertiary">
-                                {taskOf(card)}
+                                {TASKS[card.kind]}
                             </Typography.Text>
                             <Typography.Text variant="subheader" asChild>
                                 <h1 className={s.question}>{card.question}</h1>

@@ -9,8 +9,6 @@ import { api } from '../api';
 import { CARD_KINDS } from '../utils/kinds';
 import s from './ManualCreate.module.css';
 
-const kinds = CARD_KINDS;
-
 export default function ManualCreate({ setId: initialSetId, setTitle: initialTitle = '', onExit, onDone }: {
     setId?: string; setTitle?: string; onExit: () => void; onDone: (setId: string) => void;
 }) {
@@ -58,7 +56,7 @@ export default function ManualCreate({ setId: initialSetId, setTitle: initialTit
             <ScreenHeader title="Тип карточки" onBack={() => setId ? exit() : setStep('title')} />
             <Flex direction="column" align="stretch" className={s.list}>
                 <CellList mode="island" filled className={s.cells}>
-                    {kinds.map((item, index) => <CellSimple key={item.kind} as="button" showChevron separator={index > 0}
+                    {CARD_KINDS.map((item, index) => <CellSimple key={item.kind} as="button" showChevron separator={index > 0}
                         title={item.label} subtitle={item.hint}
                         onClick={() => { setKind(item.kind); setStarted(true); setStep('card'); }} />)}
                 </CellList>

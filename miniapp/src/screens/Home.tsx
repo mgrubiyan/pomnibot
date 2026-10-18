@@ -42,10 +42,9 @@ async function loadFeed(): Promise<Card[]> {
     return data;
 }
 
-/** «24 карточки · 8 на повтор», without the tail when nothing is due. */
 /** Cards of a set due today: from the feed when it has loaded, else the set's own count. */
 function setDue(set: CardSet, feedDueCount?: number): number {
-    return feedDueCount !== undefined ? feedDueCount : set.cardsDue;
+    return feedDueCount ?? set.cardsDue;
 }
 
 const avatarGradients: AvatarTextGradient[] = ['blue', 'green', 'purple', 'orange', 'red'];
