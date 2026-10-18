@@ -24,10 +24,13 @@
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: none;
-    /* The fade falls on this space, not on the last line, once scrolled down. */
-    padding-bottom: 16px;
-    -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 16px), transparent);
-    mask-image: linear-gradient(to bottom, black calc(100% - 16px), transparent);
+    /* Transparent until there is more below; then a line marks the edge. */
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s;
+}
+
+.moreBelow {
+    border-bottom-color: var(--divider-primary);
 }
 
 .body::-webkit-scrollbar {
@@ -83,12 +86,13 @@
     margin-right: 4px;
 }
 
-.setTitle {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+/* A row is one line of title and one of details, whatever their length:
+   the list keeps its rhythm. */
+.oneLine {
+    display: block;
     overflow: hidden;
-    overflow-wrap: anywhere;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Empty state */
@@ -99,5 +103,11 @@
 }
 
 .emptyText {
+    text-wrap: pretty;
+}
+
+/* What the research says, in one quiet line; the details are on a set's screen. */
+.why {
+    padding: 0 16px 8px;
     text-wrap: pretty;
 }

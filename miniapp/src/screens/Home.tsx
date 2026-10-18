@@ -15,13 +15,14 @@ import type { Card, CardSet, TodayData } from '../types';
 import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
-import { WhyItWorks } from '../components/WhyItWorks';
 import { IconCheck, IconDoc, IconOffline } from '../components/Icons';
 import { estimateMinutes } from '../utils/estimate';
 import { aboutMinutesLabel, cardsLabel, cardsWord } from '../utils/plural';
 import { formatTodayDate } from '../utils/today';
 import { formatAuthorName, formatGreetingName } from '../utils/user';
 import { formatNextReviewSubtitle } from '../utils/reviewDate';
+import { cx } from '../utils/cx';
+import { useMoreBelow } from '../utils/useMoreBelow';
 import s from './Home.module.css';
 
 type Status = 'loading' | 'error' | 'ready';
@@ -84,6 +85,7 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
     const [today, setToday] = useState<TodayData | null>(null);
     const [feedCards, setFeedCards] = useState<Card[]>([]);
     const [attempt, setAttempt] = useState(0);
+    const [bodyRef, moreBelow] = useMoreBelow<HTMLDivElement>(status === 'ready');
 
     useEffect(() => {
         let cancelled = false;
@@ -172,7 +174,7 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
                 </Typography.Text>
             </Flex>
 
-            <Flex direction="column" align="stretch" gap={20} className={s.body}>
+            <Flex ref={bodyRef} direction="column" align="stretch" gap={20} className={cx(s.body, moreBelow && s.moreBelow)}>
                 {hasSets ? (
                     <>
                         <Flex direction="column" align="stretch" gap={4} className={s.todayCard}>
@@ -228,18 +230,14 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
                                             before={<SetAvatar set={set} />}
                                             innerClassNames={{ before: s.setAvatar }}
                                             after={due > 0 ? <Counter value={due} variant="primary" className={s.dueCounter} aria-label={`${cardsLabel(due)} на повтор`} /> : null}
-                                            title={<span className={s.setTitle}>{set.title}</span>}
+                                            title={<span className={s.oneLine}>{set.title}</span>}
                                             subtitle={
-                                                <Flex direction="column" align="stretch">
-                                                    <Typography.Text variant="description" color="secondary">
-                                                        {cardsLabel(set.cardsTotal)}
-                                                    </Typography.Text>
-                                                    {set.author && set.author.id !== today.user.id ? (
-                                                        <Typography.Text variant="label" color="tertiary">
-                                                            Автор: {formatAuthorName(set.author)}
-                                                        </Typography.Text>
-                                                    ) : null}
-                                                </Flex>
+                                                <span className={s.oneLine}>
+                                                    {cardsLabel(set.cardsTotal)}
+                                                    {set.author && set.author.id !== today.user.id
+                                                        ? ` · ${formatAuthorName(set.author)}`
+                                                        : ''}
+                                                </span>
                                             }
                                         />
                                     );
@@ -256,7 +254,9 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
                     </Flex>
                 )}
 
-                <WhyItWorks />
+                <Typography.Text variant="label" color="tertiary" className={s.why}>
+                    Карточка возвращается, когда вы начинаете её забывать: так запоминается надолго
+                </Typography.Text>
             </Flex>
 
             {bottomActions}
