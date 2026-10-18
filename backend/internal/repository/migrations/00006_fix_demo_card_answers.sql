@@ -1,7 +1,8 @@
 -- Demo cards, second pass. Two answers said the opposite of the notes they
 -- quote; a few questions pointed at a table, a list or an example the card
 -- does not show; one choice card gave its answer away with options of
--- another kind (directives next to «Операторы»).
+-- another kind (directives next to «Операторы»); a set named after its file
+-- kept the file's underscore.
 
 -- +goose Up
 -- +goose StatementBegin
@@ -27,10 +28,24 @@ UPDATE cards SET explanation = 'На [0°, 90°] sin α возрастает о�
 UPDATE card_options SET text = 'Выражения' WHERE text = '#define' AND card_id IN (SELECT id FROM cards WHERE question = 'Какой уровень в составе языка самый высокий?');
 UPDATE card_options SET text = 'Лексемы' WHERE text = '#endif' AND card_id IN (SELECT id FROM cards WHERE question = 'Какой уровень в составе языка самый высокий?');
 UPDATE card_options SET text = 'Символы' WHERE text = '#undef' AND card_id IN (SELECT id FROM cards WHERE question = 'Какой уровень в составе языка самый высокий?');
+UPDATE sets SET title = 'Этапы обработки кода программы на C++ пространства имён и локали' WHERE title = 'Этапы обработки кода программы на C++_ пространства имён и локали';
+UPDATE cards SET source_ref = replace(source_ref, 'C++_ ', 'C++ '), updated_at = CURRENT_TIMESTAMP WHERE source_ref LIKE 'Этапы обработки кода программы на C++\_ пространства имён и локали%';
+UPDATE cards SET question = 'Федерация и унитарное государство — это виды какой формы государства?', explanation = 'Форма государственного устройства — это территориальная организация государства: унитарное оно или федеративное.', updated_at = CURRENT_TIMESTAMP WHERE question = 'О какой категории понятий идет речь: «несколько государственных образований… образуют одно союзное государство»?';
+UPDATE cards SET question = 'С какого возраста гражданина РФ можно избрать Президентом?', updated_at = CURRENT_TIMESTAMP WHERE question = 'Минимальный возраст для избрания Президентом РФ';
+UPDATE cards SET question = 'Как называется форма правления, при которой главу государства (Президента) избирает население?', updated_at = CURRENT_TIMESTAMP WHERE question = 'Форма правления с выборностью населением главы государства (Президента) называется...';
+UPDATE cards SET question = 'К какому классу языков относится JavaScript?', updated_at = CURRENT_TIMESTAMP WHERE question = 'К какому классу относится JavaScript в приведённой классификации?';
+UPDATE cards SET question = 'Как иначе называют компоновщик, который создаёт единый исполняемый файл из нескольких объектных?', answer_text = 'линкер', updated_at = CURRENT_TIMESTAMP WHERE question = 'Как иначе называют компоновщика, который создаёт единый исполняемый файл из нескольких объектных?';
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
+UPDATE sets SET title = 'Этапы обработки кода программы на C++_ пространства имён и локали' WHERE title = 'Этапы обработки кода программы на C++ пространства имён и локали';
+UPDATE cards SET source_ref = replace(source_ref, 'C++ ', 'C++_ ') WHERE source_ref LIKE 'Этапы обработки кода программы на C++ пространства имён и локали%';
+UPDATE cards SET question = 'О какой категории понятий идет речь: «несколько государственных образований… образуют одно союзное государство»?', explanation = 'Речь идёт о способе территориальной организации государства, то есть о форме государственного устройства.', updated_at = CURRENT_TIMESTAMP WHERE question = 'Федерация и унитарное государство — это виды какой формы государства?';
+UPDATE cards SET question = 'Минимальный возраст для избрания Президентом РФ', updated_at = CURRENT_TIMESTAMP WHERE question = 'С какого возраста гражданина РФ можно избрать Президентом?';
+UPDATE cards SET question = 'Форма правления с выборностью населением главы государства (Президента) называется...', updated_at = CURRENT_TIMESTAMP WHERE question = 'Как называется форма правления, при которой главу государства (Президента) избирает население?';
+UPDATE cards SET question = 'К какому классу относится JavaScript в приведённой классификации?', updated_at = CURRENT_TIMESTAMP WHERE question = 'К какому классу языков относится JavaScript?';
+UPDATE cards SET question = 'Как иначе называют компоновщика, который создаёт единый исполняемый файл из нескольких объектных?', answer_text = 'компоновщик (линкер)', updated_at = CURRENT_TIMESTAMP WHERE question = 'Как иначе называют компоновщик, который создаёт единый исполняемый файл из нескольких объектных?';
 UPDATE card_options SET text = '#define' WHERE text = 'Выражения' AND card_id IN (SELECT id FROM cards WHERE question = 'Какой уровень в составе языка самый высокий?');
 UPDATE card_options SET text = '#endif' WHERE text = 'Лексемы' AND card_id IN (SELECT id FROM cards WHERE question = 'Какой уровень в составе языка самый высокий?');
 UPDATE card_options SET text = '#undef' WHERE text = 'Символы' AND card_id IN (SELECT id FROM cards WHERE question = 'Какой уровень в составе языка самый высокий?');
