@@ -15,6 +15,7 @@ import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
 import { Result } from './Result';
 import { cx } from '../utils/cx';
+import { sourceRefLabel } from '../utils/source';
 import {
     IconCheck,
     IconChevronLeft,
@@ -87,6 +88,19 @@ function shuffle<T>(items: readonly T[]): T[] {
         [next[i], next[j]] = [next[j], next[i]];
     }
     return next;
+}
+
+/** What the card asks of the reader, said above the question. */
+const TASKS: Record<Card['kind'], string> = {
+    flip: 'Вспомните ответ',
+    choice: 'Выберите ответ',
+    boolean: 'Верно или нет?',
+    input: 'Впишите ответ',
+    table: 'Разложите по колонкам',
+};
+
+function taskOf(card: Card): string {
+    return TASKS[card.kind] ?? '';
 }
 
 function optionsOf(card: Card): Option[] {
@@ -594,9 +608,14 @@ export function Feed({
                             tapToReveal && s.tappable,
                         )}
                     >
-                        <Typography.Text variant="subheader" asChild>
-                            <h1 className={s.question}>{card.question}</h1>
-                        </Typography.Text>
+                        <Flex direction="column" align="stretch" gap={8}>
+                            <Typography.Text variant="label" color="tertiary">
+                                {taskOf(card)}
+                            </Typography.Text>
+                            <Typography.Text variant="subheader" asChild>
+                                <h1 className={s.question}>{card.question}</h1>
+                            </Typography.Text>
+                        </Flex>
 
                         {check ? (
                             <AnswerCheck stage={check.stage} answer={check.answer} />
@@ -716,10 +735,12 @@ export function Feed({
                             <Flex direction="column" align="stretch" gap={4}>
                                 <Typography.Text variant="label-strong" color="tertiary" asChild>
                                     <figcaption>
-                                        <Flex align="center" gap={4}>
-                                            <IconDoc size={14} tone="muted" />
-                                            Из вашего конспекта
-                                            {card.sourceRef ? ` · ${card.sourceRef}` : ''}
+                                        <Flex align="flex-start" gap={4}>
+                                            <IconDoc size={14} tone="muted" className={s.sourceIcon} />
+                                            <span>
+                                                Из вашего конспекта
+                                                {card.sourceRef ? ` · ${sourceRefLabel(card.sourceRef)}` : ''}
+                                            </span>
                                         </Flex>
                                     </figcaption>
                                 </Typography.Text>

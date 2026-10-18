@@ -6,6 +6,7 @@ import { Screen } from '../components/Screen';
 import { IconChevronLeft, IconCross, IconDoc, IconPlus, IconTrash } from '../components/Icons';
 import type { CardPatch } from '../utils/cards';
 import { cx } from '../utils/cx';
+import { sourceRefLabel } from '../utils/source';
 import s from './CardEdit.module.css';
 
 const KIND_OPTIONS: { value: CardKind; label: string }[] = [
@@ -516,10 +517,12 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                             <Flex direction="column" align="stretch" gap={4}>
                                 <Typography.Text variant="label-strong" color="tertiary" asChild>
                                     <figcaption>
-                                        <Flex align="center" gap={4}>
-                                            <IconDoc size={14} tone="muted" />
-                                            Источник
-                                            {card.sourceRef ? ` · ${card.sourceRef}` : ''}
+                                        <Flex align="flex-start" gap={4}>
+                                            <IconDoc size={14} tone="muted" className={s.sourceIcon} />
+                                            <span>
+                                                Источник
+                                                {card.sourceRef ? ` · ${sourceRefLabel(card.sourceRef)}` : ''}
+                                            </span>
                                         </Flex>
                                     </figcaption>
                                 </Typography.Text>
