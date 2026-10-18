@@ -310,13 +310,16 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                                         aria-label={`Отметить вариант ${index + 1} как верный`}
                                         onChange={() => setCorrectOptionIndex(index)}
                                     />
-                                    <Input
-                                        value={option}
-                                        aria-label={`Вариант ${index + 1}`}
-                                        className={s.optionInput}
-                                        placeholder={`Вариант ${index + 1}`}
-                                        onChange={(event) => handleOptionChange(index, event.target.value)}
-                                    />
+                                    {/* MAX UI wraps the field in a div of its own; this one is
+                                        the flex item that takes the free width. */}
+                                    <div className={s.optionInput}>
+                                        <Input
+                                            value={option}
+                                            aria-label={`Вариант ${index + 1}`}
+                                            placeholder={`Вариант ${index + 1}`}
+                                            onChange={(event) => handleOptionChange(index, event.target.value)}
+                                        />
+                                    </div>
                                     <IconButton
                                         size="small"
                                         variant="ghost"
