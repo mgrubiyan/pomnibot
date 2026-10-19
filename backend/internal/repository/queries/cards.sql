@@ -14,8 +14,8 @@ VALUES ($1, $2, $3)
 RETURNING *;
 
 -- name: CreateCardTableItem :one
-INSERT INTO card_table_items (card_id, item_text, column_name)
-VALUES ($1, $2, $3)
+INSERT INTO card_table_items (card_id, item_text, column_name, position)
+VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: GetCardByID :one
@@ -106,9 +106,10 @@ WHERE card_id = $1
 ORDER BY position ASC;
 
 -- name: GetCardTableItems :many
-SELECT id, card_id, item_text, column_name
+SELECT id, card_id, item_text, column_name, position
 FROM card_table_items
-WHERE card_id = $1;
+WHERE card_id = $1
+ORDER BY position, id;
 
 -- name: UpdateCard :one
 UPDATE cards
