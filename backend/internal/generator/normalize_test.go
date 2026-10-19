@@ -68,6 +68,31 @@ func TestFindQuoteLimitsTheGap(t *testing.T) {
 
 // Slides are lists: the model drops the bullets and ends items with
 // periods. Bullets are typography, like quote marks and dashes.
+// A model copying a slide joins its lines and puts a colon after a heading
+// and a period after a list: the words are verbatim, the punctuation at the
+// joints is its own.
+func TestFindQuoteIgnoresPunctuationAtJoinedLines(t *testing.T) {
+	fragment := "Органоиды клетки\nДвумембранные:\n• ядро\n• митохондрии\nОдномембранные:\n• лизосомы\n• вакуоли\nНемембранные:\n• рибосомы"
+	quote := "Органоиды клетки: Двумембранные: • ядро • митохондрии. Одномембранные: • лизосомы • вакуоли."
+	want := "Органоиды клетки\nДвумембранные:\n• ядро\n• митохондрии\nОдномембранные:\n• лизосомы\n• вакуоли"
+	if got, ok := findQuote(fragment, quote); !ok || got != want {
+		t.Errorf("findQuote() = %q, %v; want %q", got, ok, want)
+	}
+	quote = "Органоиды клетки: двумембранные — ядро, митохондрии; одномембранные — лизосомы, вакуоли"
+	if got, ok := findQuote(fragment, quote); !ok || got != want {
+		t.Errorf("findQuote(dashes and commas) = %q, %v; want %q", got, ok, want)
+	}
+	quote = "Органоиды клетки... Двумембранные: • ядро • митохондрии Одномембранные: • лизосомы • вакуоли"
+	if got, ok := findQuote(fragment, quote); !ok || got != want {
+		t.Errorf("findQuote(an ellipsis at a break) = %q, %v; want %q", got, ok, want)
+	}
+	// Inside a line punctuation still counts: a period the notes do not
+	// have makes two claims of one.
+	if got, ok := findQuote("Митоз делит ядро клетки на два одинаковых ядра без изменения набора", "Митоз делит ядро. Клетки на два одинаковых ядра без изменения набора"); ok {
+		t.Errorf("findQuote() accepted a period inside a line: %q", got)
+	}
+}
+
 func TestFindQuoteIgnoresBullets(t *testing.T) {
 	fragment := "Языки с виртуальными машинами (Java, C#):\n" +
 		"▶ Компиляция в байт-код (промежуточное представление)\n" +

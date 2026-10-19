@@ -171,7 +171,7 @@ func checkStats(t *testing.T, res Result) {
 	if s.Cards != len(res.Cards) {
 		t.Errorf("Stats.Cards = %d, len(Cards) = %d", s.Cards, len(res.Cards))
 	}
-	accounted := s.DroppedInvalid + s.DroppedQuote + s.DroppedPersonal + s.DroppedUnsupported + s.DroppedExample + s.DroppedDuplicate + s.DroppedByLimit + s.DroppedVariants + s.Cards
+	accounted := s.DroppedInvalid + s.DroppedQuote + s.DroppedPersonal + s.DroppedUnsupported + s.DroppedTable + s.DroppedExample + s.DroppedDuplicate + s.DroppedByLimit + s.DroppedVariants + s.Cards
 	if s.CardsFromModel != accounted {
 		t.Errorf("CardsFromModel = %d, but dropped + returned = %d (%+v)", s.CardsFromModel, accounted, s)
 	}

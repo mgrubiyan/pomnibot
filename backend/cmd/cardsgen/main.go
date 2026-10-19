@@ -315,7 +315,19 @@ func formatCards(facts []cards.Fact, list []cards.Card) string {
 			}
 			fmt.Fprintf(&w, "     Варианты: %s\n", strings.Join(opts, " | "))
 		}
-		fmt.Fprintf(&w, "     О: %s\n", c.Answer)
+		if c.Table != nil {
+			for _, col := range c.Table.Columns {
+				var terms []string
+				for _, item := range c.Table.Items {
+					if item.Column == col {
+						terms = append(terms, item.Text)
+					}
+				}
+				fmt.Fprintf(&w, "     %s: %s\n", col, strings.Join(terms, ", "))
+			}
+		} else {
+			fmt.Fprintf(&w, "     О: %s\n", c.Answer)
+		}
 		fmt.Fprintf(&w, "     Объяснение: %s\n", c.Explanation)
 	}
 	return w.String()
@@ -344,6 +356,7 @@ func formatStats(s generator.Stats) string {
 	fmt.Fprintf(&w, "Карточек от модели:    %d\n", s.CardsFromModel)
 	fmt.Fprintf(&w, "  цитата не найдена:   %d (%s)\n", s.DroppedQuote, pct(s.DroppedQuote))
 	fmt.Fprintf(&w, "  ответ не из цитаты или есть в вопросе: %d (%s)\n", s.DroppedUnsupported, pct(s.DroppedUnsupported))
+	fmt.Fprintf(&w, "  таблица не по цитате: %d (%s)\n", s.DroppedTable, pct(s.DroppedTable))
 	fmt.Fprintf(&w, "  о деталях примера:   %d (%s)\n", s.DroppedExample, pct(s.DroppedExample))
 	fmt.Fprintf(&w, "  дубликаты:           %d (%s)\n", s.DroppedDuplicate, pct(s.DroppedDuplicate))
 	fmt.Fprintf(&w, "  не по схеме:         %d (%s)\n", s.DroppedInvalid, pct(s.DroppedInvalid))

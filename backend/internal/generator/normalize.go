@@ -155,6 +155,16 @@ type folded struct {
 // Words, their order and punctuation other than quotes and dashes must
 // match, so a paraphrase does not pass.
 func fold(s string) folded {
+	return foldWith(s, false)
+}
+
+// foldBreaks is fold keeping line breaks: a run of whitespace with one in it
+// becomes "\n" instead of a space. See matchAcrossBreaks.
+func foldBreaks(s string) folded {
+	return foldWith(s, true)
+}
+
+func foldWith(s string, breaks bool) folded {
 	f := folded{
 		start: make([]int, 0, len(s)),
 		end:   make([]int, 0, len(s)),
@@ -171,6 +181,7 @@ func fold(s string) folded {
 	}
 
 	spaceFrom, spaceTo := -1, -1 // pending whitespace run, written lazily
+	lineBreak := false           // the pending run holds a line break
 	glued := false               // after a dash or a sign, where a space means nothing
 	for i := 0; i < len(s); {
 		r, size := utf8.DecodeRuneInString(s[i:])
@@ -182,9 +193,10 @@ func fold(s string) folded {
 			continue
 		case unicode.IsSpace(r) || isBullet(r):
 			if spaceFrom < 0 {
-				spaceFrom = from
+				spaceFrom, lineBreak = from, false
 			}
 			spaceTo = to
+			lineBreak = lineBreak || r == '\n'
 			continue
 		case isDash(r):
 			spaceFrom = -1
@@ -194,7 +206,11 @@ func fold(s string) folded {
 		}
 
 		if spaceFrom >= 0 && !glued && !isSign(r) && b.Len() > 0 {
-			emit(' ', spaceFrom, spaceTo)
+			if breaks && lineBreak {
+				emit('\n', spaceFrom, spaceTo)
+			} else {
+				emit(' ', spaceFrom, spaceTo)
+			}
 		}
 		spaceFrom, glued = -1, isSign(r)
 
@@ -291,6 +307,12 @@ func locateQuote(fragment, quote string) (start, end int, ok bool) {
 	f := fold(fragment)
 	if i := indexPhrase(f.s, q, 0); i >= 0 {
 		start, end = spanOf(fragment, f, i, i+len(q))
+		return start, end, true
+	}
+
+	fb := foldBreaks(fragment)
+	if i, j, ok := matchAcrossBreaks(fb.s, q); ok {
+		start, end = spanOf(fragment, fb, i, j)
 		return start, end, true
 	}
 
@@ -445,6 +467,67 @@ func indexPhrase(s, phrase string, from int) int {
 		from = start + size
 	}
 	return -1
+}
+
+// pausePunct is what a model puts where it joins lines of a slide:
+// «Органоиды клетки: Двумембранные: • ядро • митохондрии.», «двумембранные —
+// ядро, митохондрии; одномембранные — …».
+const pausePunct = ".:;,-" // "-" is any dash after fold
+
+// matchAcrossBreaks finds the folded quote q in s, a fragment folded with its
+// line breaks, letting a sign of pausePunct stand at a line break on either
+// side only: the words are the notes', the punctuation at the joints is the
+// model's. Inside a line every sign must match, as in indexPhrase. It
+// returns the span of s matched.
+func matchAcrossBreaks(s, q string) (start, end int, ok bool) {
+	if !strings.Contains(s, "\n") || q == "" {
+		return 0, 0, false
+	}
+	pause := func(str string, i int) bool { return i < len(str) && strings.IndexByte(pausePunct, str[i]) >= 0 }
+	match := func(i int) int {
+		si, qi := i, 0
+		for qi < len(q) {
+			switch {
+			case si < len(s) && s[si] == '\n':
+				si++
+				if strings.HasPrefix(q[qi:], "...") {
+					qi += 3 // «Органоиды клетки... Двумембранные»
+				} else if pause(q, qi) {
+					qi++
+				}
+				if qi < len(q) && q[qi] == ' ' {
+					qi++
+				}
+			case pause(s, si) && si+1 < len(s) && s[si+1] == '\n' && (q[qi] == ' ' || pause(q, qi)):
+				si++ // the notes' sign at the break, which the quote left out or changed
+				if pause(q, qi) {
+					qi++
+				}
+			case si < len(s) && s[si] == q[qi]:
+				si++
+				qi++
+			default:
+				return -1
+			}
+		}
+		return si
+	}
+	first, _ := utf8.DecodeRuneInString(q)
+	last, _ := utf8.DecodeLastRuneInString(q)
+	for i := 0; i < len(s); {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		before, _ := utf8.DecodeLastRuneInString(s[:i])
+		if r == first && (!isWordRune(first) || !isWordRune(before)) {
+			if j := match(i); j > i {
+				after, _ := utf8.DecodeRuneInString(s[j:])
+				if !isWordRune(last) || !isWordRune(after) {
+					return i, j, true
+				}
+			}
+		}
+		i += size
+	}
+	return 0, 0, false
 }
 
 func isWordRune(r rune) bool {
