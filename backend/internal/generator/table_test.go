@@ -68,6 +68,18 @@ func TestTableGrounded(t *testing.T) {
 			want:  false,
 		},
 		{
+			name:  "a negated group",
+			quote: "К прокариотам относятся бактерии и археи. Вирусы не относятся ни к прокариотам, ни к эукариотам. К эукариотам относятся грибы и растения.",
+			table: table(cellColumns, "бактерии", "Прокариоты", "вирусы", "Прокариоты", "растения", "Эукариоты", "грибы", "Эукариоты"),
+			want:  false,
+		},
+		{
+			name:  "a term set against the group",
+			quote: "Бактерии, в отличие от грибов, — прокариоты, а растения — эукариоты.",
+			table: table(cellColumns, "бактерии", "Прокариоты", "грибы", "Прокариоты", "растения", "Эукариоты"),
+			want:  false,
+		},
+		{
 			// A table read from a PDF row by row: a header, then values.
 			// Which value is under which header is lost.
 			name:  "a header row",

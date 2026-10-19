@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"slices"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
@@ -113,7 +114,9 @@ func parseTable(data json.RawMessage) (modelFact, bool) {
 //	Бактерии, археи — прокариоты, растения и грибы — эукариоты.
 //	Прокариоты: бактерии, археи
 //
-// A clause naming two columns tells nothing, and neither does a table read
+// A clause that negates or sets a term apart («Вирусы не относятся к
+// прокариотам», «в отличие от грибов») puts it in no column. A clause naming
+// two columns tells nothing, and neither does a table read
 // from a PDF row by row, where a header line names the columns and the
 // values follow on lines of their own: such tables are dropped.
 func tableGrounded(t *cards.Table, quote string) bool {
@@ -152,6 +155,9 @@ func tableGrounded(t *cards.Table, quote string) bool {
 				if !namedIn(item, c.text) {
 					continue
 				}
+				if negated(c.text) {
+					return ""
+				}
 				if c.column != "" {
 					return c.column
 				}
@@ -176,6 +182,18 @@ func tableGrounded(t *cards.Table, quote string) bool {
 		}
 	}
 	return true
+}
+
+// negationWords turn a clause against the term it names.
+var negationWords = []string{"не", "нет", "ни", "кроме", "исключением", "отличие", "отличии"}
+
+func negated(clause string) bool {
+	for _, w := range strings.FieldsFunc(strings.ToLower(clause), func(r rune) bool { return !unicode.IsLetter(r) }) {
+		if slices.Contains(negationWords, w) {
+			return true
+		}
+	}
+	return false
 }
 
 // splitSentences cuts text at line breaks and at the ends of sentences.
