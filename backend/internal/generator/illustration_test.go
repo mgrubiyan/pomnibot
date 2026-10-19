@@ -22,14 +22,14 @@ Car extends Vehicle, Shape → Circle.
 
 func TestExampleNames(t *testing.T) {
 	got := exampleNames(codeFragment, "")
-	for _, name := range []string{"A", "B", "C", "obj", "Dog", "Car", "Shape", "Circle"} {
+	for _, name := range []string{"A", "B", "C", "obj", "Dog", "Car"} {
 		if !got.has(name) {
 			t.Errorf("%q not found among %v", name, got)
 		}
 	}
 	// A base class or a method may be the subject of a lecture: Exception,
 	// Animal of a zoo, __init__ and speak are not invented for one example.
-	for _, name := range []string{"Animal", "Vehicle", "hello", "speak", "self", "print", "pass"} {
+	for _, name := range []string{"Animal", "Vehicle", "hello", "speak", "self", "print", "pass", "Shape", "Circle"} {
 		if got.has(name) {
 			t.Errorf("%q taken for an example name", name)
 		}
@@ -49,9 +49,10 @@ func TestExampleNamesSkipConcepts(t *testing.T) {
 	}
 }
 
-// Formulas are not code: F = m · a and y = f(x) name no example.
+// Formulas are not code: F = m · a and y = f(x) name no example, and an
+// arrow between words is no scheme of classes.
 func TestExampleNamesSkipFormulas(t *testing.T) {
-	got := exampleNames("Второй закон Ньютона: F = m · a.\nФункция y = f(x) задана на отрезке. Fe → Fe2O3 при окислении. H2O → H2 + O2", "")
+	got := exampleNames("Второй закон Ньютона: F = m · a.\nФункция y = f(x) задана на отрезке. Fe → Fe2O3 при окислении. H2O → H2 + O2. Путь курса: Python → Java → Kotlin.", "")
 	if len(got) != 0 {
 		t.Errorf("names = %v, want none", got)
 	}

@@ -96,17 +96,17 @@ func declaredNames(text string, prose bool) nameSet {
 	for _, m := range reClassLetter.FindAllStringSubmatch(text, -1) {
 		add(m[1], true)
 	}
-	// Arrows join reactions and sequences too: both ends must look like
-	// classes, or Fe → Fe2O3 would make Fe an example.
+	// Arrows join reactions, timelines and stacks too (Fe → Fe2O3, Python →
+	// Java): only lone letters at both ends make a scheme of classes.
 	for i := 0; i < len(text); {
 		m := reArrow.FindStringSubmatchIndex(text[i:])
 		if m == nil {
 			break
 		}
 		left, right := text[i+m[2]:i+m[3]], text[i+m[4]:i+m[5]]
-		if arrowEnd(left) && arrowEnd(right) {
-			add(left, false)
-			add(right, false)
+		if utf8.RuneCountInString(left) == 1 && utf8.RuneCountInString(right) == 1 {
+			add(left, true)
+			add(right, true)
 		}
 		i += m[4] // the right end may start the next arrow: A → B → C
 	}
@@ -118,15 +118,6 @@ func declaredNames(text string, prose bool) nameSet {
 func typeName(s string) bool {
 	r, _ := utf8.DecodeRuneInString(s)
 	return unicode.IsUpper(r) && !strings.Contains(s, "_")
-}
-
-// arrowEnd reports a name that may stand for a class at the end of an arrow:
-// a lone letter or a capitalized word without digits.
-func arrowEnd(s string) bool {
-	if utf8.RuneCountInString(s) == 1 {
-		return true
-	}
-	return typeName(s) && strings.IndexFunc(s, unicode.IsDigit) < 0 && strings.IndexFunc(s, unicode.IsLower) >= 0
 }
 
 // defines reports whether a sentence or a line of text starts by defining
