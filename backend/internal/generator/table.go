@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"hash/fnv"
 	"math/rand/v2"
+	"regexp"
 	"slices"
 	"strings"
 	"unicode"
@@ -31,7 +32,7 @@ const (
 	minTableItems    = 4
 	maxTableItems    = 8
 	maxTableItemLen  = 32 // runes
-	maxTablesInChunk = 1
+	maxTablesInChunk = 3
 )
 
 // Field names of a table in the model's answer, besides the fact's.
@@ -93,6 +94,11 @@ func parseTable(data json.RawMessage) (modelFact, bool) {
 		if i < 0 || slices.ContainsFunc(t.Items, func(prev cards.TableItem) bool { return strings.EqualFold(prev.Text, text) }) {
 			return modelFact{}, false
 		}
+		// A term that a column names, or the other way round, sorts itself:
+		// «нервная» under «Мышечная и нервная».
+		if slices.ContainsFunc(columns, func(c string) bool { return wordsWithin(text, c) || wordsWithin(c, text) }) {
+			return modelFact{}, false
+		}
 		t.Items = append(t.Items, cards.TableItem{Text: text, Column: columns[i]})
 		filled[columns[i]] = true
 	}
@@ -149,10 +155,10 @@ func tableGrounded(t *cards.Table, quote string) bool {
 		sentences = append(sentences, cl)
 	}
 
-	columnOf := func(item string) string {
+	columnOf := func(item string, in func(s, text string) bool) string {
 		for _, cl := range sentences {
 			for i, c := range cl {
-				if !namedIn(item, c.text) {
+				if !in(item, c.text) {
 					continue
 				}
 				if negated(c.text) {
@@ -177,7 +183,30 @@ func tableGrounded(t *cards.Table, quote string) bool {
 		return ""
 	}
 	for _, item := range t.Items {
-		if col := columnOf(item.Text); col == "" || col == ambiguous || col != item.Column {
+		// A term is looked up word for word first, then up to endings: «частица»
+		// is a form of «части», and «части речи» names both columns, but
+		// «перетяжка» stands in the notes as «перетяжкой».
+		in := namedIn
+		if wordsWithin(item.Text, quote) {
+			in = wordsWithin
+		}
+		if col := columnOf(item.Text, in); col == "" || col == ambiguous || col != item.Column {
+			return false
+		}
+	}
+	return true
+}
+
+// wordsWithin reports whether every content word of s occurs in text as it
+// is, ending and all.
+func wordsWithin(s, text string) bool {
+	want := contentWords(s)
+	if len(want) == 0 {
+		return false
+	}
+	have := contentWords(text)
+	for _, w := range want {
+		if !slices.ContainsFunc(have, func(h []rune) bool { return slices.Equal(w, h) }) {
 			return false
 		}
 	}
@@ -194,6 +223,24 @@ func negated(clause string) bool {
 		}
 	}
 	return false
+}
+
+var (
+	// «К металлам относятся железо и медь», «бактерии относятся к прокариотам».
+	reBelongs = regexp.MustCompile(`(?i)(?:^|[^\p{L}])(?:к\s+\p{L}+\s+относ\p{L}*|относ\p{L}*\s+к\s+\p{L}+)`)
+	// «Служебные: предлог, союз, частица» — a group and a list of two commas.
+	reGroupList = regexp.MustCompile(`\p{L}:\s*[^.:\n]+,[^.:\n]+,`)
+)
+
+// minGroupStatements is how many statements of a fragment must put terms in
+// groups for it to hold a classification: one list is not yet a table.
+const minGroupStatements = 2
+
+// classification reports a fragment that puts terms in groups, so the user
+// prompt asks for a table outright. The system prompt asks for one too, but a
+// model given a long list of rules tends to leave tables empty.
+func classification(text string) bool {
+	return len(reBelongs.FindAllStringIndex(text, -1))+len(reGroupList.FindAllStringIndex(text, -1)) >= minGroupStatements
 }
 
 // splitSentences cuts text at line breaks and at the ends of sentences.
