@@ -490,7 +490,9 @@ func matchAcrossBreaks(s, q string) (start, end int, ok bool) {
 			switch {
 			case si < len(s) && s[si] == '\n':
 				si++
-				if pause(q, qi) {
+				if strings.HasPrefix(q[qi:], "...") {
+					qi += 3 // «Органоиды клетки... Двумембранные»
+				} else if pause(q, qi) {
 					qi++
 				}
 				if qi < len(q) && q[qi] == ' ' {
