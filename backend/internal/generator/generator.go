@@ -110,13 +110,14 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (Result, error) 
 		"title", doc.Title, "chars", utf8.RuneCountInString(text),
 		"fragments", len(all), "filtered", stats.ChunksFiltered)
 
+	examples := exampleNames(text, doc.Title)
 	asm := newAssembler(doc.Title, normalizedPageStarts(doc.Text, doc.PageStarts, text), len(work), g.opts.MaxFactsPerDoc, &stats)
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	slots := make(chan struct{}, g.opts.Concurrency)
 	results := make(chan chunkResult, len(work))
-	go g.dispatch(runCtx, doc, len(all), work, asm, slots, results)
+	go g.dispatch(runCtx, doc, examples, len(all), work, asm, slots, results)
 
 	deliver := func(cs []cards.Card) {
 		if len(cs) == 0 {
@@ -194,7 +195,7 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (Result, error) 
 // dispatch starts fragments in document order, at most Concurrency at a time.
 // Every fragment gets exactly one result, so the ordered assembly never
 // waits for a gap. Slots are released by the assembler, not by the worker.
-func (g *Generator) dispatch(ctx context.Context, doc Document, total int, work []chunk,
+func (g *Generator) dispatch(ctx context.Context, doc Document, examples nameSet, total int, work []chunk,
 	asm *assembler, slots chan struct{}, results chan<- chunkResult) {
 	var wg sync.WaitGroup
 	defer func() {
@@ -222,14 +223,15 @@ func (g *Generator) dispatch(ctx context.Context, doc Document, total int, work 
 		}
 		r.holdsSlot = true
 		wg.Go(func() {
-			results <- g.processChunk(ctx, doc, total, r)
+			results <- g.processChunk(ctx, doc, examples, total, r)
 		})
 	}
 }
 
 // processChunk makes the model call for one fragment, retries once on an
-// unparseable answer and checks every quote against the fragment.
-func (g *Generator) processChunk(ctx context.Context, doc Document, total int, r chunkResult) chunkResult {
+// unparseable answer and checks every quote against the fragment. examples
+// are the names the document's examples invent, see aboutExample.
+func (g *Generator) processChunk(ctx context.Context, doc Document, examples nameSet, total int, r chunkResult) chunkResult {
 	began := time.Now()
 	log := slog.With("fragment", r.chunk.Index+1)
 	r.models = map[string]int{}
@@ -313,6 +315,11 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, total int, r
 				r.droppedUnsupported++
 				log.Info("cards: answer not in the quote or given in the question",
 					"kind", c.Kind, "question", c.Question, "answer", c.Answer)
+				continue
+			}
+			if aboutExample(c, examples) {
+				r.droppedExample++
+				log.Info("cards: card about the names of an example", "kind", c.Kind, "question", c.Question, "answer", c.Answer)
 				continue
 			}
 			if clean := cleanExplanation(c.Explanation, r.chunk.Text); clean != c.Explanation {
