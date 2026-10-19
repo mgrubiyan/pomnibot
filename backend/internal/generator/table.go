@@ -111,7 +111,7 @@ func parseTable(data json.RawMessage) (modelFact, bool) {
 }
 
 // tableGrounded reports whether the quote puts every term of t in its
-// column. The quote is cut into sentences (and lines), a sentence into
+// column. The quote is cut into lines, a line into sentences, a sentence into
 // clauses at commas. A term belongs to the one column its clause names;
 // a clause naming none continues the list of the nearest clause before it in
 // the sentence that names one, or else of the nearest one after it:
@@ -120,43 +120,64 @@ func parseTable(data json.RawMessage) (modelFact, bool) {
 //	Бактерии, археи — прокариоты, растения и грибы — эукариоты.
 //	Прокариоты: бактерии, археи
 //
+// A list item («• ядро», «1. ядро») naming no column belongs to the line
+// above its list, which must name exactly one: a slide with a heading per
+// group. Only a marked line counts as an item: «Немембранные» on a line of
+// its own may be a heading of a group the table left out.
+//
 // A clause that negates or sets a term apart («Вирусы не относятся к
 // прокариотам», «в отличие от грибов») puts it in no column. A clause naming
-// two columns tells nothing, and neither does a table read
-// from a PDF row by row, where a header line names the columns and the
-// values follow on lines of their own: such tables are dropped.
+// two columns tells nothing, and neither does a table read from a PDF row by
+// row, where a header line names the columns and the values follow on lines
+// of their own: such tables are dropped.
 func tableGrounded(t *cards.Table, quote string) bool {
 	for _, c := range t.Columns {
 		if !namedIn(c, quote) {
 			return false
 		}
 	}
+	const ambiguous = "\x00"
+	columnIn := func(text string) string {
+		found := ""
+		for _, col := range t.Columns {
+			if namedIn(col, text) {
+				if found != "" {
+					return ambiguous
+				}
+				found = col
+			}
+		}
+		return found
+	}
 	type clause struct {
 		text   string
 		column string // "" for none, ambiguous for two or more
 	}
-	const ambiguous = "\x00"
-	var sentences [][]clause
-	for _, s := range splitSentences(quote) {
-		var cl []clause
-		for part := range strings.SplitSeq(s, ",") {
-			c := clause{text: part}
-			for _, col := range t.Columns {
-				if namedIn(col, part) {
-					if c.column != "" {
-						c.column = ambiguous
-						break
-					}
-					c.column = col
-				}
+	type sentence struct {
+		clauses []clause
+		line    int
+	}
+	type line struct {
+		item   bool // a list item
+		column string
+	}
+	var lines []line
+	var sentences []sentence
+	for i, raw := range strings.Split(quote, "\n") {
+		body, item := listItem(raw)
+		lines = append(lines, line{item: item, column: columnIn(body)})
+		for _, s := range splitSentences(body) {
+			st := sentence{line: i}
+			for part := range strings.SplitSeq(s, ",") {
+				st.clauses = append(st.clauses, clause{text: part, column: columnIn(part)})
 			}
-			cl = append(cl, c)
+			sentences = append(sentences, st)
 		}
-		sentences = append(sentences, cl)
 	}
 
 	columnOf := func(item string, in func(s, text string) bool) string {
-		for _, cl := range sentences {
+		for _, s := range sentences {
+			cl := s.clauses
 			for i, c := range cl {
 				if !in(item, c.text) {
 					continue
@@ -177,7 +198,17 @@ func tableGrounded(t *cards.Table, quote string) bool {
 						return cl[j].column
 					}
 				}
-				return ""
+				if !lines[s.line].item || lines[s.line].column != "" {
+					return ""
+				}
+				j := s.line - 1
+				for j >= 0 && lines[j].item && lines[j].column == "" {
+					j--
+				}
+				if j < 0 {
+					return ""
+				}
+				return lines[j].column
 			}
 		}
 		return ""
@@ -195,6 +226,17 @@ func tableGrounded(t *cards.Table, quote string) bool {
 		}
 	}
 	return true
+}
+
+// reListItem matches the marker of a list item: «• », «- », «1. », «2) », «а) ».
+var reListItem = regexp.MustCompile(`^\s*(?:[•\-–—*▪●○◦·]|\d{1,2}[.)]|\p{Ll}\))\s+`)
+
+// listItem returns a line without its list marker and whether it had one.
+func listItem(line string) (string, bool) {
+	if m := reListItem.FindStringIndex(line); m != nil {
+		return line[m[1]:], true
+	}
+	return line, false
 }
 
 // wordsWithin reports whether every content word of s occurs in text as it
@@ -236,11 +278,30 @@ var (
 // groups for it to hold a classification: one list is not yet a table.
 const minGroupStatements = 2
 
+// minGroupItems is how many list items under a heading make a group.
+const minGroupItems = 2
+
 // classification reports a fragment that puts terms in groups, so the user
 // prompt asks for a table outright. The system prompt asks for one too, but a
 // model given a long list of rules tends to leave tables empty.
 func classification(text string) bool {
-	return len(reBelongs.FindAllStringIndex(text, -1))+len(reGroupList.FindAllStringIndex(text, -1)) >= minGroupStatements
+	n := len(reBelongs.FindAllStringIndex(text, -1)) + len(reGroupList.FindAllStringIndex(text, -1))
+	// A slide: a heading, then two list items or more under it.
+	items, heading := 0, false
+	for line := range strings.SplitSeq(text, "\n") {
+		if _, item := listItem(line); item {
+			items++
+			continue
+		}
+		if heading && items >= minGroupItems {
+			n++
+		}
+		heading, items = strings.TrimSpace(line) != "", 0
+	}
+	if heading && items >= minGroupItems {
+		n++
+	}
+	return n >= minGroupStatements
 }
 
 // splitSentences cuts text at line breaks and at the ends of sentences.
