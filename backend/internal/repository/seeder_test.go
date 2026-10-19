@@ -203,3 +203,36 @@ func TestSaveGeneratedSet_Success(t *testing.T) {
 		t.Errorf("expected 3 options for choice card, got %d", len(tq.createdOptions))
 	}
 }
+
+func TestSaveGeneratedSet_TableCard(t *testing.T) {
+	tq := newTestQuerier()
+	genResult := generator.Result{
+		Facts: []cards.Fact{{ID: "fact-1", Name: "Прокариоты и эукариоты", Topic: "Клетка"}},
+		Cards: []cards.Card{{
+			FactID:   "fact-1",
+			Kind:     cards.KindTable,
+			Question: "Распределите организмы по строению клетки",
+			Table: &cards.Table{
+				Columns: []string{"Прокариоты", "Эукариоты"},
+				Items: []cards.TableItem{
+					{Text: "грибы", Column: "Эукариоты"}, {Text: "бактерии", Column: "Прокариоты"},
+					{Text: "археи", Column: "Прокариоты"}, {Text: "растения", Column: "Эукариоты"},
+				},
+			},
+			SourceQuote: "К прокариотам относятся бактерии и археи, к эукариотам — растения и грибы.",
+		}},
+	}
+
+	if _, n, err := repository.SaveGeneratedSet(context.Background(), tq, 1, "Клетка", genResult); err != nil || n != 1 {
+		t.Fatalf("SaveGeneratedSet = %d cards, err %v", n, err)
+	}
+	if len(tq.createdColumns) != 2 || tq.createdColumns[1].Name != "Эукариоты" || tq.createdColumns[1].Position != 1 {
+		t.Errorf("columns = %+v", tq.createdColumns)
+	}
+	if len(tq.createdItems) != 4 || tq.createdItems[0].ItemText != "грибы" || tq.createdItems[0].ColumnName != "Эукариоты" {
+		t.Errorf("items = %+v, want all four in the order given", tq.createdItems)
+	}
+	if tq.createdCards[0].AnswerText.Valid {
+		t.Errorf("answer = %+v, want none: the layout is the answer", tq.createdCards[0].AnswerText)
+	}
+}

@@ -279,6 +279,7 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, total int, r
 				"attempt", attempt+1, "err", err, "answer", clip(resp.Content, logAnswerLength))
 			continue
 		}
+		log.Debug("cards: model answer", "answer", string(resp.Content))
 		parsed, r.droppedInvalid, answered = facts, invalid, true
 		break
 	}
@@ -309,6 +310,14 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, total int, r
 
 		kept := f.Cards[:0]
 		for _, c := range f.Cards {
+			if c.Kind == cards.KindTable {
+				if !tableGrounded(c.Table, f.Quote) {
+					r.droppedTable++
+					log.Info("cards: table not in the quote as laid out", "question", c.Question, "table", c.Table, "quote", f.Quote)
+					continue
+				}
+				c.Table = shuffleTable(c.Table, f.ID)
+			}
 			if answerChecked(c.Kind) && !answerSupported(c, f.Quote) || c.Kind == cards.KindFlip && namedIn(c.Answer, c.Question) {
 				r.droppedUnsupported++
 				log.Info("cards: answer not in the quote or given in the question",

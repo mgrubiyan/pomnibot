@@ -126,6 +126,27 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title str
 				}
 			}
 		}
+
+		if c.Kind == cards.KindTable && c.Table != nil {
+			for idx, col := range c.Table.Columns {
+				if _, err := q.CreateCardTableColumn(ctx, db.CreateCardTableColumnParams{
+					CardID:   createdCard.ID,
+					Position: int32(idx),
+					Name:     col,
+				}); err != nil {
+					slog.ErrorContext(ctx, "failed to create card table column", "error", err)
+				}
+			}
+			for _, item := range c.Table.Items {
+				if _, err := q.CreateCardTableItem(ctx, db.CreateCardTableItemParams{
+					CardID:     createdCard.ID,
+					ItemText:   item.Text,
+					ColumnName: item.Column,
+				}); err != nil {
+					slog.ErrorContext(ctx, "failed to create card table item", "error", err)
+				}
+			}
+		}
 	}
 
 	if err := q.InitUserFactProgress(ctx, db.InitUserFactProgressParams{

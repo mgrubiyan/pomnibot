@@ -66,6 +66,7 @@ type Stats struct {
 	DroppedQuote       int `json:"droppedQuote"`       // its fact's quote not found in the fragment
 	DroppedPersonal    int `json:"droppedPersonal"`    // its fact's quote holds a password, a phone number or the like
 	DroppedUnsupported int `json:"droppedUnsupported"` // choice or input answer not in the quote, or given in the question; a flip answer its question names
+	DroppedTable       int `json:"droppedTable"`       // table whose terms the quote does not put in their columns
 	DroppedDuplicate   int `json:"droppedDuplicate"`   // same fact or same question as earlier
 	DroppedByLimit     int `json:"droppedByLimit"`     // its fact is over MaxFactsPerDoc
 	DroppedVariants    int `json:"droppedVariants"`    // could not keep its kind, other cards cover the fact

@@ -34,6 +34,7 @@ type chunkResult struct {
 	droppedQuote       int
 	droppedPersonal    int
 	droppedUnsupported int
+	droppedTable       int
 	trimmedExplains    int
 	usage              providers.Usage
 	models             map[string]int
@@ -192,6 +193,7 @@ func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok boo
 			Explanation: mc.Explanation,
 			SourceQuote: f.Quote,
 			SourceRef:   sourceRef(a.title, a.pages, f.Start, f.End),
+			Table:       mc.Table,
 		}
 		a.seq++
 		switch {
@@ -435,6 +437,7 @@ func (a *assembler) count(r chunkResult) {
 	s.DroppedQuote += r.droppedQuote
 	s.DroppedUnsupported += r.droppedUnsupported
 	s.DroppedPersonal += r.droppedPersonal
+	s.DroppedTable += r.droppedTable
 	s.TrimmedExplanations += r.trimmedExplains
 
 	if r.calls > 0 {

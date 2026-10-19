@@ -60,7 +60,7 @@ func newDistractorPool() *distractorPool {
 }
 
 func (p *distractorPool) add(kind cards.Kind, answer, topic string, pos int) {
-	if kind == cards.KindBoolean {
+	if kind == cards.KindBoolean || kind == cards.KindTable {
 		return
 	}
 	key := answerKey(answer)

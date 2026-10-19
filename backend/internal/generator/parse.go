@@ -34,6 +34,8 @@ type modelCard struct {
 	// Alt is, for boolean only, the claim with the opposite answer: the
 	// assembler shows one of the two so that true and false stay even.
 	Alt string
+	// Table is the layout of a table card, whose Answer is empty.
+	Table *cards.Table
 }
 
 // maxCardsPerFact is one card of each kind.
@@ -83,7 +85,7 @@ func parseAnswer(raw []byte, maxFacts int) (facts []modelFact, invalid int, err 
 
 // decodeAnswer reads one JSON value as a set of facts.
 func decodeAnswer(data []byte, maxFacts int) ([]modelFact, int, error) {
-	var items []json.RawMessage
+	var items, tables []json.RawMessage
 	flat := false
 	switch data[0] {
 	case '[':
@@ -94,8 +96,9 @@ func decodeAnswer(data []byte, maxFacts int) ([]modelFact, int, error) {
 		flat = len(items) > 0 && !hasField(items[0], "cards")
 	case '{':
 		var obj struct {
-			Facts *[]json.RawMessage `json:"facts"`
-			Cards *[]json.RawMessage `json:"cards"`
+			Facts  *[]json.RawMessage `json:"facts"`
+			Cards  *[]json.RawMessage `json:"cards"`
+			Tables []json.RawMessage  `json:"tables"`
 		}
 		if err := json.Unmarshal(data, &obj); err != nil {
 			return nil, 0, fmt.Errorf("decode answer: %w", err)
@@ -105,19 +108,20 @@ func decodeAnswer(data []byte, maxFacts int) ([]modelFact, int, error) {
 			items = *obj.Facts
 		case obj.Cards != nil:
 			items, flat = *obj.Cards, true
-		default:
+		case obj.Tables == nil:
 			return nil, 0, errNoFacts
 		}
+		tables = obj.Tables
 	default:
 		return nil, 0, errNoFacts
 	}
 
-	if flat {
-		facts, invalid := groupFlatCards(items, maxFacts)
-		return facts, invalid, nil
-	}
 	var facts []modelFact
 	invalid := 0
+	if flat {
+		facts, invalid = groupFlatCards(items, maxFacts)
+		items = nil
+	}
 	for i, item := range items {
 		if i >= maxFacts {
 			for _, rest := range items[i:] {
@@ -130,6 +134,16 @@ func decodeAnswer(data []byte, maxFacts int) ([]modelFact, int, error) {
 		if len(f.Cards) > 0 {
 			facts = append(facts, f)
 		}
+	}
+	// Tables come on top of maxFacts: a fragment rarely holds one.
+	for i, item := range tables {
+		f, ok := parseTable(item)
+		if !ok || i >= maxTablesInChunk {
+			invalid++
+			slog.Debug("cards: table breaks the rules or the limit", "table", string(item))
+			continue
+		}
+		facts = append(facts, f)
 	}
 	return facts, invalid, nil
 }

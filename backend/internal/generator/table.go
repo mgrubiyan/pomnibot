@@ -1,0 +1,219 @@
+package generator
+
+import (
+	"encoding/json"
+	"hash/fnv"
+	"math/rand/v2"
+	"slices"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
+)
+
+// Table cards. A classification of the notes («К прокариотам относятся
+// бактерии и археи, к эукариотам — растения и грибы») becomes a sorting card:
+// the student lays the terms out across the columns. A wrong key teaches a
+// wrong fact, and the model is no more careful about a table than about a
+// quote, so the key is checked against the quote in code (tableGrounded): a
+// term must stand next to its own column there.
+//
+// The model returns tables apart from facts, in "tables": a card of its own
+// kind with columns and items would not fit the card schema, where every
+// field is required.
+
+// Table size. The feed lays columns out two in a row on a phone and terms as
+// chips, so both stay few and short.
+const (
+	minTableColumns  = 2
+	maxTableColumns  = 3
+	minTableItems    = 4
+	maxTableItems    = 8
+	maxTableItemLen  = 32 // runes
+	maxTablesInChunk = 1
+)
+
+// Field names of a table in the model's answer, besides the fact's.
+const (
+	fieldColumns = "columns"
+	fieldItems   = "items"
+	fieldText    = "text"
+	fieldColumn  = "column"
+)
+
+// parseTable reads {"quote", "topic", "name", "question", "explanation",
+// "columns", "items": [{"text", "column"}]} as a fact with one table card.
+// A table out of size, with a term in no column or a column with no terms,
+// is rejected whole: a table without a term is a different card.
+func parseTable(data json.RawMessage) (modelFact, bool) {
+	fields, ok := objectFields(data)
+	if !ok {
+		return modelFact{}, false
+	}
+	quote, okQuote := stringField(fields, fieldQuote)
+	topic, okTopic := stringField(fields, fieldTopic)
+	question, okQuestion := stringField(fields, fieldQuestion)
+	explanation, _ := stringField(fields, fieldExplanation)
+	if !okQuote || !okTopic || !okQuestion {
+		return modelFact{}, false
+	}
+
+	columns := stringList(fields, fieldColumns)
+	if len(columns) < minTableColumns || len(columns) > maxTableColumns {
+		return modelFact{}, false
+	}
+	for i, c := range columns {
+		columns[i] = strings.TrimSpace(c)
+		if slices.ContainsFunc(columns[:i], func(prev string) bool { return strings.EqualFold(prev, columns[i]) }) {
+			return modelFact{}, false
+		}
+	}
+
+	var items []json.RawMessage
+	if raw, ok := fields[fieldItems]; !ok || json.Unmarshal(raw, &items) != nil ||
+		len(items) < minTableItems || len(items) > maxTableItems {
+		return modelFact{}, false
+	}
+	t := &cards.Table{Columns: columns}
+	filled := map[string]bool{}
+	for _, raw := range items {
+		item, ok := objectFields(raw)
+		if !ok {
+			return modelFact{}, false
+		}
+		text, okText := stringField(item, fieldText)
+		column, okColumn := stringField(item, fieldColumn)
+		if !okText || !okColumn || utf8.RuneCountInString(text) > maxTableItemLen {
+			return modelFact{}, false
+		}
+		// The feed grades a term by the column string, so it must be one of
+		// the columns as listed.
+		i := slices.IndexFunc(columns, func(c string) bool { return strings.EqualFold(c, strings.TrimSpace(column)) })
+		if i < 0 || slices.ContainsFunc(t.Items, func(prev cards.TableItem) bool { return strings.EqualFold(prev.Text, text) }) {
+			return modelFact{}, false
+		}
+		t.Items = append(t.Items, cards.TableItem{Text: text, Column: columns[i]})
+		filled[columns[i]] = true
+	}
+	if len(filled) != len(columns) {
+		return modelFact{}, false
+	}
+
+	card := modelCard{Kind: cards.KindTable, Question: question, Explanation: explanation, Table: t}
+	return modelFact{Quote: quote, Topic: topic, Name: factName(fields, topic), Cards: []modelCard{card}}, true
+}
+
+// tableGrounded reports whether the quote puts every term of t in its
+// column. The quote is cut into sentences (and lines), a sentence into
+// clauses at commas. A term belongs to the one column its clause names;
+// a clause naming none continues the list of the nearest clause before it in
+// the sentence that names one, or else of the nearest one after it:
+//
+//	К прокариотам относятся бактерии и археи, к эукариотам — растения, животные и грибы.
+//	Бактерии, археи — прокариоты, растения и грибы — эукариоты.
+//	Прокариоты: бактерии, археи
+//
+// A clause naming two columns tells nothing, and neither does a table read
+// from a PDF row by row, where a header line names the columns and the
+// values follow on lines of their own: such tables are dropped.
+func tableGrounded(t *cards.Table, quote string) bool {
+	for _, c := range t.Columns {
+		if !namedIn(c, quote) {
+			return false
+		}
+	}
+	type clause struct {
+		text   string
+		column string // "" for none, ambiguous for two or more
+	}
+	const ambiguous = "\x00"
+	var sentences [][]clause
+	for _, s := range splitSentences(quote) {
+		var cl []clause
+		for part := range strings.SplitSeq(s, ",") {
+			c := clause{text: part}
+			for _, col := range t.Columns {
+				if namedIn(col, part) {
+					if c.column != "" {
+						c.column = ambiguous
+						break
+					}
+					c.column = col
+				}
+			}
+			cl = append(cl, c)
+		}
+		sentences = append(sentences, cl)
+	}
+
+	columnOf := func(item string) string {
+		for _, cl := range sentences {
+			for i, c := range cl {
+				if !namedIn(item, c.text) {
+					continue
+				}
+				if c.column != "" {
+					return c.column
+				}
+				for j := i - 1; j >= 0; j-- {
+					if cl[j].column != "" {
+						return cl[j].column
+					}
+				}
+				for j := i + 1; j < len(cl); j++ {
+					if cl[j].column != "" {
+						return cl[j].column
+					}
+				}
+				return ""
+			}
+		}
+		return ""
+	}
+	for _, item := range t.Items {
+		if col := columnOf(item.Text); col == "" || col == ambiguous || col != item.Column {
+			return false
+		}
+	}
+	return true
+}
+
+// splitSentences cuts text at line breaks and at the ends of sentences.
+func splitSentences(text string) []string {
+	return strings.FieldsFunc(text, func(r rune) bool {
+		return r == '\n' || r == '.' || r == ';' || r == '!' || r == '?'
+	})
+}
+
+// shuffleTable returns t with its items in an order that does not give the
+// columns away: the model lists them column by column, and the feed shows
+// them as they come. The order depends on the fact only, so a regenerated
+// set looks the same.
+func shuffleTable(t *cards.Table, factID string) *cards.Table {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(factID))
+	rng := rand.New(rand.NewPCG(h.Sum64(), 0))
+	out := &cards.Table{Columns: slices.Clone(t.Columns), Items: slices.Clone(t.Items)}
+	for range 8 {
+		rng.Shuffle(len(out.Items), func(i, j int) { out.Items[i], out.Items[j] = out.Items[j], out.Items[i] })
+		if !grouped(out) {
+			break
+		}
+	}
+	return out
+}
+
+// grouped reports whether the items of each column come one after another.
+func grouped(t *cards.Table) bool {
+	seen := map[string]bool{}
+	for i, item := range t.Items {
+		if i > 0 && item.Column == t.Items[i-1].Column {
+			continue
+		}
+		if seen[item.Column] {
+			return false
+		}
+		seen[item.Column] = true
+	}
+	return true
+}
