@@ -93,6 +93,26 @@ var (
 	}
 )
 
+// reListItem matches the marker of a list item: «• », «- », «1. », «2) », «а) ».
+var reListItem = regexp.MustCompile(`^\s*(?:[•\-–—*▪●○◦·]|\d{1,2}[.)]|\p{Ll}\))\s+`)
+
+// minListShare is the share of list items among the lines of a slide. A
+// contents page is numbered lines too, but it is caught by its page numbers
+// first.
+const minListShare = 0.5
+
+// slide reports a fragment that is mostly list items: a slide of a deck,
+// short lines that are study material all the same.
+func slide(lines []string) bool {
+	items := 0
+	for _, line := range lines {
+		if reListItem.MatchString(line) {
+			items++
+		}
+	}
+	return len(lines) > 0 && float64(items) >= minListShare*float64(len(lines))
+}
+
 // junkReason returns why a fragment should not be sent to the model, or ""
 // if it should. whole is a fragment that is the entire document: a short
 // page a student sent is not a scrap of a long one, so the model decides
@@ -163,8 +183,9 @@ func junkReason(text string, whole bool) string {
 	if share(digitsDots, nonSpace) > maxDigitDotRatio {
 		return junkDigitsDots
 	}
-	// A vocabulary list is short lines by nature: «cat – кошка».
-	if len(lines) >= minLinesForAvg && avgLine < minAvgLineLen && !vocabulary(lines) {
+	// A vocabulary list is short lines by nature: «cat – кошка», and so is a
+	// slide: «Функции белков», «• строительная».
+	if len(lines) >= minLinesForAvg && avgLine < minAvgLineLen && !vocabulary(lines) && !slide(lines) {
 		return junkShortLines
 	}
 	return ""
