@@ -519,7 +519,7 @@ func TestGenerateDeliversCardsProgressively(t *testing.T) {
 			}
 			time.Sleep(time.Millisecond)
 		}
-		return answerJSON(mc{kind: cards.KindFlip, q: "Что такое " + strings.ToLower(firstWord(frag)) + "?", a: "Ответ из текста.", quote: firstSentence(frag)}), nil
+		return answerJSON(mc{kind: cards.KindFlip, q: "Что такое " + strings.ToLower(firstWord(frag)) + "?", a: firstSentence(frag), quote: firstSentence(frag)}), nil
 	}}
 
 	res := generate(t, p, doc, opts)
@@ -540,7 +540,7 @@ func TestGenerateSkipsFragmentsTheContentFilterRefuses(t *testing.T) {
 		if word := firstWord(frag); word != "Митоз" && word != "Кроссинговер" {
 			return "", fmt.Errorf("gigachat: GigaChat-3-Ultra: %w", providers.ErrRefused)
 		}
-		return answerJSON(mc{kind: cards.KindFlip, q: "Что такое " + strings.ToLower(firstWord(frag)) + "?", a: "Ответ из текста.", quote: firstSentence(frag)}), nil
+		return answerJSON(mc{kind: cards.KindFlip, q: "Что такое " + strings.ToLower(firstWord(frag)) + "?", a: firstSentence(frag), quote: firstSentence(frag)}), nil
 	}}
 	res, err := NewGenerator(p, opts).Generate(context.Background(), doc)
 	if err != nil {
@@ -555,7 +555,7 @@ func TestGenerateSurvivesPanickingCallback(t *testing.T) {
 	doc, opts := testDoc(t, paragraphs[:2]...)
 	opts.OnBatch = func(Batch) { panic("storage is down") }
 	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
-		return answerJSON(mc{kind: cards.KindFlip, q: "Что такое " + strings.ToLower(firstWord(frag)) + "?", a: "Ответ.", quote: firstSentence(frag)}), nil
+		return answerJSON(mc{kind: cards.KindFlip, q: "Что такое " + strings.ToLower(firstWord(frag)) + "?", a: firstSentence(frag), quote: firstSentence(frag)}), nil
 	}}
 	res := generate(t, p, doc, opts)
 	if len(res.Cards) != 2 {
@@ -573,7 +573,7 @@ func TestGenerateSpreadsCardLimitOverDocument(t *testing.T) {
 			list = append(list, mc{
 				kind:  cards.KindFlip,
 				q:     fmt.Sprintf("Какое %s свойство у понятия %s?", o, strings.ToLower(firstWord(frag))),
-				a:     "Ответ из текста.",
+				a:     leadingWords(frag, 5),
 				quote: leadingWords(frag, 5+2*i), // three quotes: three facts
 			})
 		}
@@ -612,7 +612,7 @@ func TestGenerateBackfillsUnusedCardLimit(t *testing.T) {
 			list = append(list, mc{
 				kind:  cards.KindFlip,
 				q:     fmt.Sprintf("Какое %s свойство у понятия %s?", o, strings.ToLower(firstWord(frag))),
-				a:     "Ответ из текста.",
+				a:     leadingWords(frag, 5),
 				quote: leadingWords(frag, 5+2*i), // three quotes: three facts
 			})
 		}
@@ -641,7 +641,7 @@ func TestGenerateSurvivesProviderError(t *testing.T) {
 		if strings.HasPrefix(frag, "Мейоз") {
 			return "", errors.New("503 service unavailable")
 		}
-		return answerJSON(mc{kind: cards.KindFlip, q: "Что такое " + strings.ToLower(firstWord(frag)) + "?", a: "Ответ.", quote: firstSentence(frag)}), nil
+		return answerJSON(mc{kind: cards.KindFlip, q: "Что такое " + strings.ToLower(firstWord(frag)) + "?", a: firstSentence(frag), quote: firstSentence(frag)}), nil
 	}}
 	res := generate(t, p, doc, opts)
 	if len(res.Cards) != 2 || res.Stats.ChunksFailed != 1 {
@@ -699,7 +699,7 @@ func TestGenerateRespectsConcurrency(t *testing.T) {
 			p := &fakeProvider{
 				delay: 20 * time.Millisecond,
 				answer: func(_ int, frag string, _ providers.Request) (string, error) {
-					return answerJSON(mc{kind: cards.KindFlip, q: "Что такое " + strings.ToLower(firstWord(frag)) + "?", a: "Ответ.", quote: firstSentence(frag)}), nil
+					return answerJSON(mc{kind: cards.KindFlip, q: "Что такое " + strings.ToLower(firstWord(frag)) + "?", a: firstSentence(frag), quote: firstSentence(frag)}), nil
 				},
 			}
 			res := generate(t, p, doc, opts)
@@ -725,7 +725,7 @@ func TestGenerateStopsOnCancel(t *testing.T) {
 		if call == 2 {
 			cancel()
 		}
-		return answerJSON(mc{kind: cards.KindFlip, q: "Что такое " + strings.ToLower(firstWord(frag)) + "?", a: "Ответ.", quote: firstSentence(frag)}), nil
+		return answerJSON(mc{kind: cards.KindFlip, q: "Что такое " + strings.ToLower(firstWord(frag)) + "?", a: firstSentence(frag), quote: firstSentence(frag)}), nil
 	}}
 	res, err := NewGenerator(p, opts).Generate(ctx, doc)
 	if !errors.Is(err, context.Canceled) {
@@ -852,7 +852,7 @@ func TestGenerateAsksForFiveFactsByDefault(t *testing.T) {
 		var facts []fx
 		for i := range 6 {
 			facts = append(facts, fx{quote: leadingWords(frag, 4+i), cards: []mc{{
-				kind: cards.KindFlip, q: fmt.Sprintf("Вопрос номер %d о митозе?", i+1), a: "Ответ из текста.",
+				kind: cards.KindFlip, q: fmt.Sprintf("Вопрос номер %d о митозе?", i+1), a: leadingWords(frag, 4),
 			}}})
 		}
 		return factsJSON(facts...), nil
@@ -887,7 +887,7 @@ func TestGenerateReturnsFactsApart(t *testing.T) {
 	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
 		word := firstWord(frag)
 		return factsJSON(fx{quote: firstSentence(frag), topic: "Деление клетки", name: "Что такое " + strings.ToLower(word), cards: []mc{
-			{kind: cards.KindFlip, q: "Что такое " + strings.ToLower(word) + "?", a: "Ответ из текста."},
+			{kind: cards.KindFlip, q: "Что такое " + strings.ToLower(word) + "?", a: firstSentence(frag)},
 			{kind: cards.KindBoolean, q: word + " — это деление.", a: "true"},
 		}}), nil
 	}}
@@ -1017,7 +1017,7 @@ func TestGenerateChoiceWithoutDistractorsDroppedWhenFactHasOtherCards(t *testing
 		return factsJSON(fx{quote: firstSentence(frag), cards: []mc{
 			{kind: cards.KindChoice, q: "Как называется непрямое деление соматических клеток?", a: "Митоз"},
 			{kind: cards.KindInput, q: "Как называется непрямое деление соматических клеток?", a: "митоз"},
-			{kind: cards.KindFlip, q: "Что происходит при митозе с набором хромосом?", a: "Он сохраняется."},
+			{kind: cards.KindFlip, q: "Что происходит при митозе с набором хромосом?", a: "Две дочерние клетки получают одинаковый набор хромосом."},
 		}}), nil
 	}}
 	res := generate(t, p, doc, opts)
@@ -1085,7 +1085,7 @@ func TestGenerateBalancesTrueAndFalseClaims(t *testing.T) {
 	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
 		word := firstWord(frag)
 		return factsJSON(fx{quote: firstSentence(frag), cards: []mc{{
-			kind: cards.KindBoolean, q: word + " — верное утверждение.", a: "true",
+			kind: cards.KindBoolean, q: leadingWords(frag, 3), a: "true",
 			distractors: []string{word + " — неверное утверждение."},
 		}}}), nil
 	}}
@@ -1096,9 +1096,9 @@ func TestGenerateBalancesTrueAndFalseClaims(t *testing.T) {
 		got = append(got, c.Question+" "+c.Answer)
 	}
 	want := []string{
-		"Митоз — верное утверждение. true",
+		leadingWords(paragraphs[0], 3) + ". true",
 		"Мейоз — неверное утверждение. false",
-		"Цитокинез — верное утверждение. true",
+		leadingWords(paragraphs[2], 3) + ". true",
 		"Апоптоз — неверное утверждение. false",
 	}
 	if !slices.Equal(got, want) {
@@ -1112,7 +1112,7 @@ func TestGenerateBalancesAroundOneSidedClaims(t *testing.T) {
 	doc, opts := testDoc(t, paragraphs[:3]...)
 	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
 		word := firstWord(frag)
-		card := mc{kind: cards.KindBoolean, q: word + " — верное утверждение.", a: "true",
+		card := mc{kind: cards.KindBoolean, q: leadingWords(frag, 3), a: "true",
 			distractors: []string{word + " — неверное утверждение."}}
 		if word == "Митоз" {
 			card = mc{kind: cards.KindBoolean, q: word + " — неверное утверждение.", a: "false"}
@@ -1305,6 +1305,28 @@ func TestGenerateDropsFlipAnsweredByItsQuestion(t *testing.T) {
 	}
 	if res.Stats.DroppedUnsupported != 1 {
 		t.Errorf("DroppedUnsupported = %d, want 1", res.Stats.DroppedUnsupported)
+	}
+}
+
+// A flip answer and a true claim the quote does not back go: one made up,
+// one of another fact. The false claim of a boolean card is checked by its
+// true twin, which the model gives in distractors.
+func TestGenerateDropsClaimsTheQuoteDoesNotBack(t *testing.T) {
+	text := "Белки. Денатурация — нарушение структуры белка, которое вызывается нагреванием. Металлы хорошо проводят электрический ток и тепло."
+	p := &fakeProvider{answer: func(int, string, providers.Request) (string, error) {
+		return factsJSON(fx{quote: "Денатурация — нарушение структуры белка, которое вызывается нагреванием.", cards: []mc{
+			{kind: cards.KindFlip, q: "Что такое денатурация?", a: "Нарушение структуры белка."},
+			{kind: cards.KindFlip, q: "Как по-английски называется нарушение структуры белка?", a: "denaturation"},
+			{kind: cards.KindBoolean, q: "Металлы плохо проводят электрический ток.", a: "false", distractors: []string{"Металлы хорошо проводят электрический ток и тепло."}},
+		}}), nil
+	}}
+
+	res := generate(t, p, Document{Title: "Белки", Text: text}, Options{})
+	if len(res.Cards) != 1 || res.Cards[0].Answer != "Нарушение структуры белка." {
+		t.Errorf("cards = %+v, want the definition alone", res.Cards)
+	}
+	if res.Stats.DroppedUnsupported != 2 {
+		t.Errorf("DroppedUnsupported = %d, want 2", res.Stats.DroppedUnsupported)
 	}
 }
 

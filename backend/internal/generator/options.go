@@ -65,7 +65,7 @@ type Stats struct {
 	DroppedInvalid     int `json:"droppedInvalid"`     // card breaks the schema: empty field, unknown kind
 	DroppedQuote       int `json:"droppedQuote"`       // its fact's quote not found in the fragment
 	DroppedPersonal    int `json:"droppedPersonal"`    // its fact's quote holds a password, a phone number or the like
-	DroppedUnsupported int `json:"droppedUnsupported"` // choice or input answer not in the quote, or given in the question; a flip answer its question names
+	DroppedUnsupported int `json:"droppedUnsupported"` // choice or input answer not in the quote, or given in the question; a flip answer its question names; a flip answer or a true claim the quote does not back
 	DroppedTable       int `json:"droppedTable"`       // table whose terms the quote does not put in their columns
 	DroppedExample     int `json:"droppedExample"`     // asks about names an example invents: «От какого класса наследуется класс B?»
 	DroppedDuplicate   int `json:"droppedDuplicate"`   // same fact or same question as earlier

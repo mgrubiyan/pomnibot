@@ -320,7 +320,9 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, examples nam
 				}
 				c.Table = shuffleTable(labelPipeItems(c.Table, f.Quote), f.ID)
 			}
-			if answerChecked(c.Kind) && !answerSupported(c, f.Quote) || c.Kind == cards.KindFlip && namedIn(c.Answer, c.Question) {
+			if answerChecked(c.Kind) && !answerSupported(c, f.Quote) ||
+				c.Kind == cards.KindFlip && (namedIn(c.Answer, c.Question) || !claimSupported(c.Answer, f.Quote)) ||
+				c.Kind == cards.KindBoolean && !claimSupported(trueClaim(c), f.Quote) {
 				r.droppedUnsupported++
 				log.Info("cards: answer not in the quote or given in the question",
 					"kind", c.Kind, "question", c.Question, "answer", c.Answer)

@@ -40,6 +40,40 @@ func answerChecked(k cards.Kind) bool {
 	return k == cards.KindChoice || k == cards.KindInput
 }
 
+// minClaimSupport is the share of a flip answer's or a true claim's content
+// words its quote must hold. Over the cards of a test corpus every one below
+// 0.3 was made up or came from another fact, and the lowest sound one, a row
+// of a table «Число делений | одно | два» read as «При митозе одно деление, а
+// при мейозе — два», held 0.5.
+const minClaimSupport = 0.4
+
+// claimSupported reports whether the quote backs a flip answer or a true
+// claim, which rephrase it rather than copy a term: most of their content
+// words, up to endings, must come from the quote.
+func claimSupported(claim, quote string) bool {
+	want := contentWords(claim)
+	if len(want) == 0 {
+		return true
+	}
+	have := contentWords(quote)
+	n := 0
+	for _, w := range want {
+		if slices.ContainsFunc(have, func(h []rune) bool { return sameWord(w, h) }) {
+			n++
+		}
+	}
+	return float64(n) >= minClaimSupport*float64(len(want))
+}
+
+// trueClaim returns the true claim of a boolean card: its question, or the
+// twin the model gave the other way round. "" if the model gave none.
+func trueClaim(c modelCard) string {
+	if c.Answer == cards.AnswerTrue {
+		return c.Question
+	}
+	return c.Alt
+}
+
 // answerSupported reports whether a choice or input answer passes both
 // checks against its quote and question.
 func answerSupported(c modelCard, quote string) bool {
