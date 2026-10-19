@@ -34,6 +34,7 @@ type chunkResult struct {
 	droppedQuote       int
 	droppedPersonal    int
 	droppedUnsupported int
+	droppedExample     int
 	trimmedExplains    int
 	usage              providers.Usage
 	models             map[string]int
@@ -435,6 +436,7 @@ func (a *assembler) count(r chunkResult) {
 	s.DroppedQuote += r.droppedQuote
 	s.DroppedUnsupported += r.droppedUnsupported
 	s.DroppedPersonal += r.droppedPersonal
+	s.DroppedExample += r.droppedExample
 	s.TrimmedExplanations += r.trimmedExplains
 
 	if r.calls > 0 {
