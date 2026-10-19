@@ -281,7 +281,9 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, examples nam
 				"attempt", attempt+1, "err", err, "answer", clip(resp.Content, logAnswerLength))
 			continue
 		}
-		log.Debug("cards: model answer", "answer", string(resp.Content))
+		if log.Enabled(ctx, slog.LevelDebug) {
+			log.Debug("cards: model answer", "answer", string(resp.Content))
+		}
 		parsed, r.droppedInvalid, answered = facts, invalid, true
 		break
 	}

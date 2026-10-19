@@ -18,6 +18,12 @@ func TestJunkReason(t *testing.T) {
 			want: "",
 		},
 		{
+			// Word PDFs mark items with Symbol font bullets.
+			name: "slide of a Word PDF",
+			text: "Функции белков\n строительная\n ферментативная\n транспортная\n защитная\n сигнальная\n энергетическая\nСтроение\n первичная структура",
+			want: "",
+		},
+		{
 			name: "table of contents",
 			text: `Содержание
 Введение ......................................... 3

@@ -94,7 +94,7 @@ var (
 )
 
 // reListItem matches the marker of a list item: «• », «- », «1. », «2) », «а) ».
-var reListItem = regexp.MustCompile(`^\s*(?:[•\-–—*▪●○◦·]|\d{1,2}[.)]|\p{Ll}\))\s+`)
+var reListItem = regexp.MustCompile(`^\s*(?:[` + regexp.QuoteMeta(bullets) + `\-–—*·]|\d{1,2}[.)]|\p{Ll}\))\s+`)
 
 // minListShare is the share of list items among the lines of a slide. A
 // contents page is numbered lines too, but it is caught by its page numbers
