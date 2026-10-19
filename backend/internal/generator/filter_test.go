@@ -12,6 +12,12 @@ func TestJunkReason(t *testing.T) {
 		want string
 	}{
 		{
+			// A slide is short lines by nature, like a vocabulary.
+			name: "bulleted slide",
+			text: "Функции белков\n• строительная\n• ферментативная\n• транспортная\n• защитная\n• сигнальная\n• энергетическая\nСтроение белков\n1. первичная структура\n2. вторичная структура",
+			want: "",
+		},
+		{
 			name: "table of contents",
 			text: `Содержание
 Введение ......................................... 3
