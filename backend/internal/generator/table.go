@@ -334,10 +334,8 @@ func labelPipeItems(t *cards.Table, quote string) *cards.Table {
 	return out
 }
 
-// reListItem matches the marker of a list item: «• », «- », «1. », «2) », «а) ».
-var reListItem = regexp.MustCompile(`^\s*(?:[•\-–—*▪●○◦·]|\d{1,2}[.)]|\p{Ll}\))\s+`)
-
-// listItem returns a line without its list marker and whether it had one.
+// listItem returns a line without its list marker (see reListItem) and
+// whether it had one.
 func listItem(line string) (string, bool) {
 	if m := reListItem.FindStringIndex(line); m != nil {
 		return line[m[1]:], true
