@@ -108,7 +108,8 @@ func decodeAnswer(data []byte, maxFacts int) ([]modelFact, int, error) {
 			items = *obj.Facts
 		case obj.Cards != nil:
 			items, flat = *obj.Cards, true
-		case obj.Tables == nil:
+		default:
+			// Tables alone: the model skipped the facts, ask again.
 			return nil, 0, errNoFacts
 		}
 		tables = obj.Tables

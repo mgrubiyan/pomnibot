@@ -308,7 +308,7 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, examples nam
 			continue
 		}
 		f.Start, f.End = r.chunk.Start+start, r.chunk.Start+end
-		f.ID = factID(doc.ID, f.Quote)
+		f.ID = factID(doc.ID, factKey(f))
 
 		kept := f.Cards[:0]
 		for _, c := range f.Cards {

@@ -308,6 +308,10 @@ func TestParseAnswerReadsTables(t *testing.T) {
 	if facts, _, err := parseAnswer([]byte(`{"facts":[],"tables":[]}`), 3); err != nil || len(facts) != 0 {
 		t.Errorf("empty answer: %d facts, err %v", len(facts), err)
 	}
+	// An answer of tables alone skipped the facts: it is asked again.
+	if _, _, err := parseAnswer([]byte(`{"tables":[]}`), 3); err == nil {
+		t.Errorf("an answer without facts accepted")
+	}
 }
 
 // A table the quote lays out so becomes a card with its terms mixed; one
@@ -380,6 +384,24 @@ func TestUserPromptAsksForTable(t *testing.T) {
 	c.Text = "Митоз — непрямое деление клетки. Он состоит из четырёх фаз."
 	if p := buildUserPrompt("", c, 1, false); strings.Contains(p, tableNote) {
 		t.Errorf("prompt for prose asks for a table:\n%s", p)
+	}
+}
+
+// A table and a fact quoting the same sentence are different facts: the
+// table must not go as a duplicate of the fact.
+func TestGenerateKeepsTableOfAQuotedFact(t *testing.T) {
+	quote := "К прокариотам относятся бактерии и археи, к эукариотам — растения, животные и грибы."
+	text := "Организмы делят по строению клетки. " + quote
+	p := &fakeProvider{answer: func(int, string, providers.Request) (string, error) {
+		return `{"facts":[{"quote":"` + quote + `","topic":"Клетка","name":"Прокариоты","cards":[
+			{"kind":"flip","question":"Какие организмы относятся к прокариотам?","answer":"Бактерии и археи.","distractors":[],"explanation":"E"}]}],
+		"tables":[{"quote":"` + quote + `","topic":"Клетка","name":"Прокариоты и эукариоты","question":"Распределите организмы по строению клетки",
+			"explanation":"E","columns":["Прокариоты","Эукариоты"],
+			"items":[{"text":"бактерии","column":"Прокариоты"},{"text":"археи","column":"Прокариоты"},{"text":"растения","column":"Эукариоты"},{"text":"грибы","column":"Эукариоты"}]}]}`, nil
+	}}
+	res := generate(t, p, Document{Title: "Клетка", Text: text}, Options{})
+	if len(res.Cards) != 2 || len(res.Facts) != 2 {
+		t.Errorf("cards = %+v, facts = %+v; want the flip card and the table, each its own fact", res.Cards, res.Facts)
 	}
 }
 

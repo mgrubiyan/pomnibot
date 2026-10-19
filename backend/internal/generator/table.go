@@ -43,6 +43,16 @@ const (
 	fieldColumn  = "column"
 )
 
+// factKey is what a fact's id is derived from: its quote, and for a table
+// its columns too. A table sorting the terms of a sentence another fact
+// quotes is a fact of its own, and so is a second table of one passage.
+func factKey(f modelFact) string {
+	if len(f.Cards) == 1 && f.Cards[0].Kind == cards.KindTable {
+		return "table\x00" + strings.Join(f.Cards[0].Table.Columns, "\x00") + "\x00" + f.Quote
+	}
+	return f.Quote
+}
+
 // parseTable reads {"quote", "topic", "name", "question", "explanation",
 // "columns", "items": [{"text", "column"}]} as a fact with one table card.
 // A table out of size, with a term in no column or a column with no terms,
