@@ -12,12 +12,6 @@ func TestJunkReason(t *testing.T) {
 		want string
 	}{
 		{
-			// A slide of groups is short lines by nature, like a vocabulary.
-			name: "bulleted groups",
-			text: "Органоиды клетки\nДвумембранные:\n• ядро\n• митохондрии\n• пластиды\nОдномембранные:\n• лизосомы\n• вакуоли\nНемембранные:\n• рибосомы\n• клеточный центр\nТипы питания\nАвтотрофы:\n- растения\n- цианобактерии",
-			want: "",
-		},
-		{
 			name: "table of contents",
 			text: `Содержание
 Введение ......................................... 3

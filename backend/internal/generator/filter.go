@@ -163,9 +163,8 @@ func junkReason(text string, whole bool) string {
 	if share(digitsDots, nonSpace) > maxDigitDotRatio {
 		return junkDigitsDots
 	}
-	// A vocabulary list is short lines by nature: «cat – кошка», and so is a
-	// slide of groups: «Двумембранные:», «• ядро».
-	if len(lines) >= minLinesForAvg && avgLine < minAvgLineLen && !vocabulary(lines) && !classification(text) {
+	// A vocabulary list is short lines by nature: «cat – кошка».
+	if len(lines) >= minLinesForAvg && avgLine < minAvgLineLen && !vocabulary(lines) {
 		return junkShortLines
 	}
 	return ""

@@ -200,7 +200,8 @@ func TestParseAnswer(t *testing.T) {
 				t.Errorf("%q: got %+v, %d invalid, err %v; want %q", in, facts, invalid, err, want)
 			}
 		}
-		for _, question := range []string{"Является ли анафаза самой короткой фазой митоза?", "Верно ли, что ?"} {
+		// "False." is what example code prints, not a claim to judge.
+		for _, question := range []string{"Является ли анафаза самой короткой фазой митоза?", "Верно ли, что ?", "False.", "верно"} {
 			if facts, invalid, _ := parseAnswer([]byte(boolean(question)), 3); cardCount(facts) != 0 || invalid != 1 {
 				t.Errorf("%q: got %+v, %d invalid; want the card rejected", question, facts, invalid)
 			}

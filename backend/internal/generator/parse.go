@@ -375,8 +375,12 @@ var reTrueLeadIn = regexp.MustCompile(`(?i)^(верно|правда|так|де
 // to a question.
 // "Верно ли, что анафаза — самая короткая фаза?" becomes "Анафаза — самая
 // короткая фаза."; any other question, such as "Является ли …?", cannot be
-// turned into a claim safely and is rejected.
+// turned into a claim safely and is rejected, and so is a bare "False.", the
+// output of example code rather than a claim.
 func booleanStatement(s string) (string, bool) {
+	if _, bare := parseBool(s); bare {
+		return "", false
+	}
 	body := reTrueLeadIn.ReplaceAllString(s, "")
 	if body == s {
 		if strings.HasSuffix(s, "?") {
