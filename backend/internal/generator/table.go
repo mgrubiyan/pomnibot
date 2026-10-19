@@ -31,7 +31,7 @@ const (
 	maxTableColumns  = 3
 	minTableItems    = 4
 	maxTableItems    = 8
-	maxTableItemLen  = 32 // runes
+	maxTableItemLen  = 40 // runes: «Набор хромосом: гаплоидный» fits
 	maxTablesInChunk = 3
 )
 
@@ -136,6 +136,9 @@ func tableGrounded(t *cards.Table, quote string) bool {
 			return false
 		}
 	}
+	if rows := pipeRows(quote); rows != nil {
+		return pipeGrounded(t, rows)
+	}
 	const ambiguous = "\x00"
 	columnIn := func(text string) string {
 		found := ""
@@ -228,6 +231,109 @@ func tableGrounded(t *cards.Table, quote string) bool {
 	return true
 }
 
+// Comparison tables. Ingest writes a row of a Word table as «cell | cell»,
+// so a table of the notes keeps its layout: a header row of what is compared
+// and rows of «признак | значение | значение». A term is a value, written
+// «Число делений: два» or bare, and belongs to the header above its cell.
+const (
+	minPipeCells = 3 // a label and two values: «Число делений | одно | два»
+	minPipeRows  = 3 // the header and two rows
+)
+
+// pipeRows returns the cells of the quote's comparison table, header first,
+// or nil if the quote holds none.
+func pipeRows(quote string) [][]string {
+	var rows [][]string
+	for line := range strings.SplitSeq(quote, "\n") {
+		if !strings.Contains(line, " | ") {
+			continue
+		}
+		cells := strings.Split(line, "|")
+		for i := range cells {
+			cells[i] = strings.TrimSpace(cells[i])
+		}
+		if len(cells) < minPipeCells || len(rows) > 0 && len(cells) != len(rows[0]) {
+			continue
+		}
+		rows = append(rows, cells)
+	}
+	if len(rows) < minPipeRows {
+		return nil
+	}
+	return rows
+}
+
+// pipeGrounded reports whether every term of t is a value of exactly one
+// cell, a value its row does not repeat, under the header of its column.
+func pipeGrounded(t *cards.Table, rows [][]string) bool {
+	for _, item := range t.Items {
+		_, col, ok := pipeCell(rows, item.Text)
+		if !ok || !namedIn(item.Column, rows[0][col]) {
+			return false
+		}
+	}
+	return true
+}
+
+// pipeCell finds the one cell of the table body a term stands for: «два» or
+// «Число делений: два». The cell is matched whole first, then up to endings:
+// «А, У, Г, Ц» and «А, Т, Г, Ц» differ only in stop words.
+func pipeCell(rows [][]string, term string) (row, col int, ok bool) {
+	label, value := "", strings.TrimSpace(term)
+	if l, v, found := strings.Cut(term, ":"); found {
+		label, value = strings.TrimSpace(l), strings.TrimSpace(v)
+	}
+	for _, match := range []func(s, cell string) bool{
+		func(s, cell string) bool { return strings.EqualFold(s, cell) },
+		namedIn,
+	} {
+		found := 0
+		for r := 1; r < len(rows); r++ {
+			if label != "" && !namedIn(label, rows[r][0]) {
+				continue
+			}
+			for k := 1; k < len(rows[r]); k++ {
+				if match(value, rows[r][k]) {
+					found++
+					row, col = r, k
+				}
+			}
+		}
+		switch {
+		case found == 1:
+			return row, col, true
+		case found > 1:
+			return 0, 0, false // in two cells: of two rows, or of one row twice
+		}
+	}
+	return 0, 0, false
+}
+
+// labelPipeItems returns t with every bare value of the quote's comparison
+// table prefixed with the label of its row: «два» means nothing on a chip,
+// «Число делений: два» does. A label that makes the term too long is left
+// out. A table of prose comes back as it is.
+func labelPipeItems(t *cards.Table, quote string) *cards.Table {
+	rows := pipeRows(quote)
+	if rows == nil {
+		return t
+	}
+	out := &cards.Table{Columns: t.Columns, Items: slices.Clone(t.Items)}
+	for i, item := range out.Items {
+		if strings.Contains(item.Text, ":") {
+			continue
+		}
+		r, _, ok := pipeCell(rows, item.Text)
+		if !ok {
+			continue
+		}
+		if labeled := rows[r][0] + ": " + item.Text; utf8.RuneCountInString(labeled) <= maxTableItemLen {
+			out.Items[i].Text = labeled
+		}
+	}
+	return out
+}
+
 // reListItem matches the marker of a list item: «• », «- », «1. », «2) », «а) ».
 var reListItem = regexp.MustCompile(`^\s*(?:[•\-–—*▪●○◦·]|\d{1,2}[.)]|\p{Ll}\))\s+`)
 
@@ -300,6 +406,9 @@ func classification(text string) bool {
 	}
 	if heading && items >= minGroupItems {
 		n++
+	}
+	if pipeRows(text) != nil {
+		n += minGroupStatements
 	}
 	return n >= minGroupStatements
 }

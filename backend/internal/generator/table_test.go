@@ -21,6 +21,9 @@ func table(columns []string, items ...string) *cards.Table {
 
 var cellColumns = []string{"Прокариоты", "Эукариоты"}
 
+// mitosisTable is a Word table as ingest writes it: «cell | cell» per row.
+const mitosisTable = "Признак | Митоз | Мейоз\nЧисло делений | одно | два\nДочерние клетки | две | четыре\nНабор хромосом | диплоидный | гаплоидный\nСинтез ДНК | есть | есть"
+
 // organelles is a slide: a heading per group and its terms as bullets.
 const organelles = "Органоиды клетки\nДвумембранные:\n• ядро\n• митохондрии\n• пластиды\nОдномембранные:\n• лизосомы\n• вакуоли\nНемембранные:\n• рибосомы"
 
@@ -112,6 +115,38 @@ func TestTableGrounded(t *testing.T) {
 			want:  false,
 		},
 		{
+			name:  "a comparison table of a document",
+			quote: mitosisTable,
+			table: table([]string{"Митоз", "Мейоз"}, "Число делений: одно", "Митоз", "Число делений: два", "Мейоз", "Дочерние клетки: четыре", "Мейоз", "Набор хромосом: гаплоидный", "Мейоз"),
+			want:  true,
+		},
+		{
+			name:  "a cell under the wrong header",
+			quote: mitosisTable,
+			table: table([]string{"Митоз", "Мейоз"}, "Число делений: одно", "Мейоз", "Число делений: два", "Мейоз", "Дочерние клетки: две", "Митоз", "Дочерние клетки: четыре", "Мейоз"),
+			want:  false,
+		},
+		{
+			// «есть» under both headers sorts nowhere.
+			name:  "a value the row repeats",
+			quote: mitosisTable,
+			table: table([]string{"Митоз", "Мейоз"}, "Число делений: одно", "Митоз", "Число делений: два", "Мейоз", "Синтез ДНК: есть", "Митоз", "Дочерние клетки: четыре", "Мейоз"),
+			want:  false,
+		},
+		{
+			name:  "a bare value of a comparison table",
+			quote: mitosisTable,
+			table: table([]string{"Митоз", "Мейоз"}, "одно", "Митоз", "два", "Мейоз", "две", "Митоз", "четыре", "Мейоз"),
+			want:  true,
+		},
+		{
+			// «у» is a stop word: up to content words both cells read «Г, Ц».
+			name:  "cells that differ in a stop word",
+			quote: "Признак | ДНК | РНК\nУглевод | дезоксирибоза | рибоза\nАзотистые основания | А, Т, Г, Ц | А, У, Г, Ц\nЧисло цепей | две | одна",
+			table: table([]string{"ДНК", "РНК"}, "дезоксирибоза", "ДНК", "А, Т, Г, Ц", "ДНК", "А, У, Г, Ц", "РНК", "одна", "РНК"),
+			want:  true,
+		},
+		{
 			name:  "a negated group",
 			quote: "К прокариотам относятся бактерии и археи. Вирусы не относятся ни к прокариотам, ни к эукариотам. К эукариотам относятся грибы и растения.",
 			table: table(cellColumns, "бактерии", "Прокариоты", "вирусы", "Прокариоты", "растения", "Эукариоты", "грибы", "Эукариоты"),
@@ -137,6 +172,23 @@ func TestTableGrounded(t *testing.T) {
 				t.Errorf("tableGrounded = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// A bare value of a comparison table means nothing on a chip: «два» of
+// what? It gets the label of its row, unless that makes it too long.
+func TestLabelPipeItems(t *testing.T) {
+	quote := mitosisTable + "\nНабор хромосом в дочерних клетках после деления | 2n | n"
+	got := labelPipeItems(table([]string{"Митоз", "Мейоз"}, "два", "Мейоз", "Дочерние клетки: две", "Митоз", "n", "Мейоз", "диплоидный", "Митоз"), quote)
+	want := []string{"Число делений: два", "Дочерние клетки: две", "n", "Набор хромосом: диплоидный"}
+	for i, item := range got.Items {
+		if item.Text != want[i] {
+			t.Errorf("item %d = %q, want %q", i, item.Text, want[i])
+		}
+	}
+	plain := table(cellColumns, "бактерии", "Прокариоты")
+	if labelPipeItems(plain, "К прокариотам относятся бактерии.") != plain {
+		t.Errorf("a table of prose changed")
 	}
 }
 
@@ -274,6 +326,8 @@ func TestClassification(t *testing.T) {
 		{"a list per group", "Части речи делятся на самостоятельные и служебные.\nСамостоятельные: существительное, прилагательное, глагол.\nСлужебные: предлог, союз, частица.", true},
 		{"lists inside sentences", "Двумембранные органоиды: ядро, митохондрии, пластиды. Одномембранные органоиды: ЭПС, аппарат Гольджи, лизосомы.", true},
 		{"bulleted groups", organelles, true},
+		{"a comparison table", mitosisTable, true},
+		{"a vocabulary table", "cat | кошка\ndog | собака\nhouse | дом", false},
 		{"one bulleted list", "Функции белков:\n• строительная\n• ферментативная\n• транспортная", false},
 		{"one list is no classification", "Ткани животных бывают четырёх типов: эпителиальная, соединительная, мышечная и нервная.", false},
 		{"prose", "Митоз — непрямое деление клетки. Он состоит из четырёх фаз и длится около часа. В анафазе хроматиды расходятся к полюсам.", false},

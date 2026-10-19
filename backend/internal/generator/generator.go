@@ -316,7 +316,7 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, total int, r
 					log.Info("cards: table not in the quote as laid out", "question", c.Question, "table", c.Table, "quote", f.Quote)
 					continue
 				}
-				c.Table = shuffleTable(c.Table, f.ID)
+				c.Table = shuffleTable(labelPipeItems(c.Table, f.Quote), f.ID)
 			}
 			if answerChecked(c.Kind) && !answerSupported(c, f.Quote) || c.Kind == cards.KindFlip && namedIn(c.Answer, c.Question) {
 				r.droppedUnsupported++
