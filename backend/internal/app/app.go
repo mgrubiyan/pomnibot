@@ -89,9 +89,15 @@ type models struct {
 	slots  int                // documents turned into cards at once
 }
 
-// aiStudioSlots is how many requests AI Studio serves at once without a
-// subscription.
+// aiStudioSlots is how many documents are turned into cards at once on AI
+// Studio, the quota for requests at once without a subscription.
 const aiStudioSlots = 2
+
+// aiStudioRequests is how many requests we send AI Studio at once. Measured
+// on 2026-10-20: five pass, the sixth gets 429. A class checking answers at
+// once queues behind them instead of retrying 429s, and the documents, at
+// most aiStudioSlots requests, leave the rest of the slots to grading.
+const aiStudioRequests = 5
 
 // newModels returns Qwen backed by GigaChat for everything, or the other way
 // round with LLM_PRIMARY=gigachat; a photo neither of them reads goes to the
@@ -119,7 +125,7 @@ func newModels(cfg config.Config) (models, error) {
 		return models{}, fmt.Errorf("initialize AI Studio: %w", err)
 	}
 
-	first := providers.Backend{Name: "aistudio", Provider: studio}
+	first := providers.Backend{Name: "aistudio", Provider: providers.Limit(studio, aiStudioRequests)}
 	second := providers.Backend{Name: "gigachat", Provider: gigaOne}
 	slots := aiStudioSlots
 	if cfg.LLM.Primary == config.PrimaryGigaChat {
