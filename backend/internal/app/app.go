@@ -60,7 +60,7 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 	cardOptions = append(cardOptions, usecase.WithManualCards(store))
 	cards := usecase.NewCardService(queries, users, cardOptions...)
 	home := usecase.NewHomescreenService(queries, users)
-	router, err := httptransport.NewRouter(httptransport.NewAPIHandler(sets, cards, home, users), assets, cfg.BotToken, cfg.TelegramBotToken, users)
+	router, err := httptransport.NewRouter(httptransport.NewAPIHandler(sets, cards, home, users), assets, cfg.MaxBotToken, cfg.TelegramBotToken, users)
 	if err != nil {
 		return fmt.Errorf("initialize router: %w", err)
 	}
@@ -88,17 +88,14 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 		}
 		cardGenerator := generator.NewGenerator(llm.text, generator.Options{})
 		maker := notes.New(extractor, notes.FromGenerator(cardGenerator), sets, llm.slots)
-		maxBot, err := startBot(ctx, cfg, maker, users)
+		maxBot, err := startMAXBot(ctx, cfg, maker, users)
 		if err != nil {
 			return err
 		}
 		bots = append(bots, maxBot)
-		tgBot, err := telegram.NewBot(telegram.NewClient(cfg.TelegramBotToken), users, maker, cfg.AppURL, cfg.Notifications)
+		tgBot, err := startTelegramBot(ctx, cfg, maker, users)
 		if err != nil {
-			return fmt.Errorf("initialize Telegram bot: %w", err)
-		}
-		if err = tgBot.Start(ctx); err != nil {
-			return fmt.Errorf("start Telegram bot: %w", err)
+			return err
 		}
 		bots = append(bots, tgBot)
 	}
@@ -170,8 +167,8 @@ func newModels(cfg config.Config) (models, error) {
 	return models{text: chain, vision: chain, slots: slots}, nil
 }
 
-func startBot(ctx context.Context, cfg config.Config, maker *notes.Maker, users usecase.UserService) (*maxtransport.Bot, error) {
-	client, err := maxtransport.NewClient(cfg.BotToken, cfg.MaxAPIURL, cfg.MaxInsecureSkipVerify)
+func startMAXBot(ctx context.Context, cfg config.Config, maker *notes.Maker, users usecase.UserService) (*maxtransport.Bot, error) {
+	client, err := maxtransport.NewClient(cfg.MaxBotToken, cfg.MaxAPIURL, cfg.MaxInsecureSkipVerify)
 	if err != nil {
 		return nil, fmt.Errorf("initialize MAX client: %w", err)
 	}
@@ -181,6 +178,17 @@ func startBot(ctx context.Context, cfg config.Config, maker *notes.Maker, users 
 	}
 	if err := runner.Start(ctx); err != nil {
 		return nil, fmt.Errorf("start MAX bot: %w", err)
+	}
+	return runner, nil
+}
+
+func startTelegramBot(ctx context.Context, cfg config.Config, maker *notes.Maker, users usecase.UserService) (*telegram.Bot, error) {
+	runner, err := telegram.NewBot(telegram.NewClient(cfg.TelegramBotToken), users, maker, cfg.AppURL, cfg.Notifications)
+	if err != nil {
+		return nil, fmt.Errorf("initialize Telegram bot: %w", err)
+	}
+	if err := runner.Start(ctx); err != nil {
+		return nil, fmt.Errorf("start Telegram bot: %w", err)
 	}
 	return runner, nil
 }
