@@ -42,7 +42,6 @@ type mockQuerier struct {
 	recordAnswerResultFunc         func(ctx context.Context, arg db.RecordAnswerResultParams) (db.AnswerResult, error)
 	updateCardFunc                 func(ctx context.Context, arg db.UpdateCardParams) (db.Card, error)
 	updateFactProgressOnAnswerFunc func(ctx context.Context, arg db.UpdateFactProgressOnAnswerParams) (db.UserFactProgress, error)
-	upsertUserFunc                 func(ctx context.Context, arg db.UpsertUserParams) (db.User, error)
 	ensureUserFunc                 func(ctx context.Context, id int64) (db.User, error)
 	getSetLeaderboardFunc          func(ctx context.Context, setID pgtype.UUID) ([]db.GetSetLeaderboardRow, error)
 	getUserSetRatingFunc           func(ctx context.Context, arg db.GetUserSetRatingParams) (db.GetUserSetRatingRow, error)
@@ -287,19 +286,6 @@ func (m *mockQuerier) UpdateFactProgressOnAnswer(ctx context.Context, arg db.Upd
 		return m.updateFactProgressOnAnswerFunc(ctx, arg)
 	}
 	return db.UserFactProgress{}, nil
-}
-
-func (m *mockQuerier) UpsertUser(ctx context.Context, arg db.UpsertUserParams) (db.User, error) {
-	if m.upsertUserFunc != nil {
-		return m.upsertUserFunc(ctx, arg)
-	}
-	return db.User{
-		ID:        arg.ID,
-		FirstName: arg.FirstName,
-		LastName:  arg.LastName,
-		Username:  arg.Username,
-		IsBot:     arg.IsBot,
-	}, nil
 }
 
 func (m *mockQuerier) EnsureUser(ctx context.Context, id int64) (db.User, error) {

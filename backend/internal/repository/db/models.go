@@ -82,13 +82,19 @@ type Topic struct {
 }
 
 type User struct {
-	ID           int64              `json:"id"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	LastActiveAt pgtype.Timestamptz `json:"last_active_at"`
-	FirstName    string             `json:"first_name"`
-	LastName     pgtype.Text        `json:"last_name"`
-	Username     pgtype.Text        `json:"username"`
-	IsBot        bool               `json:"is_bot"`
+	ID              int64              `json:"id"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	LastActiveAt    pgtype.Timestamptz `json:"last_active_at"`
+	FirstName       string             `json:"first_name"`
+	LastName        pgtype.Text        `json:"last_name"`
+	Username        pgtype.Text        `json:"username"`
+	IsBot           bool               `json:"is_bot"`
+	MaxID           pgtype.Int8        `json:"max_id"`
+	TgID            pgtype.Int8        `json:"tg_id"`
+	ProfileComplete bool               `json:"profile_complete"`
+	ProfileStep     string             `json:"profile_step"`
+	PendingLastName string             `json:"pending_last_name"`
+	TgBotStarted    bool               `json:"tg_bot_started"`
 }
 
 type UserFactProgress struct {

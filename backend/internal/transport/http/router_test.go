@@ -22,7 +22,7 @@ func TestHealthEndpoint(t *testing.T) {
 		"index.html": &fstest.MapFile{Data: []byte("<!DOCTYPE html><html><body>Test</body></html>")},
 	}
 
-	router, err := NewRouter(NewAPIHandler(nil, nil, nil), mockFS, "", nil)
+	router, err := NewRouter(NewAPIHandler(nil, nil, nil, nil), mockFS, "", "", nil)
 	if err != nil {
 		t.Fatalf("failed to setup router: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestStaticAndReactRouter(t *testing.T) {
 		},
 	}
 
-	router, err := NewRouter(NewAPIHandler(nil, nil, nil), mockFS, "", nil)
+	router, err := NewRouter(NewAPIHandler(nil, nil, nil, nil), mockFS, "", "", nil)
 	if err != nil {
 		t.Fatalf("failed to setup router: %v", err)
 	}
@@ -205,10 +205,10 @@ func (h *authTestHandler) GetHealth(ctx context.Context) (contracts.GetHealthRes
 func TestRouter_AuthMiddlewareIntegration(t *testing.T) {
 	testBotToken := "secret-bot-token"
 
-	t.Run("propagates valid user from X-Init-Data header", func(t *testing.T) {
+	t.Run("propagates internal user ID from MAX authorization", func(t *testing.T) {
 		h := &authTestHandler{}
 		mockUserSvc := &mockUserService{}
-		router, err := NewRouter(h, fstest.MapFS{}, testBotToken, mockUserSvc)
+		router, err := NewRouter(h, fstest.MapFS{}, testBotToken, "", mockUserSvc)
 		if err != nil {
 			t.Fatalf("failed to create router: %v", err)
 		}
@@ -220,7 +220,7 @@ func TestRouter_AuthMiddlewareIntegration(t *testing.T) {
 		}, testBotToken)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
-		req.Header.Set("X-Init-Data", initDataStr)
+		req.Header.Set("Authorization", "max "+initDataStr)
 		rec := httptest.NewRecorder()
 
 		router.ServeHTTP(rec, req)
@@ -231,17 +231,17 @@ func TestRouter_AuthMiddlewareIntegration(t *testing.T) {
 		if !h.capturedOk {
 			t.Fatal("expected UserID to be present in context")
 		}
-		if h.capturedUserID != 424242 {
-			t.Fatalf("expected userID 424242, got %d", h.capturedUserID)
+		if h.capturedUserID != 524242 {
+			t.Fatalf("expected internal userID 524242, got %d", h.capturedUserID)
 		}
-		if len(mockUserSvc.upsertCalls) != 1 || mockUserSvc.upsertCalls[0].ID != 424242 {
-			t.Fatalf("expected UpsertUser to be called for 424242, got %+v", mockUserSvc.upsertCalls)
+		if len(mockUserSvc.upsertCalls) != 1 || mockUserSvc.upsertCalls[0].MaxID != 424242 {
+			t.Fatalf("expected UpsertMAXUser to be called for 424242, got %+v", mockUserSvc.upsertCalls)
 		}
 	})
 
-	t.Run("falls back to 0 when X-Init-Data is absent", func(t *testing.T) {
+	t.Run("falls back to 0 when authorization is absent", func(t *testing.T) {
 		h := &authTestHandler{}
-		router, err := NewRouter(h, fstest.MapFS{}, testBotToken, nil)
+		router, err := NewRouter(h, fstest.MapFS{}, testBotToken, "", nil)
 		if err != nil {
 			t.Fatalf("failed to create router: %v", err)
 		}
@@ -284,7 +284,8 @@ func TestRouter_E2E_Integration(t *testing.T) {
 		"index.html": &fstest.MapFile{Data: []byte("<!DOCTYPE html><html><body>Test</body></html>")},
 	}
 
-	testUserID := int64(98765)
+	testMaxID := int64(98765)
+	testUserID := testMaxID + 100000
 	testSetID := uuid.New()
 	testCardID := uuid.New()
 
@@ -371,7 +372,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 					ID:        testUserID,
 					FirstName: "Tester",
 				},
-				DueCount:   7,
+				DueCount: 7,
 			}, nil
 		},
 		getFeedQuestionsFunc: func(_ context.Context, userID int64) ([]contracts.Card, error) {
@@ -401,8 +402,8 @@ func TestRouter_E2E_Integration(t *testing.T) {
 
 	testBotToken := "e2e-token"
 	mockUserSvc := &mockUserService{}
-	handler := NewAPIHandler(mockSet, mockCard, mockHome)
-	router, err := NewRouter(handler, mockFS, testBotToken, mockUserSvc)
+	handler := NewAPIHandler(mockSet, mockCard, mockHome, nil)
+	router, err := NewRouter(handler, mockFS, testBotToken, "", mockUserSvc)
 	if err != nil {
 		t.Fatalf("failed to create router: %v", err)
 	}
@@ -410,7 +411,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 	now := time.Now().Unix()
 	authHeader := generateValidInitData(map[string]string{
 		"auth_date": strconv.FormatInt(now, 10),
-		"user":      fmt.Sprintf(`{"id":%d,"first_name":"Tester"}`, testUserID),
+		"user":      fmt.Sprintf(`{"id":%d,"first_name":"Tester"}`, testMaxID),
 	}, testBotToken)
 
 	t.Run("GET /api/health returns 200 OK", func(t *testing.T) {
@@ -432,7 +433,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 
 	t.Run("GET /api/sets/{setId} with auth returns 200 CardSet", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/sets/"+testSetID.String(), nil)
-		req.Header.Set("X-Init-Data", authHeader)
+		req.Header.Set("Authorization", "max "+authHeader)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
@@ -450,7 +451,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 
 	t.Run("GET /api/sets/{setId}/leaderboard with auth returns 200 SetLeaderboardResponse", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/sets/"+testSetID.String()+"/leaderboard", nil)
-		req.Header.Set("X-Init-Data", authHeader)
+		req.Header.Set("Authorization", "max "+authHeader)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
@@ -468,7 +469,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 
 	t.Run("GET /api/sets/{setId}/cards with auth returns 200 and cards", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/sets/"+testSetID.String()+"/cards", nil)
-		req.Header.Set("X-Init-Data", authHeader)
+		req.Header.Set("Authorization", "max "+authHeader)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
@@ -487,7 +488,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 	t.Run("POST /api/cards/{cardId}/answer with auth returns 200", func(t *testing.T) {
 		body := bytes.NewBufferString(`{"answer":"4"}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/cards/"+testCardID.String()+"/answer", body)
-		req.Header.Set("X-Init-Data", authHeader)
+		req.Header.Set("Authorization", "max "+authHeader)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -506,7 +507,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 
 	t.Run("GET /api/ (today) with auth returns 200 TodayData", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/", nil)
-		req.Header.Set("X-Init-Data", authHeader)
+		req.Header.Set("Authorization", "max "+authHeader)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
@@ -524,7 +525,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 
 	t.Run("GET /api/feed with auth returns 200 feed cards", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/feed", nil)
-		req.Header.Set("X-Init-Data", authHeader)
+		req.Header.Set("Authorization", "max "+authHeader)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
@@ -543,7 +544,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 	t.Run("POST /api/results with auth returns 204 No Content", func(t *testing.T) {
 		body := bytes.NewBufferString(fmt.Sprintf(`[{"cardId":"%s","correct":true,"answeredAt":"2026-09-27T05:00:00Z"}]`, testCardID))
 		req := httptest.NewRequest(http.MethodPost, "/api/results", body)
-		req.Header.Set("X-Init-Data", authHeader)
+		req.Header.Set("Authorization", "max "+authHeader)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -556,7 +557,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 	t.Run("Relational isolation returns 404 for unknown or cross-tenant set", func(t *testing.T) {
 		unknownSetID := uuid.New()
 		req := httptest.NewRequest(http.MethodGet, "/api/sets/"+unknownSetID.String(), nil)
-		req.Header.Set("X-Init-Data", authHeader)
+		req.Header.Set("Authorization", "max "+authHeader)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 

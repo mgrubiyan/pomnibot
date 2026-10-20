@@ -13,6 +13,10 @@ type AnswerQuestionBadRequest ErrorResponse
 
 func (*AnswerQuestionBadRequest) answerQuestionRes() {}
 
+type AnswerQuestionForbidden ErrorResponse
+
+func (*AnswerQuestionForbidden) answerQuestionRes() {}
+
 type AnswerQuestionInternalServerError ErrorResponse
 
 func (*AnswerQuestionInternalServerError) answerQuestionRes() {}
@@ -521,6 +525,10 @@ type CheckAnswerBadRequest ErrorResponse
 
 func (*CheckAnswerBadRequest) checkAnswerRes() {}
 
+type CheckAnswerForbidden ErrorResponse
+
+func (*CheckAnswerForbidden) checkAnswerRes() {}
+
 type CheckAnswerInternalServerError ErrorResponse
 
 func (*CheckAnswerInternalServerError) checkAnswerRes() {}
@@ -640,6 +648,10 @@ type CreateCardBadRequest ErrorResponse
 
 func (*CreateCardBadRequest) createCardRes() {}
 
+type CreateCardForbidden ErrorResponse
+
+func (*CreateCardForbidden) createCardRes() {}
+
 type CreateCardInternalServerError ErrorResponse
 
 func (*CreateCardInternalServerError) createCardRes() {}
@@ -722,6 +734,10 @@ type CreateSetBadRequest ErrorResponse
 
 func (*CreateSetBadRequest) createSetRes() {}
 
+type CreateSetForbidden ErrorResponse
+
+func (*CreateSetForbidden) createSetRes() {}
+
 type CreateSetInternalServerError ErrorResponse
 
 func (*CreateSetInternalServerError) createSetRes() {}
@@ -752,6 +768,10 @@ func (s *CreateSetRequest) SetCard(val CreateCardRequest) {
 	s.Card = val
 }
 
+type DeleteCardForbidden ErrorResponse
+
+func (*DeleteCardForbidden) deleteCardRes() {}
+
 type DeleteCardInternalServerError ErrorResponse
 
 func (*DeleteCardInternalServerError) deleteCardRes() {}
@@ -764,6 +784,10 @@ func (*DeleteCardNoContent) deleteCardRes() {}
 type DeleteCardNotFound ErrorResponse
 
 func (*DeleteCardNotFound) deleteCardRes() {}
+
+type DeleteSetForbidden ErrorResponse
+
+func (*DeleteSetForbidden) deleteSetRes() {}
 
 type DeleteSetInternalServerError ErrorResponse
 
@@ -780,7 +804,14 @@ func (*DeleteSetNotFound) deleteSetRes() {}
 
 // Ref: #/components/schemas/ErrorResponse
 type ErrorResponse struct {
-	Message string `json:"message"`
+	// Machine-readable error code, including profile_required.
+	Code    OptString `json:"code"`
+	Message string    `json:"message"`
+}
+
+// GetCode returns the value of Code.
+func (s *ErrorResponse) GetCode() OptString {
+	return s.Code
 }
 
 // GetMessage returns the value of Message.
@@ -788,14 +819,22 @@ func (s *ErrorResponse) GetMessage() string {
 	return s.Message
 }
 
+// SetCode sets the value of Code.
+func (s *ErrorResponse) SetCode(val OptString) {
+	s.Code = val
+}
+
 // SetMessage sets the value of Message.
 func (s *ErrorResponse) SetMessage(val string) {
 	s.Message = val
 }
 
-func (*ErrorResponse) getFeedQuestionsRes() {}
-func (*ErrorResponse) getHealthRes()        {}
-func (*ErrorResponse) getTodayRes()         {}
+func (*ErrorResponse) getHealthRes()  {}
+func (*ErrorResponse) getProfileRes() {}
+
+type GetCardsBySetIDForbidden ErrorResponse
+
+func (*GetCardsBySetIDForbidden) getCardsBySetIDRes() {}
 
 type GetCardsBySetIDInternalServerError ErrorResponse
 
@@ -809,9 +848,21 @@ type GetCardsBySetIDOKApplicationJSON []Card
 
 func (*GetCardsBySetIDOKApplicationJSON) getCardsBySetIDRes() {}
 
+type GetFeedQuestionsForbidden ErrorResponse
+
+func (*GetFeedQuestionsForbidden) getFeedQuestionsRes() {}
+
+type GetFeedQuestionsInternalServerError ErrorResponse
+
+func (*GetFeedQuestionsInternalServerError) getFeedQuestionsRes() {}
+
 type GetFeedQuestionsOKApplicationJSON []Card
 
 func (*GetFeedQuestionsOKApplicationJSON) getFeedQuestionsRes() {}
+
+type GetSetForbidden ErrorResponse
+
+func (*GetSetForbidden) getSetRes() {}
 
 type GetSetInternalServerError ErrorResponse
 
@@ -833,6 +884,10 @@ type GetSetNotFound ErrorResponse
 
 func (*GetSetNotFound) getSetRes() {}
 
+type GetSetPlanForbidden ErrorResponse
+
+func (*GetSetPlanForbidden) getSetPlanRes() {}
+
 type GetSetPlanInternalServerError ErrorResponse
 
 func (*GetSetPlanInternalServerError) getSetPlanRes() {}
@@ -841,6 +896,10 @@ type GetSetPlanNotFound ErrorResponse
 
 func (*GetSetPlanNotFound) getSetPlanRes() {}
 
+type GetSetShareCodeForbidden ErrorResponse
+
+func (*GetSetShareCodeForbidden) getSetShareCodeRes() {}
+
 type GetSetShareCodeInternalServerError ErrorResponse
 
 func (*GetSetShareCodeInternalServerError) getSetShareCodeRes() {}
@@ -848,6 +907,14 @@ func (*GetSetShareCodeInternalServerError) getSetShareCodeRes() {}
 type GetSetShareCodeNotFound ErrorResponse
 
 func (*GetSetShareCodeNotFound) getSetShareCodeRes() {}
+
+type GetTodayForbidden ErrorResponse
+
+func (*GetTodayForbidden) getTodayRes() {}
+
+type GetTodayInternalServerError ErrorResponse
+
+func (*GetTodayInternalServerError) getTodayRes() {}
 
 // Ref: #/components/schemas/HealthResponse
 type HealthResponse struct {
@@ -869,6 +936,10 @@ func (*HealthResponse) getHealthRes() {}
 type JoinSetByShareCodeBadRequest ErrorResponse
 
 func (*JoinSetByShareCodeBadRequest) joinSetByShareCodeRes() {}
+
+type JoinSetByShareCodeForbidden ErrorResponse
+
+func (*JoinSetByShareCodeForbidden) joinSetByShareCodeRes() {}
 
 type JoinSetByShareCodeInternalServerError ErrorResponse
 
@@ -1137,6 +1208,52 @@ func (o OptNilDateTime) Or(d time.Time) time.Time {
 	return d
 }
 
+// NewOptProfileResponsePlatform returns new OptProfileResponsePlatform with value set to v.
+func NewOptProfileResponsePlatform(v ProfileResponsePlatform) OptProfileResponsePlatform {
+	return OptProfileResponsePlatform{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptProfileResponsePlatform is optional ProfileResponsePlatform.
+type OptProfileResponsePlatform struct {
+	Value ProfileResponsePlatform
+	Set   bool
+}
+
+// IsSet returns true if OptProfileResponsePlatform was set.
+func (o OptProfileResponsePlatform) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptProfileResponsePlatform) Reset() {
+	var v ProfileResponsePlatform
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptProfileResponsePlatform) SetTo(v ProfileResponsePlatform) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptProfileResponsePlatform) Get() (v ProfileResponsePlatform, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptProfileResponsePlatform) Or(d ProfileResponsePlatform) ProfileResponsePlatform {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptString returns new OptString with value set to v.
 func NewOptString(v string) OptString {
 	return OptString{
@@ -1229,9 +1346,132 @@ func (o OptTableLayout) Or(d TableLayout) TableLayout {
 	return d
 }
 
+// Ref: #/components/schemas/ProfileRequest
+type ProfileRequest struct {
+	FirstName string `json:"firstName"`
+	LastName  string `json:"lastName"`
+}
+
+// GetFirstName returns the value of FirstName.
+func (s *ProfileRequest) GetFirstName() string {
+	return s.FirstName
+}
+
+// GetLastName returns the value of LastName.
+func (s *ProfileRequest) GetLastName() string {
+	return s.LastName
+}
+
+// SetFirstName sets the value of FirstName.
+func (s *ProfileRequest) SetFirstName(val string) {
+	s.FirstName = val
+}
+
+// SetLastName sets the value of LastName.
+func (s *ProfileRequest) SetLastName(val string) {
+	s.LastName = val
+}
+
+// Ref: #/components/schemas/ProfileResponse
+type ProfileResponse struct {
+	User            User                       `json:"user"`
+	Platform        OptProfileResponsePlatform `json:"platform"`
+	ProfileComplete bool                       `json:"profileComplete"`
+}
+
+// GetUser returns the value of User.
+func (s *ProfileResponse) GetUser() User {
+	return s.User
+}
+
+// GetPlatform returns the value of Platform.
+func (s *ProfileResponse) GetPlatform() OptProfileResponsePlatform {
+	return s.Platform
+}
+
+// GetProfileComplete returns the value of ProfileComplete.
+func (s *ProfileResponse) GetProfileComplete() bool {
+	return s.ProfileComplete
+}
+
+// SetUser sets the value of User.
+func (s *ProfileResponse) SetUser(val User) {
+	s.User = val
+}
+
+// SetPlatform sets the value of Platform.
+func (s *ProfileResponse) SetPlatform(val OptProfileResponsePlatform) {
+	s.Platform = val
+}
+
+// SetProfileComplete sets the value of ProfileComplete.
+func (s *ProfileResponse) SetProfileComplete(val bool) {
+	s.ProfileComplete = val
+}
+
+func (*ProfileResponse) getProfileRes() {}
+func (*ProfileResponse) putProfileRes() {}
+
+type ProfileResponsePlatform string
+
+const (
+	ProfileResponsePlatformMax      ProfileResponsePlatform = "max"
+	ProfileResponsePlatformTelegram ProfileResponsePlatform = "telegram"
+)
+
+// AllValues returns all ProfileResponsePlatform values.
+func (ProfileResponsePlatform) AllValues() []ProfileResponsePlatform {
+	return []ProfileResponsePlatform{
+		ProfileResponsePlatformMax,
+		ProfileResponsePlatformTelegram,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s ProfileResponsePlatform) MarshalText() ([]byte, error) {
+	switch s {
+	case ProfileResponsePlatformMax:
+		return []byte(s), nil
+	case ProfileResponsePlatformTelegram:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *ProfileResponsePlatform) UnmarshalText(data []byte) error {
+	switch ProfileResponsePlatform(data) {
+	case ProfileResponsePlatformMax:
+		*s = ProfileResponsePlatformMax
+		return nil
+	case ProfileResponsePlatformTelegram:
+		*s = ProfileResponsePlatformTelegram
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+type PutProfileBadRequest ErrorResponse
+
+func (*PutProfileBadRequest) putProfileRes() {}
+
+type PutProfileForbidden ErrorResponse
+
+func (*PutProfileForbidden) putProfileRes() {}
+
+type PutProfileInternalServerError ErrorResponse
+
+func (*PutProfileInternalServerError) putProfileRes() {}
+
 type SendResultsBadRequest ErrorResponse
 
 func (*SendResultsBadRequest) sendResultsRes() {}
+
+type SendResultsForbidden ErrorResponse
+
+func (*SendResultsForbidden) sendResultsRes() {}
 
 type SendResultsInternalServerError ErrorResponse
 
@@ -1421,6 +1661,10 @@ func (*TodayData) getTodayRes() {}
 type UpdateCardBadRequest ErrorResponse
 
 func (*UpdateCardBadRequest) updateCardRes() {}
+
+type UpdateCardForbidden ErrorResponse
+
+func (*UpdateCardForbidden) updateCardRes() {}
 
 type UpdateCardInternalServerError ErrorResponse
 

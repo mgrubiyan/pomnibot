@@ -37,6 +37,10 @@ type GetHealthRes interface {
 	getHealthRes()
 }
 
+type GetProfileRes interface {
+	getProfileRes()
+}
+
 type GetSetLeaderboardRes interface {
 	getSetLeaderboardRes()
 }
@@ -59,6 +63,10 @@ type GetTodayRes interface {
 
 type JoinSetByShareCodeRes interface {
 	joinSetByShareCodeRes()
+}
+
+type PutProfileRes interface {
+	putProfileRes()
 }
 
 type SendResultsRes interface {

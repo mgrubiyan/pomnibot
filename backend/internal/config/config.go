@@ -30,6 +30,7 @@ type Config struct {
 	Port                  string
 	DatabaseURL           string
 	BotToken              string
+	TelegramBotToken      string
 	AppURL                string
 	MaxAPIURL             string
 	MaxInsecureSkipVerify bool
@@ -97,11 +98,12 @@ func Load() (Config, error) {
 	}
 
 	cfg.BotToken = value("BOT_TOKEN", "")
+	cfg.TelegramBotToken = value("TG_BOT_TOKEN", "")
 	domain := value("DOMAIN", "")
 	cfg.AppURL = "https://" + domain
 	cfg.MaxAPIURL = value("MAX_API_URL", "https://platform-api2.max.ru")
 	var errs []error
-	for _, field := range []struct{ name, value string }{{"BOT_TOKEN", cfg.BotToken}, {"DOMAIN", domain}} {
+	for _, field := range []struct{ name, value string }{{"BOT_TOKEN", cfg.BotToken}, {"TG_BOT_TOKEN", cfg.TelegramBotToken}, {"DOMAIN", domain}} {
 		if field.value == "" {
 			errs = append(errs, fmt.Errorf("%s is required", field.name))
 		}

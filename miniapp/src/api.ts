@@ -1,12 +1,13 @@
 import { createApiClient } from '../contracts';
 import { config } from './config';
 import type { Middleware } from 'openapi-fetch';
+import { miniAppAuthorization } from './platform';
 
 const authMiddleware: Middleware = {
     async onRequest({ request }) {
-        const initData = config.maxEnabled && window.WebApp?.initData;
-        if (initData) {
-            request.headers.set('X-Init-Data', initData);
+        const authorization = miniAppAuthorization(window);
+        if (authorization) {
+            request.headers.set('Authorization', authorization);
         }
         return request;
     },

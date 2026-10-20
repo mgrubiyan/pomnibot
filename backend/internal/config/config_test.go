@@ -49,7 +49,7 @@ func setProdEnv(t *testing.T) {
 	t.Helper()
 	values := map[string]string{
 		"APP_ENV": "prod", "PORT": "8081", "DATABASE_URL": "postgres://localhost/pomnibot",
-		"BOT_TOKEN": "test-token", "DOMAIN": "example.test", "MAX_API_URL": "https://max.example.test",
+		"TG_BOT_TOKEN": "telegram-test-token", "BOT_TOKEN": "test-token", "DOMAIN": "example.test", "MAX_API_URL": "https://max.example.test",
 		"MAX_INSECURE_SKIP_VERIFY": "false", "GIGACHAT_AUTH_KEY": "test-key",
 		"GIGACHAT_SCOPE": "GIGACHAT_API_PERS", "GIGACHAT_MODEL": "test-model",
 		"GIGACHAT_FALLBACK_MODEL": "fallback", "GIGACHAT_BASE_URL": "https://example.test/v1",

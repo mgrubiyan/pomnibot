@@ -95,3 +95,39 @@ func WithWarnings(text string, warnings []string) string {
 	}
 	return b.String()
 }
+
+// Shared progress and result wording used by every messenger adapter.
+const (
+	TextReading    = "📸 Твоя очередь! Распознаю текст... ⏳"
+	TextGenerating = "🧠 Анализирую конспект и создаю карточки... ⏳"
+)
+
+func fileWord(count int) string {
+	if count == 1 {
+		return "файл"
+	}
+	if count >= 2 && count <= 4 {
+		return "файла"
+	}
+	return "файлов"
+}
+
+// ReceivedText confirms the files before extraction.
+func ReceivedText(count int) string {
+	return fmt.Sprintf("📸 Получил %d %s. Распознаю текст... ⏳", count, fileWord(count))
+}
+
+// QueuedText explains the position in the shared generation queue.
+func QueuedText(count, ahead int) string {
+	return fmt.Sprintf("📸 Получил %d %s. Сейчас обрабатываю другие конспекты, ты в очереди, перед тобой: %d. Начну, как только освобожусь ⏳", count, fileWord(count), ahead)
+}
+
+// CardsText reports streamed card generation progress.
+func CardsText(total int) string {
+	return fmt.Sprintf("🧠 Создаю карточки... Уже готово: %d ⏳", total)
+}
+
+// SuccessText includes the common share code, warnings and Mini App action.
+func SuccessText(result Result) string {
+	return WithWarnings(fmt.Sprintf("🎉 Набор «%s» успешно создан!\nКод для совместного доступа: %s", result.Set.Title, result.Set.ShareCode.Value), result.Warnings) + "\n\nОткрой мини-приложение, чтобы начать тренировку:"
+}

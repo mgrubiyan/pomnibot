@@ -12,14 +12,14 @@ import (
 
 type mockUserQuerier struct {
 	db.Querier
-	upsertUserFunc           func(ctx context.Context, arg db.UpsertUserParams) (db.User, error)
+	upsertMAXUserFunc        func(ctx context.Context, arg db.UpsertMAXUserParams) (db.User, error)
 	ensureUserFunc           func(ctx context.Context, id int64) (db.User, error)
 	getUsersWithDueFactsFunc func(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]int64, error)
 }
 
-func (m *mockUserQuerier) UpsertUser(ctx context.Context, arg db.UpsertUserParams) (db.User, error) {
-	if m.upsertUserFunc != nil {
-		return m.upsertUserFunc(ctx, arg)
+func (m *mockUserQuerier) UpsertMAXUser(ctx context.Context, arg db.UpsertMAXUserParams) (db.User, error) {
+	if m.upsertMAXUserFunc != nil {
+		return m.upsertMAXUserFunc(ctx, arg)
 	}
 	return db.User{}, nil
 }
@@ -38,18 +38,19 @@ func (m *mockUserQuerier) GetUsersWithDueFacts(ctx context.Context, arg db.GetUs
 	return nil, nil
 }
 
-func TestUserService_UpsertUser(t *testing.T) {
+func TestUserService_UpsertMAXUser(t *testing.T) {
 	ctx := context.Background()
 	lastName := "Smith"
 	username := "jsmith"
 
 	t.Run("successful upsert with all fields", func(t *testing.T) {
-		var capturedArg db.UpsertUserParams
+		var capturedArg db.UpsertMAXUserParams
 		mock := &mockUserQuerier{
-			upsertUserFunc: func(_ context.Context, arg db.UpsertUserParams) (db.User, error) {
+			upsertMAXUserFunc: func(_ context.Context, arg db.UpsertMAXUserParams) (db.User, error) {
 				capturedArg = arg
 				return db.User{
-					ID:        arg.ID,
+					ID:        900,
+					MaxID:     arg.MaxID,
 					FirstName: arg.FirstName,
 					LastName:  arg.LastName,
 					Username:  arg.Username,
@@ -59,8 +60,8 @@ func TestUserService_UpsertUser(t *testing.T) {
 		}
 
 		svc := usecase.NewUserService(mock)
-		err := svc.UpsertUser(ctx, usecase.UpsertUserParams{
-			ID:        12345,
+		_, err := svc.UpsertMAXUser(ctx, usecase.MAXUserParams{
+			MaxID:     12345,
 			FirstName: "John",
 			LastName:  &lastName,
 			Username:  &username,
@@ -70,8 +71,8 @@ func TestUserService_UpsertUser(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if capturedArg.ID != 12345 {
-			t.Errorf("expected ID 12345, got %d", capturedArg.ID)
+		if capturedArg.MaxID.Int64 != 12345 {
+			t.Errorf("expected ID 12345, got %d", capturedArg.MaxID.Int64)
 		}
 		if capturedArg.FirstName != "John" {
 			t.Errorf("expected FirstName 'John', got '%s'", capturedArg.FirstName)
@@ -88,20 +89,21 @@ func TestUserService_UpsertUser(t *testing.T) {
 	})
 
 	t.Run("successful upsert with nil optional fields", func(t *testing.T) {
-		var capturedArg db.UpsertUserParams
+		var capturedArg db.UpsertMAXUserParams
 		mock := &mockUserQuerier{
-			upsertUserFunc: func(_ context.Context, arg db.UpsertUserParams) (db.User, error) {
+			upsertMAXUserFunc: func(_ context.Context, arg db.UpsertMAXUserParams) (db.User, error) {
 				capturedArg = arg
 				return db.User{
-					ID:        arg.ID,
+					ID:        900,
+					MaxID:     arg.MaxID,
 					FirstName: arg.FirstName,
 				}, nil
 			},
 		}
 
 		svc := usecase.NewUserService(mock)
-		err := svc.UpsertUser(ctx, usecase.UpsertUserParams{
-			ID:        67890,
+		_, err := svc.UpsertMAXUser(ctx, usecase.MAXUserParams{
+			MaxID:     67890,
 			FirstName: "Alice",
 			LastName:  nil,
 			Username:  nil,
@@ -125,14 +127,14 @@ func TestUserService_UpsertUser(t *testing.T) {
 	t.Run("database error returns wrapped error", func(t *testing.T) {
 		mockErr := errors.New("connection failed")
 		mock := &mockUserQuerier{
-			upsertUserFunc: func(_ context.Context, _ db.UpsertUserParams) (db.User, error) {
+			upsertMAXUserFunc: func(_ context.Context, _ db.UpsertMAXUserParams) (db.User, error) {
 				return db.User{}, mockErr
 			},
 		}
 
 		svc := usecase.NewUserService(mock)
-		err := svc.UpsertUser(ctx, usecase.UpsertUserParams{
-			ID:        12345,
+		_, err := svc.UpsertMAXUser(ctx, usecase.MAXUserParams{
+			MaxID:     12345,
 			FirstName: "John",
 		})
 

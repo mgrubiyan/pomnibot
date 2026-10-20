@@ -84,6 +84,12 @@ type Invoker interface {
 	//
 	// GET /health
 	GetHealth(ctx context.Context) (GetHealthRes, error)
+	// GetProfile invokes GetProfile operation.
+	//
+	// Read the saved profile and verified platform.
+	//
+	// GET /profile
+	GetProfile(ctx context.Context) (GetProfileRes, error)
 	// GetSet invokes GetSet operation.
 	//
 	// Get a card set.
@@ -120,6 +126,12 @@ type Invoker interface {
 	//
 	// POST /sets/join
 	JoinSetByShareCode(ctx context.Context, request *JoinSetRequest) (JoinSetByShareCodeRes, error)
+	// PutProfile invokes PutProfile operation.
+	//
+	// Complete or edit a verified Telegram profile and clear bot dialogue.
+	//
+	// PUT /profile
+	PutProfile(ctx context.Context, request *ProfileRequest) (PutProfileRes, error)
 	// SendResults invokes SendResults operation.
 	//
 	// Send set/feed results.
@@ -1019,6 +1031,86 @@ func (c *Client) sendGetHealth(ctx context.Context) (res GetHealthRes, err error
 	return result, nil
 }
 
+// GetProfile invokes GetProfile operation.
+//
+// Read the saved profile and verified platform.
+//
+// GET /profile
+func (c *Client) GetProfile(ctx context.Context) (GetProfileRes, error) {
+	res, err := c.sendGetProfile(ctx)
+	return res, err
+}
+
+func (c *Client) sendGetProfile(ctx context.Context) (res GetProfileRes, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("GetProfile"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/profile"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, GetProfileOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/profile"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer func() {
+		// Drain the body to EOF before closing, so the underlying
+		// connection can be reused by the Transport regardless of the
+		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
+		_, _ = io.Copy(io.Discard, body)
+		_ = body.Close()
+	}()
+
+	stage = "DecodeResponse"
+	result, err := decodeGetProfileResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
 // GetSet invokes GetSet operation.
 //
 // Get a card set.
@@ -1570,6 +1662,89 @@ func (c *Client) sendJoinSetByShareCode(ctx context.Context, request *JoinSetReq
 
 	stage = "DecodeResponse"
 	result, err := decodeJoinSetByShareCodeResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// PutProfile invokes PutProfile operation.
+//
+// Complete or edit a verified Telegram profile and clear bot dialogue.
+//
+// PUT /profile
+func (c *Client) PutProfile(ctx context.Context, request *ProfileRequest) (PutProfileRes, error) {
+	res, err := c.sendPutProfile(ctx, request)
+	return res, err
+}
+
+func (c *Client) sendPutProfile(ctx context.Context, request *ProfileRequest) (res PutProfileRes, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("PutProfile"),
+		semconv.HTTPRequestMethodKey.String("PUT"),
+		semconv.URLTemplateKey.String("/profile"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, PutProfileOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/profile"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "PUT", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodePutProfileRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer func() {
+		// Drain the body to EOF before closing, so the underlying
+		// connection can be reused by the Transport regardless of the
+		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
+		_, _ = io.Copy(io.Discard, body)
+		_ = body.Close()
+	}()
+
+	stage = "DecodeResponse"
+	result, err := decodePutProfileResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}

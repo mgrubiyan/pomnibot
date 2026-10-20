@@ -14,6 +14,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/notes"
+	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
 // recordingServer is a MAX Bot API stub that keeps the text of every sent
@@ -194,4 +195,31 @@ func TestBot_SharedQueueAcrossBots(t *testing.T) {
 	close(unblock)
 	bots[0].inflight.Wait()
 	bots[1].inflight.Wait()
+}
+
+func TestMAXUsesInternalIDForNotes(t *testing.T) {
+	server := newRecordingServer(t)
+	client, err := NewClient("test-token", server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var savedID int64
+	sets := &mockSetService{saveGeneratedSetFunc: func(_ context.Context, id int64, title string, _ generator.Result) (*contracts.CardSet, error) {
+		savedID = id
+		return &contracts.CardSet{ID: uuid.New(), Title: title}, nil
+	}}
+	users := &mockUserService{upsertMAXUserFunc: func(_ context.Context, i usecase.MAXUserParams) (usecase.Account, error) {
+		if i.MaxID != 42 {
+			t.Errorf("identity: %+v", i)
+		}
+		return usecase.Account{User: contracts.User{ID: 900}, MaxID: 42, ProfileComplete: true}, nil
+	}}
+	bot, err := NewBot(client, "https://example.test", users, notes.New(&mockFileExtractor{}, &mockCardGenerator{}, sets, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bot.handleUpdate(context.Background(), fileUpdate(42, "note.pdf"))
+	if savedID != 900 {
+		t.Fatalf("saved with external ID: %d", savedID)
+	}
 }

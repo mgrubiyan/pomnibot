@@ -96,6 +96,15 @@ func (UnimplementedHandler) GetHealth(ctx context.Context) (r GetHealthRes, _ er
 	return r, ht.ErrNotImplemented
 }
 
+// GetProfile implements GetProfile operation.
+//
+// Read the saved profile and verified platform.
+//
+// GET /profile
+func (UnimplementedHandler) GetProfile(ctx context.Context) (r GetProfileRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // GetSet implements GetSet operation.
 //
 // Get a card set.
@@ -147,6 +156,15 @@ func (UnimplementedHandler) GetToday(ctx context.Context) (r GetTodayRes, _ erro
 //
 // POST /sets/join
 func (UnimplementedHandler) JoinSetByShareCode(ctx context.Context, req *JoinSetRequest) (r JoinSetByShareCodeRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// PutProfile implements PutProfile operation.
+//
+// Complete or edit a verified Telegram profile and clear bot dialogue.
+//
+// PUT /profile
+func (UnimplementedHandler) PutProfile(ctx context.Context, req *ProfileRequest) (r PutProfileRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 

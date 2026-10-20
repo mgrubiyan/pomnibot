@@ -22,7 +22,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
-func manualTestPool(t *testing.T) *pgxpool.Pool {
+func manualTestPool(t *testing.T, beforeMigration ...func(*pgxpool.Pool)) *pgxpool.Pool {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
@@ -53,6 +53,11 @@ func manualTestPool(t *testing.T) *pgxpool.Pool {
 		// Schema only: the demo sets and their fixes would fill the tables.
 		if strings.Contains(entry.Name(), "seed") || strings.Contains(entry.Name(), "demo") {
 			continue
+		}
+		if strings.HasPrefix(entry.Name(), "00008") {
+			for _, before := range beforeMigration {
+				before(pool)
+			}
 		}
 		data, err := repository.MigrationsFS.ReadFile("migrations/" + entry.Name())
 		if err != nil {

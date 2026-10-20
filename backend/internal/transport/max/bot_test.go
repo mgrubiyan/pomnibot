@@ -22,16 +22,11 @@ import (
 )
 
 type mockUserService struct {
-	upsertUserFunc           func(ctx context.Context, params usecase.UpsertUserParams) error
+	upsertMAXUserFunc func(context.Context, usecase.MAXUserParams) (usecase.Account, error)
+	deliveryFunc      func(context.Context, int64) (usecase.Account, error)
+	usecase.UserService
 	ensureUserFunc           func(ctx context.Context, userID int64) error
 	getUsersWithDueFactsFunc func(ctx context.Context, now time.Time, tz string) ([]int64, error)
-}
-
-func (m *mockUserService) UpsertUser(ctx context.Context, params usecase.UpsertUserParams) error {
-	if m.upsertUserFunc != nil {
-		return m.upsertUserFunc(ctx, params)
-	}
-	return nil
 }
 
 func (m *mockUserService) EnsureUser(ctx context.Context, userID int64) error {
@@ -46,6 +41,19 @@ func (m *mockUserService) GetUsersWithDueFacts(ctx context.Context, now time.Tim
 		return m.getUsersWithDueFactsFunc(ctx, now, tz)
 	}
 	return nil, nil
+}
+
+func (m *mockUserService) UpsertMAXUser(ctx context.Context, i usecase.MAXUserParams) (usecase.Account, error) {
+	if m.upsertMAXUserFunc != nil {
+		return m.upsertMAXUserFunc(ctx, i)
+	}
+	return usecase.Account{User: contracts.User{ID: i.MaxID + 100000, FirstName: i.FirstName}, MaxID: i.MaxID, ProfileComplete: true}, nil
+}
+func (m *mockUserService) GetAccount(ctx context.Context, id int64) (usecase.Account, error) {
+	if m.deliveryFunc != nil {
+		return m.deliveryFunc(ctx, id)
+	}
+	return usecase.Account{MaxID: id}, nil
 }
 
 type mockSetService struct {
@@ -206,11 +214,11 @@ func TestBotWelcomeMessage(t *testing.T) {
 		t.Fatalf("failed to create client: %v", err)
 	}
 
-	var capturedParams *usecase.UpsertUserParams
+	var capturedParams *usecase.MAXUserParams
 	userSvc := &mockUserService{
-		upsertUserFunc: func(_ context.Context, params usecase.UpsertUserParams) error {
+		upsertMAXUserFunc: func(_ context.Context, params usecase.MAXUserParams) (usecase.Account, error) {
 			capturedParams = &params
-			return nil
+			return usecase.Account{User: contracts.User{ID: 900}}, nil
 		},
 	}
 	setSvc := &mockSetService{}
@@ -244,8 +252,8 @@ func TestBotWelcomeMessage(t *testing.T) {
 		t.Errorf("expected Authorization 'test-token', got '%s'", receivedAuth)
 	}
 
-	if capturedParams == nil || capturedParams.ID != 999 {
-		t.Fatalf("expected UpsertUser to be called for user 999, got %+v", capturedParams)
+	if capturedParams == nil || capturedParams.MaxID != 999 {
+		t.Fatalf("expected UpsertMAXUser to be called for user 999, got %+v", capturedParams)
 	}
 	if capturedParams.FirstName != "Test" || *capturedParams.LastName != "User" {
 		t.Errorf("unexpected params: %+v", capturedParams)
@@ -273,7 +281,7 @@ func TestBotWelcomeMessage(t *testing.T) {
 	}
 }
 
-func TestBot_UpsertUser_OnMessageCreated(t *testing.T) {
+func TestBot_UpsertMAXUser_OnMessageCreated(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/me":
@@ -298,11 +306,11 @@ func TestBot_UpsertUser_OnMessageCreated(t *testing.T) {
 		t.Fatalf("failed to create client: %v", err)
 	}
 
-	var capturedParams *usecase.UpsertUserParams
+	var capturedParams *usecase.MAXUserParams
 	userSvc := &mockUserService{
-		upsertUserFunc: func(_ context.Context, params usecase.UpsertUserParams) error {
+		upsertMAXUserFunc: func(_ context.Context, params usecase.MAXUserParams) (usecase.Account, error) {
 			capturedParams = &params
-			return nil
+			return usecase.Account{User: contracts.User{ID: 900}}, nil
 		},
 	}
 	setSvc := &mockSetService{}
@@ -332,9 +340,9 @@ func TestBot_UpsertUser_OnMessageCreated(t *testing.T) {
 		})
 
 		if capturedParams == nil {
-			t.Fatalf("expected UpsertUser to be called")
+			t.Fatalf("expected UpsertMAXUser to be called")
 		}
-		if capturedParams.ID != 555 || capturedParams.FirstName != "Bob" {
+		if capturedParams.MaxID != 555 || capturedParams.FirstName != "Bob" {
 			t.Errorf("unexpected captured params: %+v", capturedParams)
 		}
 	})
@@ -355,12 +363,12 @@ func TestBot_UpsertUser_OnMessageCreated(t *testing.T) {
 		})
 
 		if capturedParams != nil {
-			t.Fatalf("expected UpsertUser NOT to be called for bot sender, got %+v", capturedParams)
+			t.Fatalf("expected UpsertMAXUser NOT to be called for bot sender, got %+v", capturedParams)
 		}
 	})
 }
 
-func TestBot_UpsertUser_ResilientOnError(t *testing.T) {
+func TestBot_UpsertMAXUser_ResilientOnError(t *testing.T) {
 	var messageSent bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -388,8 +396,8 @@ func TestBot_UpsertUser_ResilientOnError(t *testing.T) {
 	}
 
 	userSvc := &mockUserService{
-		upsertUserFunc: func(_ context.Context, _ usecase.UpsertUserParams) error {
-			return errors.New("database connection unavailable")
+		upsertMAXUserFunc: func(_ context.Context, _ usecase.MAXUserParams) (usecase.Account, error) {
+			return usecase.Account{}, errors.New("database connection unavailable")
 		},
 	}
 	setSvc := &mockSetService{}
@@ -415,7 +423,7 @@ func TestBot_UpsertUser_ResilientOnError(t *testing.T) {
 	})
 
 	if !messageSent {
-		t.Fatalf("expected message to still be sent even if UpsertUser returned an error")
+		t.Fatalf("expected message to still be sent even if UpsertMAXUser returned an error")
 	}
 }
 
@@ -529,8 +537,8 @@ func TestBot_FileAttachment_GeneratesSet(t *testing.T) {
 			},
 		})
 
-		if capturedUserID != 12345 {
-			t.Errorf("expected userID 12345, got %d", capturedUserID)
+		if capturedUserID != 112345 {
+			t.Errorf("expected internal userID 112345, got %d", capturedUserID)
 		}
 		if capturedTitle != "лекция биология" {
 			t.Errorf("expected title 'лекция биология', got %q", capturedTitle)
@@ -1057,7 +1065,7 @@ func TestNextRunDuration(t *testing.T) {
 func TestSendReviewReminders(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("successfully sends reminders and filters bypass users", func(t *testing.T) {
+	t.Run("uses MAX IDs and skips Telegram and bypass users", func(t *testing.T) {
 		type sentMsg struct {
 			UserID int64
 			Body   SendMessageRequest
@@ -1103,8 +1111,19 @@ func TestSendReviewReminders(t *testing.T) {
 		}
 
 		userSvc := &mockUserService{
+			deliveryFunc: func(_ context.Context, id int64) (usecase.Account, error) {
+				switch id {
+				case 101, 102:
+					return usecase.Account{MaxID: id + 100}, nil
+				case 103:
+					return usecase.Account{TgID: 201}, nil
+				default:
+					t.Fatalf("unexpected internal ID %d", id)
+					return usecase.Account{}, nil
+				}
+			},
 			getUsersWithDueFactsFunc: func(_ context.Context, _ time.Time, _ string) ([]int64, error) {
-				return []int64{101, 102, 100001, 0}, nil
+				return []int64{101, 102, 103, 100001, 0}, nil
 			},
 		}
 
@@ -1127,8 +1146,8 @@ func TestSendReviewReminders(t *testing.T) {
 			t.Fatalf("expected 2 API calls, got %d", len(sentMessages))
 		}
 
-		if sentMessages[0].UserID != 101 || sentMessages[1].UserID != 102 {
-			t.Errorf("expected user IDs 101 and 102, got %d and %d", sentMessages[0].UserID, sentMessages[1].UserID)
+		if sentMessages[0].UserID != 201 || sentMessages[1].UserID != 202 {
+			t.Errorf("expected MAX IDs 201 and 202, got %d and %d", sentMessages[0].UserID, sentMessages[1].UserID)
 		}
 
 		expectedText := "Привет! ⏰ Пора повторить материал — в приложении тебя ждут карточки на сегодня. Загляни в Помнибот! 📚"

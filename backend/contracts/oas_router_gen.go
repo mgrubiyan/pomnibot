@@ -20,13 +20,16 @@ var (
 	rn5AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
-	rn18AllowedHeaders = map[string]string{
+	rn13AllowedHeaders = map[string]string{
+		"PUT": "Content-Type",
+	}
+	rn19AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
 	rn10AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
-	rn17AllowedHeaders = map[string]string{
+	rn18AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
 	rn9AllowedHeaders = map[string]string{
@@ -256,6 +259,33 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 
+			case 'p': // Prefix: "profile"
+
+				if l := len("profile"); len(elem) >= l && elem[0:l] == "profile" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch r.Method {
+					case "GET":
+						s.handleGetProfileRequest([0]string{}, elemIsEscaped, w, r)
+					case "PUT":
+						s.handlePutProfileRequest([0]string{}, elemIsEscaped, w, r)
+					default:
+						s.notAllowed(w, r, notAllowedParams{
+							allowedMethods: "GET,PUT",
+							allowedHeaders: rn13AllowedHeaders,
+							acceptPost:     "",
+							acceptPatch:    "",
+						})
+					}
+
+					return
+				}
+
 			case 'r': // Prefix: "results"
 
 				if l := len("results"); len(elem) >= l && elem[0:l] == "results" {
@@ -272,7 +302,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					default:
 						s.notAllowed(w, r, notAllowedParams{
 							allowedMethods: "POST",
-							allowedHeaders: rn18AllowedHeaders,
+							allowedHeaders: rn19AllowedHeaders,
 							acceptPost:     "application/json",
 							acceptPatch:    "",
 						})
@@ -333,7 +363,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							default:
 								s.notAllowed(w, r, notAllowedParams{
 									allowedMethods: "POST",
-									allowedHeaders: rn17AllowedHeaders,
+									allowedHeaders: rn18AllowedHeaders,
 									acceptPost:     "application/json",
 									acceptPatch:    "",
 								})
@@ -767,6 +797,40 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						r.operationID = "getHealth"
 						r.operationGroup = ""
 						r.pathPattern = "/health"
+						r.args = args
+						r.count = 0
+						return r, true
+					default:
+						return
+					}
+				}
+
+			case 'p': // Prefix: "profile"
+
+				if l := len("profile"); len(elem) >= l && elem[0:l] == "profile" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch method {
+					case "GET":
+						r.name = GetProfileOperation
+						r.summary = "Read the saved profile and verified platform"
+						r.operationID = "GetProfile"
+						r.operationGroup = ""
+						r.pathPattern = "/profile"
+						r.args = args
+						r.count = 0
+						return r, true
+					case "PUT":
+						r.name = PutProfileOperation
+						r.summary = "Complete or edit a verified Telegram profile and clear bot dialogue"
+						r.operationID = "PutProfile"
+						r.operationGroup = ""
+						r.pathPattern = "/profile"
 						r.args = args
 						r.count = 0
 						return r, true

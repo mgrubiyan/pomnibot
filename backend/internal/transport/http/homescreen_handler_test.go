@@ -159,11 +159,11 @@ func TestHomescreenHandler_GetToday(t *testing.T) {
 					},
 				}
 			},
-			wantResType: (*contracts.ErrorResponse)(nil),
+			wantResType: (*contracts.GetTodayInternalServerError)(nil),
 			checkResFunc: func(t *testing.T, res contracts.GetTodayRes) {
-				errResp, ok := res.(*contracts.ErrorResponse)
+				errResp, ok := res.(*contracts.GetTodayInternalServerError)
 				if !ok {
-					t.Fatalf("expected *contracts.ErrorResponse, got %T", res)
+					t.Fatalf("expected *contracts.GetTodayInternalServerError, got %T", res)
 				}
 				if errResp.Message != "database connection failed" {
 					t.Fatalf("expected error message 'database connection failed', got %q", errResp.Message)
@@ -187,9 +187,9 @@ func TestHomescreenHandler_GetToday(t *testing.T) {
 				if _, ok := res.(*contracts.TodayData); !ok {
 					t.Fatalf("expected *contracts.TodayData, got %T", res)
 				}
-			case *contracts.ErrorResponse:
-				if _, ok := res.(*contracts.ErrorResponse); !ok {
-					t.Fatalf("expected *contracts.ErrorResponse, got %T", res)
+			case *contracts.GetTodayInternalServerError:
+				if _, ok := res.(*contracts.GetTodayInternalServerError); !ok {
+					t.Fatalf("expected *contracts.GetTodayInternalServerError, got %T", res)
 				}
 			default:
 				t.Fatalf("unhandled wantResType: %T", tc.wantResType)
@@ -330,11 +330,11 @@ func TestHomescreenHandler_GetFeedQuestions(t *testing.T) {
 					},
 				}
 			},
-			wantResType: (*contracts.ErrorResponse)(nil),
+			wantResType: (*contracts.GetFeedQuestionsInternalServerError)(nil),
 			checkResFunc: func(t *testing.T, res contracts.GetFeedQuestionsRes) {
-				errResp, ok := res.(*contracts.ErrorResponse)
+				errResp, ok := res.(*contracts.GetFeedQuestionsInternalServerError)
 				if !ok {
-					t.Fatalf("expected *contracts.ErrorResponse, got %T", res)
+					t.Fatalf("expected *contracts.GetFeedQuestionsInternalServerError, got %T", res)
 				}
 				if errResp.Message != "failed to retrieve feed" {
 					t.Fatalf("expected 'failed to retrieve feed', got %q", errResp.Message)
@@ -358,9 +358,9 @@ func TestHomescreenHandler_GetFeedQuestions(t *testing.T) {
 				if _, ok := res.(*contracts.GetFeedQuestionsOKApplicationJSON); !ok {
 					t.Fatalf("expected *contracts.GetFeedQuestionsOKApplicationJSON, got %T", res)
 				}
-			case *contracts.ErrorResponse:
-				if _, ok := res.(*contracts.ErrorResponse); !ok {
-					t.Fatalf("expected *contracts.ErrorResponse, got %T", res)
+			case *contracts.GetFeedQuestionsInternalServerError:
+				if _, ok := res.(*contracts.GetFeedQuestionsInternalServerError); !ok {
+					t.Fatalf("expected *contracts.GetFeedQuestionsInternalServerError, got %T", res)
 				}
 			default:
 				t.Fatalf("unhandled wantResType: %T", tc.wantResType)

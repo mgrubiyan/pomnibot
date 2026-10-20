@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 )
 
@@ -20,32 +21,61 @@ func NewUserService(querier db.Querier) UserService {
 	return &userServiceImpl{querier: querier}
 }
 
-// UpsertUser upserts the user record with the provided parameters.
-func (s *userServiceImpl) UpsertUser(ctx context.Context, params UpsertUserParams) error {
-	var lastName pgtype.Text
-	if params.LastName != nil {
-		lastName = pgtype.Text{String: *params.LastName, Valid: true}
+func (s *userServiceImpl) UpsertMAXUser(ctx context.Context, params MAXUserParams) (Account, error) {
+	if params.MaxID <= 0 {
+		return Account{}, ErrValidation
 	}
-	var username pgtype.Text
-	if params.Username != nil {
-		username = pgtype.Text{String: *params.Username, Valid: true}
-	}
-
-	_, err := s.querier.UpsertUser(ctx, db.UpsertUserParams{
-		ID:        params.ID,
-		FirstName: params.FirstName,
-		LastName:  lastName,
-		Username:  username,
-		IsBot:     params.IsBot,
+	row, err := s.querier.UpsertMAXUser(ctx, db.UpsertMAXUserParams{
+		MaxID: pgtype.Int8{Int64: params.MaxID, Valid: true}, FirstName: params.FirstName,
+		LastName: optionalText(params.LastName), Username: optionalText(params.Username), IsBot: params.IsBot,
 	})
 	if err != nil {
-		slog.ErrorContext(ctx, "failed to upsert user in database", "userID", params.ID, "error", err)
-		return fmt.Errorf("upsert user %d: %w", params.ID, err)
+		return Account{}, fmt.Errorf("upsert MAX user: %w", err)
 	}
-	return nil
+	return accountFromUser(row), nil
 }
 
-// EnsureUser ensures a user record exists in the database.
+func optionalText(value *string) pgtype.Text {
+	if value == nil || *value == "" {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: *value, Valid: true}
+}
+
+func (s *userServiceImpl) UpsertTelegramUser(ctx context.Context, params TelegramUserParams) (Account, error) {
+	if params.TgID <= 0 {
+		return Account{}, ErrValidation
+	}
+	row, err := s.querier.UpsertTelegramUser(ctx, db.UpsertTelegramUserParams{
+		TgID: pgtype.Int8{Int64: params.TgID, Valid: true}, Username: params.Username, IsBot: params.IsBot, TgBotStarted: params.BotStarted,
+	})
+	if err != nil {
+		return Account{}, fmt.Errorf("upsert Telegram user: %w", err)
+	}
+	return accountFromUser(row), nil
+}
+
+func (s *userServiceImpl) GetAccount(ctx context.Context, id int64) (Account, error) {
+	row, err := s.querier.GetUserByID(ctx, id)
+	if err != nil {
+		return Account{}, fmt.Errorf("get account: %w", err)
+	}
+	return accountFromUser(row), nil
+}
+
+func accountFromUser(row db.User) Account {
+	user := contracts.User{ID: row.ID, FirstName: row.FirstName}
+	if row.LastName.Valid {
+		user.LastName.SetTo(row.LastName.String)
+	}
+	if row.Username.Valid {
+		user.Username.SetTo(row.Username.String)
+	}
+	return Account{User: user, MaxID: row.MaxID.Int64, TgID: row.TgID.Int64,
+		ProfileComplete: row.ProfileComplete, ProfileStep: row.ProfileStep, BotStarted: row.TgBotStarted}
+}
+
+// EnsureUser ensures a record exists for the internal user ID, including the browser test user.
 func (s *userServiceImpl) EnsureUser(ctx context.Context, userID int64) error {
 	_, err := s.querier.EnsureUser(ctx, userID)
 	if err != nil {

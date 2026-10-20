@@ -16,6 +16,42 @@ servers:
     description: Base API prefix
 
 paths:
+  /profile:
+    get:
+      summary: Read the saved profile and verified platform
+      operationId: GetProfile
+      responses:
+        '200':
+          description: Saved profile (platform omitted for browser test user)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      summary: Complete or edit a verified Telegram profile and clear bot dialogue
+      operationId: PutProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileRequest'
+      responses:
+        '200':
+          description: Saved profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
   /health:
     get:
       summary: Health check endpoint
@@ -42,6 +78,8 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateSetRequest'
       responses:
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '201':
           description: Created successfully
           content:
@@ -68,6 +106,8 @@ paths:
             type: string
             format: uuid
       responses:
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '200':
           description: Card set retrieved successfully
           content:
@@ -92,6 +132,8 @@ paths:
             type: string
             format: uuid
       responses:
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '204':
           description: Card set deleted successfully
         '404':
@@ -118,6 +160,8 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateCardRequest'
       responses:
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '201':
           description: Created successfully
           content:
@@ -144,6 +188,8 @@ paths:
             type: string
             format: uuid
       responses:
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '200':
           description: Cards retrieved successfully
           content:
@@ -172,6 +218,8 @@ paths:
             type: string
             format: uuid
       responses:
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '200':
           description: Set share details retrieved successfully
           content:
@@ -197,6 +245,8 @@ paths:
             type: string
             format: uuid
       responses:
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '200':
           description: Pairs fact - date
           content:
@@ -249,6 +299,8 @@ paths:
             schema:
               $ref: '#/components/schemas/JoinSetRequest'
       responses:
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '200':
           description: Card set joined successfully
           content:
@@ -269,6 +321,8 @@ paths:
       summary: Get today overview data
       operationId: GetToday
       responses:
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '200':
           description: Today data retrieved successfully
           content:
@@ -285,6 +339,8 @@ paths:
       summary: Get questions of current feed
       operationId: GetFeedQuestions
       responses:
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '200':
           description: Feed of questions
           content:
@@ -309,6 +365,8 @@ paths:
             schema:
               $ref: '#/components/schemas/SendResultsRequest'
       responses:
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '204':
           description: Results was sent
         '400':
@@ -337,6 +395,8 @@ paths:
             schema:
               $ref: '#/components/schemas/UpdateCardRequest'
       responses:
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '200':
           description: Card updated successfully
           content:
@@ -363,6 +423,8 @@ paths:
             type: string
             format: uuid
       responses:
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '204':
           description: Card deleted successfully
         '404':
@@ -391,6 +453,8 @@ paths:
             schema:
               $ref: '#/components/schemas/AnswerQuestionRequest'
       responses:
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '200':
           description: Ok
           content:
@@ -429,6 +493,8 @@ paths:
             schema:
               $ref: '#/components/schemas/CheckAnswerRequest'
       responses:
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '200':
           description: Ok
           content:
@@ -443,6 +509,12 @@ paths:
           $ref: '#/components/responses/InternalServerError'
 
 components:
+  securitySchemes:
+    MiniAppAuthorization:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: 'max <original MAX initData> or tma <original Telegram initData>; invalid credentials use test user 0'
   responses:
     BadRequest:
       description: Bad request / validation error
@@ -457,7 +529,7 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     Forbidden:
-      description: Forbidden / insufficient permissions
+      description: Forbidden; code profile_required means a Telegram profile must be completed
       content:
         application/json:
           schema:
@@ -470,6 +542,29 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
 
   schemas:
+    ProfileResponse:
+      type: object
+      required: [user, profileComplete]
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        platform:
+          type: string
+          enum: [max, telegram]
+        profileComplete:
+          type: boolean
+    ProfileRequest:
+      type: object
+      required: [firstName, lastName]
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 100
     HealthResponse:
       type: object
       required:
@@ -484,6 +579,9 @@ components:
       required:
         - message
       properties:
+        code:
+          type: string
+          description: Machine-readable error code, including profile_required
         message:
           type: string
 
