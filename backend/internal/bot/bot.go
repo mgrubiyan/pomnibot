@@ -7,59 +7,14 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
-	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
+	"github.com/mgrubiyan/pomnibot/backend/internal/notes"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
-
-// FileExtractor defines interface for extracting text from files/images.
-type FileExtractor interface {
-	Extract(ctx context.Context, files []ingest.File) (ingest.Result, error)
-}
-
-// CardGenerator defines interface for generating cards from lecture notes.
-type CardGenerator interface {
-	Generate(ctx context.Context, doc generator.Document, onBatch func(generator.Batch)) (generator.Result, error)
-	// Acquire takes a turn at the model for one document. Bots that share a
-	// generator share its queue.
-	Acquire(ctx context.Context, onWait func(ahead int)) (release func(), err error)
-}
-
-type generatorAdapter struct {
-	gen *generator.Generator
-}
-
-func (a *generatorAdapter) Generate(ctx context.Context, doc generator.Document, onBatch func(generator.Batch)) (generator.Result, error) {
-	if a == nil || a.gen == nil {
-		return generator.Result{}, errors.New("generator is nil")
-	}
-	g := a.gen
-	if onBatch != nil {
-		g = g.WithOnBatch(onBatch)
-	}
-	return g.Generate(ctx, doc)
-}
-
-func (a *generatorAdapter) Acquire(ctx context.Context, onWait func(ahead int)) (func(), error) {
-	if a == nil || a.gen == nil {
-		return nil, errors.New("generator is nil")
-	}
-	return a.gen.Acquire(ctx, onWait)
-}
-
-// NewGeneratorAdapter creates a CardGenerator adapter for *generator.Generator.
-func NewGeneratorAdapter(g *generator.Generator) CardGenerator {
-	if g == nil {
-		return nil
-	}
-	return &generatorAdapter{gen: g}
-}
 
 // NotificationConfig contains the validated review reminder schedule.
 type NotificationConfig struct {
@@ -75,9 +30,7 @@ type Bot struct {
 	client        *Client
 	appURL        string
 	userService   usecase.UserService
-	setService    usecase.SetService
-	extractor     FileExtractor
-	generator     CardGenerator
+	notes         *notes.Maker
 	botUser       *User
 	inflight      sync.WaitGroup
 }
@@ -87,9 +40,7 @@ func NewBot(
 	client *Client,
 	appURL string,
 	userService usecase.UserService,
-	setService usecase.SetService,
-	extractor FileExtractor,
-	cardGenerator CardGenerator,
+	maker *notes.Maker,
 	notifications ...NotificationConfig,
 ) (*Bot, error) {
 	if client == nil {
@@ -98,8 +49,8 @@ func NewBot(
 	if userService == nil {
 		return nil, errors.New("user service is required")
 	}
-	if setService == nil {
-		return nil, errors.New("set service is required")
+	if maker == nil {
+		return nil, errors.New("notes maker is required")
 	}
 	if appURL == "" {
 		appURL = "https://pomnibot.steins.ru"
@@ -113,9 +64,7 @@ func NewBot(
 		client:        client,
 		appURL:        strings.TrimSuffix(appURL, "/"),
 		userService:   userService,
-		setService:    setService,
-		extractor:     extractor,
-		generator:     cardGenerator,
+		notes:         maker,
 	}, nil
 }
 
@@ -247,12 +196,7 @@ type attachmentInfo struct {
 }
 
 func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64, caption string, atts []attachmentInfo) {
-	firstFilename := ""
-	if len(atts) > 0 {
-		firstFilename = atts[0].filename
-	}
-	title := resolveSetTitle(caption, firstFilename)
-	log := slog.With("user_id", userID, "chat_id", chatID, "title", title)
+	log := slog.With("user_id", userID, "chat_id", chatID)
 
 	count := len(atts)
 	plural := "файлов"
@@ -289,14 +233,8 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 		}
 	}
 
-	if b.extractor == nil || b.generator == nil {
-		log.Error("extractor or generator not configured on bot")
-		updateStatus(msgTryLater)
-		return
-	}
-
 	files := make([]ingest.File, 0, len(atts))
-	for i, att := range atts {
+	for _, att := range atts {
 		var data []byte
 		var discoveredName string
 		if len(att.data) > 0 {
@@ -305,130 +243,68 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 			downloaded, err := b.client.DownloadFile(ctx, att.url)
 			if err != nil {
 				log.Error("failed to download attachment", "url", att.url, "error", err)
-				updateStatus(msgResend)
+				updateStatus(notes.TextResend)
 				return
 			}
 			data = downloaded.Data
 			discoveredName = downloaded.Filename
 		} else {
 			log.Error("attachment has neither data nor url", "filename", att.filename)
-			updateStatus(msgResend)
+			updateStatus(notes.TextResend)
 			return
 		}
 
-		effectiveName := att.filename
-		if isGenericFilename(effectiveName) && !isGenericFilename(discoveredName) {
-			effectiveName = discoveredName
-			atts[i].filename = discoveredName
-			if i == 0 && caption == "" && isGenericTitle(title) {
-				title = resolveSetTitle("", discoveredName)
-			}
+		// The download may name a file the attachment left unnamed; the
+		// set is named after the first file.
+		name := att.filename
+		if notes.IsGenericFilename(name) && !notes.IsGenericFilename(discoveredName) {
+			name = discoveredName
 		}
-
-		files = append(files, ingest.File{
-			Name: effectiveName,
-			Data: data,
-		})
+		files = append(files, ingest.File{Name: name, Data: data})
 	}
 
-	if len(files) == 0 {
-		log.Error("no files to read among attachments", "attachments", len(atts))
-		updateStatus(msgResend)
-		return
-	}
-
-	// Files are downloaded before waiting, while their links are fresh;
-	// reading and generation wait for their turn at the model.
-	queued := false
-	release, err := b.generator.Acquire(ctx, func(ahead int) {
-		queued = true
-		updateStatus(fmt.Sprintf("📸 Получил %d %s. Сейчас обрабатываю другие конспекты, ты в очереди, перед тобой: %d. Начну, как только освобожусь ⏳", count, plural, ahead))
+	// Files are downloaded before the queue, while their links are fresh.
+	var (
+		mu       sync.Mutex
+		lastEdit time.Time
+	)
+	res, err := b.notes.Make(ctx, notes.Request{UserID: userID, Caption: caption, Files: files}, notes.Progress{
+		Queued: func(ahead int) {
+			updateStatus(fmt.Sprintf("📸 Получил %d %s. Сейчас обрабатываю другие конспекты, ты в очереди, перед тобой: %d. Начну, как только освобожусь ⏳", count, plural, ahead))
+		},
+		Reading: func() { updateStatus("📸 Твоя очередь! Распознаю текст... ⏳") },
+		Generating: func() {
+			updateStatus("🧠 Анализирую конспект и создаю карточки... ⏳")
+		},
+		Cards: func(total int) {
+			mu.Lock()
+			defer mu.Unlock()
+			if time.Since(lastEdit) < 1500*time.Millisecond {
+				return
+			}
+			lastEdit = time.Now()
+			if mid != "" {
+				if err := b.client.EditMessage(ctx, mid, SendMessageRequest{
+					Text: fmt.Sprintf("🧠 Создаю карточки... Уже готово: %d ⏳", total),
+				}); err != nil {
+					log.Warn("failed to update progress message", "error", err)
+				}
+			}
+		},
 	})
 	if err != nil {
-		log.Warn("stopped waiting for generation slot", "error", err)
-		return
-	}
-	defer release()
-	if queued {
-		updateStatus("📸 Твоя очередь! Распознаю текст... ⏳")
-	}
-
-	extracted, err := b.extractor.Extract(ctx, files)
-	if err != nil {
-		log.Error("failed to extract text from files", "error", err)
-		updateStatus(extractFailure(err, len(files)))
-		return
-	}
-
-	if strings.TrimSpace(extracted.Text) == "" {
-		log.Warn("no text found in files", "files_count", len(files))
-		updateStatus(msgNoText)
-		return
-	}
-
-	updateStatus("🧠 Анализирую конспект и создаю карточки... ⏳")
-
-	doc := generator.Document{
-		Text:  extracted.Text,
-		Title: title,
-	}
-	for _, p := range extracted.Pages {
-		doc.PageStarts = append(doc.PageStarts, p.Start)
-	}
-
-	var (
-		mu         sync.Mutex
-		lastEdit   time.Time
-		totalCards int
-	)
-	onBatch := func(bCount generator.Batch) {
-		mu.Lock()
-		defer mu.Unlock()
-		totalCards += len(bCount.Cards)
-		if time.Since(lastEdit) < 1500*time.Millisecond {
-			return
+		if text := notes.FailureText(err); text != "" {
+			updateStatus(text)
 		}
-		lastEdit = time.Now()
-		if mid != "" {
-			if err := b.client.EditMessage(ctx, mid, SendMessageRequest{
-				Text: fmt.Sprintf("🧠 Создаю карточки... Уже готово: %d ⏳", totalCards),
-			}); err != nil {
-				log.Warn("failed to update progress message", "error", err)
-			}
-		}
-	}
-
-	genResult, err := b.generator.Generate(ctx, doc, onBatch)
-	if err != nil {
-		log.Error("failed to generate cards from document", "error", err)
-		updateStatus(msgTryLater)
-		return
-	}
-
-	if len(genResult.Cards) == 0 {
-		log.Warn("no cards generated from document", "stats", genResult.Stats)
-		updateStatus(noCardsReason(genResult.Stats))
-		return
-	}
-
-	if isGenericTitle(title) {
-		if t := titleFromTopics(genResult.Facts); t != "" {
-			title = t
-		}
-	}
-	cardSet, err := b.setService.SaveGeneratedSet(ctx, userID, title, genResult)
-	if err != nil {
-		log.Error("failed to save generated set to database", "error", err)
-		updateStatus(msgTryLater)
 		return
 	}
 
 	shareCode := ""
-	if cardSet.ShareCode.IsSet() {
-		shareCode = cardSet.ShareCode.Value
+	if res.Set.ShareCode.IsSet() {
+		shareCode = res.Set.ShareCode.Value
 	}
 
-	finalText := withWarnings(fmt.Sprintf("🎉 Набор «%s» успешно создан!\nКод для совместного доступа: %s", cardSet.Title, shareCode), extracted.Warnings) +
+	finalText := notes.WithWarnings(fmt.Sprintf("🎉 Набор «%s» успешно создан!\nКод для совместного доступа: %s", res.Set.Title, shareCode), res.Warnings) +
 		"\n\nОткрой мини-приложение, чтобы начать тренировку:"
 	b.editOrSendMessageWithButtons(ctx, mid, chatID, userID, finalText)
 }
@@ -486,57 +362,6 @@ func (b *Bot) getAllFileAttachments(m *Message) []attachmentInfo {
 	return results
 }
 
-// genericFileRegex matches names cameras, messengers and screenshots give
-// files, «IMG_1489.HEIC», «photo_2026-10-17 19.34.40.jpeg», «Снимок экрана …»:
-// they say nothing about the notes.
-// Separators match spaces too: a title made from a file name has its
-// underscores turned into spaces and must still read as generic.
-var genericFileRegex = regexp.MustCompile(`(?i)^(file[_ ]\d+(?:\.\w+)?|photo[_ -].*|img[_ -]?\d.*|image(?:[_ -]?\d+)?(?:\.\w+)?|scan[_ -]?\d.*|снимок экрана.*|screenshot.*|dsc[_ -]?\w*\d.*|изображение.*)$`)
-
-// A file extension: letters first, short, no spaces. A dot elsewhere is part
-// of the name — «Лекция 3. Клеточный цикл», «Версия 1.2».
-var fileExtRegex = regexp.MustCompile(`^\.[\pL][\pL\d]{0,4}$`)
-
-func trimFileExt(name string) string {
-	if ext := filepath.Ext(name); fileExtRegex.MatchString(ext) {
-		return strings.TrimSuffix(name, ext)
-	}
-	return name
-}
-
-func isGenericFilename(name string) bool {
-	name = strings.TrimSpace(name)
-	return name == "" || genericFileRegex.MatchString(name)
-}
-
-func isGenericTitle(title string) bool {
-	title = strings.TrimSpace(title)
-	if title == "" || genericFileRegex.MatchString(title) {
-		return true
-	}
-	if strings.HasPrefix(title, "Новый конспект (") {
-		return true
-	}
-	return false
-}
-
-// titleFromTopics names a set after its commonest topic, the first on a tie,
-// or returns "" when the facts have none.
-func titleFromTopics(facts []cards.Fact) string {
-	counts := map[string]int{}
-	best := ""
-	for _, f := range facts {
-		if f.Topic == "" {
-			continue
-		}
-		counts[f.Topic]++
-		if counts[f.Topic] > counts[best] {
-			best = f.Topic
-		}
-	}
-	return best
-}
-
 func extractURL(att Attachment) string {
 	if strings.TrimSpace(att.URL) != "" {
 		return strings.TrimSpace(att.URL)
@@ -575,33 +400,6 @@ func extractFilename(att Attachment) string {
 		}
 	}
 	return ""
-}
-
-func resolveSetTitle(caption, filename string) string {
-	caption = strings.TrimSpace(caption)
-	if caption != "" {
-		lines := strings.Split(caption, "\n")
-		title := strings.TrimSpace(lines[0])
-		runes := []rune(title)
-		if len(runes) > 80 {
-			title = string(runes[:80]) + "..."
-		}
-		return title
-	}
-	if filename != "" && !isGenericFilename(filename) {
-		base := trimFileExt(filename)
-		// «Лекция_4_ОРГ» reads as «Лекция 4 ОРГ»: the title is shown on
-		// the home screen and under every quote.
-		base = strings.Join(strings.Fields(strings.ReplaceAll(base, "_", " ")), " ")
-		if base != "" {
-			runes := []rune(base)
-			if len(runes) > 80 {
-				base = string(runes[:80]) + "..."
-			}
-			return base
-		}
-	}
-	return fmt.Sprintf("Новый конспект (%s)", time.Now().Format("02.01 15:04"))
 }
 
 func (b *Bot) upsertUser(ctx context.Context, u User) {

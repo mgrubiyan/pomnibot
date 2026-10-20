@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -18,6 +17,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
+	"github.com/mgrubiyan/pomnibot/backend/internal/notes"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
@@ -105,14 +105,6 @@ func (m *mockFileExtractor) Extract(ctx context.Context, files []ingest.File) (i
 
 type mockCardGenerator struct {
 	generateFunc func(ctx context.Context, doc generator.Document, onBatch func(generator.Batch)) (generator.Result, error)
-	queueOnce    sync.Once
-	queue        *generator.Queue
-}
-
-// Acquire waits in a real one-slot queue, as the generator does by default.
-func (m *mockCardGenerator) Acquire(ctx context.Context, onWait func(ahead int)) (func(), error) {
-	m.queueOnce.Do(func() { m.queue = generator.NewQueue(1) })
-	return m.queue.Acquire(ctx, onWait)
 }
 
 func (m *mockCardGenerator) Generate(ctx context.Context, doc generator.Document, onBatch func(generator.Batch)) (generator.Result, error) {
@@ -149,28 +141,28 @@ func TestNewBot_Validation(t *testing.T) {
 	cardGen := &mockCardGenerator{}
 
 	t.Run("nil client returns error", func(t *testing.T) {
-		b, err := NewBot(nil, "http://localhost", userSvc, setSvc, extractor, cardGen)
+		b, err := NewBot(nil, "http://localhost", userSvc, notes.New(extractor, cardGen, setSvc, 1))
 		if err == nil || b != nil {
 			t.Fatalf("expected error on nil client, got %v", err)
 		}
 	})
 
 	t.Run("nil user service returns error", func(t *testing.T) {
-		b, err := NewBot(client, "http://localhost", nil, setSvc, extractor, cardGen)
+		b, err := NewBot(client, "http://localhost", nil, notes.New(extractor, cardGen, setSvc, 1))
 		if err == nil || b != nil {
 			t.Fatalf("expected error on nil user service, got %v", err)
 		}
 	})
 
-	t.Run("nil set service returns error", func(t *testing.T) {
-		b, err := NewBot(client, "http://localhost", userSvc, nil, extractor, cardGen)
+	t.Run("nil notes maker returns error", func(t *testing.T) {
+		b, err := NewBot(client, "http://localhost", userSvc, nil)
 		if err == nil || b != nil {
-			t.Fatalf("expected error on nil set service, got %v", err)
+			t.Fatalf("expected error on nil notes maker, got %v", err)
 		}
 	})
 
 	t.Run("valid parameters returns Bot", func(t *testing.T) {
-		b, err := NewBot(client, "", userSvc, setSvc, extractor, cardGen)
+		b, err := NewBot(client, "", userSvc, notes.New(extractor, cardGen, setSvc, 1))
 		if err != nil || b == nil {
 			t.Fatalf("expected success, got error %v", err)
 		}
@@ -223,7 +215,7 @@ func TestBotWelcomeMessage(t *testing.T) {
 	}
 	setSvc := &mockSetService{}
 
-	bot, err := NewBot(client, "https://pomnibot.steins.ru", userSvc, setSvc, &mockFileExtractor{}, &mockCardGenerator{})
+	bot, err := NewBot(client, "https://pomnibot.steins.ru", userSvc, notes.New(&mockFileExtractor{}, &mockCardGenerator{}, setSvc, 1))
 	if err != nil {
 		t.Fatalf("NewBot failed: %v", err)
 	}
@@ -315,7 +307,7 @@ func TestBot_UpsertUser_OnMessageCreated(t *testing.T) {
 	}
 	setSvc := &mockSetService{}
 
-	bot, err := NewBot(client, "https://pomnibot.steins.ru", userSvc, setSvc, &mockFileExtractor{}, &mockCardGenerator{})
+	bot, err := NewBot(client, "https://pomnibot.steins.ru", userSvc, notes.New(&mockFileExtractor{}, &mockCardGenerator{}, setSvc, 1))
 	if err != nil {
 		t.Fatalf("NewBot failed: %v", err)
 	}
@@ -402,7 +394,7 @@ func TestBot_UpsertUser_ResilientOnError(t *testing.T) {
 	}
 	setSvc := &mockSetService{}
 
-	bot, err := NewBot(client, "https://pomnibot.steins.ru", userSvc, setSvc, &mockFileExtractor{}, &mockCardGenerator{})
+	bot, err := NewBot(client, "https://pomnibot.steins.ru", userSvc, notes.New(&mockFileExtractor{}, &mockCardGenerator{}, setSvc, 1))
 	if err != nil {
 		t.Fatalf("NewBot failed: %v", err)
 	}
@@ -493,7 +485,7 @@ func TestBot_FileAttachment_GeneratesSet(t *testing.T) {
 	extractor := &mockFileExtractor{}
 	cardGen := &mockCardGenerator{}
 
-	bot, err := NewBot(client, "https://pomnibot.steins.ru", userSvc, setSvc, extractor, cardGen)
+	bot, err := NewBot(client, "https://pomnibot.steins.ru", userSvc, notes.New(extractor, cardGen, setSvc, 1))
 	if err != nil {
 		t.Fatalf("NewBot failed: %v", err)
 	}
@@ -727,7 +719,7 @@ func TestBot_FileAttachment_GeneratesSet(t *testing.T) {
 		})
 
 		lastMsg := getLastMessage()
-		if lastMsg.Text != msgTryLater {
+		if lastMsg.Text != notes.TextTryLater {
 			t.Errorf("expected the try-later message sent to user, got: %s", lastMsg.Text)
 		}
 	})
@@ -1116,7 +1108,7 @@ func TestSendReviewReminders(t *testing.T) {
 			},
 		}
 
-		bot, err := NewBot(client, "https://pomnibot.steins.ru", userSvc, &mockSetService{}, &mockFileExtractor{}, &mockCardGenerator{})
+		bot, err := NewBot(client, "https://pomnibot.steins.ru", userSvc, notes.New(&mockFileExtractor{}, &mockCardGenerator{}, &mockSetService{}, 1))
 		if err != nil {
 			t.Fatalf("failed to create bot: %v", err)
 		}
@@ -1182,7 +1174,7 @@ func TestSendReviewReminders(t *testing.T) {
 			},
 		}
 
-		bot, err := NewBot(client, "https://pomnibot.steins.ru", userSvc, &mockSetService{}, &mockFileExtractor{}, &mockCardGenerator{})
+		bot, err := NewBot(client, "https://pomnibot.steins.ru", userSvc, notes.New(&mockFileExtractor{}, &mockCardGenerator{}, &mockSetService{}, 1))
 		if err != nil {
 			t.Fatalf("failed to create bot: %v", err)
 		}
@@ -1210,7 +1202,7 @@ func TestSendReviewReminders(t *testing.T) {
 			},
 		}
 
-		bot, err := NewBot(client, "https://pomnibot.steins.ru", userSvc, &mockSetService{}, &mockFileExtractor{}, &mockCardGenerator{})
+		bot, err := NewBot(client, "https://pomnibot.steins.ru", userSvc, notes.New(&mockFileExtractor{}, &mockCardGenerator{}, &mockSetService{}, 1))
 		if err != nil {
 			t.Fatalf("failed to create bot: %v", err)
 		}

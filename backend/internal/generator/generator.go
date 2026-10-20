@@ -50,7 +50,6 @@ type Generator struct {
 	opts     Options
 	system   string
 	schema   json.RawMessage
-	queue    *Queue
 }
 
 // NewGenerator returns a Generator. Zero Options fields take defaults.
@@ -61,18 +60,7 @@ func NewGenerator(p providers.Provider, opts Options) *Generator {
 		opts:     opts,
 		system:   buildSystemPrompt(opts.MaxFactsPerChunk),
 		schema:   cardSchema(opts.MaxFactsPerChunk),
-		queue:    NewQueue(opts.Slots),
 	}
-}
-
-// Acquire takes a turn at the model for one document; see Queue.Acquire.
-// Every caller of one Generator, and every copy made by WithOnBatch, waits
-// in the same queue, so a generator built once and handed to several bots
-// keeps them within the model's limit together. Generate does not take a
-// turn itself: the caller takes it before reading the document, which calls
-// the model too.
-func (g *Generator) Acquire(ctx context.Context, onWait func(ahead int)) (release func(), err error) {
-	return g.queue.Acquire(ctx, onWait)
 }
 
 // WithOnBatch returns a shallow copy of Generator with a custom OnBatch callback.

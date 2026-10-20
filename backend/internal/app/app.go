@@ -17,6 +17,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/grader"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest/yandex"
+	"github.com/mgrubiyan/pomnibot/backend/internal/notes"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/aistudio"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
@@ -67,9 +68,8 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	if cfg.Environment == config.Prod {
-		// One extractor and one generator for every bot: they share the
-		// generator's queue, so together they stay within what the model
-		// serves at once.
+		// One Maker for every bot: they share its queue, so together they
+		// stay within what the model serves at once.
 		ocr, err := yandex.New(cfg.OCR)
 		if err != nil {
 			return fmt.Errorf("initialize OCR: %w", err)
@@ -78,8 +78,9 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 		if err != nil {
 			return fmt.Errorf("initialize extractor: %w", err)
 		}
-		cardGenerator := generator.NewGenerator(llm.text, generator.Options{Slots: llm.slots})
-		if err := startBot(ctx, cfg, extractor, cardGenerator, users, sets); err != nil {
+		cardGenerator := generator.NewGenerator(llm.text, generator.Options{})
+		maker := notes.New(extractor, notes.FromGenerator(cardGenerator), sets, llm.slots)
+		if err := startBot(ctx, cfg, maker, users); err != nil {
 			return err
 		}
 	}
@@ -145,13 +146,12 @@ func newModels(cfg config.Config) (models, error) {
 	return models{text: chain, vision: chain, slots: slots}, nil
 }
 
-func startBot(ctx context.Context, cfg config.Config, extractor bot.FileExtractor, cardGenerator *generator.Generator,
-	users usecase.UserService, sets usecase.SetService) error {
+func startBot(ctx context.Context, cfg config.Config, maker *notes.Maker, users usecase.UserService) error {
 	client, err := bot.NewClient(cfg.BotToken, cfg.MaxAPIURL, cfg.MaxInsecureSkipVerify)
 	if err != nil {
 		return fmt.Errorf("initialize MAX client: %w", err)
 	}
-	runner, err := bot.NewBot(client, cfg.AppURL, users, sets, extractor, bot.NewGeneratorAdapter(cardGenerator), cfg.Notifications)
+	runner, err := bot.NewBot(client, cfg.AppURL, users, maker, cfg.Notifications)
 	if err != nil {
 		return fmt.Errorf("initialize MAX bot: %w", err)
 	}

@@ -109,16 +109,3 @@ func TestNewQueue_Slots(t *testing.T) {
 		}
 	}
 }
-
-func TestGenerator_Queue(t *testing.T) {
-	g := NewGenerator(nil, Options{Slots: 2})
-	if got := cap(g.queue.slots); got != 2 {
-		t.Errorf("Slots 2: slots = %d, want 2", got)
-	}
-	if g.WithOnBatch(func(Batch) {}).queue != g.queue {
-		t.Error("WithOnBatch copy has its own queue, want the generator's")
-	}
-	if got := cap(NewGenerator(nil, Options{}).queue.slots); got != DefaultSlots {
-		t.Errorf("default slots = %d, want %d", got, DefaultSlots)
-	}
-}
