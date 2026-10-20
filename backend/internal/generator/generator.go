@@ -275,6 +275,12 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, examples nam
 		r.models[model]++
 
 		facts, invalid, err := parseAnswer(resp.Content, maxFacts)
+		// A cut answer holds stray JSON at best: a model caught in a loop
+		// ran into the token limit. Facts it got out stand, an empty one is
+		// asked again.
+		if err == nil && resp.Truncated && len(facts) == 0 {
+			err = errCutAnswer
+		}
 		if err != nil {
 			r.invalidResponses++
 			log.Warn("cards: invalid model answer",
@@ -294,6 +300,7 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, examples nam
 		r.cardsFromModel += len(f.Cards)
 	}
 
+	vocab := vocabulary(nonEmptyLines(r.chunk.Text))
 	// One quote per fact: a fact that fails the check takes all its cards
 	// with it.
 	for _, f := range parsed {
@@ -341,6 +348,12 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, examples nam
 				c.Explanation = clean
 			}
 			kept = append(kept, c)
+		}
+		if !vocab {
+			kept = dropFlipRepeats(kept, func(c modelCard) {
+				r.droppedVariants++
+				log.Info("cards: flip asks another card's question in other words", "question", c.Question, "answer", c.Answer)
+			})
 		}
 		if f.Cards = kept; len(f.Cards) > 0 {
 			r.facts = append(r.facts, f)

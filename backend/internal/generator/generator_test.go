@@ -57,12 +57,17 @@ func (f *fakeProvider) Complete(ctx context.Context, req providers.Request) (pro
 	if err != nil {
 		return providers.Response{}, err
 	}
+	content, truncated := strings.CutPrefix(content, cutAnswer)
 	return providers.Response{
-		Content: []byte(content),
-		Usage:   providers.Usage{PromptTokens: 100, CompletionTokens: 40},
-		Model:   "fake-model",
+		Content:   []byte(content),
+		Truncated: truncated,
+		Usage:     providers.Usage{PromptTokens: 100, CompletionTokens: 40},
+		Model:     "fake-model",
 	}, nil
 }
+
+// cutAnswer starts a fake answer cut at the token limit.
+const cutAnswer = "\x00cut:"
 
 func (f *fakeProvider) calls() []providers.Request {
 	f.mu.Lock()
@@ -1254,9 +1259,88 @@ func TestGenerateDropsChoiceRepeatedByFlip(t *testing.T) {
 	}
 }
 
-// A flip card that asks for the same translation in other words is a card of
-// its own: only the very same question repeats the choice card.
+// A model caught in a loop ("false. false. false…") runs into the token
+// limit; the stray JSON inside the cut answer holds no facts. The fragment is
+// asked again, not taken for one without facts.
+func TestGenerateRetriesACutAnswerWithoutFacts(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[0])
+	p := &fakeProvider{answer: func(call int, frag string, _ providers.Request) (string, error) {
+		if call == 1 {
+			return cutAnswer + `{"facts": [{"cards": [{"answer": "Митоз", "distractors": ["Амитоз", "Мейоз"], "kind": "boolean", "question": "Митоз. true. false. false. false.`, nil
+		}
+		return answerJSON(mc{kind: cards.KindFlip, q: "Что такое митоз?", a: "Непрямое деление соматических клеток.", quote: firstSentence(frag)}), nil
+	}}
+
+	res := generate(t, p, doc, opts)
+	if len(p.calls()) != 2 || res.Stats.Cards != 1 || res.Stats.InvalidResponses != 1 {
+		t.Errorf("calls = %d, stats = %+v; want the fragment asked again", len(p.calls()), res.Stats)
+	}
+}
+
+// A flip card with the input card's very question shows the fact twice, and
+// the input card, which checks the answer, stays. Qwen writes such pairs.
+func TestGenerateDropsFlipRepeatingInput(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[0])
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		return factsJSON(fx{quote: firstSentence(frag), cards: []mc{
+			{kind: cards.KindInput, q: "Как называется непрямое деление соматических клеток?", a: "Митоз"},
+			{kind: cards.KindFlip, q: "Как называется непрямое деление соматических клеток?", a: "Митоз."},
+		}}), nil
+	}}
+
+	res := generate(t, p, doc, opts)
+	if len(res.Cards) != 1 || res.Cards[0].Kind != cards.KindInput {
+		t.Errorf("cards = %+v, want the input card alone", res.Cards)
+	}
+	if res.Stats.DroppedVariants != 1 {
+		t.Errorf("DroppedVariants = %d, want 1", res.Stats.DroppedVariants)
+	}
+}
+
+// The same claim twice in one fact is one card.
+func TestGenerateDropsRepeatedCardOfAFact(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[0])
+	claim := "Митоз — непрямое деление соматических клеток."
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		return factsJSON(fx{quote: firstSentence(frag), cards: []mc{
+			{kind: cards.KindBoolean, q: claim, a: cards.AnswerTrue, distractors: []string{"Мейоз — непрямое деление соматических клеток."}},
+			{kind: cards.KindBoolean, q: claim, a: cards.AnswerTrue, distractors: []string{"Амитоз — непрямое деление соматических клеток."}},
+		}}), nil
+	}}
+
+	res := generate(t, p, doc, opts)
+	if len(res.Cards) != 1 || res.Stats.Cards != 1 {
+		t.Errorf("cards = %+v (Stats.Cards = %d), want one", res.Cards, res.Stats.Cards)
+	}
+	if res.Stats.DroppedVariants != 1 {
+		t.Errorf("DroppedVariants = %d, want 1", res.Stats.DroppedVariants)
+	}
+}
+
+// In a vocabulary list a flip card that asks for the same translation in
+// other words is a card of its own: only the very same question repeats the
+// choice card.
 func TestGenerateKeepsChoiceBesideASimilarFlip(t *testing.T) {
+	doc := Document{Title: "Unit 3", Text: "1 to configure – настраивать\n2 to embark – начинать\n3 seamless – непрерывный\n4 daunting – пугающий"}
+	p := &fakeProvider{answer: func(int, string, providers.Request) (string, error) {
+		return factsJSON(fx{quote: "1 to configure – настраивать", cards: []mc{
+			{kind: cards.KindChoice, q: "Как переводится «to configure»?", a: "настраивать",
+				distractors: []string{"начинать", "пугающий", "непрерывный"}},
+			{kind: cards.KindFlip, q: "Переведите «to configure».", a: "настраивать"},
+		}}), nil
+	}}
+
+	res := generate(t, p, doc, Options{})
+	if len(res.Cards) != 2 {
+		t.Errorf("cards = %+v, want both", res.Cards)
+	}
+}
+
+// Elsewhere a flip card asking the choice card's question in other words for
+// the same short answer is the same card twice: «Какой логический оператор
+// требует выполнения всех условий?» and «Какой оператор требует выполнения
+// всех условий?», AND both.
+func TestGenerateDropsFlipAskingTheChoiceInOtherWords(t *testing.T) {
 	doc, opts := testDoc(t, paragraphs[0])
 	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
 		return factsJSON(fx{quote: firstSentence(frag), cards: []mc{
@@ -1267,8 +1351,11 @@ func TestGenerateKeepsChoiceBesideASimilarFlip(t *testing.T) {
 	}}
 
 	res := generate(t, p, doc, opts)
-	if len(res.Cards) != 2 {
-		t.Errorf("cards = %+v, want both", res.Cards)
+	if len(res.Cards) != 1 || res.Cards[0].Kind != cards.KindChoice {
+		t.Errorf("cards = %+v, want the choice card alone", res.Cards)
+	}
+	if res.Stats.DroppedVariants != 1 {
+		t.Errorf("DroppedVariants = %d, want 1", res.Stats.DroppedVariants)
 	}
 }
 

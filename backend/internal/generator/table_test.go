@@ -24,6 +24,9 @@ var cellColumns = []string{"Прокариоты", "Эукариоты"}
 // mitosisTable is a Word table as ingest writes it: «cell | cell» per row.
 const mitosisTable = "Признак | Митоз | Мейоз\nЧисло делений | одно | два\nДочерние клетки | две | четыре\nНабор хромосом | диплоидный | гаплоидный\nСинтез ДНК | есть | есть"
 
+// sqlSlides are two slides of a lecture as a PDF gives them.
+const sqlSlides = "ОПРЕДЕЛЕНИЕ ДАННЫХ\nСоздать:\nCREATE TABLE – создать таблицу\nCREATE INDEX – создать индекс\nУдалить:\nDROP TABLE – удалить таблицу\nDROP INDEX – удалить индекс\nОчистить таблицу:\nTRUNCATE TABLE\n14\nПРЕДЛОЖЕНИЯ SQL\nМАНИПУЛИРОВАНИЕ ДАННЫМИ\nINSERT – добавить записи\nUPDATE – обновить (изменить значение) записи\nSELECT – выбрать"
+
 // organelles is a slide: a heading per group and its terms as bullets.
 const organelles = "Органоиды клетки\nДвумембранные:\n• ядро\n• митохондрии\n• пластиды\nОдномембранные:\n• лизосомы\n• вакуоли\nНемембранные:\n• рибосомы"
 
@@ -106,6 +109,37 @@ func TestTableGrounded(t *testing.T) {
 			name:  "unmarked lines",
 			quote: "Одномембранные:\nлизосомы\nНемембранные\nрибосомы",
 			table: table([]string{"Двумембранные", "Одномембранные"}, "лизосомы", "Одномембранные", "рибосомы", "Одномембранные"),
+			want:  false,
+		},
+		{
+			// Slides of a lecture: a heading in capitals per group, subheadings
+			// and unmarked lines of terms under it.
+			name:  "terms under headings in capitals",
+			quote: sqlSlides,
+			table: table([]string{"Определение данных", "Манипулирование данными"}, "CREATE TABLE", "Определение данных", "DROP INDEX", "Определение данных",
+				"TRUNCATE TABLE", "Определение данных", "INSERT", "Манипулирование данными", "SELECT", "Манипулирование данными"),
+			want: true,
+		},
+		{
+			name:  "a term under the wrong heading in capitals",
+			quote: sqlSlides,
+			table: table([]string{"Определение данных", "Манипулирование данными"}, "CREATE TABLE", "Определение данных", "INSERT", "Определение данных",
+				"UPDATE", "Манипулирование данными", "SELECT", "Манипулирование данными"),
+			want: false,
+		},
+		{
+			// «ПРЕДЛОЖЕНИЯ SQL» opens another slide: what follows it is not
+			// under the heading before.
+			name:  "a heading in capitals between",
+			quote: "ОПРЕДЕЛЕНИЕ ДАННЫХ\nCREATE TABLE – создать таблицу\nПРЕДЛОЖЕНИЯ SQL\nINSERT – добавить записи\nМАНИПУЛИРОВАНИЕ ДАННЫМИ\nSELECT – выбрать",
+			table: table([]string{"Определение данных", "Манипулирование данными"}, "CREATE TABLE", "Определение данных", "INSERT", "Определение данных", "SELECT", "Манипулирование данными"),
+			want:  false,
+		},
+		{
+			// «а» opens a contrast, not the next item of a list.
+			name:  "a clause after а",
+			quote: "К соединительным тканям относятся кровь, кость и хрящ. Мышечная ткань сокращается, а нервная ткань проводит возбуждение",
+			table: table([]string{"соединительные", "мышечная ткань"}, "кровь", "соединительные", "проводит возбуждение", "мышечная ткань"),
 			want:  false,
 		},
 		{
@@ -259,6 +293,20 @@ func TestParseTable(t *testing.T) {
 		t.Errorf("column = %q, want the column as listed", got)
 	}
 
+	// A model misspells the ending of a column it names under a term,
+	// «Манипулирование данные» for «Манипулирование данными»: the term is
+	// in that column.
+	typo := raw(func(m map[string]any) {
+		m["columns"] = []string{"Определение данных", "Манипулирование данными"}
+		m["items"] = []map[string]string{{"text": "CREATE TABLE", "column": "Определение данных"}, {"text": "DROP TABLE", "column": "Определение данных"},
+			{"text": "INSERT", "column": "Манипулирование данными"}, {"text": "SELECT", "column": "Манипулирование данные"}}
+	})
+	if f, ok := parseTable(typo); !ok {
+		t.Errorf("table with a misspelt column rejected")
+	} else if got := f.Cards[0].Table.Items[3].Column; got != "Манипулирование данными" {
+		t.Errorf("column = %q, want the column as listed", got)
+	}
+
 	for name, patch := range map[string]func(map[string]any){
 		"one column":      func(m map[string]any) { m["columns"] = []string{"Прокариоты"} },
 		"four columns":    func(m map[string]any) { m["columns"] = []string{"A", "B", "C", "D"} },
@@ -279,6 +327,11 @@ func TestParseTable(t *testing.T) {
 		"item names its column": func(m map[string]any) {
 			m["columns"] = []string{"Эпителиальная", "Мышечная и нервная"}
 			m["items"] = []map[string]string{{"text": "эпителиальная", "column": "Эпителиальная"}, {"text": "кожа", "column": "Эпителиальная"}, {"text": "нервная", "column": "Мышечная и нервная"}, {"text": "мышечная", "column": "Мышечная и нервная"}}
+		},
+		// A term is a thing the group holds, not what the group does:
+		// «Мышечная ткань сокращается».
+		"a verb as a term": func(m map[string]any) {
+			m["items"] = append(slices.Clone(valid["items"].([]map[string]string)), map[string]string{"text": "сокращается", "column": "Эукариоты"})
 		},
 		"no quote":          func(m map[string]any) { delete(m, "quote") },
 		"no question":       func(m map[string]any) { m["question"] = " " },
@@ -367,6 +420,8 @@ func TestClassification(t *testing.T) {
 		{"one list is no classification", "Ткани животных бывают четырёх типов: эпителиальная, соединительная, мышечная и нервная.", false},
 		{"prose", "Митоз — непрямое деление клетки. Он состоит из четырёх фаз и длится около часа. В анафазе хроматиды расходятся к полюсам.", false},
 		{"a vocabulary list", "cat – кошка\ndog – собака\nhouse – дом", false},
+		{"slides of definition lines", "ОПРЕДЕЛЕНИЕ ДАННЫХ\nCREATE TABLE – создать таблицу\nDROP TABLE – удалить таблицу\nМАНИПУЛИРОВАНИЕ ДАННЫМИ\nINSERT – добавить записи\nDELETE – удалить записи", true},
+		{"one heading of definition lines", "Деление клеток\nМитоз – непрямое деление\nАмитоз – прямое деление", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := classification(tc.text); got != tc.want {

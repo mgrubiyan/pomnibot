@@ -16,7 +16,7 @@ func TestLoadLocal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.BotToken != "" {
+	if cfg.MaxBotToken != "" {
 		t.Fatal("local mode must ignore bot credentials")
 	}
 }
@@ -95,7 +95,7 @@ func TestLoadProdWithoutTelegramToken(t *testing.T) {
 			if err != nil {
 				t.Fatalf("production must work without Telegram: %v", err)
 			}
-			if cfg.TelegramBotToken != "" || cfg.BotToken != "test-token" {
+			if cfg.TelegramBotToken != "" || cfg.MaxBotToken != "test-token" {
 				t.Fatal("expected Telegram to be disabled and MAX to remain configured")
 			}
 		})

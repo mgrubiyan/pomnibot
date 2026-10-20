@@ -29,7 +29,7 @@ type Config struct {
 	Environment           Environment
 	Port                  string
 	DatabaseURL           string
-	BotToken              string
+	MaxBotToken           string
 	TelegramBotToken      string
 	AppURL                string
 	MaxAPIURL             string
@@ -97,13 +97,13 @@ func Load() (Config, error) {
 		return cfg, nil
 	}
 
-	cfg.BotToken = value("BOT_TOKEN", "")
+	cfg.MaxBotToken = value("BOT_TOKEN", "")
 	cfg.TelegramBotToken = value("TG_BOT_TOKEN", "")
 	domain := value("DOMAIN", "")
 	cfg.AppURL = "https://" + domain
 	cfg.MaxAPIURL = value("MAX_API_URL", "https://platform-api2.max.ru")
 	var errs []error
-	for _, field := range []struct{ name, value string }{{"BOT_TOKEN", cfg.BotToken}, {"DOMAIN", domain}} {
+	for _, field := range []struct{ name, value string }{{"BOT_TOKEN", cfg.MaxBotToken}, {"DOMAIN", domain}} {
 		if field.value == "" {
 			errs = append(errs, fmt.Errorf("%s is required", field.name))
 		}

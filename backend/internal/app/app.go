@@ -59,7 +59,7 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 	cardOptions = append(cardOptions, usecase.WithManualCards(store))
 	cards := usecase.NewCardService(queries, users, cardOptions...)
 	home := usecase.NewHomescreenService(queries, users)
-	router, err := httptransport.NewRouter(httptransport.NewAPIHandler(sets, cards, home, users), assets, cfg.BotToken, cfg.TelegramBotToken, users)
+	router, err := httptransport.NewRouter(httptransport.NewAPIHandler(sets, cards, home, users), assets, cfg.MaxBotToken, cfg.TelegramBotToken, users)
 	if err != nil {
 		return fmt.Errorf("initialize router: %w", err)
 	}
@@ -87,7 +87,7 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 		}
 		cardGenerator := generator.NewGenerator(llm.text, generator.Options{})
 		maker := notes.New(extractor, notes.FromGenerator(cardGenerator), sets, llm.slots)
-		maxBot, err := startBot(ctx, cfg, maker, users)
+		maxBot, err := startMAXBot(ctx, cfg, maker, users)
 		if err != nil {
 			return err
 		}
@@ -161,8 +161,8 @@ func newModels(cfg config.Config) (models, error) {
 	return models{text: chain, vision: chain, slots: slots}, nil
 }
 
-func startBot(ctx context.Context, cfg config.Config, maker *notes.Maker, users usecase.UserService) (*maxtransport.Bot, error) {
-	client, err := maxtransport.NewClient(cfg.BotToken, cfg.MaxAPIURL, cfg.MaxInsecureSkipVerify)
+func startMAXBot(ctx context.Context, cfg config.Config, maker *notes.Maker, users usecase.UserService) (*maxtransport.Bot, error) {
+	client, err := maxtransport.NewClient(cfg.MaxBotToken, cfg.MaxAPIURL, cfg.MaxInsecureSkipVerify)
 	if err != nil {
 		return nil, fmt.Errorf("initialize MAX client: %w", err)
 	}
