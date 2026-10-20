@@ -61,8 +61,38 @@ func setProdEnv(t *testing.T) {
 	for key, value := range values {
 		t.Setenv(key, value)
 	}
-	for _, key := range []string{"YC_LLM_MODEL", "YC_LLM_BASE_URL", "YC_LLM_MAX_TOKENS", "LLM_PRIMARY", "LLM_PRIMARY_TIMEOUT", "LLM_COOLDOWN"} {
+	for _, key := range []string{"OPENROUTER_KEY", "OPENROUTER_MODEL", "OPENROUTER_BASE_URL", "OPENROUTER_MAX_TOKENS", "YC_LLM_MODEL", "YC_LLM_BASE_URL", "YC_LLM_MAX_TOKENS", "LLM_PRIMARY", "LLM_PRIMARY_TIMEOUT", "LLM_COOLDOWN"} {
 		t.Setenv(key, "")
+	}
+}
+
+func TestLoadOpenRouter(t *testing.T) {
+	setProdEnv(t)
+	t.Setenv("OPENROUTER_KEY", "router-key")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.OpenRouter == nil || cfg.OpenRouter.APIKey != "router-key" || cfg.OpenRouter.Model != "anthropic/claude-haiku-5.5" || cfg.LLM.Primary != PrimaryOpenRouter {
+		t.Fatalf("OpenRouter not selected: primary=%s", cfg.LLM.Primary)
+	}
+	t.Setenv("LLM_PRIMARY", "gigachat")
+	cfg, err = Load()
+	if err != nil || cfg.LLM.Primary != PrimaryGigaChat || cfg.OpenRouter == nil {
+		t.Fatalf("explicit primary ignored: %v", err)
+	}
+	t.Setenv("YC_LLM_MODEL", "off")
+	t.Setenv("LLM_PRIMARY", "openrouter")
+	if _, err := Load(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLoadOpenRouterRequiresKey(t *testing.T) {
+	setProdEnv(t)
+	t.Setenv("LLM_PRIMARY", "openrouter")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "OPENROUTER_KEY") {
+		t.Fatalf("err=%v", err)
 	}
 }
 

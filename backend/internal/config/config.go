@@ -12,6 +12,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest/yandex"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/aistudio"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers/openrouter"
 	maxtransport "github.com/mgrubiyan/pomnibot/backend/internal/transport/max"
 )
 
@@ -36,9 +37,10 @@ type Config struct {
 	MaxInsecureSkipVerify bool
 	Notifications         maxtransport.NotificationConfig
 	GigaChat              gigachat.Config
-	// AIStudio is the main model, Qwen by default: it writes the cards,
-	// grades answers and reads photos, GigaChat backs it up (see LLM). nil
-	// with YC_LLM_MODEL=off.
+	// OpenRouter is enabled when OPENROUTER_KEY is set; it goes first unless
+	// LLM_PRIMARY explicitly selects a legacy provider.
+	OpenRouter *openrouter.Config
+	// AIStudio is the Qwen backup, disabled with YC_LLM_MODEL=off.
 	AIStudio *aistudio.Config
 	LLM      LLMConfig
 	OCR      yandex.Config
@@ -46,19 +48,19 @@ type Config struct {
 
 // Models that can go first, see LLMConfig.Primary.
 const (
-	PrimaryAIStudio = "aistudio"
-	PrimaryGigaChat = "gigachat"
+	PrimaryAIStudio   = "aistudio"
+	PrimaryGigaChat   = "gigachat"
+	PrimaryOpenRouter = "openrouter"
 )
 
 // LLMConfig sets which model goes first and when requests move to the other
 // one.
 type LLMConfig struct {
-	// Primary is PrimaryAIStudio or PrimaryGigaChat; GigaChat without AI
-	// Studio.
+	// Primary selects the first provider; the remaining providers are backups.
 	Primary string
 	// PrimaryTimeout bounds one call to the primary, its retries included,
-	// so that a primary that hangs leaves time for the backup. It counts as
-	// down then.
+	// so that a provider that hangs leaves time for the backup. Applied to
+	// every backend except the final one; a timeout marks it unavailable.
 	PrimaryTimeout time.Duration
 	// Cooldown is how long a provider that is down gets no requests.
 	Cooldown time.Duration
@@ -121,7 +123,12 @@ func Load() (Config, error) {
 		cfg.AIStudio = &studio
 		errs = append(errs, err)
 	}
-	cfg.LLM, err = llmFromEnv(cfg.AIStudio != nil)
+	if value("OPENROUTER_KEY", "") != "" || value("LLM_PRIMARY", "") == PrimaryOpenRouter {
+		router, err := openrouter.ConfigFromEnv()
+		cfg.OpenRouter = &router
+		errs = append(errs, err)
+	}
+	cfg.LLM, err = llmFromEnv(cfg.AIStudio != nil, cfg.OpenRouter != nil)
 	errs = append(errs, err)
 	cfg.Notifications, err = notificationsFromEnv()
 	errs = append(errs, err)
@@ -144,11 +151,13 @@ func notificationsFromEnv() (maxtransport.NotificationConfig, error) {
 	return maxtransport.NotificationConfig{Enabled: enabled, Hour: at.Hour(), Minute: at.Minute(), Location: loc}, nil
 }
 
-func llmFromEnv(withAIStudio bool) (LLMConfig, error) {
+func llmFromEnv(withAIStudio, withOpenRouter bool) (LLMConfig, error) {
 	var cfg LLMConfig
 	var errs []error
 
 	switch primary := value("LLM_PRIMARY", ""); {
+	case primary == "" && withOpenRouter, primary == PrimaryOpenRouter && withOpenRouter:
+		cfg.Primary = PrimaryOpenRouter
 	case primary == "" && withAIStudio, primary == PrimaryAIStudio && withAIStudio:
 		cfg.Primary = PrimaryAIStudio
 	case primary == "", primary == PrimaryGigaChat:
@@ -156,7 +165,7 @@ func llmFromEnv(withAIStudio bool) (LLMConfig, error) {
 	case primary == PrimaryAIStudio:
 		errs = append(errs, errors.New("LLM_PRIMARY = aistudio, but YC_LLM_MODEL = off"))
 	default:
-		errs = append(errs, fmt.Errorf("LLM_PRIMARY = %q, want aistudio or gigachat", primary))
+		errs = append(errs, fmt.Errorf("LLM_PRIMARY = %q, want openrouter, aistudio or gigachat", primary))
 	}
 	for _, d := range []struct {
 		name, fallback string

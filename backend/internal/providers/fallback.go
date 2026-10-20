@@ -56,6 +56,15 @@ func (f *Fallback) Complete(ctx context.Context, req Request) (Response, error) 
 	var errs []error
 	for i, idx := range order {
 		b := f.backends[idx]
+		budgetLimited := false
+		// Share the caller's remaining time across all available backends.
+		// Otherwise two intermediate timeouts can consume the entire budget
+		// before the final backup gets a chance (also important for grading).
+		if deadline, ok := ctx.Deadline(); ok && b.Timeout > 0 && i+1 < len(order) {
+			share := max(time.Nanosecond, time.Until(deadline)/time.Duration(len(order)-i))
+			budgetLimited = share < b.Timeout
+			b.Timeout = min(b.Timeout, share)
+		}
 		resp, err := f.call(ctx, b, req)
 		if err == nil {
 			f.markUp(idx)
@@ -66,7 +75,10 @@ func (f *Fallback) Complete(ctx context.Context, req Request) (Response, error) 
 			// is not to blame.
 			return Response{}, fmt.Errorf("providers: %w (last error: %w)", ctx.Err(), err)
 		}
-		if errors.Is(err, ErrUnavailable) {
+		// A short grading deadline can leave just a few seconds per model.
+		// Exhausting that slice does not establish a provider-wide outage.
+		callerBudgetExhausted := budgetLimited && errors.Is(err, context.DeadlineExceeded)
+		if errors.Is(err, ErrUnavailable) && !callerBudgetExhausted {
 			f.markDown(idx, b.Name, err)
 		}
 		errs = append(errs, err)

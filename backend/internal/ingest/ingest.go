@@ -76,17 +76,19 @@ type OCR interface {
 
 // OCRRequest is one file to recognize.
 type OCRRequest struct {
-	Data     []byte
-	MimeType string // image/jpeg, image/png or application/pdf
-	Model    string
-	Pages    int   // pages in a PDF, 1 for an image
-	Only     []int // 0-based pages of a PDF worth reading, nil for all; an OCR may read all anyway
+	Data       []byte
+	MimeType   string // image/jpeg, image/png or application/pdf
+	Model      string
+	Pages      int      // pages in a PDF, 1 for an image
+	Only       []int    // 0-based pages of a PDF worth reading, nil for all; an OCR may read all anyway
+	TextLayers []string // optional reference text, indexed by PDF page; never an interpretation
 }
 
 // OCRPage is the text of one page. Confidence is the mean over the page when
 // the service reports it.
 type OCRPage struct {
 	Text          string
+	FromTextLayer bool // a full-page reader fell back to the original PDF text
 	Confidence    float64
 	HasConfidence bool
 	Rotate        int // clockwise turn in degrees that sets the page upright, when the service tells
@@ -94,10 +96,11 @@ type OCRPage struct {
 
 // Options configure an Extractor.
 type Options struct {
-	MinPageChars int     // default DefaultMinPageChars
-	PDF          PDFText // nil: pdftotext from PATH, checked in NewExtractor
-	DisablePDF   bool    // no pdftotext needed; PDFs are rejected
-	OCRModel     string  // overrides the choice of ModelPhoto or ModelScan
+	MinPageChars    int     // default DefaultMinPageChars
+	PDF             PDFText // nil: pdftotext from PATH, checked in NewExtractor
+	DisablePDF      bool    // no pdftotext needed; PDFs are rejected
+	OCRModel        string  // overrides the choice of ModelPhoto or ModelScan
+	ReadAllPDFPages bool    // read full page images even when the PDF has a text layer
 }
 
 // Errors, wrapped in *Error.
@@ -276,6 +279,9 @@ func (e *Extractor) readPDF(ctx context.Context, res *Result, file int, f File) 
 	}
 
 	first := len(res.Pages)
+	// Text-only PDFs previously bypassed OCR service limits. If a document
+	// exceeds them, keep that behavior and only request OCR for actual scans.
+	fullRead := e.opts.ReadAllPDFPages && len(pages) <= e.lim.pages && len(f.Data) <= e.lim.bytes
 	var scanned []int
 	for i, text := range pages {
 		text, recoded := recodeLatin1(text)
@@ -290,6 +296,8 @@ func (e *Extractor) readPDF(ctx context.Context, res *Result, file int, f File) 
 		}
 		if info.Chars < e.opts.MinPageChars {
 			info.NeedsOCR = true
+		}
+		if info.NeedsOCR || fullRead {
 			scanned = append(scanned, i)
 		}
 		res.Pages = append(res.Pages, info)
@@ -322,11 +330,12 @@ func (e *Extractor) recognizePDF(ctx context.Context, res *Result, f File, pages
 			float64(len(f.Data))/1e6, e.lim.bytes/1_000_000)}
 	}
 	got, err := e.ocr.Recognize(ctx, OCRRequest{
-		Data:     f.Data,
-		MimeType: "application/pdf",
-		Model:    e.model(ModelScan),
-		Pages:    len(pages),
-		Only:     scanned,
+		Data:       f.Data,
+		MimeType:   "application/pdf",
+		Model:      e.model(ModelScan),
+		Pages:      len(pages),
+		Only:       scanned,
+		TextLayers: append([]string(nil), pages...),
 	})
 	if err != nil {
 		return e.ocrError(ctx, f, err)
@@ -370,6 +379,10 @@ func (e *Extractor) readImage(ctx context.Context, res *Result, file int, f File
 }
 
 func (e *Extractor) markOCR(res *Result, info *PageInfo, page OCRPage) {
+	if page.FromTextLayer {
+		info.Source, info.Chars = SourceText, countChars(page.Text)
+		return
+	}
 	info.Source = SourceOCR
 	info.Chars = countChars(page.Text)
 	if poorRecognition(page) {

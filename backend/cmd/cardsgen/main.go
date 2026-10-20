@@ -1,4 +1,4 @@
-// Command cardsgen runs card generation on notes against live GigaChat and
+// Command cardsgen runs card generation on notes against a live model and
 // prints the cards, the stats and the timings. It is for measuring quality
 // and latency on real notes before there is storage.
 //
@@ -20,7 +20,10 @@
 //	task cardsgen -- -provider yandexgpt -ocr yandex lecture.pdf
 //	task cardsgen -- -extract -vision-provider qwen page1.jpg page2.jpg
 //
-// Credentials come from GIGACHAT_* and YC_* variables: task passes the ones
+// -provider openrouter uses OPENROUTER_KEY and defaults to Haiku 5.5 with
+// thinking disabled. It also reads full PDF pages through OpenRouter.
+//
+// Credentials come from OPENROUTER_*, GIGACHAT_* and YC_* variables: task passes the ones
 // from .env in the repository root.
 package main
 
@@ -46,6 +49,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/aistudio"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers/openrouter"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/yandexgpt"
 )
 
@@ -60,8 +64,8 @@ func run() error {
 	var (
 		file        = flag.String("file", "", "file with the notes; more files can follow as arguments")
 		title       = flag.String("title", "", "document title for sourceRef (default: first file name)")
-		provider    = flag.String("provider", "gigachat", "who writes the cards: gigachat, yandexgpt or qwen")
-		model       = flag.String("model", "", "model, overrides GIGACHAT_MODEL, YC_YANDEXGPT_MODEL or YC_LLM_MODEL")
+		provider    = flag.String("provider", defaultProvider(), "who writes the cards: openrouter, gigachat, yandexgpt or qwen")
+		model       = flag.String("model", "", "override the selected provider's model")
 		chunk       = flag.Int("chunk", generator.DefaultChunkSize, "fragment size in characters")
 		overlap     = flag.Int("overlap", generator.DefaultChunkOverlap, "fragment overlap in characters, -1 for none")
 		limit       = flag.Int("limit", 0, "max facts per document, 0 for no limit")
@@ -69,13 +73,19 @@ func run() error {
 		concurrency = flag.Int("concurrency", generator.DefaultConcurrency, "parallel model calls; freemium allows 1")
 		timeout     = flag.Duration("call-timeout", generator.DefaultCallTimeout, "timeout per model call")
 		ocrMode     = flag.String("ocr", "vision", "how photos and scans are read: vision (GigaChat, checked by Yandex OCR) or yandex (Yandex OCR alone)")
-		visionBy    = flag.String("vision-provider", "gigachat", "who reads photos with -ocr vision: gigachat or qwen")
+		visionBy    = flag.String("vision-provider", "", "who reads pages: openrouter, gigachat or qwen; defaults to openrouter with -provider openrouter, otherwise gigachat")
 		ocrModel    = flag.String("ocr-model", os.Getenv("YC_OCR_MODEL"), "Yandex OCR model for every page (handwritten, page...); default: handwritten for photos, page for scans")
 		extractOnly = flag.Bool("extract", false, "only extract the text of the notes and print it, no cards")
 		asJSON      = flag.Bool("json", false, "print the result as JSON to stdout")
 		verbose     = flag.Bool("v", false, "debug logs")
 	)
 	flag.Parse()
+	if *visionBy == "" {
+		*visionBy = "gigachat"
+		if *provider == "openrouter" {
+			*visionBy = "openrouter"
+		}
+	}
 	paths := flag.Args()
 	if *file != "" {
 		paths = append([]string{*file}, paths...)
@@ -97,11 +107,11 @@ func run() error {
 	if *ocrMode != "vision" && *ocrMode != "yandex" {
 		return fmt.Errorf("-ocr %q: want vision or yandex", *ocrMode)
 	}
-	if *provider != "gigachat" && *provider != "yandexgpt" && *provider != "qwen" {
-		return fmt.Errorf("-provider %q: want gigachat, yandexgpt or qwen", *provider)
+	if *provider != "gigachat" && *provider != "yandexgpt" && *provider != "qwen" && *provider != "openrouter" {
+		return fmt.Errorf("-provider %q: want openrouter, gigachat, yandexgpt or qwen", *provider)
 	}
-	if *visionBy != "gigachat" && *visionBy != "qwen" {
-		return fmt.Errorf("-vision-provider %q: want gigachat or qwen", *visionBy)
+	if *visionBy != "gigachat" && *visionBy != "qwen" && *visionBy != "openrouter" {
+		return fmt.Errorf("-vision-provider %q: want openrouter, gigachat or qwen", *visionBy)
 	}
 	// GigaChat writes the cards, unless -provider yandexgpt, and reads the
 	// photos, unless -ocr yandex.
@@ -148,9 +158,28 @@ func run() error {
 			return err
 		}
 	}
+	var router *openrouter.Client
+	if (!*extractOnly && *provider == "openrouter") || (*ocrMode == "vision" && *visionBy == "openrouter") {
+		cfg, err := openrouter.ConfigFromEnv()
+		if err != nil {
+			return err
+		}
+		if *model != "" && *provider == "openrouter" {
+			cfg.Model = *model
+		}
+		router, err = openrouter.New(cfg)
+		if err != nil {
+			return err
+		}
+		if *provider == "openrouter" {
+			writer, modelName = router, cfg.Model
+		}
+	}
 
 	var vision providers.Provider
 	switch {
+	case *ocrMode == "vision" && *visionBy == "openrouter":
+		vision = router
 	case *ocrMode == "vision" && *visionBy == "qwen":
 		cfg, err := aistudio.ConfigFromEnv()
 		if err != nil {
@@ -162,7 +191,15 @@ func run() error {
 	case *ocrMode == "vision":
 		vision = client
 	}
-	notes, err := extract(ctx, paths, *ocrModel, vision)
+	usage := &runUsage{}
+	if writer != nil {
+		writer = trackedProvider{Provider: writer, usage: usage}
+	}
+	if vision != nil {
+		vision = trackedProvider{Provider: vision, usage: usage}
+	}
+	started := time.Now()
+	notes, err := extract(ctx, paths, *ocrModel, vision, *ocrMode == "vision" && *visionBy == "openrouter")
 	if err != nil {
 		return err
 	}
@@ -213,8 +250,10 @@ func run() error {
 		enc.SetEscapeHTML(false)
 		out := struct {
 			generator.Result
-			Ingest ingest.Result `json:"ingest"`
-		}{res, notes}
+			Ingest         ingest.Result         `json:"ingest"`
+			ModelUsage     map[string]modelUsage `json:"modelUsage"`
+			ElapsedSeconds float64               `json:"elapsedSeconds"`
+		}{res, notes, usage.snapshot(), time.Since(started).Seconds()}
 		out.Ingest.Text = "" // the notes themselves are not the output
 		if err := enc.Encode(out); err != nil {
 			return fmt.Errorf("encode result: %w", err)
@@ -222,6 +261,12 @@ func run() error {
 	} else {
 		fmt.Print(formatCards(res.Facts, res.Cards) + formatStats(res.Stats))
 	}
+	totals := usage.snapshot()
+	for _, name := range sortedKeys(totals) {
+		u := totals[name]
+		fmt.Fprintf(os.Stderr, "%s: %d вызовов, prompt %d, completion %d, стоимость по API $%.6f\n", name, u.Calls, u.PromptTokens, u.CompletionTokens, u.CostUSD)
+	}
+	fmt.Fprintf(os.Stderr, "Включая чтение: %.1fs\n", time.Since(started).Seconds())
 	if genErr != nil {
 		return fmt.Errorf("generation stopped: %w", genErr)
 	}
@@ -230,7 +275,7 @@ func run() error {
 
 // extract reads the files and pulls the text out of them. pdftotext is
 // required only when one of them is a PDF.
-func extract(ctx context.Context, paths []string, ocrModel string, vision providers.Provider) (ingest.Result, error) {
+func extract(ctx context.Context, paths []string, ocrModel string, vision providers.Provider, fullPages bool) (ingest.Result, error) {
 	files := make([]ingest.File, 0, len(paths))
 	hasPDF := false
 	for _, path := range paths {
@@ -254,9 +299,9 @@ func extract(ctx context.Context, paths []string, ocrModel string, vision provid
 	}
 	var ocr ingest.OCR = client
 	if vision != nil {
-		ocr = &ingest.VisionOCR{Model: vision, Checker: client}
+		ocr = &ingest.VisionOCR{Model: vision, Checker: client, FullPage: fullPages}
 	}
-	ext, err := ingest.NewExtractor(ocr, ingest.Options{DisablePDF: !hasPDF, OCRModel: ocrModel})
+	ext, err := ingest.NewExtractor(ocr, ingest.Options{DisablePDF: !hasPDF, OCRModel: ocrModel, ReadAllPDFPages: fullPages})
 	if err != nil {
 		return ingest.Result{}, err
 	}
