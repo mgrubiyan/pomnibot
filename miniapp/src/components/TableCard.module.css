@@ -1,0 +1,115 @@
+/* Sorting card: the terms are laid out across the columns.
+   No dragging — pick a term, then pick a column. */
+
+.column {
+    /* Without this a long term blows up the grid column. */
+    min-width: 0;
+}
+
+/* Splitter between the categories: the columns sit flush (gapX = 0),
+   each column draws the divider itself and its padding gives the air. */
+.column:not(:last-child) {
+    padding-right: 12px;
+    border-right: 1px solid var(--divider-primary);
+}
+
+.column + .column {
+    padding-left: 12px;
+}
+
+.columnTitle {
+    overflow-wrap: anywhere;
+}
+
+/* A term */
+
+.chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 8px 12px;
+    /* A transparent border is always there so that selection and verdict
+       do not shift the neighbouring terms. */
+    border: 2px solid transparent;
+    border-radius: 12px;
+    background: var(--background-card);
+    color: var(--text-primary);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    /* Same press feedback as an answer option in the feed. */
+    transition: transform 0.12s ease-out;
+}
+
+/* A placed term sits on the card, hence the different background. */
+.chipPlaced {
+    background: var(--background-surface);
+}
+
+.chipSelected {
+    border-color: var(--text-primary);
+}
+
+.chipCorrect {
+    border-color: var(--icon-positive);
+}
+
+.chipWrong {
+    border-color: var(--icon-negative);
+}
+
+.chip:active {
+    opacity: 0.6;
+    transform: scale(0.97);
+    transition-duration: 0.06s;
+}
+
+.chip:disabled {
+    cursor: default;
+}
+
+.chipText {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* The slot a picked term goes into */
+
+.slot {
+    min-height: 44px;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 8px 12px;
+    border: 1.5px dashed var(--divider-primary);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.slot:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+
+.pool {
+    flex-wrap: wrap;
+}
+
+/* Reduced motion: a press dims the term without moving it. */
+
+@media (prefers-reduced-motion: reduce) {
+    .chip {
+        transition: none;
+    }
+
+    .chip:active {
+        transform: none;
+    }
+}

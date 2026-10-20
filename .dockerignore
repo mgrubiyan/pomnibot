@@ -1,0 +1,13 @@
+.git
+.gitignore
+.idea
+.DS_Store
+miniapp/node_modules
+miniapp/dist
+miniapp/.bun-build
+miniapp/*.local
+backend/dist
+backend/cmd/server/dist/*
+!backend/cmd/server/dist/.gitkeep
+*.log
+docker-compose*.override.yml

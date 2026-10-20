@@ -1,0 +1,16 @@
+/* On a small phone the facts scroll under a fixed header. */
+.body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.factsList {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.factText {
+    text-wrap: pretty;
+}
