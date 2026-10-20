@@ -31,8 +31,8 @@ export interface WhyItWorksProps {
     onBack: () => void;
 }
 
-/** The research behind the reviews, on its own screen: on the set screen
-    it pushed the set itself into a scroll. */
+/** The research behind the reviews, opened from the quiet line on home:
+    on the set screen it pushed the set itself into a scroll. */
 export function WhyItWorks({ onBack }: WhyItWorksProps) {
     return (
         <Screen>

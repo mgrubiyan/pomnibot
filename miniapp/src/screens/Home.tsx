@@ -74,13 +74,15 @@ export interface HomeProps {
     onOpenSet: (setId: string) => void;
     onAddNote: () => void;
     onJoinSet: () => void;
+    /** The research behind the reviews, on its own screen. */
+    onOpenWhy: () => void;
     /** Sets deleted during this session: no backend yet, App remembers them. */
     removedSetIds: string[];
     /** Notify parent when today data (including current user) is loaded */
     onTodayLoaded?: (today: TodayData) => void;
 }
 
-export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, onTodayLoaded }: HomeProps) {
+export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, removedSetIds, onTodayLoaded }: HomeProps) {
     const [status, setStatus] = useState<Status>('loading');
     const [today, setToday] = useState<TodayData | null>(null);
     const [feedCards, setFeedCards] = useState<Card[]>([]);
@@ -254,9 +256,13 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, removedSetIds, 
                     </Flex>
                 )}
 
-                <Typography.Text variant="label" color="tertiary" className={s.why}>
-                    Карточка возвращается, когда вы начинаете её забывать: так запоминается надолго
-                </Typography.Text>
+                <button type="button" className={s.why} onClick={onOpenWhy}>
+                    <Typography.Text variant="label" color="tertiary">
+                        Карточка возвращается, когда вы начинаете её забывать: так запоминается
+                        надолго.{' '}
+                        <span className={s.whyMore}>Почему это работает</span>
+                    </Typography.Text>
+                </button>
             </Flex>
 
             {bottomActions}

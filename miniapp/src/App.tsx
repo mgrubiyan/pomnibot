@@ -29,7 +29,7 @@ type Screen =
       }
     | { name: 'share'; setId: string; setTitle?: string }
     | { name: 'leaderboard'; setId: string; setTitle?: string }
-    | { name: 'why'; setId: string }
+    | { name: 'why' }
     | { name: 'add' }
     | { name: 'create-method' }
     | { name: 'manual'; setId?: string; setTitle?: string }
@@ -185,6 +185,7 @@ function App() {
             onOpenSet={(setId) => go({ name: 'set', setId })}
             onAddNote={() => go({ name: 'create-method' })}
             onJoinSet={() => go({ name: 'join' })}
+            onOpenWhy={() => go({ name: 'why' })}
             removedSetIds={removedSetIds}
             onTodayLoaded={handleTodayLoaded}
         />
@@ -317,7 +318,7 @@ function App() {
     }
 
     if (screen.name === 'why') {
-        return <WhyItWorks onBack={() => openSet(screen.setId)} />;
+        return <WhyItWorks onBack={goHome} />;
     }
 
     if (screen.name === 'set-cards') {
@@ -353,7 +354,6 @@ function App() {
                 onRemove={removeSet}
                 onOpenCards={(setId) => go({ name: 'set-cards', setId })}
                 onShare={(setId, setTitle) => go({ name: 'share', setId, setTitle })}
-                onOpenWhy={() => go({ name: 'why', setId: screen.setId })}
                 onOpenLeaderboard={(setId, setTitle) =>
                     go({
                         name: 'leaderboard',
