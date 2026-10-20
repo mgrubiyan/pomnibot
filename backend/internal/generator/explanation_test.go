@@ -116,3 +116,22 @@ func TestCleanExplanationReadsMathAbbreviations(t *testing.T) {
 		}
 	}
 }
+
+func TestCleanExplanationPreservesNotationScope(t *testing.T) {
+	const fragment = "Для естественного соединения используют специальный синтаксис: A JOIN B."
+	for _, scope := range []string{
+		"В обозначениях лекции",
+		"В нотации конспекта",
+	} {
+		in := scope + " естественное соединение записывается A JOIN B."
+		if got := cleanExplanation(in, fragment); got != in {
+			t.Errorf("cleanExplanation(%q) = %q, want notation scope preserved", in, got)
+		}
+	}
+	// The exception must not let commentary about the notes through.
+	const commentary = "В обозначениях лекции естественное соединение записывается A JOIN B. Эта формулировка приведена в конспекте."
+	const want = "В обозначениях лекции естественное соединение записывается A JOIN B."
+	if got := cleanExplanation(commentary, fragment); got != want {
+		t.Errorf("cleanExplanation() = %q, want %q", got, want)
+	}
+}

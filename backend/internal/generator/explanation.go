@@ -47,6 +47,9 @@ var (
 	reAboutNotes = regexp.MustCompile(`(?i)(?:^|[^\p{L}])(?:конспект|фрагмент|цитат|лекци)\p{L}*` +
 		`|(?:указан|сказан|написан|приведен|отмечен)\p{L}*\s+(?:(?:прямо|дословно|явно)\s+)?в\s+тексте` +
 		`|(?:^|[^\p{L}])(?:в|во)\s+начале\s+[^.!?]*(?:указан|приведен|дан)`)
+	// A notation qualifier limits a statement to the source's conventions;
+	// unlike commentary about the notes, it is part of the fact's meaning.
+	reNotationScope = regexp.MustCompile(`(?i)^в\s+(?:обозначениях|нотации)\s+(?:лекции|конспекта)\s+`)
 )
 
 // explanationStopWords carry no knowledge of their own: a sentence is judged
@@ -90,7 +93,8 @@ func cleanExplanation(explanation, fragment string) string {
 		if s = reSourceTail.ReplaceAllString(s, "$1"); s != "" && !strings.ContainsRune(".!?…", []rune(s)[len([]rune(s))-1]) {
 			s += "."
 		}
-		if reAboutNotes.MatchString(s) || !supported(s, have) {
+		body := reNotationScope.ReplaceAllString(s, "")
+		if reAboutNotes.MatchString(body) || !supported(body, have) {
 			continue
 		}
 		kept = append(kept, s)
