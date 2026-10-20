@@ -3,10 +3,10 @@ package repository_test
 import (
 	"context"
 	"errors"
-	"os"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -18,33 +18,33 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
 func manualTestPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	url := os.Getenv("POMNIBOT_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("set POMNIBOT_TEST_DATABASE_URL to run PostgreSQL integration tests")
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+	container, err := postgres.Run(ctx, "postgres:17-alpine",
+		postgres.WithDatabase("pomnibot_test"),
+		postgres.WithUsername("pomnibot"),
+		postgres.WithPassword("pomnibot"),
+		postgres.BasicWaitStrategies(),
+	)
+	testcontainers.CleanupContainer(t, container)
+	if err != nil {
+		t.Fatalf("start test PostgreSQL (Docker must be running): %v", err)
 	}
-	ctx := context.Background()
-	admin, err := pgxpool.New(ctx, url)
+	url, err := container.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
 		t.Fatal(err)
 	}
-	schema := "manual_" + strings.ReplaceAll(uuid.NewString(), "-", "")
-	if _, err = admin.Exec(ctx, "CREATE SCHEMA "+schema); err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := pgxpool.ParseConfig(url)
+	pool, err := pgxpool.New(ctx, url)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.ConnConfig.RuntimeParams["search_path"] = schema
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { pool.Close(); _, _ = admin.Exec(ctx, "DROP SCHEMA "+schema+" CASCADE"); admin.Close() })
+	t.Cleanup(pool.Close)
 	entries, err := repository.MigrationsFS.ReadDir("migrations")
 	if err != nil {
 		t.Fatal(err)
