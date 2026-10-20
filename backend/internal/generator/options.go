@@ -90,7 +90,9 @@ type Stats struct {
 const (
 	// DefaultConcurrency is 1 because the GigaChat freemium plan allows exactly
 	// one concurrent request; a second one gets 429.
-	DefaultConcurrency      = 1
+	DefaultConcurrency = 1
+	// DefaultSlots is 1 for the same reason: reading a document and making
+	// its cards both call the model.
 	DefaultSlots            = 1
 	DefaultChunkSize        = 2500
 	DefaultChunkOverlap     = 150
