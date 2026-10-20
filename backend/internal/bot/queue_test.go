@@ -266,6 +266,7 @@ func TestBot_GenerationSlots(t *testing.T) {
 func TestIsGenericFilename(t *testing.T) {
 	for name, want := range map[string]bool{
 		"file_12":                        true,
+		"file_12345.pdf":                 true,
 		"photo_123.jpg":                  true,
 		"IMG_1489.HEIC":                  true,
 		"photo_2026-10-17 19.34.40.jpeg": true,
@@ -288,9 +289,22 @@ func TestResolveSetTitleFromFilename(t *testing.T) {
 		"Этапы обработки кода программы на C++_ пространства имён и локали.pdf": "Этапы обработки кода программы на C++ пространства имён и локали",
 		"__Лекция__4__.docx":           "Лекция 4",
 		"Лекция 3. Клеточный цикл.pdf": "Лекция 3. Клеточный цикл",
+		// A title or name with no extension keeps everything after its dots.
+		"Лекция 3. Клеточный цикл": "Лекция 3. Клеточный цикл",
+		"Версия 1.2":               "Версия 1.2",
 	} {
 		if got := resolveSetTitle("", name); got != want {
 			t.Errorf("resolveSetTitle(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
+
+// A generic name stays generic once its underscores turn into spaces,
+// so the set is still renamed after its topics.
+func TestIsGenericTitleAfterSpaces(t *testing.T) {
+	for _, name := range []string{"file_12345.pdf", "IMG_1489.HEIC", "DSC_0042.jpg"} {
+		if title := resolveSetTitle("", name); !isGenericTitle(title) {
+			t.Errorf("isGenericTitle(resolveSetTitle(%q) = %q) = false, want true", name, title)
 		}
 	}
 }
