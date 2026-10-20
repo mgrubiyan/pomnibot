@@ -47,6 +47,9 @@ type Response struct {
 	Content []byte
 	Usage   Usage
 	Model   string // model that actually answered, may be a fallback
+	// Truncated: the model ran into the token limit and the answer is cut
+	// off.
+	Truncated bool
 }
 
 // Provider is an LLM backend. Implementations handle auth, rate limits and

@@ -90,6 +90,9 @@ func declaredNames(text string, prose bool) nameSet {
 	for _, m := range reInstance.FindAllStringSubmatch(text, -1) {
 		add(m[1], false)
 	}
+	for name := range sqlNames(text) {
+		add(name, false)
+	}
 	if !prose {
 		return names
 	}
@@ -111,6 +114,119 @@ func declaredNames(text string, prose bool) nameSet {
 		i += m[4] // the right end may start the next arrow: A → B → C
 	}
 	return names
+}
+
+// SQL examples. A query or a table definition shows the syntax, and its
+// tables, columns and values are invented: CREATE TABLE Student (Id INTEGER,
+// …), SELECT * FROM Persons WHERE City='Sandnes'. The model asks «Какой тип у
+// поля Id в таблице Student?». Keywords are matched in capitals, as slides
+// write them, so that English prose ("data from users") declares nothing.
+var (
+	// "CREATE TABLE Student", "FROM Persons", "REFERENCES Professor".
+	reSQLTable = regexp.MustCompile(`\b(?:TABLE|INTO|FROM|UPDATE|REFERENCES|JOIN|INDEX|ON)\s+([A-Za-z_]\w*)`)
+	// The columns of "KEY (ProfId)", "Professor (Id)", "INTO t (a, b)", "ON Person (LastName DESC)".
+	reSQLColumnList = regexp.MustCompile(`\b(?:KEY|(?:REFERENCES|INTO|ON)\s+\w+)\s*\(([^()]*)\)`)
+	// "WHERE City='Sandnes'", "AND LastName LIKE".
+	reSQLCondition = regexp.MustCompile(`\b(?:WHERE|AND|OR|SET)\s+([A-Za-z_]\w*)\s*(?:=|<>|!=|>=|<=|>|<|LIKE\b|BETWEEN\b|IN\b)`)
+	// "SELECT Company, OrderNumber FROM".
+	reSQLSelect = regexp.MustCompile(`\bSELECT\s+(?:DISTINCT\s+)?([^*\n]+?)\s+FROM\b`)
+	// "CREATE TABLE Student (": its column definitions follow.
+	reSQLCreate = regexp.MustCompile(`\bCREATE\s+TABLE\s+\w+\s*\(`)
+	// 'Los Angeles', ‘freshman’: a value, on a line of SQL only.
+	reSQLLiteral   = regexp.MustCompile(`['‘’]([^'‘’\n]+)['‘’]`)
+	reSQLStatement = regexp.MustCompile(`\b(?:SELECT|INSERT|UPDATE|DELETE|VALUES|WHERE|DEFAULT|CHECK)\b`)
+	reIdentStart   = regexp.MustCompile(`^\s*([A-Za-z_]\w*)`)
+	// table_name, column_1, value1, {condition}: placeholders of a syntax
+	// template, the lecture's own words.
+	reSQLPlaceholder = regexp.MustCompile(`(?i)^(?:(?:table|column|index|field|view)_?name|column_?\d*|value_?\d*|condition|pattern|table|column)$`)
+)
+
+// reSQLKeyword is a keyword, a type or an aggregate: what a lecture teaches.
+var reSQLKeyword = regexp.MustCompile(`(?i)^(?:SELECT|DISTINCT|FROM|WHERE|AND|OR|NOT|IN|LIKE|BETWEEN|IS|NULL|ORDER|GROUP|BY|HAVING|ASC|DESC|` +
+	`INSERT|INTO|VALUES|UPDATE|SET|DELETE|CREATE|ALTER|DROP|TRUNCATE|TABLE|INDEX|VIEW|UNIQUE|PRIMARY|FOREIGN|KEY|` +
+	`REFERENCES|CONSTRAINT|CHECK|DEFAULT|ON|CASCADE|RESTRICT|NO|ACTION|ADD|COLUMN|JOIN|INNER|LEFT|RIGHT|FULL|OUTER|` +
+	`UNION|ALL|AS|TOP|LIMIT|EXISTS|ANY|SOME|INTEGER|INT|SMALLINT|TINYINT|BIGINT|CHAR|VARCHAR|TEXT|FLOAT|DOUBLE|REAL|` +
+	`DECIMAL|NUMERIC|DATE|TIME|DATETIME|TIMESTAMP|BOOLEAN|COUNT|SUM|AVG|MIN|MAX)$`)
+
+// maxTableDefinition bounds the column definitions read after "CREATE TABLE
+// t (": a closing parenthesis lost in a PDF must not make the rest of the
+// notes columns.
+const maxTableDefinition = 2000
+
+// sqlNames returns the tables, columns and values that SQL in text invents.
+func sqlNames(text string) nameSet {
+	names := nameSet{}
+	add := func(name string) {
+		name = strings.TrimSpace(name)
+		if name == "" || reSQLKeyword.MatchString(name) || reSQLPlaceholder.MatchString(name) {
+			return
+		}
+		names[name] = struct{}{}
+	}
+	addFirst := func(item string) {
+		if m := reIdentStart.FindStringSubmatch(item); m != nil {
+			add(m[1])
+		}
+	}
+	for _, m := range reSQLTable.FindAllStringSubmatch(text, -1) {
+		add(m[1])
+	}
+	for _, m := range reSQLColumnList.FindAllStringSubmatch(text, -1) {
+		for item := range strings.SplitSeq(m[1], ",") {
+			addFirst(item)
+		}
+	}
+	for _, m := range reSQLCondition.FindAllStringSubmatch(text, -1) {
+		add(m[1])
+	}
+	for _, m := range reSQLSelect.FindAllStringSubmatch(text, -1) {
+		for item := range strings.SplitSeq(m[1], ",") {
+			addFirst(item)
+		}
+	}
+	for _, loc := range reSQLCreate.FindAllStringIndex(text, -1) {
+		def := text[loc[1]:]
+		def = def[:min(len(def), maxTableDefinition)]
+		for _, item := range topLevelItems(def) {
+			addFirst(item)
+		}
+	}
+	for line := range strings.SplitSeq(text, "\n") {
+		if !reSQLStatement.MatchString(line) {
+			continue
+		}
+		for _, m := range reSQLLiteral.FindAllStringSubmatch(line, -1) {
+			// 'A' is a grade, 'Jan-10-1999' a date: no name to ask about.
+			if v := m[1]; utf8.RuneCountInString(v) > 1 && !strings.ContainsFunc(v, unicode.IsDigit) {
+				add(v)
+			}
+		}
+	}
+	return names
+}
+
+// topLevelItems splits the column definitions that follow "CREATE TABLE t (" at
+// its top-level commas, up to the closing parenthesis.
+func topLevelItems(s string) []string {
+	var items []string
+	depth, start := 0, 0
+	for i, r := range s {
+		switch r {
+		case '(':
+			depth++
+		case ')':
+			if depth == 0 {
+				return append(items, s[start:i])
+			}
+			depth--
+		case ',':
+			if depth == 0 {
+				items = append(items, s[start:i])
+				start = i + 1
+			}
+		}
+	}
+	return append(items, s[start:])
 }
 
 // typeName reports a name written as a class: capitalized, letters and

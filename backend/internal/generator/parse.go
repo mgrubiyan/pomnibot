@@ -42,8 +42,9 @@ type modelCard struct {
 const maxCardsPerFact = 4
 
 var (
-	errNoJSON  = errors.New("no JSON in the answer")
-	errNoFacts = errors.New(`answer has no "facts" array`)
+	errNoJSON    = errors.New("no JSON in the answer")
+	errNoFacts   = errors.New(`answer has no "facts" array`)
+	errCutAnswer = errors.New("answer cut at the token limit, no facts in it")
 
 	reFence = regexp.MustCompile("(?s)```[a-zA-Z]*\\s*(.*?)```")
 	bom     = []byte("\uFEFF")

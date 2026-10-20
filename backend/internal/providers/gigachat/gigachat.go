@@ -489,8 +489,8 @@ func (c *Client) call(ctx context.Context, model string, req providers.Request, 
 		// politics trip it now and then. Another model may pass the text.
 		return providers.Response{}, fmt.Errorf("gigachat: %s: %w", model, providers.ErrRefused)
 	case "length":
-		// Passed on anyway: the caller sees an unusable answer and handles it
-		// like any other.
+		// Passed on anyway, marked Truncated: the caller decides what of
+		// it to use.
 		slog.Warn("gigachat: answer cut short", "model", model, "finish_reason", choice.FinishReason)
 	}
 	return providers.Response{
@@ -499,7 +499,8 @@ func (c *Client) call(ctx context.Context, model string, req providers.Request, 
 			PromptTokens:     cr.Usage.PromptTokens,
 			CompletionTokens: cr.Usage.CompletionTokens,
 		},
-		Model: or(cr.Model, model),
+		Model:     or(cr.Model, model),
+		Truncated: choice.FinishReason == "length",
 	}, nil
 }
 

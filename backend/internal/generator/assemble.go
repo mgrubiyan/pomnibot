@@ -36,6 +36,7 @@ type chunkResult struct {
 	droppedUnsupported int
 	droppedTable       int
 	droppedExample     int
+	droppedVariants    int
 	trimmedExplains    int
 	usage              providers.Usage
 	models             map[string]int
@@ -182,6 +183,22 @@ func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok boo
 			slog.Debug("cards: choice asks what another card of the fact asks", "question", mc.Question)
 			continue
 		}
+		// A flip card with the input card's very question shows the fact
+		// twice; the input card checks the answer and stays.
+		if mc.Kind == cards.KindFlip && repeatsInput(f, mc.Question) {
+			a.stats.DroppedVariants++
+			slog.Debug("cards: flip asks what the input card of the fact asks", "question", mc.Question)
+			continue
+		}
+		// The same question twice in one fact, two equal claims say, is one
+		// card.
+		if slices.ContainsFunc(questions, func(q string) bool {
+			return slices.Equal(questionWords(q), questionWords(mc.Question))
+		}) {
+			a.stats.DroppedVariants++
+			slog.Debug("cards: question repeats another card of the fact", "question", mc.Question)
+			continue
+		}
 		// Indexed after the loop: cards of one fact are checked against
 		// earlier facts, not against each other.
 		questions = append(questions, mc.Question)
@@ -290,6 +307,45 @@ func repeatsRecall(f modelFact, q string) bool {
 		}
 		return false
 	})
+}
+
+// repeatsInput reports whether q is word for word the question of an input
+// card of f.
+func repeatsInput(f modelFact, q string) bool {
+	return slices.ContainsFunc(f.Cards, func(c modelCard) bool {
+		return c.Kind == cards.KindInput && slices.Equal(questionWords(c.Question), questionWords(q))
+	})
+}
+
+// dropFlipRepeats drops a flip card that asks a choice or input card's
+// question in other words for the same answer: «Какой логический оператор
+// требует выполнения всех условий?» and «Какой оператор требует выполнения
+// всех условий?», AND both. A vocabulary list keeps it: «Переведите "to
+// configure"» beside «Как переводится "to configure"?» is a card of its own.
+func dropFlipRepeats(cs []modelCard, dropped func(modelCard)) []modelCard {
+	var recall []modelCard
+	for _, c := range cs {
+		if c.Kind == cards.KindChoice || c.Kind == cards.KindInput {
+			recall = append(recall, c)
+		}
+	}
+	return slices.DeleteFunc(cs, func(c modelCard) bool {
+		if c.Kind != cards.KindFlip || !slices.ContainsFunc(recall, func(o modelCard) bool {
+			// The very same question is settled in acceptFact.
+			return sameAnswer(o.Answer, c.Answer) && askSame(o.Question, c.Question) &&
+				!slices.Equal(questionWords(o.Question), questionWords(c.Question))
+		}) {
+			return false
+		}
+		dropped(c)
+		return true
+	})
+}
+
+// sameAnswer compares short answers up to case and a final period.
+func sameAnswer(a, b string) bool {
+	trim := func(s string) string { return strings.TrimRight(strings.TrimSpace(s), ".") }
+	return strings.EqualFold(trim(a), trim(b))
 }
 
 // balanceClaim shows a boolean card's claim true or false so that the
@@ -440,6 +496,7 @@ func (a *assembler) count(r chunkResult) {
 	s.DroppedPersonal += r.droppedPersonal
 	s.DroppedTable += r.droppedTable
 	s.DroppedExample += r.droppedExample
+	s.DroppedVariants += r.droppedVariants
 	s.TrimmedExplanations += r.trimmedExplains
 
 	if r.calls > 0 {

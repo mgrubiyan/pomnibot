@@ -100,8 +100,11 @@ func parseTable(data json.RawMessage) (modelFact, bool) {
 		}
 		// The feed grades a term by the column string, so it must be one of
 		// the columns as listed.
-		i := slices.IndexFunc(columns, func(c string) bool { return strings.EqualFold(c, strings.TrimSpace(column)) })
+		i := columnIndex(columns, column)
 		if i < 0 || slices.ContainsFunc(t.Items, func(prev cards.TableItem) bool { return strings.EqualFold(prev.Text, text) }) {
+			return modelFact{}, false
+		}
+		if reVerb.MatchString(text) {
 			return modelFact{}, false
 		}
 		// A term that a column names, or the other way round, sorts itself:
@@ -118,6 +121,38 @@ func parseTable(data json.RawMessage) (modelFact, bool) {
 
 	card := modelCard{Kind: cards.KindTable, Question: question, Explanation: explanation, Table: t}
 	return modelFact{Quote: quote, Topic: topic, Name: factName(fields, topic), Cards: []modelCard{card}}, true
+}
+
+// reVerb finds a reflexive verb in a term: «сокращается» is what a group
+// does, not a term it holds.
+var reVerb = regexp.MustCompile(`(?i)\p{L}(?:ется|ится|ются|ятся|утся|атся)(?:$|[^\p{L}])`)
+
+// contrast opens a clause that sets itself against the one before: «…, а
+// нервная ткань проводит возбуждение» is no next item of a list.
+var reContrast = regexp.MustCompile(`(?i)^\s*(?:а|но|однако|зато|тогда как)\s`)
+
+// columnIndex returns the column a term's column string names: the column
+// itself up to case, or else the one column that differs from it only in
+// word endings, «Манипулирование данные» for «Манипулирование данными». -1
+// for none.
+func columnIndex(columns []string, column string) int {
+	column = strings.TrimSpace(column)
+	if i := slices.IndexFunc(columns, func(c string) bool { return strings.EqualFold(c, column) }); i >= 0 {
+		return i
+	}
+	want := contentWords(column)
+	found := -1
+	for i, c := range columns {
+		words := contentWords(c)
+		if len(words) == 0 || !slices.EqualFunc(words, want, sameWord) {
+			continue
+		}
+		if found >= 0 {
+			return -1
+		}
+		found = i
+	}
+	return found
 }
 
 // tableGrounded reports whether the quote puts every term of t in its
@@ -205,6 +240,32 @@ func tableGrounded(t *cards.Table, quote string) bool {
 		}
 		return column
 	}
+	// slideHeading returns the column of the heading in capitals a line of
+	// a slide stands under: «ОПРЕДЕЛЕНИЕ ДАННЫХ», then «Создать:», then
+	// «CREATE TABLE – создать таблицу». Another heading in capitals
+	// («ПРЕДЛОЖЕНИЯ SQL») or a line of prose between them breaks the tie;
+	// a line of code in capitals («TRUNCATE TABLE») does not.
+	slideHeading := func(i int) string {
+		for j := i; j >= 0; j-- {
+			l := lines[j]
+			if utf8.RuneCountInString(l.text) > maxSlideLine {
+				return ""
+			}
+			if j == i {
+				continue
+			}
+			if l.column != "" {
+				if !capitals(l.text) {
+					return ""
+				}
+				return from(l.text, l.column)
+			}
+			if capitals(l.text) && strings.IndexFunc(l.text, isCyrillic) >= 0 {
+				return ""
+			}
+		}
+		return ""
+	}
 	columnOf := func(item string, in func(s, text string) bool) string {
 		for _, s := range sentences {
 			cl := s.clauses
@@ -230,6 +291,8 @@ func tableGrounded(t *cards.Table, quote string) bool {
 					}
 				}
 				switch {
+				case reContrast.MatchString(c.text):
+					return ""
 				case prev >= 0 && cl[prev].leads:
 					return from(cl[prev].text, cl[prev].column)
 				case next >= 0 && !cl[next].leads:
@@ -237,8 +300,11 @@ func tableGrounded(t *cards.Table, quote string) bool {
 				case prev >= 0 || next >= 0:
 					return "" // a list that neither clause opens or closes
 				}
-				if !lines[s.line].item || lines[s.line].column != "" {
+				if lines[s.line].column != "" {
 					return ""
+				}
+				if !lines[s.line].item {
+					return slideHeading(s.line)
 				}
 				j := s.line - 1
 				for j >= 0 && lines[j].item && lines[j].column == "" {
@@ -429,6 +495,19 @@ var (
 // groups for it to hold a classification: one list is not yet a table.
 const minGroupStatements = 2
 
+// maxSlideLine is the longest line of a slide: a heading, a subheading, a
+// term with its short definition. A longer line is prose.
+const maxSlideLine = 80
+
+// capitals reports a line written in capital letters, a slide's heading.
+func capitals(s string) bool {
+	return strings.IndexFunc(s, unicode.IsLetter) >= 0 && strings.IndexFunc(s, unicode.IsLower) < 0
+}
+
+// reDefinitionLine is a line that defines a short term: «INSERT – добавить
+// записи», «Митоз - непрямое деление».
+var reDefinitionLine = regexp.MustCompile(`^\s*[^\s–—-][^–—\n]{0,40}?\s[–—-]\s+\S`)
+
 // minGroupItems is how many list items under a heading make a group.
 const minGroupItems = 2
 
@@ -437,10 +516,11 @@ const minGroupItems = 2
 // model given a long list of rules tends to leave tables empty.
 func classification(text string) bool {
 	n := len(reBelongs.FindAllStringIndex(text, -1)) + len(reGroupList.FindAllStringIndex(text, -1))
-	// A slide: a heading, then two list items or more under it.
+	// A slide: a heading, then two list items or more under it. A slide
+	// lists its terms without bullets too: «CREATE TABLE – создать таблицу».
 	items, heading := 0, false
 	for line := range strings.SplitSeq(text, "\n") {
-		if _, item := listItem(line); item {
+		if _, item := listItem(line); item || reDefinitionLine.MatchString(line) {
 			items++
 			continue
 		}
