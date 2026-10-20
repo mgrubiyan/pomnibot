@@ -109,3 +109,17 @@ func TestNewQueue_Slots(t *testing.T) {
 		}
 	}
 }
+
+func TestSharedQueue_OnePerKey(t *testing.T) {
+	q := SharedQueue(t.Name()+"/a", 2)
+	if again := SharedQueue(t.Name()+"/a", 2); again != q {
+		t.Error("same key: got another queue")
+	}
+	if other := SharedQueue(t.Name()+"/b", 2); other == q {
+		t.Error("different keys share a queue")
+	}
+	// The first call sets the size.
+	if again := SharedQueue(t.Name()+"/a", 5); again != q || cap(again.slots) != 2 {
+		t.Errorf("same key with another size: slots = %d, want the existing queue with 2", cap(again.slots))
+	}
+}

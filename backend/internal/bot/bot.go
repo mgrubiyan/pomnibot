@@ -112,16 +112,17 @@ func NewBot(
 }
 
 // generationSlots is how many documents are read and turned into cards at
-// once by default. Both steps call the model, and the GigaChat freemium plan
-// serves exactly one request at a time; a second one gets 429. A model with
-// more room raises it with SetGenerationSlots.
+// once until SetQueue. Both steps call the model, and the GigaChat freemium
+// plan serves exactly one request at a time; a second one gets 429.
 const generationSlots = 1
 
-// SetGenerationSlots sets how many documents are turned into cards at once,
-// at least one: as many requests as the main model serves in parallel. Call
-// it before Start.
-func (b *Bot) SetGenerationSlots(n int) {
-	b.queue = generator.NewQueue(n)
+// SetQueue makes documents wait in q, usually the generator.SharedQueue of
+// the main model's API key, so they share it with everything else on that
+// key. Call it before Start.
+func (b *Bot) SetQueue(q *generator.Queue) {
+	if q != nil {
+		b.queue = q
+	}
 }
 
 // Start initializes the bot and starts the polling loop.

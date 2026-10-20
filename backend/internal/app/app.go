@@ -87,6 +87,15 @@ type models struct {
 	text   providers.Provider // writes cards and grades answers
 	vision providers.Provider // reads photos of notes
 	slots  int                // documents turned into cards at once
+	key    string             // API key of the main model: documents on it share one queue
+}
+
+// gigaChatKey is the GigaChat credential that requests are counted against.
+func gigaChatKey(cfg gigachat.Config) string {
+	if cfg.AuthKey != "" {
+		return cfg.AuthKey
+	}
+	return cfg.ClientID + ":" + cfg.ClientSecret
 }
 
 // aiStudioSlots is how many requests AI Studio serves at once without a
@@ -112,7 +121,7 @@ func newModels(cfg config.Config) (models, error) {
 		// leaves the OCR time.
 		photos := providers.NewFallback(cfg.LLM.Cooldown,
 			providers.Backend{Name: "gigachat", Provider: gigaOne, Timeout: cfg.LLM.PrimaryTimeout})
-		return models{text: gigaOne, vision: photos, slots: 1}, nil
+		return models{text: gigaOne, vision: photos, slots: 1, key: gigaChatKey(cfg.GigaChat)}, nil
 	}
 	studio, err := aistudio.New(*cfg.AIStudio)
 	if err != nil {
@@ -121,16 +130,16 @@ func newModels(cfg config.Config) (models, error) {
 
 	first := providers.Backend{Name: "aistudio", Provider: studio}
 	second := providers.Backend{Name: "gigachat", Provider: gigaOne}
-	slots := aiStudioSlots
+	slots, key := aiStudioSlots, cfg.AIStudio.APIKey
 	if cfg.LLM.Primary == config.PrimaryGigaChat {
-		first, second, slots = second, first, 1
+		first, second, slots, key = second, first, 1, gigaChatKey(cfg.GigaChat)
 	}
 	first.Timeout = cfg.LLM.PrimaryTimeout
 	chain := providers.NewFallback(cfg.LLM.Cooldown, first, second)
 
 	slog.Info("models", "primary", cfg.LLM.Primary, "aistudio_model", cfg.AIStudio.Model,
 		"primary_timeout", cfg.LLM.PrimaryTimeout, "cooldown", cfg.LLM.Cooldown, "documents_at_once", slots)
-	return models{text: chain, vision: chain, slots: slots}, nil
+	return models{text: chain, vision: chain, slots: slots, key: key}, nil
 }
 
 func startBot(ctx context.Context, cfg config.Config, llm models, users usecase.UserService, sets usecase.SetService) error {
@@ -151,7 +160,7 @@ func startBot(ctx context.Context, cfg config.Config, llm models, users usecase.
 	if err != nil {
 		return fmt.Errorf("initialize MAX bot: %w", err)
 	}
-	runner.SetGenerationSlots(llm.slots)
+	runner.SetQueue(generator.SharedQueue(llm.key, llm.slots))
 	if err := runner.Start(ctx); err != nil {
 		return fmt.Errorf("start MAX bot: %w", err)
 	}

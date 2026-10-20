@@ -149,6 +149,53 @@ func TestBot_DocumentInProgressDoesNotBlockOthers(t *testing.T) {
 	}
 }
 
+// Two bots on the same API key queue into one line: the second document
+// waits for the first even though another bot took it.
+func TestBot_SharedQueueAcrossBots(t *testing.T) {
+	server := newRecordingServer(t)
+	client, err := NewClient("test-token", server.URL)
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	started := make(chan struct{}, 2)
+	unblock := make(chan struct{})
+	base := &mockCardGenerator{}
+	cardGen := &mockCardGenerator{
+		generateFunc: func(ctx context.Context, doc generator.Document, onBatch func(generator.Batch)) (generator.Result, error) {
+			started <- struct{}{}
+			<-unblock
+			return base.Generate(ctx, doc, onBatch)
+		},
+	}
+
+	bots := make([]*Bot, 2)
+	for i := range bots {
+		b, err := NewBot(client, "https://example.test", &mockUserService{}, &mockSetService{}, &mockFileExtractor{}, cardGen)
+		if err != nil {
+			t.Fatalf("NewBot: %v", err)
+		}
+		b.SetQueue(generator.SharedQueue(t.Name(), 1))
+		bots[i] = b
+	}
+	ctx := context.Background()
+
+	bots[0].dispatch(ctx, fileUpdate(1, "first.pdf"))
+	<-started
+	bots[1].dispatch(ctx, fileUpdate(2, "second.pdf"))
+	server.waitFor(t, "перед тобой: 1")
+
+	select {
+	case <-started:
+		t.Fatal("second bot started a document while the first held the key's slot")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(unblock)
+	bots[0].inflight.Wait()
+	bots[1].inflight.Wait()
+}
+
 // Phone cameras and screenshots name files by date or number: such a name
 // says nothing about the notes.
 func TestIsGenericFilename(t *testing.T) {
