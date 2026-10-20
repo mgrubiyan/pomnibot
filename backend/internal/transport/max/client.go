@@ -1,5 +1,4 @@
-// Package bot implements MAX Bot API client and bot event loop.
-package bot
+package max
 
 import (
 	"bytes"

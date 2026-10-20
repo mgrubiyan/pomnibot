@@ -1,4 +1,4 @@
-package bot
+package max
 
 import (
 	"bytes"
@@ -15,6 +15,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
+	"github.com/mgrubiyan/pomnibot/backend/internal/notes"
 )
 
 func (s *recordingServer) lastText() string {
@@ -56,7 +57,7 @@ func TestBot_FailuresTellTheStudentWhatHappened(t *testing.T) {
 				}
 				return u
 			},
-			want: msgResend,
+			want: notes.TextResend,
 		},
 		{
 			name: "unsupported format",
@@ -73,39 +74,39 @@ func TestBot_FailuresTellTheStudentWhatHappened(t *testing.T) {
 		{
 			name:      "extraction fails for an unknown reason",
 			extractor: extractErr(errors.New("boom")),
-			want:      msgTryLater,
+			want:      notes.TextTryLater,
 		},
 		{
 			name: "no text in the files",
 			extractor: &mockFileExtractor{extractFunc: func(context.Context, []ingest.File) (ingest.Result, error) {
 				return ingest.Result{Text: "  \n "}, nil
 			}},
-			want: msgNoText,
+			want: notes.TextNoText,
 		},
 		{
 			name: "model fails",
 			gen:  failingGen(fmt.Errorf("provider failed on 3 fragments in a row: %w", errors.New("503")), generator.Stats{}),
-			want: msgTryLater,
+			want: notes.TextTryLater,
 		},
 		{
 			name: "only a table of contents",
 			gen:  failingGen(nil, generator.Stats{Chunks: 2, ChunksFiltered: 2}),
-			want: msgOnlyJunk,
+			want: notes.TextOnlyJunk,
 		},
 		{
 			name: "content filter refused every fragment",
 			gen:  failingGen(nil, generator.Stats{Chunks: 3, ChunksFiltered: 1, ChunksRefused: 2}),
-			want: msgOtherText,
+			want: notes.TextOtherText,
 		},
 		{
 			name: "no card backed by a quote",
 			gen:  failingGen(nil, generator.Stats{Chunks: 2, CardsFromModel: 6, DroppedQuote: 6}),
-			want: msgNoCards,
+			want: notes.TextNoCards,
 		},
 		{
 			name:    "saving fails",
 			saveErr: errors.New("db down"),
-			want:    msgTryLater,
+			want:    notes.TextTryLater,
 		},
 	}
 
@@ -130,7 +131,7 @@ func TestBot_FailuresTellTheStudentWhatHappened(t *testing.T) {
 				}
 				return &contracts.CardSet{ID: uuid.New(), Title: title}, nil
 			}}
-			b, err := NewBot(client, "https://example.test", &mockUserService{}, setSvc, extractor, gen)
+			b, err := NewBot(client, "https://example.test", &mockUserService{}, notes.New(extractor, gen, setSvc, 1))
 			if err != nil {
 				t.Fatalf("NewBot: %v", err)
 			}
@@ -174,7 +175,7 @@ func TestBot_SuccessMentionsPoorlyReadPages(t *testing.T) {
 	setSvc := &mockSetService{saveGeneratedSetFunc: func(_ context.Context, _ int64, title string, _ generator.Result) (*contracts.CardSet, error) {
 		return &contracts.CardSet{ID: uuid.New(), Title: title}, nil
 	}}
-	b, err := NewBot(client, "https://example.test", &mockUserService{}, setSvc, extractor, &mockCardGenerator{})
+	b, err := NewBot(client, "https://example.test", &mockUserService{}, notes.New(extractor, &mockCardGenerator{}, setSvc, 1))
 	if err != nil {
 		t.Fatalf("NewBot: %v", err)
 	}
@@ -205,7 +206,7 @@ func TestBot_UndeliveredStatusIsLogged(t *testing.T) {
 	gen := &mockCardGenerator{generateFunc: func(context.Context, generator.Document, func(generator.Batch)) (generator.Result, error) {
 		return generator.Result{}, errors.New("model down")
 	}}
-	b, err := NewBot(client, "https://example.test", &mockUserService{}, &mockSetService{}, &mockFileExtractor{}, gen)
+	b, err := NewBot(client, "https://example.test", &mockUserService{}, notes.New(&mockFileExtractor{}, gen, &mockSetService{}, 1))
 	if err != nil {
 		t.Fatalf("NewBot: %v", err)
 	}
