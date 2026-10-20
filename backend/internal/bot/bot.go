@@ -69,7 +69,7 @@ type Bot struct {
 	extractor     FileExtractor
 	generator     CardGenerator
 	botUser       *User
-	queue         *generationQueue
+	queue         *generator.Queue
 	inflight      sync.WaitGroup
 }
 
@@ -80,7 +80,7 @@ func NewBot(
 	userService usecase.UserService,
 	setService usecase.SetService,
 	extractor FileExtractor,
-	generator CardGenerator,
+	cardGenerator CardGenerator,
 	notifications ...NotificationConfig,
 ) (*Bot, error) {
 	if client == nil {
@@ -106,16 +106,22 @@ func NewBot(
 		userService:   userService,
 		setService:    setService,
 		extractor:     extractor,
-		generator:     generator,
-		queue:         newGenerationQueue(generationSlots),
+		generator:     cardGenerator,
+		queue:         generator.NewQueue(generationSlots),
 	}, nil
 }
+
+// generationSlots is how many documents are read and turned into cards at
+// once by default. Both steps call the model, and the GigaChat freemium plan
+// serves exactly one request at a time; a second one gets 429. A model with
+// more room raises it with SetGenerationSlots.
+const generationSlots = 1
 
 // SetGenerationSlots sets how many documents are turned into cards at once,
 // at least one: as many requests as the main model serves in parallel. Call
 // it before Start.
 func (b *Bot) SetGenerationSlots(n int) {
-	b.queue = newGenerationQueue(max(n, 1))
+	b.queue = generator.NewQueue(n)
 }
 
 // Start initializes the bot and starts the polling loop.
@@ -339,7 +345,7 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 	// Files are downloaded before waiting, while their links are fresh;
 	// reading and generation wait for their turn at GigaChat.
 	queued := false
-	release, err := b.queue.acquire(ctx, func(ahead int) {
+	release, err := b.queue.Acquire(ctx, func(ahead int) {
 		queued = true
 		updateStatus(fmt.Sprintf("📸 Получил %d %s. Сейчас обрабатываю другие конспекты, ты в очереди, перед тобой: %d. Начну, как только освобожусь ⏳", count, plural, ahead))
 	})

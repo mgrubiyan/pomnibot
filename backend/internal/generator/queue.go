@@ -1,32 +1,28 @@
-package bot
+package generator
 
 import (
 	"context"
 	"sync"
 )
 
-// generationSlots is how many documents are read and turned into cards at
-// once by default. Both steps call the model, and the GigaChat freemium plan
-// serves exactly one request at a time; a second one gets 429. A model with
-// more room raises it with Bot.SetGenerationSlots.
-const generationSlots = 1
-
-// generationQueue lets a fixed number of documents through at a time; the
-// rest wait in arrival order.
-type generationQueue struct {
+// Queue lets a fixed number of documents through at a time; the rest wait in
+// arrival order. Reading a document and turning it into cards both call the
+// model, so the number of slots is how many requests the model serves at once.
+type Queue struct {
 	slots   chan struct{}
 	mu      sync.Mutex
 	waiting int
 }
 
-func newGenerationQueue(size int) *generationQueue {
-	return &generationQueue{slots: make(chan struct{}, size)}
+// NewQueue makes a queue with size slots, at least one.
+func NewQueue(size int) *Queue {
+	return &Queue{slots: make(chan struct{}, max(size, 1))}
 }
 
-// acquire takes a slot. When none is free it calls onWait with the number of
+// Acquire takes a slot. When none is free it calls onWait with the number of
 // documents ahead, then blocks until a slot frees or ctx ends. The returned
 // release must be called once the document is done.
-func (q *generationQueue) acquire(ctx context.Context, onWait func(ahead int)) (release func(), err error) {
+func (q *Queue) Acquire(ctx context.Context, onWait func(ahead int)) (release func(), err error) {
 	release = func() { <-q.slots }
 
 	q.mu.Lock()

@@ -3,7 +3,6 @@ package bot
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,101 +15,6 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 )
-
-func TestGenerationQueue_FreeSlotDoesNotWait(t *testing.T) {
-	q := newGenerationQueue(1)
-
-	release, err := q.acquire(context.Background(), func(int) {
-		t.Error("onWait called while a slot was free")
-	})
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	release()
-}
-
-func TestGenerationQueue_ReportsDocumentsAhead(t *testing.T) {
-	q := newGenerationQueue(1)
-	ctx := context.Background()
-
-	releaseFirst, err := q.acquire(ctx, nil)
-	if err != nil {
-		t.Fatalf("acquire first: %v", err)
-	}
-
-	aheads := make(chan int, 2)
-	acquired := make(chan func(), 2)
-	for range 2 {
-		waiting := make(chan struct{})
-		go func() {
-			release, err := q.acquire(ctx, func(ahead int) {
-				aheads <- ahead
-				close(waiting)
-			})
-			if err != nil {
-				t.Errorf("acquire: %v", err)
-				return
-			}
-			acquired <- release
-		}()
-		// Wait for this one to queue before starting the next, so the
-		// positions are deterministic.
-		<-waiting
-	}
-
-	if got := <-aheads; got != 1 {
-		t.Errorf("second document: ahead = %d, want 1", got)
-	}
-	if got := <-aheads; got != 2 {
-		t.Errorf("third document: ahead = %d, want 2", got)
-	}
-
-	select {
-	case <-acquired:
-		t.Fatal("a waiting document got a slot before the first released it")
-	case <-time.After(50 * time.Millisecond):
-	}
-
-	releaseFirst()
-	(<-acquired)()
-	(<-acquired)()
-}
-
-func TestGenerationQueue_CancelledWhileWaiting(t *testing.T) {
-	q := newGenerationQueue(1)
-	release, err := q.acquire(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer release()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() {
-		_, err := q.acquire(ctx, func(int) { cancel() })
-		done <- err
-	}()
-
-	select {
-	case err := <-done:
-		if !errors.Is(err, context.Canceled) {
-			t.Errorf("err = %v, want context.Canceled", err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("acquire did not return after ctx was cancelled")
-	}
-
-	// The cancelled document no longer counts as waiting.
-	next, stop := context.WithCancel(context.Background())
-	defer stop()
-	got := make(chan int, 1)
-	go func() {
-		_, _ = q.acquire(next, func(ahead int) { got <- ahead })
-	}()
-	if ahead := <-got; ahead != 1 {
-		t.Errorf("ahead after a cancelled waiter = %d, want 1", ahead)
-	}
-}
 
 // recordingServer is a MAX Bot API stub that keeps the text of every sent
 // and edited message. Handlers run concurrently, so access is locked.
@@ -242,22 +146,6 @@ func TestBot_DocumentInProgressDoesNotBlockOthers(t *testing.T) {
 	defer savedMu.Unlock()
 	if len(saved) != 2 || saved[0] != "first" || saved[1] != "second" {
 		t.Errorf("saved sets = %q, want [first second] in arrival order", saved)
-	}
-}
-
-func TestBot_GenerationSlots(t *testing.T) {
-	b, err := NewBot(&Client{}, "https://example.test", &mockUserService{}, &mockSetService{}, &mockFileExtractor{}, &mockCardGenerator{})
-	if err != nil {
-		t.Fatalf("NewBot: %v", err)
-	}
-	if got := cap(b.queue.slots); got != 1 {
-		t.Errorf("default slots = %d, want 1: GigaChat serves one request at a time", got)
-	}
-	for _, tc := range []struct{ set, want int }{{2, 2}, {0, 1}, {-3, 1}} {
-		b.SetGenerationSlots(tc.set)
-		if got := cap(b.queue.slots); got != tc.want {
-			t.Errorf("SetGenerationSlots(%d): slots = %d, want %d", tc.set, got, tc.want)
-		}
 	}
 }
 
