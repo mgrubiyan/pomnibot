@@ -1,0 +1,27 @@
+version: '3'
+
+tasks:
+  dev:
+    desc: 'Запуск дев-сервера Vite'
+    cmds:
+      - bun run dev
+
+  build:
+    desc: 'Сборка фронтенда (TypeScript + Vite)'
+    cmds:
+      - bun run build
+
+  lint:
+    desc: 'Проверка кода линтером (ESLint)'
+    cmds:
+      - bun run lint
+
+  preview:
+    desc: 'Предпросмотр production-сборки Vite'
+    cmds:
+      - bun run preview
+
+  install:
+    desc: 'Установка зависимостей frontend через Bun'
+    cmds:
+      - bun install

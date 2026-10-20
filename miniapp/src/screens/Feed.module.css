@@ -1,0 +1,251 @@
+/* Card feed. Only the card itself and the answer options are laid out
+   by hand: Button from max-ui has a fixed height (52px for medium),
+   while an option has to grow with long text.
+   The screen frame and the icons live in src/components. */
+
+/* Header with the progress bar */
+
+.progressTrack {
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--divider-primary);
+    overflow: hidden;
+}
+
+.progressFill {
+    width: 100%;
+    height: 100%;
+    border-radius: 2px;
+    background: var(--text-tertiary);
+    /* The bar fills by scaling, not by width: the card change should
+       move it on the compositor, same as everything else here. */
+    transform-origin: left;
+    transition: transform 0.2s ease-out;
+}
+
+/* Moving on to the next card: the current one slides up and dissolves,
+   the next one arrives from below. The card is remounted on every id,
+   so cardIn runs by itself; cardOut is put on by the leaving class. */
+
+@keyframes cardIn {
+    from {
+        transform: translateY(24px);
+        opacity: 0;
+    }
+}
+
+@keyframes cardOut {
+    to {
+        transform: translateY(-24px);
+        opacity: 0;
+    }
+}
+
+/* Card turn
+
+   The question and the breakdown are two sides of one box: they sit on
+   top of each other and always share a height. The box is as tall as the
+   taller side allows on screen, so the card never jumps mid-turn. */
+
+.flip {
+    flex: 1;
+    /* min-height keeps a long breakdown scrolling inside the card
+       instead of stretching the screen. */
+    min-height: 0;
+    perspective: 1000px;
+    animation: cardIn 0.2s ease-out;
+}
+
+/* Leaving is short on purpose: nothing to look at while the card is gone.
+   The duration is mirrored in Feed.tsx (CARD_OUT_MS), which holds the
+   index back until the card is out of the way. */
+.leaving {
+    animation: cardOut 0.15s ease-in forwards;
+}
+
+.flipInner {
+    position: relative;
+    height: 100%;
+    transform-style: preserve-3d;
+    /* The duration is mirrored in Feed.tsx (FLIP_MS): the buttons
+       stay disabled for exactly as long. */
+    transition: transform 0.35s ease-out;
+}
+
+.flipped {
+    transform: rotateY(180deg);
+}
+
+.face {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
+    /* Without the prefix WebKit shows the back through the front side. */
+    -webkit-backface-visibility: hidden;
+}
+
+/* The back side is pre-rotated: turning the container brings it
+   round to face the reader. */
+.faceBack {
+    transform: rotateY(180deg);
+}
+
+/* The card */
+
+.card {
+    box-sizing: border-box;
+    padding: 24px 20px;
+    border: 2px solid transparent;
+    border-radius: 16px;
+    background: var(--background-card);
+    /* Whatever does not fit scrolls inside the side;
+       the card itself does not grow. */
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+/* A flip card has no options to choose from, so the whole side opens the
+   answer. cursor: pointer is not decoration here: without it iOS does not
+   deliver clicks from a plain element to the React root. */
+.tappable {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* The question sits in the middle of the card, the breakdown at the top. */
+.cardCentered {
+    justify-content: center;
+}
+
+/* Verdict border. A transparent border is there in the normal state
+   too, so the content does not shift when the breakdown appears. */
+.cardCorrect {
+    border-color: var(--icon-positive);
+}
+
+.cardWrong {
+    border-color: var(--icon-negative);
+}
+
+.question {
+    margin: 0;
+    text-wrap: pretty;
+}
+
+/* Answer options */
+
+.option {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 52px;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 12px 16px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--background-card);
+    color: var(--text-primary);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    /* Springs back slower than it goes down, so the press reads as
+       a squeeze rather than a jump. */
+    transition: transform 0.12s ease-out;
+}
+
+.option:active {
+    opacity: 0.6;
+    transform: scale(0.97);
+    transition-duration: 0.06s;
+}
+
+.option:disabled {
+    cursor: default;
+}
+
+
+/* Answer breakdown */
+
+.divider {
+    width: 100%;
+    height: 1px;
+    background: var(--divider-primary);
+}
+
+.answerRow {
+    /* The verdict icon must not shrink next to a long answer. */
+    min-width: 0;
+}
+
+.answerText {
+    overflow-wrap: anywhere;
+}
+
+.explanation {
+    margin: 0;
+    text-wrap: pretty;
+}
+
+.source {
+    margin: 0;
+}
+
+/* The icon sits on the first line of a caption that wraps. */
+.sourceIcon {
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.quote {
+    margin: 0;
+    text-wrap: pretty;
+}
+
+/* Reduced motion: no turn, the sides simply replace one another. */
+
+@media (prefers-reduced-motion: reduce) {
+    .flip,
+    .leaving {
+        animation: none;
+    }
+
+    .flip {
+        perspective: none;
+    }
+
+    .flipInner,
+    .flipInner.flipped {
+        transform: none;
+        transition: none;
+        transform-style: flat;
+    }
+
+    .face,
+    .faceBack {
+        transform: none;
+        backface-visibility: visible;
+    }
+
+    /* Hidden via visibility on purpose: Flex from max-ui sets display
+       inline, and no stylesheet rule can override that. */
+    .flipInner:not(.flipped) .faceBack,
+    .flipInner.flipped .faceFront {
+        visibility: hidden;
+    }
+
+    .progressFill {
+        transition: none;
+    }
+
+    /* A press still dims the option, it just does not move it. */
+    .option {
+        transition: none;
+    }
+
+    .option:active {
+        transform: none;
+    }
+}
