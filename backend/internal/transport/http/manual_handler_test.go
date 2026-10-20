@@ -62,7 +62,7 @@ func TestManualCreationHTTP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			sets := &manualSetService{err: tt.err}
 			cards := &manualCardService{err: tt.err}
-			router, err := NewRouter(NewAPIHandler(sets, cards, nil), fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("test")}}, "", nil)
+			router, err := NewRouter(NewAPIHandler(sets, cards, nil), fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("test")}}, nil, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -4,6 +4,24 @@
  */
 
 export interface paths {
+    "/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the saved profile and verified platform */
+        get: operations["GetProfile"];
+        /** Complete or edit a verified Telegram profile and clear bot dialogue */
+        put: operations["PutProfile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -252,11 +270,23 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ProfileResponse: {
+            user: components["schemas"]["User"];
+            /** @enum {string} */
+            platform?: "max" | "telegram";
+            profileComplete: boolean;
+        };
+        ProfileRequest: {
+            firstName: string;
+            lastName: string;
+        };
         HealthResponse: {
             /** @example ok */
             status: string;
         };
         ErrorResponse: {
+            /** @description Machine-readable error code, including profile_required */
+            code?: string;
             message: string;
         };
         /** @description A term of the table and the column it belongs to. */
@@ -434,7 +464,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description Forbidden / insufficient permissions */
+        /** @description Forbidden; code profile_required means a Telegram profile must be completed */
         Forbidden: {
             headers: {
                 [name: string]: unknown;
@@ -460,6 +490,54 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    GetProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved profile (platform omitted for browser test user) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileResponse"];
+                };
+            };
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    PutProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
     getHealth: {
         parameters: {
             query?: never;
@@ -504,6 +582,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalServerError"];
         };
     };
@@ -528,6 +607,7 @@ export interface operations {
                     "application/json": components["schemas"]["CardSet"];
                 };
             };
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };
@@ -551,6 +631,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };
@@ -576,6 +657,7 @@ export interface operations {
                     "application/json": components["schemas"]["Card"][];
                 };
             };
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };
@@ -605,6 +687,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };
@@ -630,6 +713,7 @@ export interface operations {
                     "application/json": components["schemas"]["CardSet"];
                 };
             };
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };
@@ -654,6 +738,7 @@ export interface operations {
                     "application/json": components["schemas"]["SetPlanResponse"];
                 };
             };
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };
@@ -707,6 +792,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };
@@ -729,6 +815,7 @@ export interface operations {
                     "application/json": components["schemas"]["TodayData"];
                 };
             };
+            403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalServerError"];
         };
     };
@@ -750,6 +837,7 @@ export interface operations {
                     "application/json": components["schemas"]["Card"][];
                 };
             };
+            403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalServerError"];
         };
     };
@@ -774,6 +862,7 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalServerError"];
         };
     };
@@ -803,6 +892,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };
@@ -826,6 +916,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };
@@ -856,6 +947,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };
@@ -886,6 +978,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };

@@ -1,6 +1,6 @@
 # Помнибот
 
-Чат-бот и мини-приложение в мессенджере MAX, которые превращают конспект студента в карточки для самопроверки. Карточки строятся строго по тексту конспекта: под каждым ответом показывается цитата-источник, а модели запрещено додумывать то, чего в конспекте нет.
+Чат-бот и мини-приложение в мессенджерах MAX и Telegram, которые превращают конспект студента в карточки для самопроверки. Карточки строятся строго по тексту конспекта: под каждым ответом показывается цитата-источник, а модели запрещено додумывать то, чего в конспекте нет.
 
 Хакатон Минобрнауки × MAX, трек «Образовательные решения». Команда `t583`.
 
@@ -60,7 +60,7 @@
 
 Решение — один Go-сервис и база PostgreSQL. Сервис одновременно:
 
-- ведёт чат-бота через MAX Bot API;
+- ведёт чат-ботов через MAX Bot API и Telegram Bot API;
 - отдаёт REST API мини-приложения под `/api`;
 - отдаёт собранное мини-приложение.
 
@@ -71,7 +71,8 @@
 | `backend/internal/ingest` | извлечение текста: `pdftotext` для PDF с текстовым слоем, OCR для фото и сканов |
 | `backend/internal/generator` | нарезка конспекта на фрагменты и генерация карточек через модель (Qwen или GigaChat) с проверкой цитат |
 | `backend/internal/grader` | проверка печатного ответа: локальное сравнение, затем модель по смыслу |
-| `backend/internal/transport/http` | роутер, авторизация по `initData` от MAX, отдача статики |
+| `backend/internal/transport/http` | роутер, авторизация по `initData` от MAX и Telegram, отдача статики |
+| `backend/internal/transport/telegram` | Telegram Bot API, long polling, профиль, файлы, альбомы и напоминания |
 | `backend/internal/transport/max` | бот в MAX: клиент MAX Bot API, long polling, приём файлов, напоминания |
 | `backend/internal/usecase` | бизнес-логика: наборы, лента, результаты, интервальные повторения |
 | `backend/internal/repository` | миграции (goose), SQL-запросы (sqlc), демо-данные |
@@ -83,6 +84,7 @@
 | Метод и путь | Назначение |
 |---|---|
 | `GET /api/health` | проверка живости |
+| `GET` / `PUT /api/profile` | профиль; сохранение только для проверенного Telegram-пользователя |
 | `GET /api/` | главный экран «на сегодня»: наборы, сколько повторять, активность |
 | `GET /api/feed` | карточки текущей ленты |
 | `POST /api/results` | результаты ответов — по ним считается следующий повтор |
@@ -153,6 +155,7 @@ cp .env.example .env
 | Переменная | .env.example | Назначение |
 |---|---|---|
 | `BOT_TOKEN` | — | токен бота MAX (секрет) |
+| `TG_BOT_TOKEN` | — | токен Telegram BotFather, обязателен в prod; бот отключён в local |
 | `MAX_API_URL` | `https://platform-api2.max.ru` | адрес MAX Bot API |
 | `MAX_INSECURE_SKIP_VERIFY` | `false` | `true` отключает проверку TLS-сертификата MAX API; только для отладки |
 
@@ -272,7 +275,7 @@ cp .env.example .env
 4. Мини-приложение получает ленту через `GET /api/feed`, отправляет ответы через `POST /api/results`; по ним пересчитывается дата следующего повтора каждого факта.
 5. Печатный ответ сначала сравнивается локально; ответ другими словами уходит в GigaChat. Эта проверка ничего не записывает — результат сохраняется только вместе с остальными ответами ленты.
 
-Пользователь в мини-приложении определяется по подписанным данным `initData` от MAX. При отсутствии `initData` приложение выдает пользователю данные, соответствующие `userId = 0`
+Пользователь определяется по подписанному `initData` в `Authorization: max <initData>` или `Authorization: tma <initData>`. Отсутствующая или неверная авторизация использует общий тестовый аккаунт `0`, включая production. Ошибки БД возвращают `500`. Аккаунты платформ раздельные, наборы и рейтинги общие. Настройка Telegram через BotFather и сценарии проверки описаны в [docs/telegram.md](docs/telegram.md).
 
 ## Тестовые данные
 
@@ -352,8 +355,6 @@ backend-1  | time=2026-09-30T01:57:08.773Z level=INFO msg="starting MAX bot long
 backend-1  | time=2026-09-30T01:57:08.773Z level=INFO msg="starting review notifications scheduler" time=10:00 tz=Europe/Moscow
 backend-1  | time=2026-09-30T01:57:08.773Z level=INFO msg="starting server" addr=:8080
 backend-1  | time=2026-09-30T01:57:08.773Z level=INFO msg="scheduled next review notifications dispatch" delay=5h2m51.226483687s target_time=2026-09-30T10:00:00+03:00
-backend-1  | time=2026-09-30T01:57:13.055Z level=WARN msg="failed to extract user from MAX initData, using fake id 0" error="missing X-Init-Data header"
-backend-1  | time=2026-09-30T01:57:43.086Z level=WARN msg="failed to extract user from MAX initData, using fake id 0" error="missing X-Init-Data header"
 backend-1  | time=2026-09-30T01:57:43.360Z level=INFO msg="shutting down server gracefully..."
 backend-1  | time=2026-09-30T01:57:43.361Z level=INFO msg="server stopped successfully"
 ```

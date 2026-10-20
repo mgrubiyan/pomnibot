@@ -37,6 +37,18 @@ func encodeAnswerQuestionResponse(response AnswerQuestionRes, w http.ResponseWri
 
 		return nil
 
+	case *AnswerQuestionForbidden:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(403)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
 	case *AnswerQuestionNotFound:
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(404)
@@ -84,6 +96,18 @@ func encodeCheckAnswerResponse(response CheckAnswerRes, w http.ResponseWriter, s
 	case *CheckAnswerBadRequest:
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(400)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	case *CheckAnswerForbidden:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(403)
 
 		e := new(jx.Encoder)
 		response.Encode(e)
@@ -149,6 +173,18 @@ func encodeCreateCardResponse(response CreateCardRes, w http.ResponseWriter, spa
 
 		return nil
 
+	case *CreateCardForbidden:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(403)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
 	case *CreateCardNotFound:
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(404)
@@ -205,6 +241,18 @@ func encodeCreateSetResponse(response CreateSetRes, w http.ResponseWriter, span 
 
 		return nil
 
+	case *CreateSetForbidden:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(403)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
 	case *CreateSetInternalServerError:
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(500)
@@ -227,6 +275,18 @@ func encodeDeleteCardResponse(response DeleteCardRes, w http.ResponseWriter, spa
 	switch response := response.(type) {
 	case *DeleteCardNoContent:
 		w.WriteHeader(204)
+
+		return nil
+
+	case *DeleteCardForbidden:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(403)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
 
 		return nil
 
@@ -267,6 +327,18 @@ func encodeDeleteSetResponse(response DeleteSetRes, w http.ResponseWriter, span 
 
 		return nil
 
+	case *DeleteSetForbidden:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(403)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
 	case *DeleteSetNotFound:
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(404)
@@ -302,6 +374,18 @@ func encodeGetCardsBySetIDResponse(response GetCardsBySetIDRes, w http.ResponseW
 	case *GetCardsBySetIDOKApplicationJSON:
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(200)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	case *GetCardsBySetIDForbidden:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(403)
 
 		e := new(jx.Encoder)
 		response.Encode(e)
@@ -355,7 +439,19 @@ func encodeGetFeedQuestionsResponse(response GetFeedQuestionsRes, w http.Respons
 
 		return nil
 
-	case *ErrorResponse:
+	case *GetFeedQuestionsForbidden:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(403)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	case *GetFeedQuestionsInternalServerError:
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(500)
 		span.SetStatus(codes.Error, http.StatusText(500))
@@ -405,11 +501,55 @@ func encodeGetHealthResponse(response GetHealthRes, w http.ResponseWriter, span 
 	}
 }
 
+func encodeGetProfileResponse(response GetProfileRes, w http.ResponseWriter, span trace.Span) error {
+	switch response := response.(type) {
+	case *ProfileResponse:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(200)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	case *ErrorResponse:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(500)
+		span.SetStatus(codes.Error, http.StatusText(500))
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	default:
+		return errors.Errorf("unexpected response type: %T", response)
+	}
+}
+
 func encodeGetSetResponse(response GetSetRes, w http.ResponseWriter, span trace.Span) error {
 	switch response := response.(type) {
 	case *CardSet:
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(200)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	case *GetSetForbidden:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(403)
 
 		e := new(jx.Encoder)
 		response.Encode(e)
@@ -519,6 +659,18 @@ func encodeGetSetPlanResponse(response GetSetPlanRes, w http.ResponseWriter, spa
 
 		return nil
 
+	case *GetSetPlanForbidden:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(403)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
 	case *GetSetPlanNotFound:
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(404)
@@ -554,6 +706,18 @@ func encodeGetSetShareCodeResponse(response GetSetShareCodeRes, w http.ResponseW
 	case *CardSet:
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(200)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	case *GetSetShareCodeForbidden:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(403)
 
 		e := new(jx.Encoder)
 		response.Encode(e)
@@ -607,7 +771,19 @@ func encodeGetTodayResponse(response GetTodayRes, w http.ResponseWriter, span tr
 
 		return nil
 
-	case *ErrorResponse:
+	case *GetTodayForbidden:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(403)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	case *GetTodayInternalServerError:
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(500)
 		span.SetStatus(codes.Error, http.StatusText(500))
@@ -651,6 +827,18 @@ func encodeJoinSetByShareCodeResponse(response JoinSetByShareCodeRes, w http.Res
 
 		return nil
 
+	case *JoinSetByShareCodeForbidden:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(403)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
 	case *JoinSetByShareCodeNotFound:
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(404)
@@ -681,6 +869,62 @@ func encodeJoinSetByShareCodeResponse(response JoinSetByShareCodeRes, w http.Res
 	}
 }
 
+func encodePutProfileResponse(response PutProfileRes, w http.ResponseWriter, span trace.Span) error {
+	switch response := response.(type) {
+	case *ProfileResponse:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(200)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	case *PutProfileBadRequest:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(400)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	case *PutProfileForbidden:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(403)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	case *PutProfileInternalServerError:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(500)
+		span.SetStatus(codes.Error, http.StatusText(500))
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	default:
+		return errors.Errorf("unexpected response type: %T", response)
+	}
+}
+
 func encodeSendResultsResponse(response SendResultsRes, w http.ResponseWriter, span trace.Span) error {
 	switch response := response.(type) {
 	case *SendResultsNoContent:
@@ -691,6 +935,18 @@ func encodeSendResultsResponse(response SendResultsRes, w http.ResponseWriter, s
 	case *SendResultsBadRequest:
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(400)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	case *SendResultsForbidden:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(403)
 
 		e := new(jx.Encoder)
 		response.Encode(e)
@@ -735,6 +991,18 @@ func encodeUpdateCardResponse(response UpdateCardRes, w http.ResponseWriter, spa
 	case *UpdateCardBadRequest:
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(400)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	case *UpdateCardForbidden:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(403)
 
 		e := new(jx.Encoder)
 		response.Encode(e)

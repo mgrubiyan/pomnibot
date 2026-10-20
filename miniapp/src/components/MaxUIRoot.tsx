@@ -1,11 +1,28 @@
-import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { MaxUI, useAppearance } from '@maxhub/max-ui';
+import { telegramApp } from '../platform';
 
 /** The MAX UI root that also paints the page behind the app. */
 export function MaxUIRoot({ children }: { children: ReactNode }) {
     const root = useRef<HTMLDivElement>(null);
+    const telegram = telegramApp();
+    const [theme, setTheme] = useState(telegram?.colorScheme);
+    useEffect(() => {
+        if (!telegram) return;
+        const update = () => {
+            setTheme(telegram.colorScheme);
+            for (const side of ['top', 'right', 'bottom', 'left'] as const) {
+                const inset = (telegram.safeAreaInset?.[side] ?? 0) + (telegram.contentSafeAreaInset?.[side] ?? 0);
+                document.documentElement.style.setProperty(`--telegram-safe-${side}`, `${inset}px`);
+            }
+        };
+        update();
+        const events = ['themeChanged', 'safeAreaChanged', 'contentSafeAreaChanged'];
+        events.forEach(event => telegram.onEvent(event, update));
+        return () => events.forEach(event => telegram.offEvent(event, update));
+    }, [telegram]);
     return (
-        <MaxUI ref={root} resetBody>
+        <MaxUI ref={root} resetBody colorScheme={theme}>
             <PageBackground root={root} />
             {children}
         </MaxUI>

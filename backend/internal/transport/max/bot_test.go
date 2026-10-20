@@ -22,6 +22,9 @@ import (
 )
 
 type mockUserService struct {
+	resolveFunc  func(context.Context, usecase.Identity) (usecase.Account, error)
+	deliveryFunc func(context.Context, int64) ([]usecase.Identity, error)
+	usecase.UserService
 	upsertUserFunc           func(ctx context.Context, params usecase.UpsertUserParams) error
 	ensureUserFunc           func(ctx context.Context, userID int64) error
 	getUsersWithDueFactsFunc func(ctx context.Context, now time.Time, tz string) ([]int64, error)
@@ -46,6 +49,22 @@ func (m *mockUserService) GetUsersWithDueFacts(ctx context.Context, now time.Tim
 		return m.getUsersWithDueFactsFunc(ctx, now, tz)
 	}
 	return nil, nil
+}
+
+func (m *mockUserService) ResolveIdentity(ctx context.Context, i usecase.Identity) (usecase.Account, error) {
+	if m.resolveFunc != nil {
+		return m.resolveFunc(ctx, i)
+	}
+	if err := m.UpsertUser(ctx, usecase.UpsertUserParams{ID: i.ExternalID, FirstName: i.FirstName, LastName: &i.LastName, Username: &i.Username, IsBot: i.IsBot}); err != nil {
+		return usecase.Account{}, err
+	}
+	return usecase.Account{User: contracts.User{ID: i.ExternalID, FirstName: i.FirstName}, Platform: i.Platform, ProfileComplete: true}, nil
+}
+func (m *mockUserService) GetDeliveryIdentities(ctx context.Context, id int64) ([]usecase.Identity, error) {
+	if m.deliveryFunc != nil {
+		return m.deliveryFunc(ctx, id)
+	}
+	return []usecase.Identity{{Platform: "max", ExternalID: id}}, nil
 }
 
 type mockSetService struct {

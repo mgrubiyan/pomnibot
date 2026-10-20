@@ -104,6 +104,16 @@ type UserFactProgress struct {
 	LastReviewedAt       pgtype.Timestamptz `json:"last_reviewed_at"`
 }
 
+type UserIdentity struct {
+	UserID          int64  `json:"user_id"`
+	Platform        string `json:"platform"`
+	ExternalID      int64  `json:"external_id"`
+	ProfileComplete bool   `json:"profile_complete"`
+	ProfileStep     string `json:"profile_step"`
+	PendingLastName string `json:"pending_last_name"`
+	BotStarted      bool   `json:"bot_started"`
+}
+
 type UserSet struct {
 	UserID   int64              `json:"user_id"`
 	SetID    pgtype.UUID        `json:"set_id"`

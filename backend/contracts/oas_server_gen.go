@@ -64,6 +64,12 @@ type Handler interface {
 	//
 	// GET /health
 	GetHealth(ctx context.Context) (GetHealthRes, error)
+	// GetProfile implements GetProfile operation.
+	//
+	// Read the saved profile and verified platform.
+	//
+	// GET /profile
+	GetProfile(ctx context.Context) (GetProfileRes, error)
 	// GetSet implements GetSet operation.
 	//
 	// Get a card set.
@@ -100,6 +106,12 @@ type Handler interface {
 	//
 	// POST /sets/join
 	JoinSetByShareCode(ctx context.Context, req *JoinSetRequest) (JoinSetByShareCodeRes, error)
+	// PutProfile implements PutProfile operation.
+	//
+	// Complete or edit a verified Telegram profile and clear bot dialogue.
+	//
+	// PUT /profile
+	PutProfile(ctx context.Context, req *ProfileRequest) (PutProfileRes, error)
 	// SendResults implements SendResults operation.
 	//
 	// Send set/feed results.

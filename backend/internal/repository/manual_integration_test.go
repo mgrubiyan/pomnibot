@@ -20,7 +20,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
-func manualTestPool(t *testing.T) *pgxpool.Pool {
+func manualTestPool(t *testing.T, beforeIdentity ...func(*pgxpool.Pool)) *pgxpool.Pool {
 	t.Helper()
 	url := os.Getenv("POMNIBOT_TEST_DATABASE_URL")
 	if url == "" {
@@ -53,6 +53,11 @@ func manualTestPool(t *testing.T) *pgxpool.Pool {
 		// Schema only: the demo sets and their fixes would fill the tables.
 		if strings.Contains(entry.Name(), "seed") || strings.Contains(entry.Name(), "demo") {
 			continue
+		}
+		if strings.HasPrefix(entry.Name(), "00008") {
+			for _, before := range beforeIdentity {
+				before(pool)
+			}
 		}
 		data, err := repository.MigrationsFS.ReadFile("migrations/" + entry.Name())
 		if err != nil {

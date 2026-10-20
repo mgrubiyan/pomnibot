@@ -49,6 +49,7 @@ type UpsertUserParams struct {
 
 // UserService defines user domain operations.
 type UserService interface {
+	AccountService
 	UpsertUser(ctx context.Context, params UpsertUserParams) error
 	EnsureUser(ctx context.Context, userID int64) error
 	GetUsersWithDueFacts(ctx context.Context, now time.Time, tz string) ([]int64, error)

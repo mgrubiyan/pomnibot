@@ -34,6 +34,7 @@ type Bot struct {
 	notes         *notes.Maker
 	botUser       *User
 	inflight      sync.WaitGroup
+	background    sync.WaitGroup
 }
 
 // NewBot creates a new Bot instance.
@@ -94,7 +95,7 @@ func (b *Bot) Start(ctx context.Context) error {
 
 	// 3. Start long polling loop
 	slog.Info("starting MAX bot long-polling loop...", "app_url", b.appURL)
-	go b.pollLoop(ctx)
+	b.background.Go(func() { b.pollLoop(ctx) })
 
 	// 4. Start review notifications scheduler
 	b.startNotificationLoop(ctx)
@@ -160,7 +161,9 @@ func (b *Bot) handleUpdate(ctx context.Context, u Update) {
 		chatID = u.ChatID
 		if u.User != nil {
 			userID = u.User.UserID
-			b.upsertUser(ctx, *u.User)
+			if _, err := b.upsertUser(ctx, *u.User); err != nil {
+				return
+			}
 		}
 	case "message_created":
 		if u.Message == nil {
@@ -172,10 +175,16 @@ func (b *Bot) handleUpdate(ctx context.Context, u Update) {
 		}
 		chatID = u.Message.Recipient.ChatID
 		userID = u.Message.Sender.UserID
-		b.upsertUser(ctx, u.Message.Sender)
+		internalID, err := b.upsertUser(ctx, u.Message.Sender)
+		if err != nil {
+			if _, sendErr := b.client.SendMessage(ctx, chatID, userID, SendMessageRequest{Text: "Не удалось загрузить профиль. Повторите сообщение чуть позже."}); sendErr != nil {
+				slog.WarnContext(ctx, "send MAX profile error", "error", sendErr)
+			}
+			return
+		}
 
 		if atts := b.getAllFileAttachments(u.Message); len(atts) > 0 {
-			b.handleFileMessage(ctx, chatID, userID, u.Message.Body.Text, atts)
+			b.handleFileMessage(ctx, chatID, userID, internalID, u.Message.Body.Text, atts)
 			return
 		}
 	default:
@@ -196,17 +205,11 @@ type attachmentInfo struct {
 	data     []byte
 }
 
-func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64, caption string, atts []attachmentInfo) {
+func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64, internalID int64, caption string, atts []attachmentInfo) {
 	log := slog.With("user_id", userID, "chat_id", chatID)
 
 	count := len(atts)
-	plural := "файлов"
-	if count == 1 {
-		plural = "файл"
-	} else if count >= 2 && count <= 4 {
-		plural = "файла"
-	}
-	statusText := fmt.Sprintf("📸 Получил %d %s. Распознаю текст... ⏳", count, plural)
+	statusText := notes.ReceivedText(count)
 
 	mid, err := b.client.SendMessage(ctx, chatID, userID, SendMessageRequest{
 		Text: statusText,
@@ -216,8 +219,8 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 	}
 
 	if chatID != 0 {
-		go func() {
-			if err := b.client.SendAction(context.Background(), chatID, "typing_on"); err != nil {
+		func() {
+			if err := b.client.SendAction(ctx, chatID, "typing_on"); err != nil {
 				log.Warn("failed to send typing action", "error", err)
 			}
 		}()
@@ -269,13 +272,13 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 		mu       sync.Mutex
 		lastEdit time.Time
 	)
-	res, err := b.notes.Make(ctx, notes.Request{UserID: userID, Caption: caption, Files: files}, notes.Progress{
+	res, err := b.notes.Make(ctx, notes.Request{UserID: internalID, Caption: caption, Files: files}, notes.Progress{
 		Queued: func(ahead int) {
-			updateStatus(fmt.Sprintf("📸 Получил %d %s. Сейчас обрабатываю другие конспекты, ты в очереди, перед тобой: %d. Начну, как только освобожусь ⏳", count, plural, ahead))
+			updateStatus(notes.QueuedText(count, ahead))
 		},
-		Reading: func() { updateStatus("📸 Твоя очередь! Распознаю текст... ⏳") },
+		Reading: func() { updateStatus(notes.TextReading) },
 		Generating: func() {
-			updateStatus("🧠 Анализирую конспект и создаю карточки... ⏳")
+			updateStatus(notes.TextGenerating)
 		},
 		Cards: func(total int) {
 			mu.Lock()
@@ -286,7 +289,7 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 			lastEdit = time.Now()
 			if mid != "" {
 				if err := b.client.EditMessage(ctx, mid, SendMessageRequest{
-					Text: fmt.Sprintf("🧠 Создаю карточки... Уже готово: %d ⏳", total),
+					Text: notes.CardsText(total),
 				}); err != nil {
 					log.Warn("failed to update progress message", "error", err)
 				}
@@ -300,13 +303,7 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 		return
 	}
 
-	shareCode := ""
-	if res.Set.ShareCode.IsSet() {
-		shareCode = res.Set.ShareCode.Value
-	}
-
-	finalText := notes.WithWarnings(fmt.Sprintf("🎉 Набор «%s» успешно создан!\nКод для совместного доступа: %s", res.Set.Title, shareCode), res.Warnings) +
-		"\n\nОткрой мини-приложение, чтобы начать тренировку:"
+	finalText := notes.SuccessText(res)
 	b.editOrSendMessageWithButtons(ctx, mid, chatID, userID, finalText)
 }
 
@@ -403,24 +400,24 @@ func extractFilename(att Attachment) string {
 	return ""
 }
 
-func (b *Bot) upsertUser(ctx context.Context, u User) {
-	if b.userService == nil {
-		return
+func (b *Bot) upsertUser(ctx context.Context, u User) (int64, error) {
+	last, username := "", ""
+	if u.LastName != nil {
+		last = *u.LastName
 	}
-	err := b.userService.UpsertUser(ctx, usecase.UpsertUserParams{
-		ID:        u.UserID,
-		FirstName: u.FirstName,
-		LastName:  u.LastName,
-		Username:  u.Username,
-		IsBot:     u.IsBot,
-	})
+	if u.Username != nil {
+		username = *u.Username
+	}
+	account, err := b.userService.ResolveIdentity(ctx, usecase.Identity{Platform: "max", ExternalID: u.UserID, FirstName: u.FirstName, LastName: last, Username: username, IsBot: u.IsBot, BotStarted: true})
 	if err != nil {
-		slog.Error("failed to upsert user on bot update",
-			"user_id", u.UserID,
-			"error", err,
-		)
+		slog.ErrorContext(ctx, "resolve MAX user", "error", err)
+		return 0, err
 	}
+	return account.User.ID, nil
 }
+
+// Wait joins polling, reminders and active note processing after cancellation.
+func (b *Bot) Wait() { b.background.Wait(); b.inflight.Wait() }
 
 func (b *Bot) buildAppButtons() [][]map[string]interface{} {
 	username := ""
@@ -553,7 +550,20 @@ func (b *Bot) SendReviewReminders(ctx context.Context) (int, error) {
 			continue
 		}
 
-		if _, err := b.client.SendMessage(ctx, 0, userID, msg); err != nil {
+		identities, err := b.userService.GetDeliveryIdentities(ctx, userID)
+		if err != nil {
+			return successCount, err
+		}
+		var externalID int64
+		for _, identity := range identities {
+			if identity.Platform == "max" {
+				externalID = identity.ExternalID
+			}
+		}
+		if externalID == 0 {
+			continue
+		}
+		if _, err := b.client.SendMessage(ctx, 0, externalID, msg); err != nil {
 			slog.WarnContext(ctx, "failed to send review reminder to user",
 				"user_id", userID,
 				"error", err,
@@ -590,7 +600,7 @@ func (b *Bot) startNotificationLoop(ctx context.Context) {
 		"tz", loc.String(),
 	)
 
-	go func() {
+	b.background.Go(func() {
 		for {
 			delay := nextRunDuration(time.Now(), targetHour, targetMinute, loc)
 			slog.InfoContext(ctx, "scheduled next review notifications dispatch",
@@ -612,5 +622,5 @@ func (b *Bot) startNotificationLoop(ctx context.Context) {
 				slog.ErrorContext(ctx, "error dispatching review reminders", "error", err)
 			}
 		}
-	}()
+	})
 }

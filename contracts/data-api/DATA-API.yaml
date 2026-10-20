@@ -241,6 +241,93 @@ checks:
             description: topic, used for stats
   timeoutMs: 5000
   repeatable: true
+- id: GetProfile
+  name: Read the saved profile and verified platform
+  method: GET
+  path: /profile
+  role: user
+  expected:
+    statusCodes:
+    - 200
+    contentType: application/json
+    requiredFields:
+    - profileComplete
+    - user
+    bodySchema:
+      type: object
+      required:
+      - user
+      - profileComplete
+      properties:
+        user:
+          type: object
+          required:
+          - id
+          - firstName
+          properties:
+            id:
+              type: integer
+              format: int64
+            firstName:
+              type: string
+            lastName:
+              type: string
+            username:
+              type: string
+        platform:
+          type: string
+          enum:
+          - max
+          - telegram
+        profileComplete:
+          type: boolean
+  timeoutMs: 5000
+  repeatable: true
+- id: PutProfile
+  name: Complete or edit a verified Telegram profile and clear bot dialogue
+  method: PUT
+  path: /profile
+  role: user
+  request:
+    headers:
+      Content-Type: application/json
+  expected:
+    statusCodes:
+    - 200
+    contentType: application/json
+    requiredFields:
+    - profileComplete
+    - user
+    bodySchema:
+      type: object
+      required:
+      - user
+      - profileComplete
+      properties:
+        user:
+          type: object
+          required:
+          - id
+          - firstName
+          properties:
+            id:
+              type: integer
+              format: int64
+            firstName:
+              type: string
+            lastName:
+              type: string
+            username:
+              type: string
+        platform:
+          type: string
+          enum:
+          - max
+          - telegram
+        profileComplete:
+          type: boolean
+  timeoutMs: 5000
+  repeatable: false
 - id: SendResults
   name: Send set/feed results
   method: POST
@@ -1051,6 +1138,7 @@ cleanup:
   expected:
     statusCodes:
     - 204
+    - 403
     - 404
     - 500
   timeoutMs: 5000
@@ -1064,6 +1152,7 @@ cleanup:
   expected:
     statusCodes:
     - 204
+    - 403
     - 404
     - 500
   timeoutMs: 5000
