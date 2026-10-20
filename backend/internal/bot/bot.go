@@ -26,6 +26,9 @@ type FileExtractor interface {
 // CardGenerator defines interface for generating cards from lecture notes.
 type CardGenerator interface {
 	Generate(ctx context.Context, doc generator.Document, onBatch func(generator.Batch)) (generator.Result, error)
+	// Acquire takes a turn at the model for one document. Bots that share a
+	// generator share its queue.
+	Acquire(ctx context.Context, onWait func(ahead int)) (release func(), err error)
 }
 
 type generatorAdapter struct {
@@ -41,6 +44,13 @@ func (a *generatorAdapter) Generate(ctx context.Context, doc generator.Document,
 		g = g.WithOnBatch(onBatch)
 	}
 	return g.Generate(ctx, doc)
+}
+
+func (a *generatorAdapter) Acquire(ctx context.Context, onWait func(ahead int)) (func(), error) {
+	if a == nil || a.gen == nil {
+		return nil, errors.New("generator is nil")
+	}
+	return a.gen.Acquire(ctx, onWait)
 }
 
 // NewGeneratorAdapter creates a CardGenerator adapter for *generator.Generator.
@@ -69,7 +79,6 @@ type Bot struct {
 	extractor     FileExtractor
 	generator     CardGenerator
 	botUser       *User
-	queue         *generator.Queue
 	inflight      sync.WaitGroup
 }
 
@@ -107,22 +116,7 @@ func NewBot(
 		setService:    setService,
 		extractor:     extractor,
 		generator:     cardGenerator,
-		queue:         generator.NewQueue(generationSlots),
 	}, nil
-}
-
-// generationSlots is how many documents are read and turned into cards at
-// once until SetQueue. Both steps call the model, and the GigaChat freemium
-// plan serves exactly one request at a time; a second one gets 429.
-const generationSlots = 1
-
-// SetQueue makes documents wait in q, usually the generator.SharedQueue of
-// the main model's API key, so they share it with everything else on that
-// key. Call it before Start.
-func (b *Bot) SetQueue(q *generator.Queue) {
-	if q != nil {
-		b.queue = q
-	}
 }
 
 // Start initializes the bot and starts the polling loop.
@@ -344,9 +338,9 @@ func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64,
 	}
 
 	// Files are downloaded before waiting, while their links are fresh;
-	// reading and generation wait for their turn at GigaChat.
+	// reading and generation wait for their turn at the model.
 	queued := false
-	release, err := b.queue.Acquire(ctx, func(ahead int) {
+	release, err := b.generator.Acquire(ctx, func(ahead int) {
 		queued = true
 		updateStatus(fmt.Sprintf("📸 Получил %d %s. Сейчас обрабатываю другие конспекты, ты в очереди, перед тобой: %d. Начну, как только освобожусь ⏳", count, plural, ahead))
 	})

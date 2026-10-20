@@ -91,6 +91,7 @@ const (
 	// DefaultConcurrency is 1 because the GigaChat freemium plan allows exactly
 	// one concurrent request; a second one gets 429.
 	DefaultConcurrency      = 1
+	DefaultSlots            = 1
 	DefaultChunkSize        = 2500
 	DefaultChunkOverlap     = 150
 	DefaultMaxFactsPerChunk = 5
@@ -100,6 +101,7 @@ const (
 // Options configure a Generator. Zero values mean defaults.
 type Options struct {
 	Concurrency      int           // parallel model calls, default 1
+	Slots            int           // documents through the model at once, default 1; see Generator.Acquire
 	ChunkSize        int           // fragment size in characters, default 2500
 	ChunkOverlap     int           // characters shared with the previous fragment, default 150, negative for none
 	MaxFactsPerChunk int           // facts per fragment, default 5; each fact gets up to 4 cards
@@ -115,6 +117,9 @@ type Options struct {
 func (o Options) withDefaults() Options {
 	if o.Concurrency <= 0 {
 		o.Concurrency = DefaultConcurrency
+	}
+	if o.Slots <= 0 {
+		o.Slots = DefaultSlots
 	}
 	if o.ChunkSize <= 0 {
 		o.ChunkSize = DefaultChunkSize

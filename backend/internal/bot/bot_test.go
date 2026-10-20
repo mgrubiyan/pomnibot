@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -104,6 +105,14 @@ func (m *mockFileExtractor) Extract(ctx context.Context, files []ingest.File) (i
 
 type mockCardGenerator struct {
 	generateFunc func(ctx context.Context, doc generator.Document, onBatch func(generator.Batch)) (generator.Result, error)
+	queueOnce    sync.Once
+	queue        *generator.Queue
+}
+
+// Acquire waits in a real one-slot queue, as the generator does by default.
+func (m *mockCardGenerator) Acquire(ctx context.Context, onWait func(ahead int)) (func(), error) {
+	m.queueOnce.Do(func() { m.queue = generator.NewQueue(1) })
+	return m.queue.Acquire(ctx, onWait)
 }
 
 func (m *mockCardGenerator) Generate(ctx context.Context, doc generator.Document, onBatch func(generator.Batch)) (generator.Result, error) {

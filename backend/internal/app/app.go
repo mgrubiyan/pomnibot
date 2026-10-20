@@ -67,7 +67,10 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	if cfg.Environment == config.Prod {
-		if err := startBot(ctx, cfg, llm, users, sets); err != nil {
+		// One generator for every bot: they share its queue, so together
+		// they stay within what the model serves at once.
+		cardGenerator := bot.NewGeneratorAdapter(generator.NewGenerator(llm.text, generator.Options{Slots: llm.slots}))
+		if err := startBot(ctx, cfg, llm, cardGenerator, users, sets); err != nil {
 			return err
 		}
 	}
@@ -87,15 +90,6 @@ type models struct {
 	text   providers.Provider // writes cards and grades answers
 	vision providers.Provider // reads photos of notes
 	slots  int                // documents turned into cards at once
-	key    string             // API key of the main model: documents on it share one queue
-}
-
-// gigaChatKey is the GigaChat credential that requests are counted against.
-func gigaChatKey(cfg gigachat.Config) string {
-	if cfg.AuthKey != "" {
-		return cfg.AuthKey
-	}
-	return cfg.ClientID + ":" + cfg.ClientSecret
 }
 
 // aiStudioSlots is how many requests AI Studio serves at once without a
@@ -121,7 +115,7 @@ func newModels(cfg config.Config) (models, error) {
 		// leaves the OCR time.
 		photos := providers.NewFallback(cfg.LLM.Cooldown,
 			providers.Backend{Name: "gigachat", Provider: gigaOne, Timeout: cfg.LLM.PrimaryTimeout})
-		return models{text: gigaOne, vision: photos, slots: 1, key: gigaChatKey(cfg.GigaChat)}, nil
+		return models{text: gigaOne, vision: photos, slots: 1}, nil
 	}
 	studio, err := aistudio.New(*cfg.AIStudio)
 	if err != nil {
@@ -130,19 +124,19 @@ func newModels(cfg config.Config) (models, error) {
 
 	first := providers.Backend{Name: "aistudio", Provider: studio}
 	second := providers.Backend{Name: "gigachat", Provider: gigaOne}
-	slots, key := aiStudioSlots, cfg.AIStudio.APIKey
+	slots := aiStudioSlots
 	if cfg.LLM.Primary == config.PrimaryGigaChat {
-		first, second, slots, key = second, first, 1, gigaChatKey(cfg.GigaChat)
+		first, second, slots = second, first, 1
 	}
 	first.Timeout = cfg.LLM.PrimaryTimeout
 	chain := providers.NewFallback(cfg.LLM.Cooldown, first, second)
 
 	slog.Info("models", "primary", cfg.LLM.Primary, "aistudio_model", cfg.AIStudio.Model,
 		"primary_timeout", cfg.LLM.PrimaryTimeout, "cooldown", cfg.LLM.Cooldown, "documents_at_once", slots)
-	return models{text: chain, vision: chain, slots: slots, key: key}, nil
+	return models{text: chain, vision: chain, slots: slots}, nil
 }
 
-func startBot(ctx context.Context, cfg config.Config, llm models, users usecase.UserService, sets usecase.SetService) error {
+func startBot(ctx context.Context, cfg config.Config, llm models, cardGenerator bot.CardGenerator, users usecase.UserService, sets usecase.SetService) error {
 	client, err := bot.NewClient(cfg.BotToken, cfg.MaxAPIURL, cfg.MaxInsecureSkipVerify)
 	if err != nil {
 		return fmt.Errorf("initialize MAX client: %w", err)
@@ -155,12 +149,10 @@ func startBot(ctx context.Context, cfg config.Config, llm models, users usecase.
 	if err != nil {
 		return fmt.Errorf("initialize extractor: %w", err)
 	}
-	cardGenerator := bot.NewGeneratorAdapter(generator.NewGenerator(llm.text, generator.Options{}))
 	runner, err := bot.NewBot(client, cfg.AppURL, users, sets, extractor, cardGenerator, cfg.Notifications)
 	if err != nil {
 		return fmt.Errorf("initialize MAX bot: %w", err)
 	}
-	runner.SetQueue(generator.SharedQueue(llm.key, llm.slots))
 	if err := runner.Start(ctx); err != nil {
 		return fmt.Errorf("start MAX bot: %w", err)
 	}

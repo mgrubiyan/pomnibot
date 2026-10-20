@@ -149,8 +149,8 @@ func TestBot_DocumentInProgressDoesNotBlockOthers(t *testing.T) {
 	}
 }
 
-// Two bots on the same API key queue into one line: the second document
-// waits for the first even though another bot took it.
+// Bots handed one generator queue into one line: the second document waits
+// for the first even though another bot took it.
 func TestBot_SharedQueueAcrossBots(t *testing.T) {
 	server := newRecordingServer(t)
 	client, err := NewClient("test-token", server.URL)
@@ -175,7 +175,6 @@ func TestBot_SharedQueueAcrossBots(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewBot: %v", err)
 		}
-		b.SetQueue(generator.SharedQueue(t.Name(), 1))
 		bots[i] = b
 	}
 	ctx := context.Background()
@@ -187,7 +186,7 @@ func TestBot_SharedQueueAcrossBots(t *testing.T) {
 
 	select {
 	case <-started:
-		t.Fatal("second bot started a document while the first held the key's slot")
+		t.Fatal("second bot started a document while the first held the slot")
 	case <-time.After(50 * time.Millisecond):
 	}
 

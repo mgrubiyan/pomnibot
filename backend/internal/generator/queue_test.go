@@ -110,16 +110,15 @@ func TestNewQueue_Slots(t *testing.T) {
 	}
 }
 
-func TestSharedQueue_OnePerKey(t *testing.T) {
-	q := SharedQueue(t.Name()+"/a", 2)
-	if again := SharedQueue(t.Name()+"/a", 2); again != q {
-		t.Error("same key: got another queue")
+func TestGenerator_Queue(t *testing.T) {
+	g := NewGenerator(nil, Options{Slots: 2})
+	if got := cap(g.queue.slots); got != 2 {
+		t.Errorf("Slots 2: slots = %d, want 2", got)
 	}
-	if other := SharedQueue(t.Name()+"/b", 2); other == q {
-		t.Error("different keys share a queue")
+	if g.WithOnBatch(func(Batch) {}).queue != g.queue {
+		t.Error("WithOnBatch copy has its own queue, want the generator's")
 	}
-	// The first call sets the size.
-	if again := SharedQueue(t.Name()+"/a", 5); again != q || cap(again.slots) != 2 {
-		t.Errorf("same key with another size: slots = %d, want the existing queue with 2", cap(again.slots))
+	if got := cap(NewGenerator(nil, Options{}).queue.slots); got != DefaultSlots {
+		t.Errorf("default slots = %d, want %d", got, DefaultSlots)
 	}
 }

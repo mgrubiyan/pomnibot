@@ -2,9 +2,6 @@ package generator
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"log/slog"
 	"sync"
 )
 
@@ -60,31 +57,4 @@ func (q *Queue) Acquire(ctx context.Context, onWait func(ahead int)) (release fu
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
-}
-
-var (
-	sharedMu sync.Mutex
-	shared   = map[string]*Queue{}
-)
-
-// SharedQueue returns the queue of an API key. The model limits requests per
-// key, so every generator on the same key waits in the same line, whoever
-// started it. The first call sets the number of slots; a later call with
-// another size gets the existing queue. The key is kept only as a hash.
-func SharedQueue(apiKey string, size int) *Queue {
-	sum := sha256.Sum256([]byte(apiKey))
-	id := hex.EncodeToString(sum[:])
-
-	sharedMu.Lock()
-	defer sharedMu.Unlock()
-	if q, ok := shared[id]; ok {
-		if want := max(size, 1); want != cap(q.slots) {
-			slog.Warn("generation queue: key already has another size",
-				"key", id[:8], "slots", cap(q.slots), "asked", want)
-		}
-		return q
-	}
-	q := NewQueue(size)
-	shared[id] = q
-	return q
 }
