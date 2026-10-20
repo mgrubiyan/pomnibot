@@ -111,25 +111,32 @@ func (q *Queries) CreateCardTableColumn(ctx context.Context, arg CreateCardTable
 }
 
 const createCardTableItem = `-- name: CreateCardTableItem :one
-INSERT INTO card_table_items (card_id, item_text, column_name)
-VALUES ($1, $2, $3)
-RETURNING id, card_id, item_text, column_name
+INSERT INTO card_table_items (card_id, item_text, column_name, position)
+VALUES ($1, $2, $3, $4)
+RETURNING id, card_id, item_text, column_name, position
 `
 
 type CreateCardTableItemParams struct {
 	CardID     pgtype.UUID `json:"card_id"`
 	ItemText   string      `json:"item_text"`
 	ColumnName string      `json:"column_name"`
+	Position   int32       `json:"position"`
 }
 
 func (q *Queries) CreateCardTableItem(ctx context.Context, arg CreateCardTableItemParams) (CardTableItem, error) {
-	row := q.db.QueryRow(ctx, createCardTableItem, arg.CardID, arg.ItemText, arg.ColumnName)
+	row := q.db.QueryRow(ctx, createCardTableItem,
+		arg.CardID,
+		arg.ItemText,
+		arg.ColumnName,
+		arg.Position,
+	)
 	var i CardTableItem
 	err := row.Scan(
 		&i.ID,
 		&i.CardID,
 		&i.ItemText,
 		&i.ColumnName,
+		&i.Position,
 	)
 	return i, err
 }
@@ -387,9 +394,10 @@ func (q *Queries) GetCardTableColumns(ctx context.Context, cardID pgtype.UUID) (
 }
 
 const getCardTableItems = `-- name: GetCardTableItems :many
-SELECT id, card_id, item_text, column_name
+SELECT id, card_id, item_text, column_name, position
 FROM card_table_items
 WHERE card_id = $1
+ORDER BY position, id
 `
 
 func (q *Queries) GetCardTableItems(ctx context.Context, cardID pgtype.UUID) ([]CardTableItem, error) {
@@ -406,6 +414,7 @@ func (q *Queries) GetCardTableItems(ctx context.Context, cardID pgtype.UUID) ([]
 			&i.CardID,
 			&i.ItemText,
 			&i.ColumnName,
+			&i.Position,
 		); err != nil {
 			return nil, err
 		}

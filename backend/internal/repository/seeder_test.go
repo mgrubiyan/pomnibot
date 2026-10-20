@@ -232,6 +232,11 @@ func TestSaveGeneratedSet_TableCard(t *testing.T) {
 	if len(tq.createdItems) != 4 || tq.createdItems[0].ItemText != "грибы" || tq.createdItems[0].ColumnName != "Эукариоты" {
 		t.Errorf("items = %+v, want all four in the order given", tq.createdItems)
 	}
+	for i, item := range tq.createdItems {
+		if item.Position != int32(i) {
+			t.Errorf("item %d position = %d: the feed must show them in the order given", i, item.Position)
+		}
+	}
 	if tq.createdCards[0].AnswerText.Valid {
 		t.Errorf("answer = %+v, want none: the layout is the answer", tq.createdCards[0].AnswerText)
 	}

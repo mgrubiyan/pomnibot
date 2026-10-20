@@ -120,8 +120,8 @@ func insertManualCard(ctx context.Context, q db.Querier, setID pgtype.UUID, req 
 				return uuid.Nil, err
 			}
 		}
-		for _, v := range req.Table.Value.Items {
-			if _, err := q.CreateCardTableItem(ctx, db.CreateCardTableItemParams{CardID: pgID, ItemText: v.Text, ColumnName: v.Column}); err != nil {
+		for i, v := range req.Table.Value.Items {
+			if _, err := q.CreateCardTableItem(ctx, db.CreateCardTableItemParams{CardID: pgID, ItemText: v.Text, ColumnName: v.Column, Position: int32(i)}); err != nil {
 				return uuid.Nil, err
 			}
 		}

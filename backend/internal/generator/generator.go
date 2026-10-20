@@ -281,7 +281,9 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, examples nam
 				"attempt", attempt+1, "err", err, "answer", clip(resp.Content, logAnswerLength))
 			continue
 		}
-		log.Debug("cards: model answer", "answer", string(resp.Content))
+		if log.Enabled(ctx, slog.LevelDebug) {
+			log.Debug("cards: model answer", "answer", string(resp.Content))
+		}
 		parsed, r.droppedInvalid, answered = facts, invalid, true
 		break
 	}
@@ -308,7 +310,7 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, examples nam
 			continue
 		}
 		f.Start, f.End = r.chunk.Start+start, r.chunk.Start+end
-		f.ID = factID(doc.ID, f.Quote)
+		f.ID = factID(doc.ID, factKey(f))
 
 		kept := f.Cards[:0]
 		for _, c := range f.Cards {
@@ -320,7 +322,9 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, examples nam
 				}
 				c.Table = shuffleTable(labelPipeItems(c.Table, f.Quote), f.ID)
 			}
-			if answerChecked(c.Kind) && !answerSupported(c, f.Quote) || c.Kind == cards.KindFlip && namedIn(c.Answer, c.Question) {
+			if answerChecked(c.Kind) && !answerSupported(c, f.Quote) ||
+				c.Kind == cards.KindFlip && (namedIn(c.Answer, c.Question) || !claimSupported(c.Answer, f.Quote)) ||
+				c.Kind == cards.KindBoolean && !claimSupported(trueClaim(c), f.Quote) {
 				r.droppedUnsupported++
 				log.Info("cards: answer not in the quote or given in the question",
 					"kind", c.Kind, "question", c.Question, "answer", c.Answer)

@@ -107,13 +107,12 @@ func isInvisible(r rune) bool {
 // isBullet reports list markers, which slides are full of and the model
 // leaves out of its quotes. The middle dot is not one: "кг·м/с²".
 func isBullet(r rune) bool {
-	switch r {
-	case '▶', '►', '▸', '▹', '•', '◦', '▪', '▫', '■', '□', '●', '○', '‣', '∙', '➢', '➤',
-		'\uF0B7', '\uF0A7', '\uF076': // Symbol and Wingdings bullets of Word PDFs
-		return true
-	}
-	return false
+	return strings.ContainsRune(bullets, r)
 }
+
+// bullets mark list items; the last three are Symbol and Wingdings bullets of
+// Word PDFs.
+const bullets = "▶►▸▹•◦▪▫■□●○‣∙➢➤\uF0B7\uF0A7\uF076"
 
 // isSign reports signs of formulas and brackets: spacing around them varies
 // between a reading of a formula and its quote, "cos (180° - α)" and
@@ -199,6 +198,9 @@ func foldWith(s string, breaks bool) folded {
 			lineBreak = lineBreak || r == '\n'
 			continue
 		case isDash(r):
+			if breaks && lineBreak && spaceFrom >= 0 && b.Len() > 0 {
+				emit('\n', spaceFrom, spaceTo) // «- ядро» opens a line
+			}
 			spaceFrom = -1
 			emit('-', from, to)
 			glued = true
@@ -310,10 +312,12 @@ func locateQuote(fragment, quote string) (start, end int, ok bool) {
 		return start, end, true
 	}
 
-	fb := foldBreaks(fragment)
-	if i, j, ok := matchAcrossBreaks(fb.s, q); ok {
-		start, end = spanOf(fragment, fb, i, j)
-		return start, end, true
+	if strings.Contains(fragment, "\n") {
+		fb := foldBreaks(fragment)
+		if i, j, ok := matchAcrossBreaks(fb.s, q); ok {
+			start, end = spanOf(fragment, fb, i, j)
+			return start, end, true
+		}
 	}
 
 	pieces := quotePieces(q)
@@ -490,6 +494,9 @@ func matchAcrossBreaks(s, q string) (start, end int, ok bool) {
 			switch {
 			case si < len(s) && s[si] == '\n':
 				si++
+				if m := listMarkerLen(s[si:]); m > 0 && !strings.HasPrefix(q[qi:], s[si:si+m]) {
+					si += m // «- ядро», «1. ядро» copied as «ядро»
+				}
 				if strings.HasPrefix(q[qi:], "...") {
 					qi += 3 // «Органоиды клетки... Двумембранные»
 				} else if pause(q, qi) {
@@ -528,6 +535,22 @@ func matchAcrossBreaks(s, q string) (start, end int, ok bool) {
 		i += size
 	}
 	return 0, 0, false
+}
+
+// listMarkerLen returns the length of a folded list marker s starts with: a
+// dash of «- ядро», or «1. » of a numbered item. Bullets fold to spaces.
+func listMarkerLen(s string) int {
+	if strings.HasPrefix(s, "-") {
+		return 1
+	}
+	i := 0
+	for i < len(s) && i < 2 && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	if i > 0 && i+1 < len(s) && (s[i] == '.' || s[i] == ')') && s[i+1] == ' ' {
+		return i + 2
+	}
+	return 0
 }
 
 func isWordRune(r rune) bool {

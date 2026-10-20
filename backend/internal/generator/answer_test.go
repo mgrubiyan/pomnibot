@@ -92,3 +92,30 @@ func TestAnswerSupportedForCode(t *testing.T) {
 		}
 	}
 }
+
+// A flip answer and a true claim rephrase the quote, so most of their words
+// come from it. One that shares few words with it is made up («denaturation»
+// of «Денатурация») or belongs to another fact: the card would show a quote
+// that does not prove it.
+func TestClaimSupported(t *testing.T) {
+	const metals = "Простые вещества делят на металлы и неметаллы. К металлам относятся железо, медь, натрий и алюминий."
+	const row = "Число делений | одно | два"
+	for _, tc := range []struct {
+		name, claim, quote string
+		want               bool
+	}{
+		{"a restatement", "К металлам относятся железо и медь.", metals, true},
+		{"a paraphrase", "Железо и алюминий — металлы.", metals, true},
+		{"a row of a table, headers from the question", "При митозе происходит одно деление, а при мейозе — два.", row, true},
+		{"made up", "denaturation", "Денатурация", false},
+		{"another fact", "Металлы хорошо проводят электрический ток и тепло.", metals, false},
+		{"another fragment", "Кинетической энергией обладает движущееся тело.", metals, false},
+		{"no content words", "Это.", metals, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := claimSupported(tc.claim, tc.quote); got != tc.want {
+				t.Errorf("claimSupported(%q) = %v, want %v", tc.claim, got, tc.want)
+			}
+		})
+	}
+}

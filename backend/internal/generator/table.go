@@ -43,6 +43,16 @@ const (
 	fieldColumn  = "column"
 )
 
+// factKey is what a fact's id is derived from: its quote, and for a table
+// its columns too. A table sorting the terms of a sentence another fact
+// quotes is a fact of its own, and so is a second table of one passage.
+func factKey(f modelFact) string {
+	if len(f.Cards) == 1 && f.Cards[0].Kind == cards.KindTable {
+		return "table\x00" + strings.Join(f.Cards[0].Table.Columns, "\x00") + "\x00" + f.Quote
+	}
+	return f.Quote
+}
+
 // parseTable reads {"quote", "topic", "name", "question", "explanation",
 // "columns", "items": [{"text", "column"}]} as a fact with one table card.
 // A table out of size, with a term in no column or a column with no terms,
@@ -112,12 +122,13 @@ func parseTable(data json.RawMessage) (modelFact, bool) {
 
 // tableGrounded reports whether the quote puts every term of t in its
 // column. The quote is cut into lines, a line into sentences, a sentence into
-// clauses at commas. A term belongs to the one column its clause names;
-// a clause naming none continues the list of the nearest clause before it in
-// the sentence that names one, or else of the nearest one after it:
+// clauses at commas. A term belongs to the one column its clause names. A
+// clause naming none is part of a list: of the clause before it if that one
+// opens with its column, or of the clause after it if that one closes with
+// its column:
 //
 //	К прокариотам относятся бактерии и археи, к эукариотам — растения, животные и грибы.
-//	Бактерии, археи — прокариоты, растения и грибы — эукариоты.
+//	Бактерии, археи — прокариоты, растения, грибы — эукариоты.
 //	Прокариоты: бактерии, археи
 //
 // A list item («• ядро», «1. ядро») naming no column belongs to the line
@@ -126,7 +137,9 @@ func parseTable(data json.RawMessage) (modelFact, bool) {
 // its own may be a heading of a group the table left out.
 //
 // A clause that negates or sets a term apart («Вирусы не относятся к
-// прокариотам», «в отличие от грибов») puts it in no column. A clause naming
+// прокариотам», «в отличие от грибов») puts it in no column, and so does one
+// whose column comes from a negated clause or heading («К эукариотам не
+// относятся бактерии, археи»). A clause naming
 // two columns tells nothing, and neither does a table read from a PDF row by
 // row, where a header line names the columns and the values follow on lines
 // of their own: such tables are dropped.
@@ -155,12 +168,14 @@ func tableGrounded(t *cards.Table, quote string) bool {
 	type clause struct {
 		text   string
 		column string // "" for none, ambiguous for two or more
+		leads  bool   // the column is the clause's first word: «к эукариотам — растения»
 	}
 	type sentence struct {
 		clauses []clause
 		line    int
 	}
 	type line struct {
+		text   string
 		item   bool // a list item
 		column string
 	}
@@ -168,16 +183,28 @@ func tableGrounded(t *cards.Table, quote string) bool {
 	var sentences []sentence
 	for i, raw := range strings.Split(quote, "\n") {
 		body, item := listItem(raw)
-		lines = append(lines, line{item: item, column: columnIn(body)})
+		lines = append(lines, line{text: body, item: item, column: columnIn(body)})
 		for _, s := range splitSentences(body) {
 			st := sentence{line: i}
 			for part := range strings.SplitSeq(s, ",") {
-				st.clauses = append(st.clauses, clause{text: part, column: columnIn(part)})
+				c := clause{text: part, column: columnIn(part)}
+				if c.column != "" && c.column != ambiguous {
+					c.leads = leadsWith(part, c.column)
+				}
+				st.clauses = append(st.clauses, c)
 			}
 			sentences = append(sentences, st)
 		}
 	}
 
+	// from returns the column of a clause or a heading a term takes it from,
+	// or "" if that one negates it.
+	from := func(text, column string) string {
+		if negated(text) {
+			return ""
+		}
+		return column
+	}
 	columnOf := func(item string, in func(s, text string) bool) string {
 		for _, s := range sentences {
 			cl := s.clauses
@@ -191,15 +218,24 @@ func tableGrounded(t *cards.Table, quote string) bool {
 				if c.column != "" {
 					return c.column
 				}
-				for j := i - 1; j >= 0; j-- {
+				prev, next := -1, -1
+				for j := i - 1; j >= 0 && prev < 0; j-- {
 					if cl[j].column != "" {
-						return cl[j].column
+						prev = j
 					}
 				}
-				for j := i + 1; j < len(cl); j++ {
+				for j := i + 1; j < len(cl) && next < 0; j++ {
 					if cl[j].column != "" {
-						return cl[j].column
+						next = j
 					}
+				}
+				switch {
+				case prev >= 0 && cl[prev].leads:
+					return from(cl[prev].text, cl[prev].column)
+				case next >= 0 && !cl[next].leads:
+					return from(cl[next].text, cl[next].column)
+				case prev >= 0 || next >= 0:
+					return "" // a list that neither clause opens or closes
 				}
 				if !lines[s.line].item || lines[s.line].column != "" {
 					return ""
@@ -211,7 +247,7 @@ func tableGrounded(t *cards.Table, quote string) bool {
 				if j < 0 {
 					return ""
 				}
-				return lines[j].column
+				return from(lines[j].text, lines[j].column)
 			}
 		}
 		return ""
@@ -341,6 +377,17 @@ func listItem(line string) (string, bool) {
 		return line[m[1]:], true
 	}
 	return line, false
+}
+
+// leadsWith reports whether the first content word of clause is a word of
+// column: «к эукариотам — растения» opens a list of эукариоты, «археи —
+// прокариоты» closes one.
+func leadsWith(clause, column string) bool {
+	words := contentWords(clause)
+	if len(words) == 0 {
+		return false
+	}
+	return slices.ContainsFunc(contentWords(column), func(w []rune) bool { return sameWord(w, words[0]) })
 }
 
 // wordsWithin reports whether every content word of s occurs in text as it

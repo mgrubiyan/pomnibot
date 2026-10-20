@@ -55,6 +55,7 @@ type CardTableItem struct {
 	CardID     pgtype.UUID `json:"card_id"`
 	ItemText   string      `json:"item_text"`
 	ColumnName string      `json:"column_name"`
+	Position   int32       `json:"position"`
 }
 
 type Fact struct {

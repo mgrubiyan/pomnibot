@@ -137,11 +137,12 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title str
 					slog.ErrorContext(ctx, "failed to create card table column", "error", err)
 				}
 			}
-			for _, item := range c.Table.Items {
+			for idx, item := range c.Table.Items {
 				if _, err := q.CreateCardTableItem(ctx, db.CreateCardTableItemParams{
 					CardID:     createdCard.ID,
 					ItemText:   item.Text,
 					ColumnName: item.Column,
+					Position:   int32(idx), // the generator's order, mixed so as not to give the columns away
 				}); err != nil {
 					slog.ErrorContext(ctx, "failed to create card table item", "error", err)
 				}

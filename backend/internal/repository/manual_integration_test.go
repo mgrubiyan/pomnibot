@@ -50,8 +50,9 @@ func manualTestPool(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	for _, entry := range entries {
-		if entry.Name() >= "00004" {
-			break
+		// Schema only: the demo sets and their fixes would fill the tables.
+		if strings.Contains(entry.Name(), "seed") || strings.Contains(entry.Name(), "demo") {
+			continue
 		}
 		data, err := repository.MigrationsFS.ReadFile("migrations/" + entry.Name())
 		if err != nil {

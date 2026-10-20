@@ -86,6 +86,15 @@ func TestFindQuoteIgnoresPunctuationAtJoinedLines(t *testing.T) {
 	if got, ok := findQuote(fragment, quote); !ok || got != want {
 		t.Errorf("findQuote(an ellipsis at a break) = %q, %v; want %q", got, ok, want)
 	}
+	// Dashes and numbers mark items as bullets do.
+	for _, frag := range []string{
+		"Органоиды клетки\nДвумембранные\n- ядро\n- митохондрии",
+		"Органоиды клетки\nДвумембранные\n1. ядро\n2. митохондрии",
+	} {
+		if got, ok := findQuote(frag, "Органоиды клетки: Двумембранные: ядро, митохондрии"); !ok || got != frag {
+			t.Errorf("findQuote(%q) = %q, %v; want the whole slide", frag, got, ok)
+		}
+	}
 	// Inside a line punctuation still counts: a period the notes do not
 	// have makes two claims of one.
 	if got, ok := findQuote("Митоз делит ядро клетки на два одинаковых ядра без изменения набора", "Митоз делит ядро. Клетки на два одинаковых ядра без изменения набора"); ok {

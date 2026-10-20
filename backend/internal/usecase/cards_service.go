@@ -158,6 +158,7 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID int64, cardID u
 				CardID:     pgCardID,
 				ItemText:   item.Text,
 				ColumnName: item.Column,
+				Position:   int32(idx),
 			}); err != nil {
 				return nil, fmt.Errorf("create card table item %d: %w", idx, err)
 			}
