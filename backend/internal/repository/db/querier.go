@@ -27,18 +27,25 @@ type Querier interface {
 	GetCardByID(ctx context.Context, arg GetCardByIDParams) (GetCardByIDRow, error)
 	GetCardByIDForAuthor(ctx context.Context, arg GetCardByIDForAuthorParams) (GetCardByIDForAuthorRow, error)
 	GetCardOptions(ctx context.Context, cardID pgtype.UUID) ([]CardOption, error)
+	GetCardOptionsBatch(ctx context.Context, cardIds []pgtype.UUID) ([]CardOption, error)
 	GetCardTableColumns(ctx context.Context, cardID pgtype.UUID) ([]CardTableColumn, error)
+	GetCardTableColumnsBatch(ctx context.Context, cardIds []pgtype.UUID) ([]CardTableColumn, error)
 	GetCardTableItems(ctx context.Context, cardID pgtype.UUID) ([]CardTableItem, error)
+	GetCardTableItemsBatch(ctx context.Context, cardIds []pgtype.UUID) ([]CardTableItem, error)
 	GetCardsBySetID(ctx context.Context, arg GetCardsBySetIDParams) ([]GetCardsBySetIDRow, error)
 	GetFactsBySetID(ctx context.Context, setID pgtype.UUID) ([]GetFactsBySetIDRow, error)
 	GetFeedCardsForUser(ctx context.Context, userID int64) ([]GetFeedCardsForUserRow, error)
 	GetNextReviewDateForUser(ctx context.Context, userID int64) (pgtype.Timestamptz, error)
 	GetSetByID(ctx context.Context, arg GetSetByIDParams) (GetSetByIDRow, error)
 	GetSetByShareCode(ctx context.Context, arg GetSetByShareCodeParams) (GetSetByShareCodeRow, error)
+	// Aggregate only existing progress before joining participants. Missing facts
+	// contribute the default 700 without expanding every participant into every fact.
 	GetSetLeaderboard(ctx context.Context, setID pgtype.UUID) ([]GetSetLeaderboardRow, error)
 	GetSetPlan(ctx context.Context, arg GetSetPlanParams) ([]GetSetPlanRow, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserFactProgress(ctx context.Context, arg GetUserFactProgressParams) (UserFactProgress, error)
+	// Aggregate only existing progress before joining participants. Missing facts
+	// contribute the default 700 without expanding every participant into every fact.
 	GetUserSetRating(ctx context.Context, arg GetUserSetRatingParams) (GetUserSetRatingRow, error)
 	GetUserSets(ctx context.Context, userID int64) ([]GetUserSetsRow, error)
 	GetUsersWithDueFacts(ctx context.Context, arg GetUsersWithDueFactsParams) ([]int64, error)

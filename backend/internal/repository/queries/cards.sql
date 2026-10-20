@@ -210,3 +210,18 @@ SELECT
     updated_at
 FROM ranked_cards
 WHERE rank = 1;
+
+-- name: GetCardOptionsBatch :many
+SELECT * FROM card_options
+WHERE card_id = ANY(sqlc.arg(card_ids)::UUID[])
+ORDER BY card_id, position;
+
+-- name: GetCardTableColumnsBatch :many
+SELECT * FROM card_table_columns
+WHERE card_id = ANY(sqlc.arg(card_ids)::UUID[])
+ORDER BY card_id, position;
+
+-- name: GetCardTableItemsBatch :many
+SELECT * FROM card_table_items
+WHERE card_id = ANY(sqlc.arg(card_ids)::UUID[])
+ORDER BY card_id, position, id;

@@ -99,9 +99,25 @@ func (s *homescreenServiceImpl) GetFeedQuestions(ctx context.Context, userID int
 		return nil, fmt.Errorf("get feed cards for user: %w", err)
 	}
 
+	var choiceIDs, tableIDs []pgtype.UUID
+	for _, row := range rows {
+		switch row.Kind {
+		case "choice":
+			choiceIDs = append(choiceIDs, row.ID)
+		case "table":
+			tableIDs = append(tableIDs, row.ID)
+		}
+	}
+	details, err := loadCardDetails(ctx, s.querier, choiceIDs, tableIDs)
+	if err != nil {
+		return nil, err
+	}
+	builder := *s
+	builder.querier = details
+
 	cards := make([]contracts.Card, 0, len(rows))
 	for _, r := range rows {
-		c, err := s.buildFeedCard(ctx, r)
+		c, err := builder.buildFeedCard(ctx, r)
 		if err != nil {
 			return nil, err
 		}

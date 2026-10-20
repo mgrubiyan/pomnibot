@@ -217,19 +217,23 @@ participants AS (
     UNION
     SELECT s.author_id AS user_id FROM sets s WHERE s.id = $1::UUID
 ),
+progress_by_user AS (
+    SELECT ufp.user_id, SUM(ufp.elo::BIGINT - 700)::FLOAT AS elo_delta
+    FROM user_fact_progress ufp
+    JOIN set_facts sf ON sf.id = ufp.fact_id
+    GROUP BY ufp.user_id
+),
 user_scores AS (
     SELECT
         p.user_id,
         fc.total AS facts_count,
         CASE
             WHEN fc.total = 0 THEN 0::FLOAT
-            ELSE COALESCE(SUM(COALESCE(ufp.elo, 700)), 0)::FLOAT / fc.total
+            ELSE 700.0 + COALESCE(pu.elo_delta, 0) / fc.total
         END AS avg_elo
     FROM participants p
     CROSS JOIN facts_count fc
-    LEFT JOIN set_facts sf ON TRUE
-    LEFT JOIN user_fact_progress ufp ON ufp.user_id = p.user_id AND ufp.fact_id = sf.id
-    GROUP BY p.user_id, fc.total
+    LEFT JOIN progress_by_user pu ON pu.user_id = p.user_id
 ),
 ranked AS (
     SELECT
@@ -261,6 +265,8 @@ type GetSetLeaderboardRow struct {
 	Rank       int32       `json:"rank"`
 }
 
+// Aggregate only existing progress before joining participants. Missing facts
+// contribute the default 700 without expanding every participant into every fact.
 func (q *Queries) GetSetLeaderboard(ctx context.Context, setID pgtype.UUID) ([]GetSetLeaderboardRow, error) {
 	rows, err := q.db.Query(ctx, getSetLeaderboard, setID)
 	if err != nil {
@@ -302,19 +308,23 @@ participants AS (
     UNION
     SELECT $1::BIGINT AS user_id
 ),
+progress_by_user AS (
+    SELECT ufp.user_id, SUM(ufp.elo::BIGINT - 700)::FLOAT AS elo_delta
+    FROM user_fact_progress ufp
+    JOIN set_facts sf ON sf.id = ufp.fact_id
+    GROUP BY ufp.user_id
+),
 user_scores AS (
     SELECT
         p.user_id,
         fc.total AS facts_count,
         CASE
             WHEN fc.total = 0 THEN 0::FLOAT
-            ELSE COALESCE(SUM(COALESCE(ufp.elo, 700)), 0)::FLOAT / fc.total
+            ELSE 700.0 + COALESCE(pu.elo_delta, 0) / fc.total
         END AS avg_elo
     FROM participants p
     CROSS JOIN facts_count fc
-    LEFT JOIN set_facts sf ON TRUE
-    LEFT JOIN user_fact_progress ufp ON ufp.user_id = p.user_id AND ufp.fact_id = sf.id
-    GROUP BY p.user_id, fc.total
+    LEFT JOIN progress_by_user pu ON pu.user_id = p.user_id
 ),
 ranked AS (
     SELECT
@@ -344,6 +354,8 @@ type GetUserSetRatingRow struct {
 	Rank       int32 `json:"rank"`
 }
 
+// Aggregate only existing progress before joining participants. Missing facts
+// contribute the default 700 without expanding every participant into every fact.
 func (q *Queries) GetUserSetRating(ctx context.Context, arg GetUserSetRatingParams) (GetUserSetRatingRow, error) {
 	row := q.db.QueryRow(ctx, getUserSetRating, arg.UserID, arg.SetID)
 	var i GetUserSetRatingRow

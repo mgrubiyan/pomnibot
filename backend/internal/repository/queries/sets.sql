@@ -112,19 +112,25 @@ participants AS (
     UNION
     SELECT s.author_id AS user_id FROM sets s WHERE s.id = sqlc.arg('set_id')::UUID
 ),
+-- Aggregate only existing progress before joining participants. Missing facts
+-- contribute the default 700 without expanding every participant into every fact.
+progress_by_user AS (
+    SELECT ufp.user_id, SUM(ufp.elo::BIGINT - 700)::FLOAT AS elo_delta
+    FROM user_fact_progress ufp
+    JOIN set_facts sf ON sf.id = ufp.fact_id
+    GROUP BY ufp.user_id
+),
 user_scores AS (
     SELECT
         p.user_id,
         fc.total AS facts_count,
         CASE
             WHEN fc.total = 0 THEN 0::FLOAT
-            ELSE COALESCE(SUM(COALESCE(ufp.elo, 700)), 0)::FLOAT / fc.total
+            ELSE 700.0 + COALESCE(pu.elo_delta, 0) / fc.total
         END AS avg_elo
     FROM participants p
     CROSS JOIN facts_count fc
-    LEFT JOIN set_facts sf ON TRUE
-    LEFT JOIN user_fact_progress ufp ON ufp.user_id = p.user_id AND ufp.fact_id = sf.id
-    GROUP BY p.user_id, fc.total
+    LEFT JOIN progress_by_user pu ON pu.user_id = p.user_id
 ),
 ranked AS (
     SELECT
@@ -160,19 +166,25 @@ participants AS (
     UNION
     SELECT sqlc.arg('user_id')::BIGINT AS user_id
 ),
+-- Aggregate only existing progress before joining participants. Missing facts
+-- contribute the default 700 without expanding every participant into every fact.
+progress_by_user AS (
+    SELECT ufp.user_id, SUM(ufp.elo::BIGINT - 700)::FLOAT AS elo_delta
+    FROM user_fact_progress ufp
+    JOIN set_facts sf ON sf.id = ufp.fact_id
+    GROUP BY ufp.user_id
+),
 user_scores AS (
     SELECT
         p.user_id,
         fc.total AS facts_count,
         CASE
             WHEN fc.total = 0 THEN 0::FLOAT
-            ELSE COALESCE(SUM(COALESCE(ufp.elo, 700)), 0)::FLOAT / fc.total
+            ELSE 700.0 + COALESCE(pu.elo_delta, 0) / fc.total
         END AS avg_elo
     FROM participants p
     CROSS JOIN facts_count fc
-    LEFT JOIN set_facts sf ON TRUE
-    LEFT JOIN user_fact_progress ufp ON ufp.user_id = p.user_id AND ufp.fact_id = sf.id
-    GROUP BY p.user_id, fc.total
+    LEFT JOIN progress_by_user pu ON pu.user_id = p.user_id
 ),
 ranked AS (
     SELECT

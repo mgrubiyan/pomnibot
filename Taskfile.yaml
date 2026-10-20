@@ -82,6 +82,12 @@ tasks:
     cmds:
       - task: backend:lint
 
+  perf:
+    desc: 'Measure API capacity using disposable PostgreSQL 17 (Docker required)'
+    dir: backend
+    cmds:
+      - go run -tags perf ./cmd/perf {{.CLI_ARGS}}
+
   test:
     desc: 'Запуск тестов бэкенда'
     cmds:

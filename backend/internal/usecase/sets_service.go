@@ -141,9 +141,25 @@ func (s *setServiceImpl) GetCardsBySetID(ctx context.Context, userID int64, setI
 		return nil, fmt.Errorf("get cards by set id: %w", err)
 	}
 
+	var choiceIDs, tableIDs []pgtype.UUID
+	for _, row := range rows {
+		switch row.Kind {
+		case "choice":
+			choiceIDs = append(choiceIDs, row.ID)
+		case "table":
+			tableIDs = append(tableIDs, row.ID)
+		}
+	}
+	details, err := loadCardDetails(ctx, s.querier, choiceIDs, tableIDs)
+	if err != nil {
+		return nil, err
+	}
+	builder := *s
+	builder.querier = details
+
 	cards := make([]contracts.Card, 0, len(rows))
 	for _, r := range rows {
-		c, err := s.buildCard(ctx, r.ID, r.SetID, r.Kind, r.Question, r.AnswerText, r.Explanation, r.SourceQuote, r.SourceRef, r.Topic)
+		c, err := builder.buildCard(ctx, r.ID, r.SetID, r.Kind, r.Question, r.AnswerText, r.Explanation, r.SourceQuote, r.SourceRef, r.Topic)
 		if err != nil {
 			return nil, err
 		}
