@@ -1,0 +1,22 @@
+/* Manual set creation: the name, then the kind of the first card. */
+
+.body {
+    flex: 1;
+    min-height: 0;
+}
+
+.hint {
+    text-wrap: pretty;
+}
+
+.list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* In island mode CellList adds its own side padding inside the screen frame. */
+.cells {
+    padding-left: 0;
+    padding-right: 0;
+}

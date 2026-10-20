@@ -1,0 +1,16 @@
+.icon {
+    flex-shrink: 0;
+}
+
+/* Icon colors — design system variables only. */
+.iconPositive {
+    color: var(--icon-positive);
+}
+
+.iconNegative {
+    color: var(--icon-negative);
+}
+
+.iconMuted {
+    color: var(--text-tertiary);
+}

@@ -1,0 +1,58 @@
+/* Set screen: what the set holds at the top, what can be done at the bottom.
+   The middle scrolls, the header and the buttons stay put. */
+
+.body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    /* Transparent until there is more below; then a line marks the edge. */
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s;
+}
+
+.body::-webkit-scrollbar {
+    display: none;
+}
+
+.moreBelow {
+    border-bottom-color: var(--divider-primary);
+}
+
+/* Personal progress card showing percentile and rank in set */
+.ratingCard {
+    box-sizing: border-box;
+    padding: 16px 20px;
+    border-radius: 16px;
+    background: var(--background-card);
+}
+
+.progressBarTrack {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--divider-primary);
+    overflow: hidden;
+}
+
+.progressBarFill {
+    height: 100%;
+    border-radius: 3px;
+    background: var(--button-primary, var(--text-primary));
+    transition: width 0.3s ease-out;
+}
+
+.factsList {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.confirmText {
+    text-wrap: pretty;
+}
+
+/* The same height as the button it stands in for. */
+.done {
+    min-height: 52px;
+}
