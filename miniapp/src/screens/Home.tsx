@@ -43,10 +43,6 @@ async function loadFeed(): Promise<Card[]> {
     return data;
 }
 
-/** Cards of a set due today: from the feed when it has loaded, else the set's own count. */
-function setDue(set: CardSet, feedDueCount?: number): number {
-    return feedDueCount ?? set.cardsDue;
-}
 
 const avatarGradients: AvatarTextGradient[] = ['blue', 'green', 'purple', 'orange', 'red'];
 
@@ -220,7 +216,9 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, remo
                             <CellHeader titleStyle="normal">Мои наборы</CellHeader>
                             <CellList mode="island" filled className={s.setsList}>
                                 {sets.map((set, index) => {
-                                    const due = setDue(set, setDueMap.get(set.id));
+                                    // The feed is loaded by now; a set it has no cards of has nothing
+                                    // due, whatever the set's own count says (it counts facts, not cards).
+                                    const due = setDueMap.get(set.id) ?? 0;
                                     return (
                                         <CellSimple
                                             key={set.id}

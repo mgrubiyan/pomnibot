@@ -488,7 +488,20 @@ func (b *Bot) getAllFileAttachments(m *Message) []attachmentInfo {
 // genericFileRegex matches names cameras, messengers and screenshots give
 // files, «IMG_1489.HEIC», «photo_2026-10-17 19.34.40.jpeg», «Снимок экрана …»:
 // they say nothing about the notes.
-var genericFileRegex = regexp.MustCompile(`(?i)^(file_\d+|photo[_ -].*|img[_-]?\d.*|image(?:[_ -]?\d+)?(?:\.\w+)?|scan[_ -]?\d.*|снимок экрана.*|screenshot.*|dsc[_-]?\w*\d.*|изображение.*)$`)
+// Separators match spaces too: a title made from a file name has its
+// underscores turned into spaces and must still read as generic.
+var genericFileRegex = regexp.MustCompile(`(?i)^(file[_ ]\d+(?:\.\w+)?|photo[_ -].*|img[_ -]?\d.*|image(?:[_ -]?\d+)?(?:\.\w+)?|scan[_ -]?\d.*|снимок экрана.*|screenshot.*|dsc[_ -]?\w*\d.*|изображение.*)$`)
+
+// A file extension: letters first, short, no spaces. A dot elsewhere is part
+// of the name — «Лекция 3. Клеточный цикл», «Версия 1.2».
+var fileExtRegex = regexp.MustCompile(`^\.[\pL][\pL\d]{0,4}$`)
+
+func trimFileExt(name string) string {
+	if ext := filepath.Ext(name); fileExtRegex.MatchString(ext) {
+		return strings.TrimSuffix(name, ext)
+	}
+	return name
+}
 
 func isGenericFilename(name string) bool {
 	name = strings.TrimSpace(name)
@@ -575,7 +588,7 @@ func resolveSetTitle(caption, filename string) string {
 		return title
 	}
 	if filename != "" && !isGenericFilename(filename) {
-		base := strings.TrimSuffix(filename, filepath.Ext(filename))
+		base := trimFileExt(filename)
 		// «Лекция_4_ОРГ» reads as «Лекция 4 ОРГ»: the title is shown on
 		// the home screen and under every quote.
 		base = strings.Join(strings.Fields(strings.ReplaceAll(base, "_", " ")), " ")
