@@ -132,6 +132,7 @@ func (e *extractError) Unwrap() error { return e.err }
 // the order they came.
 func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, error) {
 	if len(req.Files) == 0 {
+		slog.Error("no files to read among attachments", "user_id", req.UserID)
 		return Result{}, ErrNoFiles
 	}
 	title := resolveSetTitle(req.Caption, req.Files[0].Name)
