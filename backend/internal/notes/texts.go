@@ -103,13 +103,17 @@ const (
 )
 
 func fileWord(count int) string {
-	if count == 1 {
+	if lastTwo := count % 100; lastTwo >= 11 && lastTwo <= 14 {
+		return "файлов"
+	}
+	switch count % 10 {
+	case 1:
 		return "файл"
-	}
-	if count >= 2 && count <= 4 {
+	case 2, 3, 4:
 		return "файла"
+	default:
+		return "файлов"
 	}
-	return "файлов"
 }
 
 // ReceivedText confirms the files before extraction.
