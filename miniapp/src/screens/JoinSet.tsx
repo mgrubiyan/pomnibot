@@ -1,0 +1,109 @@
+import { useState } from 'react';
+import { Button, Flex, Input, Typography } from '@maxhub/max-ui';
+import type { CardSet } from '../types';
+import { api } from '../api';
+import { Screen } from '../components/Screen';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { IconCross } from '../components/Icons';
+import { formatCode } from '../utils/code';
+import s from './JoinSet.module.css';
+
+const CODE_LENGTH = 6;
+
+const digitsOf = (value: string) => value.replace(/\D/g, '').slice(0, CODE_LENGTH);
+
+async function findSetByCode(code: string): Promise<CardSet> {
+    const { data, error } = await api.POST('/sets/join', {
+        body: { code },
+    });
+    if (error || !data) {
+        throw new Error(error?.message ?? 'not found');
+    }
+    return data;
+}
+
+export interface JoinSetProps {
+    onBack: () => void;
+    onOpenSet: (setId: string) => void;
+}
+
+export function JoinSet({ onBack, onOpenSet }: JoinSetProps) {
+    const [digits, setDigits] = useState('');
+    const [checking, setChecking] = useState(false);
+    const [notFound, setNotFound] = useState(false);
+
+    const ready = digits.length === CODE_LENGTH;
+
+    const change = (value: string) => {
+        setDigits(digitsOf(value));
+        setNotFound(false);
+    };
+
+    const submit = () => {
+        if (!ready || checking) {
+            return;
+        }
+        setChecking(true);
+        setNotFound(false);
+
+        findSetByCode(digits)
+            .then((set) => onOpenSet(set.id))
+            .catch(() => {
+                setChecking(false);
+                setNotFound(true);
+            });
+    };
+
+    return (
+        <Screen>
+            <ScreenHeader title="Код набора" onBack={onBack} />
+
+            <Flex direction="column" align="stretch" gap={12} className={s.body}>
+                <Typography.Text variant="body" color="secondary" className={s.hint}>
+                    Введите код, который прислали в чате группы. Набор появится в списке ваших.
+                </Typography.Text>
+
+                <Input
+                    size="large"
+                    value={formatCode(digits)}
+                    placeholder="000 000"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    aria-label="Код набора, шесть цифр"
+                    disabled={checking}
+                    innerClassNames={{ input: s.codeInput }}
+                    onChange={(event) => change(event.target.value)}
+                    onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                            submit();
+                        }
+                    }}
+                />
+
+                {notFound ? (
+                    <Flex align="center" gap={8}>
+                        <IconCross size={20} tone="negative" />
+                        <Typography.Text variant="description" color="secondary">
+                            Набора с таким кодом нет. Проверьте цифры.
+                        </Typography.Text>
+                    </Flex>
+                ) : null}
+            </Flex>
+
+            <Flex direction="column" align="stretch" gap={8}>
+                <Button
+                    size="medium"
+                    variant="primary"
+                    stretched
+                    disabled={!ready}
+                    loading={checking}
+                    onClick={submit}
+                >
+                    Добавить набор
+                </Button>
+            </Flex>
+        </Screen>
+    );
+}
+
+export default JoinSet;
