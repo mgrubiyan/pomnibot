@@ -3,6 +3,7 @@ package notes
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -215,7 +216,7 @@ func TestMake_Queue(t *testing.T) {
 	queued := make(chan struct{})
 	wg.Go(func() {
 		if _, err := m.Make(ctx, Request{Files: file("second.pdf")}, Progress{
-			Queued:     func(ahead int) { record("queued " + string(rune('0'+ahead))); close(queued) },
+			Queued:     func(ahead int) { record(fmt.Sprintf("queued %d", ahead)); close(queued) },
 			Reading:    func() { record("reading") },
 			Generating: func() { record("generating") },
 		}); err != nil {
