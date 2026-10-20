@@ -342,8 +342,8 @@ func (c *Client) call(ctx context.Context, req providers.Request, withSchema boo
 	case "content_filter":
 		return providers.Response{}, fmt.Errorf("aistudio: %s: %w", c.cfg.Model, providers.ErrRefused)
 	case "length":
-		// Passed on anyway: the caller sees an unusable answer and handles it
-		// like any other.
+		// Passed on anyway, marked Truncated: the caller decides what of
+		// it to use.
 		slog.Warn("aistudio: answer cut short", "model", c.cfg.Model, "finish_reason", choice.FinishReason)
 	}
 	var content string
@@ -356,7 +356,8 @@ func (c *Client) call(ctx context.Context, req providers.Request, withSchema boo
 			PromptTokens:     cr.Usage.PromptTokens,
 			CompletionTokens: cr.Usage.CompletionTokens,
 		},
-		Model: c.cfg.Model,
+		Model:     c.cfg.Model,
+		Truncated: choice.FinishReason == "length",
 	}, nil
 }
 

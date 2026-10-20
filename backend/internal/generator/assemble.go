@@ -36,6 +36,7 @@ type chunkResult struct {
 	droppedUnsupported int
 	droppedTable       int
 	droppedExample     int
+	droppedVariants    int
 	trimmedExplains    int
 	usage              providers.Usage
 	models             map[string]int
@@ -316,6 +317,37 @@ func repeatsInput(f modelFact, q string) bool {
 	})
 }
 
+// dropFlipRepeats drops a flip card that asks a choice or input card's
+// question in other words for the same answer: «Какой логический оператор
+// требует выполнения всех условий?» and «Какой оператор требует выполнения
+// всех условий?», AND both. A vocabulary list keeps it: «Переведите "to
+// configure"» beside «Как переводится "to configure"?» is a card of its own.
+func dropFlipRepeats(cs []modelCard, dropped func(modelCard)) []modelCard {
+	var recall []modelCard
+	for _, c := range cs {
+		if c.Kind == cards.KindChoice || c.Kind == cards.KindInput {
+			recall = append(recall, c)
+		}
+	}
+	return slices.DeleteFunc(cs, func(c modelCard) bool {
+		if c.Kind != cards.KindFlip || !slices.ContainsFunc(recall, func(o modelCard) bool {
+			// The very same question is settled in acceptFact.
+			return sameAnswer(o.Answer, c.Answer) && askSame(o.Question, c.Question) &&
+				!slices.Equal(questionWords(o.Question), questionWords(c.Question))
+		}) {
+			return false
+		}
+		dropped(c)
+		return true
+	})
+}
+
+// sameAnswer compares short answers up to case and a final period.
+func sameAnswer(a, b string) bool {
+	trim := func(s string) string { return strings.TrimRight(strings.TrimSpace(s), ".") }
+	return strings.EqualFold(trim(a), trim(b))
+}
+
 // balanceClaim shows a boolean card's claim true or false so that the
 // document keeps both about even. Models lean one way: YandexGPT writes
 // nearly every claim false, Qwen nearly every one true, and a student soon
@@ -464,6 +496,7 @@ func (a *assembler) count(r chunkResult) {
 	s.DroppedPersonal += r.droppedPersonal
 	s.DroppedTable += r.droppedTable
 	s.DroppedExample += r.droppedExample
+	s.DroppedVariants += r.droppedVariants
 	s.TrimmedExplanations += r.trimmedExplains
 
 	if r.calls > 0 {

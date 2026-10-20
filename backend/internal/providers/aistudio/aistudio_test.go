@@ -213,6 +213,22 @@ func TestContentFilterIsRefused(t *testing.T) {
 	}
 }
 
+// An answer cut at the token limit is passed on, marked: the caller asks
+// again rather than read a half of a JSON object.
+func TestCutAnswerIsTruncated(t *testing.T) {
+	api := &fakeAPI{reply: func(int, map[string]any) reply { return answer(`{"facts": [{"cards": [`, "length") }}
+	c := newTestClient(t, api)
+
+	resp, err := c.Complete(context.Background(), photoRequest())
+	if err != nil || !resp.Truncated {
+		t.Errorf("Complete() = %+v, %v; want a truncated answer", resp, err)
+	}
+	api.reply = func(int, map[string]any) reply { return ok("текст") }
+	if resp, _ := c.Complete(context.Background(), photoRequest()); resp.Truncated {
+		t.Errorf("a whole answer marked truncated")
+	}
+}
+
 func TestRetriesServerErrors(t *testing.T) {
 	api := &fakeAPI{reply: func(n int, _ map[string]any) reply {
 		if n < 3 {

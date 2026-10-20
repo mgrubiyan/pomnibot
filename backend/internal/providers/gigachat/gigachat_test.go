@@ -420,6 +420,25 @@ func TestFallsBackWhenContentFilterBlocks(t *testing.T) {
 	}
 }
 
+// An answer cut at the token limit is passed on, marked: the caller asks
+// again rather than read a half of a JSON object.
+func TestCutAnswerIsTruncated(t *testing.T) {
+	api := &fakeAPI{chat: func(int, chatRequest) chatReply {
+		b, _ := json.Marshal(map[string]any{
+			"model":   "GigaChat-3-Ultra:3.0.1",
+			"choices": []map[string]any{{"message": map[string]string{"role": "assistant", "content": `{"facts": [{"cards": [`}, "finish_reason": "length"}},
+			"usage":   map[string]int{"prompt_tokens": 120, "completion_tokens": 4000, "total_tokens": 4120},
+		})
+		return chatReply{status: http.StatusOK, body: string(b)}
+	}}
+	c := newTestClient(t, api)
+
+	resp, err := c.Complete(context.Background(), request())
+	if err != nil || !resp.Truncated {
+		t.Errorf("Complete() = %+v, %v; want a truncated answer", resp, err)
+	}
+}
+
 func TestReportsContentFilterOfEveryModel(t *testing.T) {
 	api := &fakeAPI{chat: func(int, chatRequest) chatReply { return blacklisted() }}
 	c := newTestClient(t, api)
