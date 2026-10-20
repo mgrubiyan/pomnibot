@@ -361,6 +361,38 @@ func (q *Queries) GetCardOptions(ctx context.Context, cardID pgtype.UUID) ([]Car
 	return items, nil
 }
 
+const getCardOptionsBatch = `-- name: GetCardOptionsBatch :many
+SELECT id, card_id, position, text, is_correct FROM card_options
+WHERE card_id = ANY($1::UUID[])
+ORDER BY card_id, position
+`
+
+func (q *Queries) GetCardOptionsBatch(ctx context.Context, cardIds []pgtype.UUID) ([]CardOption, error) {
+	rows, err := q.db.Query(ctx, getCardOptionsBatch, cardIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CardOption
+	for rows.Next() {
+		var i CardOption
+		if err := rows.Scan(
+			&i.ID,
+			&i.CardID,
+			&i.Position,
+			&i.Text,
+			&i.IsCorrect,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCardTableColumns = `-- name: GetCardTableColumns :many
 SELECT id, card_id, position, name
 FROM card_table_columns
@@ -393,6 +425,37 @@ func (q *Queries) GetCardTableColumns(ctx context.Context, cardID pgtype.UUID) (
 	return items, nil
 }
 
+const getCardTableColumnsBatch = `-- name: GetCardTableColumnsBatch :many
+SELECT id, card_id, position, name FROM card_table_columns
+WHERE card_id = ANY($1::UUID[])
+ORDER BY card_id, position
+`
+
+func (q *Queries) GetCardTableColumnsBatch(ctx context.Context, cardIds []pgtype.UUID) ([]CardTableColumn, error) {
+	rows, err := q.db.Query(ctx, getCardTableColumnsBatch, cardIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CardTableColumn
+	for rows.Next() {
+		var i CardTableColumn
+		if err := rows.Scan(
+			&i.ID,
+			&i.CardID,
+			&i.Position,
+			&i.Name,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCardTableItems = `-- name: GetCardTableItems :many
 SELECT id, card_id, item_text, column_name, position
 FROM card_table_items
@@ -402,6 +465,38 @@ ORDER BY position, id
 
 func (q *Queries) GetCardTableItems(ctx context.Context, cardID pgtype.UUID) ([]CardTableItem, error) {
 	rows, err := q.db.Query(ctx, getCardTableItems, cardID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CardTableItem
+	for rows.Next() {
+		var i CardTableItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.CardID,
+			&i.ItemText,
+			&i.ColumnName,
+			&i.Position,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCardTableItemsBatch = `-- name: GetCardTableItemsBatch :many
+SELECT id, card_id, item_text, column_name, position FROM card_table_items
+WHERE card_id = ANY($1::UUID[])
+ORDER BY card_id, position, id
+`
+
+func (q *Queries) GetCardTableItemsBatch(ctx context.Context, cardIds []pgtype.UUID) ([]CardTableItem, error) {
+	rows, err := q.db.Query(ctx, getCardTableItemsBatch, cardIds)
 	if err != nil {
 		return nil, err
 	}

@@ -6,3 +6,6 @@ miniapp/contracts/** linguist-generated=true
 # Lockfiles and dependency checksums
 bun.lock linguist-generated=true
 go.sum linguist-generated=true
+
+# Generated performance measurement artifacts
+docs/perf/*.json linguist-generated=true

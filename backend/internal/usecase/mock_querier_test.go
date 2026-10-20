@@ -308,3 +308,48 @@ func (m *mockQuerier) GetUserSetRating(ctx context.Context, arg db.GetUserSetRat
 	}
 	return db.GetUserSetRatingRow{Percentile: 0, Rank: 1}, nil
 }
+
+func (m *mockQuerier) GetCardOptionsBatch(ctx context.Context, ids []pgtype.UUID) ([]db.CardOption, error) {
+	var rows []db.CardOption
+	for _, id := range ids {
+		details, err := m.GetCardOptions(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		for _, detail := range details {
+			detail.CardID = id
+			rows = append(rows, detail)
+		}
+	}
+	return rows, nil
+}
+
+func (m *mockQuerier) GetCardTableColumnsBatch(ctx context.Context, ids []pgtype.UUID) ([]db.CardTableColumn, error) {
+	var rows []db.CardTableColumn
+	for _, id := range ids {
+		details, err := m.GetCardTableColumns(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		for _, detail := range details {
+			detail.CardID = id
+			rows = append(rows, detail)
+		}
+	}
+	return rows, nil
+}
+
+func (m *mockQuerier) GetCardTableItemsBatch(ctx context.Context, ids []pgtype.UUID) ([]db.CardTableItem, error) {
+	var rows []db.CardTableItem
+	for _, id := range ids {
+		details, err := m.GetCardTableItems(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		for _, detail := range details {
+			detail.CardID = id
+			rows = append(rows, detail)
+		}
+	}
+	return rows, nil
+}
