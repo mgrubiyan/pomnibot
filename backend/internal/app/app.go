@@ -24,7 +24,6 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 	httptransport "github.com/mgrubiyan/pomnibot/backend/internal/transport/http"
 	maxtransport "github.com/mgrubiyan/pomnibot/backend/internal/transport/max"
-	"github.com/mgrubiyan/pomnibot/backend/internal/transport/telegram"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
@@ -68,11 +67,11 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 	// Stop background integrations on both startup failure and normal shutdown.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	var bots []interface{ Wait() }
+	var bots []func()
 	defer func() {
 		cancel()
-		for _, bot := range bots {
-			bot.Wait()
+		for _, wait := range bots {
+			wait()
 		}
 	}()
 	if cfg.Environment == config.Prod {
@@ -92,15 +91,7 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 		if err != nil {
 			return err
 		}
-		bots = append(bots, maxBot)
-		tgBot, err := telegram.NewBot(telegram.NewClient(cfg.TelegramBotToken), users, maker, cfg.AppURL, cfg.Notifications)
-		if err != nil {
-			return fmt.Errorf("initialize Telegram bot: %w", err)
-		}
-		if err = tgBot.Start(ctx); err != nil {
-			return fmt.Errorf("start Telegram bot: %w", err)
-		}
-		bots = append(bots, tgBot)
+		bots = append(bots, maxBot.Wait, startTelegramBot(ctx, cfg, maker, users))
 	}
 
 	server := &http.Server{
