@@ -211,6 +211,7 @@ jobs:
 
           # Sensitive credentials (GitHub Actions Secrets)
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           GIGACHAT_AUTH_KEY: ${{ secrets.GIGACHAT_AUTH_KEY }}
@@ -256,6 +257,7 @@ jobs:
 
           SECRET_VARS=(
             BOT_TOKEN
+            TG_BOT_TOKEN
             POSTGRES_PASSWORD
             DATABASE_URL
             GIGACHAT_AUTH_KEY
