@@ -2,13 +2,7 @@ openapi: 3.0.3
 info:
   title: Pomnibot API
   version: 1.0
-  description: |
-    Shared MAX and Telegram API. Send the entire original SDK initData in
-    Authorization: max <initData> or Authorization: tma <initData>.
-    No other platform header or default platform is used. Missing or invalid
-    credentials use shared browser test user 0, including production.
-    Persistence failures return 500. Verified Telegram users must complete
-    their profile before accessing learning APIs (403, code profile_required).
+  description: OpenAPI specification for Pomnibot
 tags:
   - name: Sets
     description: Sets of cards
