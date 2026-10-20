@@ -1,0 +1,23 @@
+.dialog {
+    box-sizing: border-box;
+    width: min(400px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+    max-height: calc(100dvh - 48px);
+    margin: auto;
+    padding: 24px;
+    border: 0;
+    border-radius: 20px;
+    background: var(--background-card);
+    color: var(--text-primary);
+    font-family: inherit;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.dialog::backdrop {
+    background: rgb(0 0 0 / 48%);
+}
+
+.title {
+    margin: 0;
+}

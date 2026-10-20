@@ -4,6 +4,7 @@ import type { Card, CardKind, TableItem, TableLayout } from '../types';
 import { AutoTextarea } from '../components/AutoTextarea';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { ConfirmDiscardDialog } from '../components/ConfirmDiscardDialog';
 import { CARD_KINDS } from '../utils/kinds';
 import { IconCross, IconDoc, IconPlus, IconTrash } from '../components/Icons';
 import type { CardPatch } from '../utils/cards';
@@ -34,6 +35,7 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
     const [question, setQuestion] = useState(card.question ?? '');
     const [explanation, setExplanation] = useState(card.explanation ?? '');
     const [confirmingRemove, setConfirmingRemove] = useState(false);
+    const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null);
 
     // --- Choice kind state ---
     const [options, setOptions] = useState<string[]>(() => {
@@ -185,7 +187,9 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
     const dirty = snapshot !== initialSnapshot;
     useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
     const leave = (action: () => void) => {
-        if (!savingRef.current && (!dirty || window.confirm('Несохранённые изменения будут потеряны. Выйти?'))) action();
+        if (savingRef.current) return;
+        if (dirty) setPendingLeave(() => action);
+        else action();
     };
     const save = async () => {
         if (savingRef.current || !canSave) {
@@ -574,6 +578,10 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                 </Flex>
                 {error && <Typography.Text role="alert">{error}</Typography.Text>}
             </fieldset>
+            {pendingLeave && <ConfirmDiscardDialog
+                onCancel={() => setPendingLeave(null)}
+                onConfirm={() => { setPendingLeave(null); pendingLeave(); }}
+            />}
         </Screen>
     );
 }
