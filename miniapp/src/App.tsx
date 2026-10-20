@@ -10,6 +10,7 @@ import SetScreen from './screens/SetScreen';
 import SetCards from './screens/SetCards';
 import Share from './screens/Share';
 import Leaderboard from './screens/Leaderboard';
+import WhyItWorks from './screens/WhyItWorks';
 import { api } from './api';
 import type { AnswerResult, Card, TodayData, User } from './types';
 import type { CardPatch } from './utils/cards';
@@ -28,6 +29,7 @@ type Screen =
       }
     | { name: 'share'; setId: string; setTitle?: string }
     | { name: 'leaderboard'; setId: string; setTitle?: string }
+    | { name: 'why'; setId: string }
     | { name: 'add' }
     | { name: 'create-method' }
     | { name: 'manual'; setId?: string; setTitle?: string }
@@ -314,6 +316,10 @@ function App() {
         );
     }
 
+    if (screen.name === 'why') {
+        return <WhyItWorks onBack={() => openSet(screen.setId)} />;
+    }
+
     if (screen.name === 'set-cards') {
         return (
             <SetCards
@@ -347,6 +353,7 @@ function App() {
                 onRemove={removeSet}
                 onOpenCards={(setId) => go({ name: 'set-cards', setId })}
                 onShare={(setId, setTitle) => go({ name: 'share', setId, setTitle })}
+                onOpenWhy={() => go({ name: 'why', setId: screen.setId })}
                 onOpenLeaderboard={(setId, setTitle) =>
                     go({
                         name: 'leaderboard',

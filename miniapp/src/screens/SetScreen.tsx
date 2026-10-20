@@ -5,7 +5,6 @@ import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusScreen } from '../components/StatusScreen';
-import { WhyItWorks } from '../components/WhyItWorks';
 import { IconCheck, IconOffline, IconShare, IconTrash } from '../components/Icons';
 import { loadCards, loadSet } from '../utils/sets';
 import { cardsLabel } from '../utils/plural';
@@ -34,6 +33,7 @@ export interface SetScreenProps {
     /** The list of cards lives on its own screen, managed from there. */
     onOpenCards: (setId: string) => void;
     onShare: (setId: string, setTitle: string) => void;
+    onOpenWhy: () => void;
     onOpenLeaderboard?: (setId: string, setTitle: string) => void;
 }
 
@@ -45,6 +45,7 @@ export function SetScreen({
     onRemove,
     onOpenCards,
     onShare,
+    onOpenWhy,
     onOpenLeaderboard,
 }: SetScreenProps) {
     const [status, setStatus] = useState<Status>('loading');
@@ -177,10 +178,15 @@ export function SetScreen({
                         title={`Карточки · ${cards.length}`}
                         subtitle={isOwner ? 'Просмотр и правка' : 'Просмотр'}
                     />
+                    <CellSimple
+                        as="button"
+                        showChevron
+                        separator
+                        onClick={onOpenWhy}
+                        title="Почему это работает"
+                        subtitle="Что говорят исследования"
+                    />
                 </CellList>
-
-                {/* Moved here from home: read once, by someone about to review. */}
-                <WhyItWorks />
             </Flex>
 
             <Flex direction="column" align="stretch" gap={8}>
