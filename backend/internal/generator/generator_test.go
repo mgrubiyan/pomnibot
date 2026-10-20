@@ -1254,6 +1254,57 @@ func TestGenerateDropsChoiceRepeatedByFlip(t *testing.T) {
 	}
 }
 
+// A flip card with the input card's very question shows the fact twice, and
+// the input card, which checks the answer, stays. Qwen writes such pairs.
+func TestGenerateDropsFlipRepeatingInput(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[0])
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		return factsJSON(fx{quote: firstSentence(frag), cards: []mc{
+			{kind: cards.KindInput, q: "Как называется непрямое деление соматических клеток?", a: "Митоз"},
+			{kind: cards.KindFlip, q: "Как называется непрямое деление соматических клеток?", a: "Митоз."},
+			{kind: cards.KindFlip, q: "Назовите непрямое деление соматических клеток.", a: "Митоз."},
+		}}), nil
+	}}
+
+	res := generate(t, p, doc, opts)
+	var kinds []string
+	for _, c := range res.Cards {
+		kinds = append(kinds, string(c.Kind)+": "+c.Question)
+	}
+	want := []string{
+		"input: Как называется непрямое деление соматических клеток?",
+		"flip: Назовите непрямое деление соматических клеток.",
+	}
+	slices.Sort(kinds)
+	slices.Sort(want)
+	if !slices.Equal(kinds, want) {
+		t.Errorf("cards = %q, want %q", kinds, want)
+	}
+	if res.Stats.DroppedVariants != 1 {
+		t.Errorf("DroppedVariants = %d, want 1", res.Stats.DroppedVariants)
+	}
+}
+
+// The same claim twice in one fact is one card.
+func TestGenerateDropsRepeatedCardOfAFact(t *testing.T) {
+	doc, opts := testDoc(t, paragraphs[0])
+	claim := "Митоз — непрямое деление соматических клеток."
+	p := &fakeProvider{answer: func(_ int, frag string, _ providers.Request) (string, error) {
+		return factsJSON(fx{quote: firstSentence(frag), cards: []mc{
+			{kind: cards.KindBoolean, q: claim, a: cards.AnswerTrue, distractors: []string{"Мейоз — непрямое деление соматических клеток."}},
+			{kind: cards.KindBoolean, q: claim, a: cards.AnswerTrue, distractors: []string{"Амитоз — непрямое деление соматических клеток."}},
+		}}), nil
+	}}
+
+	res := generate(t, p, doc, opts)
+	if len(res.Cards) != 1 || res.Stats.Cards != 1 {
+		t.Errorf("cards = %+v (Stats.Cards = %d), want one", res.Cards, res.Stats.Cards)
+	}
+	if res.Stats.DroppedVariants != 1 {
+		t.Errorf("DroppedVariants = %d, want 1", res.Stats.DroppedVariants)
+	}
+}
+
 // A flip card that asks for the same translation in other words is a card of
 // its own: only the very same question repeats the choice card.
 func TestGenerateKeepsChoiceBesideASimilarFlip(t *testing.T) {

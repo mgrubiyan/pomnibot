@@ -182,6 +182,22 @@ func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok boo
 			slog.Debug("cards: choice asks what another card of the fact asks", "question", mc.Question)
 			continue
 		}
+		// A flip card with the input card's very question shows the fact
+		// twice; the input card checks the answer and stays.
+		if mc.Kind == cards.KindFlip && repeatsInput(f, mc.Question) {
+			a.stats.DroppedVariants++
+			slog.Debug("cards: flip asks what the input card of the fact asks", "question", mc.Question)
+			continue
+		}
+		// The same question twice in one fact, two equal claims say, is one
+		// card.
+		if slices.ContainsFunc(questions, func(q string) bool {
+			return slices.Equal(questionWords(q), questionWords(mc.Question))
+		}) {
+			a.stats.DroppedVariants++
+			slog.Debug("cards: question repeats another card of the fact", "question", mc.Question)
+			continue
+		}
 		// Indexed after the loop: cards of one fact are checked against
 		// earlier facts, not against each other.
 		questions = append(questions, mc.Question)
@@ -289,6 +305,14 @@ func repeatsRecall(f modelFact, q string) bool {
 			return slices.Equal(questionWords(c.Question), questionWords(q))
 		}
 		return false
+	})
+}
+
+// repeatsInput reports whether q is word for word the question of an input
+// card of f.
+func repeatsInput(f modelFact, q string) bool {
+	return slices.ContainsFunc(f.Cards, func(c modelCard) bool {
+		return c.Kind == cards.KindInput && slices.Equal(questionWords(c.Question), questionWords(q))
 	})
 }
 
