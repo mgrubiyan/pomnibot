@@ -21,6 +21,38 @@ func TestMain(m *testing.M) {
 
 const testCooldown = 10 * time.Minute
 
+func TestFallbackReservesDeadlineForEveryBackup(t *testing.T) {
+	hang := func(ctx context.Context, _ int) (Response, error) { <-ctx.Done(); return Response{}, ctx.Err() }
+	first, second, last := &fakeProvider{reply: hang}, &fakeProvider{reply: hang}, answers("last")
+	f := NewFallback(time.Minute, Backend{Name: "first", Provider: first, Timeout: time.Second}, Backend{Name: "second", Provider: second, Timeout: time.Second}, Backend{Name: "last", Provider: last})
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	res, err := f.Complete(ctx, Request{})
+	if err != nil || res.Model != "last" || last.callCount() != 1 {
+		t.Fatalf("final backend got no time: %+v %v", res, err)
+	}
+}
+
+func TestFallbackShortCallerBudgetDoesNotCoolProvider(t *testing.T) {
+	primary := &fakeProvider{reply: func(ctx context.Context, call int) (Response, error) {
+		if call == 1 {
+			<-ctx.Done()
+			return Response{}, ctx.Err()
+		}
+		return Response{Model: "primary"}, nil
+	}}
+	f := NewFallback(time.Minute, Backend{Name: "primary", Provider: primary, Timeout: time.Second}, Backend{Name: "backup", Provider: answers("backup")})
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	if _, err := f.Complete(ctx, Request{}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := f.Complete(context.Background(), Request{})
+	if err != nil || res.Model != "primary" || primary.callCount() != 2 {
+		t.Fatalf("short caller budget cooled the primary: %+v %v", res, err)
+	}
+}
+
 // fakeProvider answers with reply, given the number of the call, from 1.
 type fakeProvider struct {
 	reply func(ctx context.Context, call int) (Response, error)

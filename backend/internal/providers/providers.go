@@ -39,6 +39,7 @@ type Image struct {
 type Usage struct {
 	PromptTokens     int
 	CompletionTokens int
+	CostUSD          float64 // billed cost when reported by the provider; zero otherwise
 }
 
 // Response is the raw model answer. Content may be wrapped in markdown or

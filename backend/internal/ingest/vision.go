@@ -31,6 +31,9 @@ import (
 type VisionOCR struct {
 	Model   providers.Provider
 	Checker OCR // optional
+	// FullPage reads the whole page with a structured response, preserving
+	// tables and labels. Visual interpretations never enter the quoted text.
+	FullPage bool
 	// Render turns page (0-based) of a PDF into a JPEG; nil: pdftoppm.
 	Render func(ctx context.Context, pdf []byte, page int) ([]byte, error)
 }
@@ -78,6 +81,10 @@ const (
 // nil); pages not read come back empty.
 func (v *VisionOCR) Recognize(ctx context.Context, req OCRRequest) ([]OCRPage, error) {
 	if req.MimeType != "application/pdf" {
+		if v.FullPage {
+			p, err := v.readFullPage(ctx, req.Data, req.MimeType, req.Model, "")
+			return []OCRPage{p}, err
+		}
 		p, err := v.readPage(ctx, req.Data, req.MimeType, req.Model)
 		if err != nil {
 			return nil, err
@@ -96,14 +103,33 @@ func (v *VisionOCR) Recognize(ctx context.Context, req OCRRequest) ([]OCRPage, e
 	}
 	out := make([]OCRPage, req.Pages)
 	for _, n := range only {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if n < 0 || n >= req.Pages {
 			continue
 		}
 		img, err := render(ctx, req.Data, n)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			if v.FullPage && n < len(req.TextLayers) && strings.TrimSpace(req.TextLayers[n]) != "" {
+				out[n] = OCRPage{Text: req.TextLayers[n], FromTextLayer: true}
+				continue
+			}
 			return nil, fmt.Errorf("render page %d: %w", n+1, err)
 		}
-		if out[n], err = v.readPage(ctx, img, "image/jpeg", req.Model); err != nil {
+		if v.FullPage {
+			reference := ""
+			if n < len(req.TextLayers) {
+				reference = req.TextLayers[n]
+			}
+			out[n], err = v.readFullPage(ctx, img, "image/jpeg", req.Model, reference)
+		} else {
+			out[n], err = v.readPage(ctx, img, "image/jpeg", req.Model)
+		}
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -351,7 +377,7 @@ func abs(n int) int {
 	return n
 }
 
-// renderPDFPage renders one page of a PDF to a grayscale JPEG with pdftoppm,
+// renderPDFPage renders one page of a PDF to a color JPEG with pdftoppm,
 // from poppler-utils like pdftotext.
 func renderPDFPage(ctx context.Context, pdf []byte, page int) ([]byte, error) {
 	dir, err := os.MkdirTemp("", "pomnibot-render-")
@@ -366,7 +392,7 @@ func renderPDFPage(ctx context.Context, pdf []byte, page int) ([]byte, error) {
 	out := filepath.Join(dir, "page")
 	n := strconv.Itoa(page + 1)
 	cmd := exec.CommandContext(ctx, "pdftoppm", "-f", n, "-l", n, "-singlefile",
-		"-r", strconv.Itoa(renderDPI), "-gray", "-jpeg", in, out)
+		"-r", strconv.Itoa(renderDPI), "-jpeg", in, out)
 	if msg, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("pdftoppm: %w: %s", err, strings.TrimSpace(string(msg)))
 	}

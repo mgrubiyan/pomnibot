@@ -20,6 +20,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/aistudio"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers/openrouter"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 	httptransport "github.com/mgrubiyan/pomnibot/backend/internal/transport/http"
@@ -81,7 +82,8 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 		if err != nil {
 			return fmt.Errorf("initialize OCR: %w", err)
 		}
-		extractor, err := ingest.NewExtractor(&ingest.VisionOCR{Model: llm.vision, Checker: ocr}, ingest.Options{})
+		fullPages := cfg.LLM.Primary == config.PrimaryOpenRouter
+		extractor, err := ingest.NewExtractor(&ingest.VisionOCR{Model: llm.vision, Checker: ocr, FullPage: fullPages}, ingest.Options{ReadAllPDFPages: fullPages})
 		if err != nil {
 			return fmt.Errorf("initialize extractor: %w", err)
 		}
@@ -121,10 +123,9 @@ const aiStudioSlots = 2
 // most aiStudioSlots requests, leave the rest of the slots to grading.
 const aiStudioRequests = 5
 
-// newModels returns Qwen backed by GigaChat for everything, or the other way
-// round with LLM_PRIMARY=gigachat; a photo neither of them reads goes to the
-// OCR. One chain serves cards, grading and photos, so a model that is down is
-// skipped by all of them at once. Without AI Studio, GigaChat does it all.
+// newModels shares a single fallback chain across cards, grading and photos.
+// OpenRouter is backed by GigaChat, then AI Studio; without OpenRouter the
+// legacy order remains available. Each backend retains its own request limit.
 func newModels(cfg config.Config) (models, error) {
 	giga, err := gigachat.New(cfg.GigaChat)
 	if err != nil {
@@ -134,7 +135,7 @@ func newModels(cfg config.Config) (models, error) {
 	// GigaChat at once; its plan answers the second with 429.
 	gigaOne := providers.Limit(giga, 1)
 
-	if cfg.AIStudio == nil {
+	if cfg.AIStudio == nil && cfg.OpenRouter == nil {
 		slog.Warn("AI Studio is off: GigaChat does it all, no backup when it is down")
 		// GigaChat alone still gets a timeout on photos, so that a hang
 		// leaves the OCR time.
@@ -142,21 +143,39 @@ func newModels(cfg config.Config) (models, error) {
 			providers.Backend{Name: "gigachat", Provider: gigaOne, Timeout: cfg.LLM.PrimaryTimeout})
 		return models{text: gigaOne, vision: photos, slots: 1}, nil
 	}
-	studio, err := aistudio.New(*cfg.AIStudio)
-	if err != nil {
-		return models{}, fmt.Errorf("initialize AI Studio: %w", err)
+	backends := []providers.Backend{{Name: config.PrimaryGigaChat, Provider: gigaOne}}
+	if cfg.AIStudio != nil {
+		studio, err := aistudio.New(*cfg.AIStudio)
+		if err != nil {
+			return models{}, fmt.Errorf("initialize AI Studio: %w", err)
+		}
+		backends = append(backends, providers.Backend{Name: config.PrimaryAIStudio, Provider: providers.Limit(studio, aiStudioRequests)})
 	}
-
-	first := providers.Backend{Name: "aistudio", Provider: providers.Limit(studio, aiStudioRequests)}
-	second := providers.Backend{Name: "gigachat", Provider: gigaOne}
+	if cfg.OpenRouter != nil {
+		router, err := openrouter.New(*cfg.OpenRouter)
+		if err != nil {
+			return models{}, fmt.Errorf("initialize OpenRouter: %w", err)
+		}
+		backends = append(backends, providers.Backend{Name: config.PrimaryOpenRouter, Provider: providers.Limit(router, aiStudioRequests)})
+	}
+	// Move the selected primary to the front, preserving the backup order.
+	for i := range backends {
+		if backends[i].Name == cfg.LLM.Primary {
+			primary := backends[i]
+			copy(backends[1:i+1], backends[:i])
+			backends[0] = primary
+			break
+		}
+	}
+	for i := range len(backends) - 1 {
+		backends[i].Timeout = cfg.LLM.PrimaryTimeout
+	}
+	chain := providers.NewFallback(cfg.LLM.Cooldown, backends...)
 	slots := aiStudioSlots
 	if cfg.LLM.Primary == config.PrimaryGigaChat {
-		first, second, slots = second, first, 1
+		slots = 1
 	}
-	first.Timeout = cfg.LLM.PrimaryTimeout
-	chain := providers.NewFallback(cfg.LLM.Cooldown, first, second)
-
-	slog.Info("models", "primary", cfg.LLM.Primary, "aistudio_model", cfg.AIStudio.Model,
+	slog.Info("models", "primary", cfg.LLM.Primary,
 		"primary_timeout", cfg.LLM.PrimaryTimeout, "cooldown", cfg.LLM.Cooldown, "documents_at_once", slots)
 	return models{text: chain, vision: chain, slots: slots}, nil
 }
