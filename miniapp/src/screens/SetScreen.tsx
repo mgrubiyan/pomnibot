@@ -5,7 +5,6 @@ import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusScreen } from '../components/StatusScreen';
-import { WhyItWorks } from '../components/WhyItWorks';
 import { IconCheck, IconOffline, IconShare, IconTrash } from '../components/Icons';
 import { loadCards, loadSet } from '../utils/sets';
 import { cardsLabel } from '../utils/plural';
@@ -178,9 +177,6 @@ export function SetScreen({
                         subtitle={isOwner ? 'Просмотр и правка' : 'Просмотр'}
                     />
                 </CellList>
-
-                {/* Moved here from home: read once, by someone about to review. */}
-                <WhyItWorks />
             </Flex>
 
             <Flex direction="column" align="stretch" gap={8}>

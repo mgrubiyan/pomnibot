@@ -17,6 +17,22 @@
     overflow-wrap: anywhere;
 }
 
+/* Three lines at most; the rest is behind a tap. */
+.clamped {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    overflow: hidden;
+}
+
+/* cursor: pointer is not decoration: without it iOS does not deliver
+   clicks from a plain element to the React root. */
+.tappable {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
 .subtitle {
     overflow-wrap: anywhere;
 }
