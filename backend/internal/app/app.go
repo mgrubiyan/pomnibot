@@ -131,10 +131,7 @@ func newModels(cfg config.Config) (models, error) {
 		return models{}, fmt.Errorf("initialize AI Studio: %w", err)
 	}
 
-	// Cards, photos and answer checks all go to the same key: past its
-	// limit AI Studio answers 429, and the fallback would then skip it for
-	// the cooldown. Extra requests wait their turn instead, as on GigaChat.
-	first := providers.Backend{Name: "aistudio", Provider: providers.Limit(studio, aiStudioSlots)}
+	first := providers.Backend{Name: "aistudio", Provider: studio}
 	second := providers.Backend{Name: "gigachat", Provider: gigaOne}
 	slots := aiStudioSlots
 	if cfg.LLM.Primary == config.PrimaryGigaChat {
