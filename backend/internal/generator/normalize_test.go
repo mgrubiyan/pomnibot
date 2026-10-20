@@ -102,6 +102,20 @@ func TestFindQuoteIgnoresPunctuationAtJoinedLines(t *testing.T) {
 	}
 }
 
+// A slide's number between two slides is no part of the text: a quote over
+// both leaves it out.
+func TestFindQuoteSkipsSlideNumbers(t *testing.T) {
+	fragment := "Изменение структуры:\nALTER TABLE\n14\nПРЕДЛОЖЕНИЯ SQL\nМАНИПУЛИРОВАНИЕ ДАННЫМИ\nINSERT – добавить записи"
+	quote := "Изменение структуры: ALTER TABLE ПРЕДЛОЖЕНИЯ SQL МАНИПУЛИРОВАНИЕ ДАННЫМИ INSERT – добавить записи"
+	if got, ok := findQuote(fragment, quote); !ok || got != fragment {
+		t.Errorf("findQuote() = %q, %v; want the whole fragment", got, ok)
+	}
+	// A number inside the text stays: «в 14 лет» is not «в лет».
+	if got, ok := findQuote("Пётр I стал царём в\n14\nлет", "Пётр I стал царём в лет"); ok {
+		t.Errorf("findQuote() dropped a number of the text: %q", got)
+	}
+}
+
 func TestFindQuoteIgnoresBullets(t *testing.T) {
 	fragment := "Языки с виртуальными машинами (Java, C#):\n" +
 		"▶ Компиляция в байт-код (промежуточное представление)\n" +

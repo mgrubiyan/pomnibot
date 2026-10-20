@@ -314,7 +314,11 @@ func locateQuote(fragment, quote string) (start, end int, ok bool) {
 
 	if strings.Contains(fragment, "\n") {
 		fb := foldBreaks(fragment)
-		if i, j, ok := matchAcrossBreaks(fb.s, q); ok {
+		capital := func(i int) bool {
+			r, _ := utf8.DecodeRuneInString(fragment[fb.start[i]:])
+			return unicode.IsUpper(r)
+		}
+		if i, j, ok := matchAcrossBreaks(fb.s, q, capital); ok {
 			start, end = spanOf(fragment, fb, i, j)
 			return start, end, true
 		}
@@ -481,9 +485,11 @@ const pausePunct = ".:;,-" // "-" is any dash after fold
 // matchAcrossBreaks finds the folded quote q in s, a fragment folded with its
 // line breaks, letting a sign of pausePunct stand at a line break on either
 // side only: the words are the notes', the punctuation at the joints is the
-// model's. Inside a line every sign must match, as in indexPhrase. It
-// returns the span of s matched.
-func matchAcrossBreaks(s, q string) (start, end int, ok bool) {
+// model's. Inside a line every sign must match, as in indexPhrase. A slide's
+// number alone on a line may be left out; capital tells whether the rune at
+// s[i] is a capital in the notes, as folding lowers it. It returns the span
+// of s matched.
+func matchAcrossBreaks(s, q string, capital func(i int) bool) (start, end int, ok bool) {
 	if !strings.Contains(s, "\n") || q == "" {
 		return 0, 0, false
 	}
@@ -494,6 +500,9 @@ func matchAcrossBreaks(s, q string) (start, end int, ok bool) {
 			switch {
 			case si < len(s) && s[si] == '\n':
 				si++
+				if n := slideNumberLen(s[si:]); n > 0 && si+n < len(s) && capital(si+n) && !strings.HasPrefix(q[qi:], s[si:si+n-1]) {
+					si += n // «ALTER TABLE\n14\nПРЕДЛОЖЕНИЯ SQL» copied without the 14
+				}
 				if m := listMarkerLen(s[si:]); m > 0 && !strings.HasPrefix(q[qi:], s[si:si+m]) {
 					si += m // «- ядро», «1. ядро» copied as «ядро»
 				}
@@ -535,6 +544,21 @@ func matchAcrossBreaks(s, q string) (start, end int, ok bool) {
 		i += size
 	}
 	return 0, 0, false
+}
+
+// slideNumberLen returns the length of a number line s starts with, its
+// line break included: one to three digits alone on a line. 0 for none. It is
+// a slide's number when a capital opens the next line, the heading of the
+// next slide; «в\n14\nлет» goes on with the text.
+func slideNumberLen(s string) int {
+	n := 0
+	for n < len(s) && n < 3 && s[n] >= '0' && s[n] <= '9' {
+		n++
+	}
+	if n == 0 || n >= len(s) || s[n] != '\n' {
+		return 0
+	}
+	return n + 1
 }
 
 // listMarkerLen returns the length of a folded list marker s starts with: a
