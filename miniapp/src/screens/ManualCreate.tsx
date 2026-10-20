@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button, CellList, CellSimple, Flex, Input, Typography } from '@maxhub/max-ui';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { ConfirmDiscardDialog } from '../components/ConfirmDiscardDialog';
 import CardForm from './CardForm';
 import type { CardKind } from '../types';
 import type { CardPatch } from '../utils/cards';
@@ -19,8 +20,10 @@ export default function ManualCreate({ setId: initialSetId, setTitle: initialTit
     const [started, setStarted] = useState(false);
     const [version, setVersion] = useState(0);
     const [dirty, setDirty] = useState(false);
+    const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null);
     const exit = () => {
-        if ((!dirty && (setId || !title.trim())) || window.confirm('Несохранённые изменения будут потеряны. Выйти?')) onExit();
+        if (!dirty && (setId || !title.trim())) onExit();
+        else setPendingLeave(() => onExit);
     };
     const save = async (patch: CardPatch) => {
         if (!patch.kind || !patch.question || patch.answer === undefined) return;
@@ -66,9 +69,14 @@ export default function ManualCreate({ setId: initialSetId, setTitle: initialTit
             setTitle={title} creationKind={kind} onKindChange={setKind} onDirtyChange={setDirty}
             onSave={save} onBack={() => {
                 if (!setId) setStep('kind');
-                else if (!dirty || window.confirm('Несохранённые изменения будут потеряны. Выйти?')) onDone(setId);
+                else if (dirty) setPendingLeave(() => () => onDone(setId));
+                else onDone(setId);
             }}
             onDone={setId ? () => onDone(setId) : undefined} />
         </div>}
+        {pendingLeave && <ConfirmDiscardDialog
+            onCancel={() => setPendingLeave(null)}
+            onConfirm={() => { setPendingLeave(null); pendingLeave(); }}
+        />}
     </>;
 }
