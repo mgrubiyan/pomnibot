@@ -161,6 +161,8 @@ cp .env.example .env
 
 **OpenRouter**: основной провайдер при наличии `OPENROUTER_KEY`. Модель по умолчанию — `anthropic/claude-haiku-5.5`, размышления явно отключены через `reasoning.enabled=false`. Deploy workflow выбирает `LLM_PRIMARY=openrouter` при наличии секрета, включая установки со старой переменной `LLM_PRIMARY=aistudio`; без ключа сохраняет прежнюю настройку. Общая цепочка для карточек, проверки ответов и чтения страниц: OpenRouter → GigaChat → Qwen.
 
+Для Haiku 5.5 и алиаса `~anthropic/claude-haiku-latest` (включая варианты с суффиксом `:…`) параметр `temperature` не отправляется: модель его не поддерживает, а `require_parameters=true` иначе исключает все endpoints с ошибкой 404. Для остальных моделей температура передаётся как прежде.
+
 | Переменная | По умолчанию | Назначение |
 |---|---|---|
 | `OPENROUTER_KEY` | — | API-ключ; deploy workflow передаёт GitHub Secret с этим именем в окружение backend |

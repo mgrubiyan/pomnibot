@@ -172,7 +172,7 @@ type responseFormat struct {
 type chatRequest struct {
 	Model          string          `json:"model"`
 	Messages       []message       `json:"messages"`
-	Temperature    float64         `json:"temperature"`
+	Temperature    *float64        `json:"temperature,omitempty"`
 	MaxTokens      int             `json:"max_tokens"`
 	ResponseFormat *responseFormat `json:"response_format,omitempty"`
 	Reasoning      struct {
@@ -206,7 +206,13 @@ func (c *Client) call(ctx context.Context, req providers.Request) (providers.Res
 	if req.Image != nil {
 		user = []part{{Type: "text", Text: req.User}, {Type: "image_url", ImageURL: &imageURL{URL: "data:" + req.Image.MimeType + ";base64," + base64.StdEncoding.EncodeToString(req.Image.Data)}}}
 	}
-	body := chatRequest{Model: c.cfg.Model, Messages: []message{{Role: "system", Content: req.System}, {Role: "user", Content: user}}, Temperature: req.Temperature, MaxTokens: c.cfg.MaxTokens}
+	body := chatRequest{Model: c.cfg.Model, Messages: []message{{Role: "system", Content: req.System}, {Role: "user", Content: user}}, MaxTokens: c.cfg.MaxTokens}
+	// Haiku 5.5 removed sampling parameters. With require_parameters enabled,
+	// even temperature=0 excludes every endpoint and OpenRouter returns 404.
+	baseModel, _, _ := strings.Cut(c.cfg.Model, ":")
+	if baseModel != "anthropic/claude-haiku-5.5" && baseModel != "~anthropic/claude-haiku-latest" {
+		body.Temperature = &req.Temperature
+	}
 	body.Reasoning.Enabled = false
 	body.Provider.RequireParameters = true
 	if len(req.Schema) > 0 {

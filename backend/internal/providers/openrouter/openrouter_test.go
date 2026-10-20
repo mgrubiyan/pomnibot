@@ -77,6 +77,55 @@ func TestCompleteTextAndImage(t *testing.T) {
 	}
 }
 
+func TestCompleteTemperatureCompatibility(t *testing.T) {
+	for _, tc := range []struct {
+		name, model string
+		temperature float64
+		wantSent    bool
+	}{
+		{"haiku zero", DefaultModel, 0, false},
+		{"haiku nonzero", DefaultModel, 0.3, false},
+		{"haiku variant", DefaultModel + ":nitro", 0.3, false},
+		{"haiku latest", "~anthropic/claude-haiku-latest", 0.3, false},
+		{"haiku latest variant", "~anthropic/claude-haiku-latest:nitro", 0.3, false},
+		{"legacy zero", "anthropic/claude-haiku-4.5", 0, true},
+		{"legacy nonzero", "anthropic/claude-haiku-4.5", 0.3, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := clientFor(t, func(w http.ResponseWriter, r *http.Request) {
+				var body map[string]json.RawMessage
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Fatal(err)
+				}
+				temperature, sent := body["temperature"]
+				if sent != tc.wantSent {
+					t.Errorf("temperature sent = %v, want %v", sent, tc.wantSent)
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+				if sent {
+					var got float64
+					if err := json.Unmarshal(temperature, &got); err != nil || got != tc.temperature {
+						t.Errorf("temperature = %s, want %v", temperature, tc.temperature)
+					}
+				}
+				var provider struct {
+					RequireParameters bool `json:"require_parameters"`
+				}
+				if err := json.Unmarshal(body["provider"], &provider); err != nil || !provider.RequireParameters {
+					t.Errorf("provider must require parameter support: %s", body["provider"])
+				}
+				_, _ = fmt.Fprint(w, `{"choices":[{"message":{"content":"ok"}}]}`)
+			})
+			c.cfg.Model = tc.model
+			res, err := c.Complete(context.Background(), providers.Request{User: "Hello", Temperature: tc.temperature})
+			if err != nil || string(res.Content) != "ok" {
+				t.Fatalf("response = %+v, err = %v", res, err)
+			}
+		})
+	}
+}
+
 func TestErrorsAndRetries(t *testing.T) {
 	for _, tc := range []struct {
 		status, calls int
