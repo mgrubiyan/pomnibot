@@ -27,7 +27,7 @@ func RunMigrations(ctx context.Context, dbURL string) error {
 		_ = db.Close()
 	}()
 
-	if err := db.PingContext(ctx); err != nil {
+	if err := PingDatabase(ctx, db.PingContext); err != nil {
 		return fmt.Errorf("ping migration db: %w", err)
 	}
 

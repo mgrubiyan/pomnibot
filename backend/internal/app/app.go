@@ -48,7 +48,7 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 		return fmt.Errorf("connect database: %w", err)
 	}
 	defer pool.Close()
-	if err := pool.Ping(ctx); err != nil {
+	if err := repository.PingDatabase(ctx, pool.Ping); err != nil {
 		return fmt.Errorf("ping database: %w", err)
 	}
 
