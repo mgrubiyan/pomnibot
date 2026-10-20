@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
@@ -18,40 +19,46 @@ func accountFromContext(ctx context.Context) (usecase.Account, bool) {
 	return account, ok
 }
 
-// AuthMiddleware selects exactly one provider by the Authorization scheme.
+// AuthMiddleware resolves a verified platform ID to the internal user ID.
 // Missing or invalid credentials retain the shared browser test account.
-func AuthMiddleware(maxProvider, telegramProvider IdentityProvider, users usecase.AccountService) func(http.Handler) http.Handler {
+func AuthMiddleware(maxToken, telegramToken string, users usecase.UserService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			fallback := WithUserName(WithUserID(r.Context(), 0), "Browser Test User")
 			scheme, raw, ok := strings.Cut(r.Header.Get("Authorization"), " ")
-			var provider IdentityProvider
+			var user *initDataUser
+			var err error
 			switch {
-			case strings.EqualFold(scheme, "max"):
-				provider = maxProvider
-			case strings.EqualFold(scheme, "tma"):
-				provider = telegramProvider
+			case ok && raw != "" && strings.EqualFold(scheme, "max") && maxToken != "":
+				user, err = validateInitData(raw, maxToken, time.Now())
+			case ok && raw != "" && strings.EqualFold(scheme, "tma") && telegramToken != "":
+				user, err = validateTelegramInitData(raw, telegramToken, time.Now())
 			}
-			if !ok || raw == "" || provider == nil {
-				next.ServeHTTP(w, r.WithContext(fallback))
-				return
-			}
-			identity, err := provider.Verify(r.Context(), raw)
-			if err != nil {
+			if err != nil || user == nil {
 				next.ServeHTTP(w, r.WithContext(fallback))
 				return
 			}
 			if users == nil {
-				writeAuthError(w, 500, "account service unavailable", "")
+				writeAuthError(w, 500, "user service unavailable", "")
 				return
 			}
-			account, err := users.ResolveIdentity(r.Context(), identity)
+			var account usecase.Account
+			if strings.EqualFold(scheme, "max") {
+				first := strings.TrimSpace(user.FirstName)
+				if first == "" {
+					first = resolveUserName(*user)
+				}
+				last, username := strings.TrimSpace(user.LastName), strings.TrimSpace(user.Username)
+				account, err = users.UpsertMAXUser(r.Context(), usecase.MAXUserParams{MaxID: user.ID, FirstName: first, LastName: &last, Username: &username, IsBot: user.IsBot})
+			} else {
+				account, err = users.UpsertTelegramUser(r.Context(), usecase.TelegramUserParams{TgID: user.ID, Username: user.Username, IsBot: user.IsBot})
+			}
 			if err != nil {
 				slog.ErrorContext(r.Context(), "resolve authenticated user", "error", err)
 				writeAuthError(w, 500, "failed to resolve user", "")
 				return
 			}
-			if account.Platform == "telegram" && !account.ProfileComplete && (r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/")) && r.URL.Path != "/api/profile" && r.URL.Path != "/api/health" {
+			if account.TgID != 0 && !account.ProfileComplete && (r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/")) && r.URL.Path != "/api/profile" && r.URL.Path != "/api/health" {
 				writeAuthError(w, http.StatusForbidden, "Заполните фамилию и имя", "profile_required")
 				return
 			}

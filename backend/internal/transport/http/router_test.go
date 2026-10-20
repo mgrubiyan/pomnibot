@@ -22,7 +22,7 @@ func TestHealthEndpoint(t *testing.T) {
 		"index.html": &fstest.MapFile{Data: []byte("<!DOCTYPE html><html><body>Test</body></html>")},
 	}
 
-	router, err := NewRouter(NewAPIHandler(nil, nil, nil), mockFS, nil, nil, nil)
+	router, err := NewRouter(NewAPIHandler(nil, nil, nil, nil), mockFS, "", "", nil)
 	if err != nil {
 		t.Fatalf("failed to setup router: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestStaticAndReactRouter(t *testing.T) {
 		},
 	}
 
-	router, err := NewRouter(NewAPIHandler(nil, nil, nil), mockFS, nil, nil, nil)
+	router, err := NewRouter(NewAPIHandler(nil, nil, nil, nil), mockFS, "", "", nil)
 	if err != nil {
 		t.Fatalf("failed to setup router: %v", err)
 	}
@@ -205,10 +205,10 @@ func (h *authTestHandler) GetHealth(ctx context.Context) (contracts.GetHealthRes
 func TestRouter_AuthMiddlewareIntegration(t *testing.T) {
 	testBotToken := "secret-bot-token"
 
-	t.Run("propagates valid user from X-Init-Data header", func(t *testing.T) {
+	t.Run("propagates internal user ID from MAX authorization", func(t *testing.T) {
 		h := &authTestHandler{}
 		mockUserSvc := &mockUserService{}
-		router, err := NewRouter(h, fstest.MapFS{}, NewMAXIdentityProvider(testBotToken), nil, mockUserSvc)
+		router, err := NewRouter(h, fstest.MapFS{}, testBotToken, "", mockUserSvc)
 		if err != nil {
 			t.Fatalf("failed to create router: %v", err)
 		}
@@ -231,17 +231,17 @@ func TestRouter_AuthMiddlewareIntegration(t *testing.T) {
 		if !h.capturedOk {
 			t.Fatal("expected UserID to be present in context")
 		}
-		if h.capturedUserID != 424242 {
-			t.Fatalf("expected userID 424242, got %d", h.capturedUserID)
+		if h.capturedUserID != 524242 {
+			t.Fatalf("expected internal userID 524242, got %d", h.capturedUserID)
 		}
-		if len(mockUserSvc.upsertCalls) != 1 || mockUserSvc.upsertCalls[0].ID != 424242 {
-			t.Fatalf("expected UpsertUser to be called for 424242, got %+v", mockUserSvc.upsertCalls)
+		if len(mockUserSvc.upsertCalls) != 1 || mockUserSvc.upsertCalls[0].MaxID != 424242 {
+			t.Fatalf("expected UpsertMAXUser to be called for 424242, got %+v", mockUserSvc.upsertCalls)
 		}
 	})
 
-	t.Run("falls back to 0 when X-Init-Data is absent", func(t *testing.T) {
+	t.Run("falls back to 0 when authorization is absent", func(t *testing.T) {
 		h := &authTestHandler{}
-		router, err := NewRouter(h, fstest.MapFS{}, NewMAXIdentityProvider(testBotToken), nil, nil)
+		router, err := NewRouter(h, fstest.MapFS{}, testBotToken, "", nil)
 		if err != nil {
 			t.Fatalf("failed to create router: %v", err)
 		}
@@ -284,7 +284,8 @@ func TestRouter_E2E_Integration(t *testing.T) {
 		"index.html": &fstest.MapFile{Data: []byte("<!DOCTYPE html><html><body>Test</body></html>")},
 	}
 
-	testUserID := int64(98765)
+	testMaxID := int64(98765)
+	testUserID := testMaxID + 100000
 	testSetID := uuid.New()
 	testCardID := uuid.New()
 
@@ -401,8 +402,8 @@ func TestRouter_E2E_Integration(t *testing.T) {
 
 	testBotToken := "e2e-token"
 	mockUserSvc := &mockUserService{}
-	handler := NewAPIHandler(mockSet, mockCard, mockHome)
-	router, err := NewRouter(handler, mockFS, NewMAXIdentityProvider(testBotToken), nil, mockUserSvc)
+	handler := NewAPIHandler(mockSet, mockCard, mockHome, nil)
+	router, err := NewRouter(handler, mockFS, testBotToken, "", mockUserSvc)
 	if err != nil {
 		t.Fatalf("failed to create router: %v", err)
 	}
@@ -410,7 +411,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 	now := time.Now().Unix()
 	authHeader := generateValidInitData(map[string]string{
 		"auth_date": strconv.FormatInt(now, 10),
-		"user":      fmt.Sprintf(`{"id":%d,"first_name":"Tester"}`, testUserID),
+		"user":      fmt.Sprintf(`{"id":%d,"first_name":"Tester"}`, testMaxID),
 	}, testBotToken)
 
 	t.Run("GET /api/health returns 200 OK", func(t *testing.T) {

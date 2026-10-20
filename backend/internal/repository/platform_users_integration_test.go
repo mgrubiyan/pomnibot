@@ -14,7 +14,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
-func TestIdentityMigrationAndSharedLearning(t *testing.T) {
+func TestPlatformUsersMigrationAndSharedLearning(t *testing.T) {
 	ctx := context.Background()
 	oldSet := uuid.New()
 	pool := manualTestPool(t, func(pool *pgxpool.Pool) {
@@ -32,7 +32,7 @@ func TestIdentityMigrationAndSharedLearning(t *testing.T) {
 	})
 	q := db.New(pool)
 	users := usecase.NewUserService(q)
-	maxAccount, err := users.ResolveIdentity(ctx, usecase.Identity{Platform: "max", ExternalID: 9999999, FirstName: "Updated MAX"})
+	maxAccount, err := users.UpsertMAXUser(ctx, usecase.MAXUserParams{MaxID: 9999999, FirstName: "Updated MAX"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,8 +40,8 @@ func TestIdentityMigrationAndSharedLearning(t *testing.T) {
 		t.Fatalf("legacy ID changed: %d", maxAccount.User.ID)
 	}
 	var count int
-	if err = pool.QueryRow(ctx, "SELECT count(*) FROM user_identities WHERE user_id IN (0,1,100001)").Scan(&count); err != nil || count != 0 {
-		t.Fatalf("demo identities: %d %v", count, err)
+	if err = pool.QueryRow(ctx, "SELECT count(*) FROM users WHERE id IN (0,1,100001) AND (max_id IS NOT NULL OR tg_id IS NOT NULL)").Scan(&count); err != nil || count != 0 {
+		t.Fatalf("demo platform IDs: %d %v", count, err)
 	}
 	var elo int
 	if err = pool.QueryRow(ctx, "SELECT elo FROM user_fact_progress WHERE user_id=9999999 AND fact_id='legacy-fact'").Scan(&elo); err != nil || elo != 900 {
@@ -56,7 +56,7 @@ func TestIdentityMigrationAndSharedLearning(t *testing.T) {
 	failures := make(chan error, 32)
 	for i := range 32 {
 		wg.Go(func() {
-			account, err := users.ResolveIdentity(ctx, usecase.Identity{Platform: "telegram", ExternalID: 9999999, FirstName: "Remote name", BotStarted: i%2 == 0})
+			account, err := users.UpsertTelegramUser(ctx, usecase.TelegramUserParams{TgID: 9999999, BotStarted: i%2 == 0})
 			if err != nil {
 				failures <- err
 				return
@@ -118,7 +118,7 @@ func TestIdentityMigrationAndSharedLearning(t *testing.T) {
 	if _, err = users.ProfileInput(ctx, telegramID, "Stale answer", false); err != nil {
 		t.Fatal(err)
 	}
-	telegram, err = users.ResolveIdentity(ctx, usecase.Identity{Platform: "telegram", ExternalID: 9999999, FirstName: "Remote", LastName: "Remote"})
+	telegram, err = users.UpsertTelegramUser(ctx, usecase.TelegramUserParams{TgID: 9999999})
 	if err != nil || telegram.User.FirstName != "Форма" || telegram.User.LastName.Value != "Новая" {
 		t.Fatalf("profile overwritten: %+v %v", telegram, err)
 	}
@@ -153,9 +153,9 @@ func TestIdentityMigrationAndSharedLearning(t *testing.T) {
 	if err != nil || len(board.Items) != 2 {
 		t.Fatalf("shared leaderboard: %+v %v", board, err)
 	}
-	identities, err := users.GetDeliveryIdentities(ctx, telegramID)
-	if err != nil || len(identities) != 1 || identities[0].ExternalID != 9999999 {
-		t.Fatalf("delivery: %+v %v", identities, err)
+	delivery, err := users.GetAccount(ctx, telegramID)
+	if err != nil || delivery.TgID != 9999999 || delivery.MaxID != 0 || !delivery.BotStarted {
+		t.Fatalf("delivery: %+v %v", delivery, err)
 	}
 }
 
@@ -163,15 +163,16 @@ func TestTelegramReminderEligibility(t *testing.T) {
 	pool := manualTestPool(t)
 	ctx := context.Background()
 	users := usecase.NewUserService(db.New(pool))
-	account, err := users.ResolveIdentity(ctx, usecase.Identity{Platform: "telegram", ExternalID: 42})
+	account, err := users.UpsertTelegramUser(ctx, usecase.TelegramUserParams{TgID: 42})
 	if err != nil {
 		t.Fatal(err)
 	}
 	check := func(want int) {
 		t.Helper()
-		identities, err := users.GetDeliveryIdentities(ctx, account.User.ID)
-		if err != nil || len(identities) != want {
-			t.Fatalf("delivery=%+v %v, want %d", identities, err, want)
+		saved, err := users.GetAccount(ctx, account.User.ID)
+		eligible := saved.TgID != 0 && saved.ProfileComplete && saved.BotStarted
+		if err != nil || eligible != (want == 1) {
+			t.Fatalf("delivery=%+v %v, want %d", saved, err, want)
 		}
 	}
 	check(0)
@@ -179,7 +180,7 @@ func TestTelegramReminderEligibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	check(0)
-	if _, err = users.ResolveIdentity(ctx, usecase.Identity{Platform: "telegram", ExternalID: 42, BotStarted: true}); err != nil {
+	if _, err = users.UpsertTelegramUser(ctx, usecase.TelegramUserParams{TgID: 42, BotStarted: true}); err != nil {
 		t.Fatal(err)
 	}
 	check(1)

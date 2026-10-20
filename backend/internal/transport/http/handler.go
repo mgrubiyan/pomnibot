@@ -11,7 +11,7 @@ import (
 // APIHandler implements contracts.Handler by delegating to domain-specific handlers.
 type APIHandler struct {
 	contracts.UnimplementedHandler
-	users      usecase.AccountService
+	users      usecase.UserService
 	sets       *SetsHandler
 	cards      *CardsHandler
 	homescreen *HomescreenHandler
@@ -25,7 +25,7 @@ func NewAPIHandler(
 	setService usecase.SetService,
 	cardService usecase.CardService,
 	homescreenService usecase.HomescreenService,
-	userServices ...usecase.AccountService,
+	users usecase.UserService,
 ) *APIHandler {
 	var sets *SetsHandler
 	if setService != nil {
@@ -38,10 +38,6 @@ func NewAPIHandler(
 	var homescreen *HomescreenHandler
 	if homescreenService != nil {
 		homescreen = NewHomescreenHandler(homescreenService)
-	}
-	var users usecase.AccountService
-	if len(userServices) > 0 {
-		users = userServices[0]
 	}
 	return &APIHandler{
 		users:      users,

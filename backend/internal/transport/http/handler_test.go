@@ -15,7 +15,7 @@ import (
 var _ contracts.Handler = (*APIHandler)(nil)
 
 func TestAPIHandler_GetHealth(t *testing.T) {
-	h := NewAPIHandler(nil, nil, nil)
+	h := NewAPIHandler(nil, nil, nil, nil)
 	res, err := h.GetHealth(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -76,7 +76,7 @@ func TestAPIHandler_SetsDelegation(t *testing.T) {
 		},
 	}
 
-	h := NewAPIHandler(mockSet, nil, nil)
+	h := NewAPIHandler(mockSet, nil, nil, nil)
 	ctx := WithUserID(context.Background(), 123)
 
 	t.Run("GetSet delegates to setsHandler", func(t *testing.T) {
@@ -173,7 +173,7 @@ func TestAPIHandler_CardsDelegation(t *testing.T) {
 		},
 	}
 
-	h := NewAPIHandler(nil, mockCard, nil)
+	h := NewAPIHandler(nil, mockCard, nil, nil)
 	ctx := WithUserID(context.Background(), 456)
 
 	t.Run("UpdateCard delegates to cardsHandler", func(t *testing.T) {
@@ -229,7 +229,7 @@ func TestAPIHandler_HomescreenDelegation(t *testing.T) {
 		},
 	}
 
-	h := NewAPIHandler(nil, nil, mockHome)
+	h := NewAPIHandler(nil, nil, mockHome, nil)
 	ctx := WithUserID(context.Background(), 789)
 
 	t.Run("GetToday delegates to homescreenHandler", func(t *testing.T) {
@@ -266,7 +266,7 @@ func TestAPIHandler_HomescreenDelegation(t *testing.T) {
 }
 
 func TestAPIHandler_NilServicesFallback(t *testing.T) {
-	h := NewAPIHandler(nil, nil, nil)
+	h := NewAPIHandler(nil, nil, nil, nil)
 	ctx := context.Background()
 	randomID := uuid.New()
 

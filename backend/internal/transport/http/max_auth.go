@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -13,24 +12,21 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
 var (
-	errMissingInitDataHeader = errors.New("missing Authorization header")
-	errMissingHash           = errors.New("missing hash in initData")
-	errMissingAuthDate       = errors.New("missing auth_date in initData")
-	errInvalidAuthDate       = errors.New("invalid auth_date in initData")
-	errExpiredAuthDate       = errors.New("expired auth_date in initData")
-	errHashMismatch          = errors.New("hash mismatch in initData")
-	errMissingUserField      = errors.New("missing user in initData")
-	errInvalidUserID         = errors.New("invalid or zero user ID")
+	errMissingHash      = errors.New("missing hash in initData")
+	errMissingAuthDate  = errors.New("missing auth_date in initData")
+	errInvalidAuthDate  = errors.New("invalid auth_date in initData")
+	errExpiredAuthDate  = errors.New("expired auth_date in initData")
+	errHashMismatch     = errors.New("hash mismatch in initData")
+	errMissingUserField = errors.New("missing user in initData")
+	errInvalidUserID    = errors.New("invalid or zero user ID")
 )
 
 const maxInitDataAge = time.Hour
 
-type maxUser struct {
+type initDataUser struct {
 	ID        int64  `json:"id"`
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
@@ -39,7 +35,7 @@ type maxUser struct {
 	IsBot     bool   `json:"is_bot"`
 }
 
-func resolveUserName(u maxUser) string {
+func resolveUserName(u initDataUser) string {
 	if strings.TrimSpace(u.Name) != "" {
 		return strings.TrimSpace(u.Name)
 	}
@@ -56,7 +52,7 @@ func resolveUserName(u maxUser) string {
 	return "MAX User"
 }
 
-func validateInitData(rawInitData, botToken string, now time.Time) (*maxUser, error) {
+func validateInitData(rawInitData, botToken string, now time.Time) (*initDataUser, error) {
 	raw := strings.TrimSpace(rawInitData)
 	raw = strings.TrimPrefix(raw, "#")
 	if strings.HasPrefix(raw, "WebAppData=") {
@@ -127,7 +123,7 @@ func validateInitData(rawInitData, botToken string, now time.Time) (*maxUser, er
 		return nil, errMissingUserField
 	}
 
-	var u maxUser
+	var u initDataUser
 	if unmarshalErr := json.Unmarshal([]byte(userRaw), &u); unmarshalErr != nil {
 		if unescaped, unescapeErr := url.QueryUnescape(userRaw); unescapeErr == nil {
 			if unmarshalErr = json.Unmarshal([]byte(unescaped), &u); unmarshalErr != nil {
@@ -143,29 +139,4 @@ func validateInitData(rawInitData, botToken string, now time.Time) (*maxUser, er
 	}
 
 	return &u, nil
-}
-
-// IdentityProvider verifies raw Mini App data without accessing persistence.
-type IdentityProvider interface {
-	Verify(context.Context, string) (usecase.Identity, error)
-}
-
-type maxIdentityProvider struct{ token string }
-
-// NewMAXIdentityProvider uses the existing MAX signature and time rules.
-func NewMAXIdentityProvider(token string) IdentityProvider { return maxIdentityProvider{token: token} }
-
-func (p maxIdentityProvider) Verify(_ context.Context, raw string) (usecase.Identity, error) {
-	if p.token == "" {
-		return usecase.Identity{}, errMissingInitDataHeader
-	}
-	u, err := validateInitData(raw, p.token, time.Now())
-	if err != nil {
-		return usecase.Identity{}, err
-	}
-	first := strings.TrimSpace(u.FirstName)
-	if first == "" {
-		first = resolveUserName(*u)
-	}
-	return usecase.Identity{Platform: "max", ExternalID: u.ID, FirstName: first, LastName: strings.TrimSpace(u.LastName), Username: strings.TrimSpace(u.Username), IsBot: u.IsBot}, nil
 }

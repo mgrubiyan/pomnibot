@@ -60,7 +60,7 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 	cardOptions = append(cardOptions, usecase.WithManualCards(store))
 	cards := usecase.NewCardService(queries, users, cardOptions...)
 	home := usecase.NewHomescreenService(queries, users)
-	router, err := httptransport.NewRouter(httptransport.NewAPIHandler(sets, cards, home, users), assets, httptransport.NewMAXIdentityProvider(cfg.BotToken), httptransport.NewTelegramIdentityProvider(cfg.TelegramBotToken), users)
+	router, err := httptransport.NewRouter(httptransport.NewAPIHandler(sets, cards, home, users), assets, cfg.BotToken, cfg.TelegramBotToken, users)
 	if err != nil {
 		return fmt.Errorf("initialize router: %w", err)
 	}

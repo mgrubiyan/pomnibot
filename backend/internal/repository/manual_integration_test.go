@@ -20,7 +20,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
-func manualTestPool(t *testing.T, beforeIdentity ...func(*pgxpool.Pool)) *pgxpool.Pool {
+func manualTestPool(t *testing.T, beforeMigration ...func(*pgxpool.Pool)) *pgxpool.Pool {
 	t.Helper()
 	url := os.Getenv("POMNIBOT_TEST_DATABASE_URL")
 	if url == "" {
@@ -55,7 +55,7 @@ func manualTestPool(t *testing.T, beforeIdentity ...func(*pgxpool.Pool)) *pgxpoo
 			continue
 		}
 		if strings.HasPrefix(entry.Name(), "00008") {
-			for _, before := range beforeIdentity {
+			for _, before := range beforeMigration {
 				before(pool)
 			}
 		}

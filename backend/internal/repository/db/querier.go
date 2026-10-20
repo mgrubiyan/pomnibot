@@ -24,14 +24,12 @@ type Querier interface {
 	DeleteCardTableItems(ctx context.Context, cardID pgtype.UUID) error
 	DeleteSet(ctx context.Context, arg DeleteSetParams) (int64, error)
 	EnsureUser(ctx context.Context, id int64) (User, error)
-	GetAccount(ctx context.Context, id int64) (GetAccountRow, error)
 	GetCardByID(ctx context.Context, arg GetCardByIDParams) (GetCardByIDRow, error)
 	GetCardByIDForAuthor(ctx context.Context, arg GetCardByIDForAuthorParams) (GetCardByIDForAuthorRow, error)
 	GetCardOptions(ctx context.Context, cardID pgtype.UUID) ([]CardOption, error)
 	GetCardTableColumns(ctx context.Context, cardID pgtype.UUID) ([]CardTableColumn, error)
 	GetCardTableItems(ctx context.Context, cardID pgtype.UUID) ([]CardTableItem, error)
 	GetCardsBySetID(ctx context.Context, arg GetCardsBySetIDParams) ([]GetCardsBySetIDRow, error)
-	GetDeliveryIdentities(ctx context.Context, userID int64) ([]UserIdentity, error)
 	GetFactsBySetID(ctx context.Context, setID pgtype.UUID) ([]GetFactsBySetIDRow, error)
 	GetFeedCardsForUser(ctx context.Context, userID int64) ([]GetFeedCardsForUserRow, error)
 	GetNextReviewDateForUser(ctx context.Context, userID int64) (pgtype.Timestamptz, error)
@@ -50,13 +48,13 @@ type Querier interface {
 	LeaveSet(ctx context.Context, arg LeaveSetParams) (int64, error)
 	LockSetForAuthor(ctx context.Context, arg LockSetForAuthorParams) (pgtype.UUID, error)
 	RecordAnswerResult(ctx context.Context, arg RecordAnswerResultParams) (AnswerResult, error)
-	ResolveIdentity(ctx context.Context, arg ResolveIdentityParams) (int64, error)
-	SaveTelegramProfile(ctx context.Context, arg SaveTelegramProfileParams) error
-	TelegramProfileInput(ctx context.Context, arg TelegramProfileInputParams) error
+	SaveTelegramProfile(ctx context.Context, arg SaveTelegramProfileParams) (User, error)
+	TelegramProfileInput(ctx context.Context, arg TelegramProfileInputParams) (User, error)
 	UpdateCard(ctx context.Context, arg UpdateCardParams) (Card, error)
 	UpdateFactProgressOnAnswer(ctx context.Context, arg UpdateFactProgressOnAnswerParams) (UserFactProgress, error)
+	UpsertMAXUser(ctx context.Context, arg UpsertMAXUserParams) (User, error)
+	UpsertTelegramUser(ctx context.Context, arg UpsertTelegramUserParams) (User, error)
 	UpsertTopic(ctx context.Context, name string) (Topic, error)
-	UpsertUser(ctx context.Context, arg UpsertUserParams) (User, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -29,9 +29,12 @@ type testUsers struct {
 	calls   int
 }
 
-func (u *testUsers) ResolveIdentity(_ context.Context, _ usecase.Identity) (usecase.Account, error) {
+func (u *testUsers) UpsertTelegramUser(_ context.Context, params usecase.TelegramUserParams) (usecase.Account, error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
+	if params.TgID != 42 || !params.BotStarted {
+		return usecase.Account{}, fmt.Errorf("unexpected Telegram input: %+v", params)
+	}
 	u.calls++
 	return u.account, nil
 }
@@ -62,10 +65,16 @@ func (u *testUsers) ProfileInput(_ context.Context, _ int64, text string, restar
 	return u.account, nil
 }
 func (u *testUsers) GetUsersWithDueFacts(context.Context, time.Time, string) ([]int64, error) {
-	return []int64{900}, nil
+	return []int64{900, 901}, nil
 }
-func (u *testUsers) GetDeliveryIdentities(context.Context, int64) ([]usecase.Identity, error) {
-	return []usecase.Identity{{Platform: "max", ExternalID: 42}, {Platform: "telegram", ExternalID: 43}}, nil
+func (u *testUsers) GetAccount(_ context.Context, id int64) (usecase.Account, error) {
+	if id == 900 {
+		return usecase.Account{TgID: 43, BotStarted: true, ProfileComplete: true}, nil
+	}
+	if id == 901 {
+		return usecase.Account{MaxID: 43, ProfileComplete: true}, nil
+	}
+	return usecase.Account{}, fmt.Errorf("wrong internal ID %d", id)
 }
 
 type extractorFunc func(context.Context, []ingest.File) (ingest.Result, error)
@@ -108,7 +117,7 @@ func testBot(t *testing.T, users *testUsers, handler http.HandlerFunc, extractor
 func sendOK(w http.ResponseWriter) { _, _ = w.Write([]byte(`{"ok":true,"result":{"message_id":1}}`)) }
 
 func TestTelegramProfileDialogue(t *testing.T) {
-	users := &testUsers{account: usecase.Account{User: contracts.User{ID: 900}, Platform: "telegram", ProfileStep: "last_name"}}
+	users := &testUsers{account: usecase.Account{User: contracts.User{ID: 900}, TgID: 42, ProfileStep: "last_name"}}
 	var texts []string
 	bot, _ := testBot(t, users, func(w http.ResponseWriter, r *http.Request) {
 		var body struct{ Text string }
@@ -162,7 +171,7 @@ func TestTelegramProfileDialogue(t *testing.T) {
 }
 
 func TestTelegramAlbumAndPhotos(t *testing.T) {
-	users := &testUsers{account: usecase.Account{User: contracts.User{ID: 900}, Platform: "telegram", ProfileComplete: true}}
+	users := &testUsers{account: usecase.Account{User: contracts.User{ID: 900}, TgID: 42, ProfileComplete: true}}
 	var mu sync.Mutex
 	var downloads []string
 	extracted := make(chan []ingest.File, 2)
@@ -253,7 +262,7 @@ func TestTelegramRejectsOversizeAndDownloadErrors(t *testing.T) {
 }
 
 func TestPollingDeduplicatesAndOrdersDialogue(t *testing.T) {
-	users := &testUsers{account: usecase.Account{User: contracts.User{ID: 900}, Platform: "telegram", ProfileStep: "last_name"}}
+	users := &testUsers{account: usecase.Account{User: contracts.User{ID: 900}, TgID: 42, ProfileStep: "last_name"}}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	polls := 0

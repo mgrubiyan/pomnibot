@@ -10,8 +10,10 @@ import (
 
 func profileResponse(account usecase.Account) *contracts.ProfileResponse {
 	response := &contracts.ProfileResponse{User: account.User, ProfileComplete: account.ProfileComplete}
-	if account.Platform != "" {
-		response.Platform.SetTo(contracts.ProfileResponsePlatform(account.Platform))
+	if account.TgID != 0 {
+		response.Platform.SetTo(contracts.ProfileResponsePlatformTelegram)
+	} else if account.MaxID != 0 {
+		response.Platform.SetTo(contracts.ProfileResponsePlatformMax)
 	}
 	return response
 }
@@ -27,7 +29,7 @@ func (h *APIHandler) GetProfile(ctx context.Context) (contracts.GetProfileRes, e
 // PutProfile is restricted to verified Telegram accounts.
 func (h *APIHandler) PutProfile(ctx context.Context, req *contracts.ProfileRequest) (contracts.PutProfileRes, error) {
 	account, ok := accountFromContext(ctx)
-	if !ok || account.Platform != "telegram" {
+	if !ok || account.TgID == 0 {
 		return &contracts.PutProfileForbidden{Message: "Telegram authorization required"}, nil
 	}
 	if h.users == nil {

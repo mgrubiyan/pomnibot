@@ -147,7 +147,7 @@ func profilePrompt(account usecase.Account) string {
 
 func (b *Bot) handleMessage(ctx context.Context, m *Message) error {
 	u := m.From
-	account, err := b.users.ResolveIdentity(ctx, usecase.Identity{Platform: "telegram", ExternalID: u.ID, FirstName: u.FirstName, LastName: u.LastName, Username: u.Username, IsBot: u.IsBot, BotStarted: true})
+	account, err := b.users.UpsertTelegramUser(ctx, usecase.TelegramUserParams{TgID: u.ID, Username: u.Username, IsBot: u.IsBot, BotStarted: true})
 	if err != nil {
 		b.send(ctx, m.Chat.ID, "Не удалось загрузить профиль. Повторите сообщение чуть позже.", false)
 		return err
@@ -367,22 +367,21 @@ func (b *Bot) SendReviewReminders(ctx context.Context) (int, error) {
 	}
 	count := 0
 	for _, id := range ids {
-		identities, err := b.users.GetDeliveryIdentities(ctx, id)
+		account, err := b.users.GetAccount(ctx, id)
 		if err != nil {
 			return count, err
 		}
-		for _, identity := range identities {
-			if identity.Platform != "telegram" {
-				continue
-			}
-			if _, err = b.client.Send(ctx, identity.ExternalID, 0, "⏰ Пора повторить материал — в приложении вас ждут карточки на сегодня. 📚", b.appURL); err == nil {
-				count++
-			}
-			if err = pause(ctx, 50*time.Millisecond); err != nil {
-				return count, err
-			}
+		if account.TgID == 0 || !account.BotStarted || !account.ProfileComplete {
+			continue
+		}
+		if _, err = b.client.Send(ctx, account.TgID, 0, "⏰ Пора повторить материал — в приложении вас ждут карточки на сегодня. 📚", b.appURL); err == nil {
+			count++
+		}
+		if err = pause(ctx, 50*time.Millisecond); err != nil {
+			return count, err
 		}
 	}
+
 	return count, nil
 }
 

@@ -401,14 +401,7 @@ func extractFilename(att Attachment) string {
 }
 
 func (b *Bot) upsertUser(ctx context.Context, u User) (int64, error) {
-	last, username := "", ""
-	if u.LastName != nil {
-		last = *u.LastName
-	}
-	if u.Username != nil {
-		username = *u.Username
-	}
-	account, err := b.userService.ResolveIdentity(ctx, usecase.Identity{Platform: "max", ExternalID: u.UserID, FirstName: u.FirstName, LastName: last, Username: username, IsBot: u.IsBot, BotStarted: true})
+	account, err := b.userService.UpsertMAXUser(ctx, usecase.MAXUserParams{MaxID: u.UserID, FirstName: u.FirstName, LastName: u.LastName, Username: u.Username, IsBot: u.IsBot})
 	if err != nil {
 		slog.ErrorContext(ctx, "resolve MAX user", "error", err)
 		return 0, err
@@ -550,20 +543,14 @@ func (b *Bot) SendReviewReminders(ctx context.Context) (int, error) {
 			continue
 		}
 
-		identities, err := b.userService.GetDeliveryIdentities(ctx, userID)
+		account, err := b.userService.GetAccount(ctx, userID)
 		if err != nil {
 			return successCount, err
 		}
-		var externalID int64
-		for _, identity := range identities {
-			if identity.Platform == "max" {
-				externalID = identity.ExternalID
-			}
-		}
-		if externalID == 0 {
+		if account.MaxID == 0 {
 			continue
 		}
-		if _, err := b.client.SendMessage(ctx, 0, externalID, msg); err != nil {
+		if _, err := b.client.SendMessage(ctx, 0, account.MaxID, msg); err != nil {
 			slog.WarnContext(ctx, "failed to send review reminder to user",
 				"user_id", userID,
 				"error", err,

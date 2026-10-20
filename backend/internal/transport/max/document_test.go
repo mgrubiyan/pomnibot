@@ -208,11 +208,11 @@ func TestMAXUsesInternalIDForNotes(t *testing.T) {
 		savedID = id
 		return &contracts.CardSet{ID: uuid.New(), Title: title}, nil
 	}}
-	users := &mockUserService{resolveFunc: func(_ context.Context, i usecase.Identity) (usecase.Account, error) {
-		if i.Platform != "max" || i.ExternalID != 42 {
+	users := &mockUserService{upsertMAXUserFunc: func(_ context.Context, i usecase.MAXUserParams) (usecase.Account, error) {
+		if i.MaxID != 42 {
 			t.Errorf("identity: %+v", i)
 		}
-		return usecase.Account{User: contracts.User{ID: 900}, Platform: "max", ExternalID: 42, ProfileComplete: true}, nil
+		return usecase.Account{User: contracts.User{ID: 900}, MaxID: 42, ProfileComplete: true}, nil
 	}}
 	bot, err := NewBot(client, "https://example.test", users, notes.New(&mockFileExtractor{}, &mockCardGenerator{}, sets, 1))
 	if err != nil {

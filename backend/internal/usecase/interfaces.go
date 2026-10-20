@@ -38,19 +38,38 @@ type HomescreenService interface {
 	SendResults(ctx context.Context, userID int64, results []contracts.AnswerResult) error
 }
 
-// UpsertUserParams defines fields required to upsert a user into the system.
-type UpsertUserParams struct {
-	ID        int64
-	FirstName string
-	LastName  *string
-	Username  *string
-	IsBot     bool
+// MAXUserParams comes from a verified MAX request or bot update.
+type MAXUserParams struct {
+	MaxID              int64
+	FirstName          string
+	LastName, Username *string
+	IsBot              bool
+}
+
+// TelegramUserParams never overwrites the manually entered profile names.
+type TelegramUserParams struct {
+	TgID              int64
+	Username          string
+	IsBot, BotStarted bool
+}
+
+// Account contains the saved user and Telegram conversation state.
+// User.ID is internal; MaxID and TgID are only for messenger delivery.
+type Account struct {
+	User            contracts.User
+	MaxID, TgID     int64
+	ProfileComplete bool
+	ProfileStep     string
+	BotStarted      bool
 }
 
 // UserService defines user domain operations.
 type UserService interface {
-	AccountService
-	UpsertUser(ctx context.Context, params UpsertUserParams) error
+	UpsertMAXUser(context.Context, MAXUserParams) (Account, error)
+	UpsertTelegramUser(context.Context, TelegramUserParams) (Account, error)
+	GetAccount(context.Context, int64) (Account, error)
+	SaveProfile(context.Context, int64, string, string) (Account, error)
+	ProfileInput(context.Context, int64, string, bool) (Account, error)
 	EnsureUser(ctx context.Context, userID int64) error
 	GetUsersWithDueFacts(ctx context.Context, now time.Time, tz string) ([]int64, error)
 }

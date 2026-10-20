@@ -1,19 +1,18 @@
 package http
 
 import (
-	"context"
 	"strconv"
 	"testing"
 	"time"
 )
 
-func TestIdentityProviders(t *testing.T) {
+func TestPlatformInitData(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	for _, platform := range []string{"max", "telegram"} {
 		t.Run(platform, func(t *testing.T) {
-			p := NewMAXIdentityProvider("secret")
+			validate := validateInitData
 			if platform == "telegram" {
-				p = NewTelegramIdentityProvider("secret")
+				validate = validateTelegramInitData
 			}
 			for _, tc := range []struct {
 				age   time.Duration
@@ -27,14 +26,14 @@ func TestIdentityProviders(t *testing.T) {
 				{0, `{"id":0}`, false}, {0, `{"id":-1}`, false}, {0, `{"id":"42"}`, false},
 			} {
 				raw := generateValidInitData(map[string]string{"auth_date": strconv.FormatInt(now.Add(-tc.age).Unix(), 10), "user": tc.user, "query_id": "a + b"}, "secret")
-				got, err := p.Verify(context.Background(), raw)
+				got, err := validate(raw, "secret", now)
 				if (err == nil) != tc.valid {
 					t.Fatalf("%v %s: %v", tc.age, tc.user, err)
 				}
-				if err == nil && (got.ExternalID != 42 || got.Platform != platform) {
+				if err == nil && got.ID != 42 {
 					t.Fatalf("identity: %+v", got)
 				}
-				if _, err = p.Verify(context.Background(), raw+"tamper"); err == nil {
+				if _, err = validate(raw+"tamper", "secret", now); err == nil {
 					t.Fatal("tampered signature accepted")
 				}
 			}

@@ -16,7 +16,7 @@ INSERT INTO users (id, first_name, last_name, username, is_bot, last_active_at)
 VALUES ($1, '', NULL, NULL, FALSE, CURRENT_TIMESTAMP)
 ON CONFLICT (id) DO UPDATE
 SET last_active_at = CURRENT_TIMESTAMP
-RETURNING id, created_at, last_active_at, first_name, last_name, username, is_bot
+RETURNING id, created_at, last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started
 `
 
 func (q *Queries) EnsureUser(ctx context.Context, id int64) (User, error) {
@@ -30,12 +30,18 @@ func (q *Queries) EnsureUser(ctx context.Context, id int64) (User, error) {
 		&i.LastName,
 		&i.Username,
 		&i.IsBot,
+		&i.MaxID,
+		&i.TgID,
+		&i.ProfileComplete,
+		&i.ProfileStep,
+		&i.PendingLastName,
+		&i.TgBotStarted,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, created_at, last_active_at, first_name, last_name, username, is_bot FROM users WHERE id = $1
+SELECT id, created_at, last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -49,6 +55,12 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.LastName,
 		&i.Username,
 		&i.IsBot,
+		&i.MaxID,
+		&i.TgID,
+		&i.ProfileComplete,
+		&i.ProfileStep,
+		&i.PendingLastName,
+		&i.TgBotStarted,
 	)
 	return i, err
 }
@@ -92,29 +104,101 @@ func (q *Queries) GetUsersWithDueFacts(ctx context.Context, arg GetUsersWithDueF
 	return items, nil
 }
 
-const upsertUser = `-- name: UpsertUser :one
-INSERT INTO users (id, first_name, last_name, username, is_bot, last_active_at)
-VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
-ON CONFLICT (id) DO UPDATE
-SET first_name = CASE WHEN EXCLUDED.first_name <> '' THEN EXCLUDED.first_name ELSE users.first_name END,
+const saveTelegramProfile = `-- name: SaveTelegramProfile :one
+UPDATE users SET first_name = $1, last_name = $2,
+    profile_complete = TRUE, profile_step = '', pending_last_name = ''
+WHERE id = $3 AND tg_id IS NOT NULL
+RETURNING id, created_at, last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started
+`
+
+type SaveTelegramProfileParams struct {
+	FirstName string      `json:"first_name"`
+	LastName  pgtype.Text `json:"last_name"`
+	ID        int64       `json:"id"`
+}
+
+func (q *Queries) SaveTelegramProfile(ctx context.Context, arg SaveTelegramProfileParams) (User, error) {
+	row := q.db.QueryRow(ctx, saveTelegramProfile, arg.FirstName, arg.LastName, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.LastActiveAt,
+		&i.FirstName,
+		&i.LastName,
+		&i.Username,
+		&i.IsBot,
+		&i.MaxID,
+		&i.TgID,
+		&i.ProfileComplete,
+		&i.ProfileStep,
+		&i.PendingLastName,
+		&i.TgBotStarted,
+	)
+	return i, err
+}
+
+const telegramProfileInput = `-- name: TelegramProfileInput :one
+UPDATE users SET
+    first_name = CASE WHEN NOT $1::boolean AND profile_step = 'first_name' AND $2::text <> '' THEN $2 ELSE first_name END,
+    last_name = CASE WHEN NOT $1::boolean AND profile_step = 'first_name' AND $2::text <> '' THEN pending_last_name ELSE last_name END,
+    profile_complete = profile_complete OR (NOT $1::boolean AND profile_step = 'first_name' AND $2::text <> ''),
+    pending_last_name = CASE WHEN $1::boolean OR (profile_step = 'first_name' AND $2::text <> '') THEN '' WHEN profile_step = 'last_name' AND $2::text <> '' THEN $2 ELSE pending_last_name END,
+    profile_step = CASE WHEN $1::boolean THEN 'last_name' WHEN $2::text = '' THEN profile_step WHEN profile_step = 'last_name' THEN 'first_name' ELSE '' END
+WHERE id = $3 AND tg_id IS NOT NULL
+RETURNING id, created_at, last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started
+`
+
+type TelegramProfileInputParams struct {
+	Restart bool   `json:"restart"`
+	Input   string `json:"input"`
+	ID      int64  `json:"id"`
+}
+
+func (q *Queries) TelegramProfileInput(ctx context.Context, arg TelegramProfileInputParams) (User, error) {
+	row := q.db.QueryRow(ctx, telegramProfileInput, arg.Restart, arg.Input, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.LastActiveAt,
+		&i.FirstName,
+		&i.LastName,
+		&i.Username,
+		&i.IsBot,
+		&i.MaxID,
+		&i.TgID,
+		&i.ProfileComplete,
+		&i.ProfileStep,
+		&i.PendingLastName,
+		&i.TgBotStarted,
+	)
+	return i, err
+}
+
+const upsertMAXUser = `-- name: UpsertMAXUser :one
+INSERT INTO users (max_id, first_name, last_name, username, is_bot)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (max_id) DO UPDATE SET
+    first_name = CASE WHEN EXCLUDED.first_name <> '' THEN EXCLUDED.first_name ELSE users.first_name END,
     last_name = COALESCE(EXCLUDED.last_name, users.last_name),
     username = COALESCE(EXCLUDED.username, users.username),
     is_bot = EXCLUDED.is_bot,
     last_active_at = CURRENT_TIMESTAMP
-RETURNING id, created_at, last_active_at, first_name, last_name, username, is_bot
+RETURNING id, created_at, last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started
 `
 
-type UpsertUserParams struct {
-	ID        int64       `json:"id"`
+type UpsertMAXUserParams struct {
+	MaxID     pgtype.Int8 `json:"max_id"`
 	FirstName string      `json:"first_name"`
 	LastName  pgtype.Text `json:"last_name"`
 	Username  pgtype.Text `json:"username"`
 	IsBot     bool        `json:"is_bot"`
 }
 
-func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, upsertUser,
-		arg.ID,
+func (q *Queries) UpsertMAXUser(ctx context.Context, arg UpsertMAXUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, upsertMAXUser,
+		arg.MaxID,
 		arg.FirstName,
 		arg.LastName,
 		arg.Username,
@@ -129,6 +213,56 @@ func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, e
 		&i.LastName,
 		&i.Username,
 		&i.IsBot,
+		&i.MaxID,
+		&i.TgID,
+		&i.ProfileComplete,
+		&i.ProfileStep,
+		&i.PendingLastName,
+		&i.TgBotStarted,
+	)
+	return i, err
+}
+
+const upsertTelegramUser = `-- name: UpsertTelegramUser :one
+INSERT INTO users (tg_id, username, is_bot, tg_bot_started, profile_complete, profile_step)
+VALUES ($1, NULLIF($4::text, ''), $2, $3, FALSE, 'last_name')
+ON CONFLICT (tg_id) DO UPDATE SET
+    username = COALESCE(EXCLUDED.username, users.username),
+    is_bot = EXCLUDED.is_bot,
+    tg_bot_started = users.tg_bot_started OR EXCLUDED.tg_bot_started,
+    last_active_at = CURRENT_TIMESTAMP
+RETURNING id, created_at, last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started
+`
+
+type UpsertTelegramUserParams struct {
+	TgID         pgtype.Int8 `json:"tg_id"`
+	IsBot        bool        `json:"is_bot"`
+	TgBotStarted bool        `json:"tg_bot_started"`
+	Username     string      `json:"username"`
+}
+
+func (q *Queries) UpsertTelegramUser(ctx context.Context, arg UpsertTelegramUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, upsertTelegramUser,
+		arg.TgID,
+		arg.IsBot,
+		arg.TgBotStarted,
+		arg.Username,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.LastActiveAt,
+		&i.FirstName,
+		&i.LastName,
+		&i.Username,
+		&i.IsBot,
+		&i.MaxID,
+		&i.TgID,
+		&i.ProfileComplete,
+		&i.ProfileStep,
+		&i.PendingLastName,
+		&i.TgBotStarted,
 	)
 	return i, err
 }

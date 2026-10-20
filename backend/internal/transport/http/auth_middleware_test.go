@@ -21,19 +21,12 @@ import (
 
 type mockUserService struct {
 	usecase.UserService
-	upsertUserFunc func(context.Context, usecase.UpsertUserParams) error
 	ensureUserFunc func(context.Context, int64) error
-	upsertCalls    []usecase.UpsertUserParams
-	resolveFunc    func(context.Context, usecase.Identity) (usecase.Account, error)
+	upsertCalls    []usecase.MAXUserParams
+	maxFunc        func(context.Context, usecase.MAXUserParams) (usecase.Account, error)
+	telegramFunc   func(context.Context, usecase.TelegramUserParams) (usecase.Account, error)
 }
 
-func (m *mockUserService) UpsertUser(ctx context.Context, p usecase.UpsertUserParams) error {
-	m.upsertCalls = append(m.upsertCalls, p)
-	if m.upsertUserFunc != nil {
-		return m.upsertUserFunc(ctx, p)
-	}
-	return nil
-}
 func (m *mockUserService) EnsureUser(ctx context.Context, id int64) error {
 	if m.ensureUserFunc != nil {
 		return m.ensureUserFunc(ctx, id)
@@ -43,15 +36,15 @@ func (m *mockUserService) EnsureUser(ctx context.Context, id int64) error {
 func (m *mockUserService) GetUsersWithDueFacts(context.Context, time.Time, string) ([]int64, error) {
 	return nil, nil
 }
-func (m *mockUserService) ResolveIdentity(ctx context.Context, i usecase.Identity) (usecase.Account, error) {
-	if m.resolveFunc != nil {
-		return m.resolveFunc(ctx, i)
+func (m *mockUserService) UpsertMAXUser(ctx context.Context, p usecase.MAXUserParams) (usecase.Account, error) {
+	if m.maxFunc != nil {
+		return m.maxFunc(ctx, p)
 	}
-	p := usecase.UpsertUserParams{ID: i.ExternalID, FirstName: i.FirstName, LastName: &i.LastName, Username: &i.Username, IsBot: i.IsBot}
-	if err := m.UpsertUser(ctx, p); err != nil {
-		return usecase.Account{}, err
-	}
-	return usecase.Account{User: contracts.User{ID: i.ExternalID, FirstName: i.FirstName, LastName: contracts.NewOptString(i.LastName)}, Platform: i.Platform, ProfileComplete: true}, nil
+	m.upsertCalls = append(m.upsertCalls, p)
+	return usecase.Account{User: contracts.User{ID: p.MaxID + 100000, FirstName: p.FirstName}, MaxID: p.MaxID, ProfileComplete: true}, nil
+}
+func (m *mockUserService) UpsertTelegramUser(ctx context.Context, p usecase.TelegramUserParams) (usecase.Account, error) {
+	return m.telegramFunc(ctx, p)
 }
 
 func generateValidInitData(params map[string]string, botToken string) string {
@@ -86,68 +79,81 @@ func generateValidInitData(params map[string]string, botToken string) string {
 	return vals.Encode()
 }
 
-type providerFunc func(context.Context, string) (usecase.Identity, error)
-
-func (f providerFunc) Verify(ctx context.Context, raw string) (usecase.Identity, error) {
-	return f(ctx, raw)
-}
-
 func TestAuthMiddleware(t *testing.T) {
 	for _, tc := range []struct {
-		name, header                   string
+		name, scheme                   string
 		invalid, dbFailure, incomplete bool
 		status                         int
 		wantID                         int64
 	}{
-		{name: "max", header: "max original+%20data", status: 200, wantID: 900},
-		{name: "telegram", header: "tma original+%20data", status: 200, wantID: 900},
-		{name: "missing", status: 200}, {name: "unknown", header: "Bearer data", status: 200},
-		{name: "invalid", header: "tma data", invalid: true, status: 200},
-		{name: "database failure", header: "max data", dbFailure: true, status: 500},
-		{name: "incomplete", header: "tma data", incomplete: true, status: 403},
+		{name: "max", scheme: "max", status: 200, wantID: 900},
+		{name: "telegram", scheme: "tma", status: 200, wantID: 901},
+		{name: "missing", status: 200}, {name: "unknown", scheme: "Bearer", status: 200},
+		{name: "invalid", scheme: "tma", invalid: true, status: 200},
+		{name: "database failure", scheme: "max", dbFailure: true, status: 500},
+		{name: "incomplete", scheme: "tma", incomplete: true, status: 403},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			calls := []string{}
-			makeProvider := func(platform string) IdentityProvider {
-				return providerFunc(func(_ context.Context, raw string) (usecase.Identity, error) {
-					calls = append(calls, platform)
-					if raw != strings.SplitN(tc.header, " ", 2)[1] {
-						t.Fatalf("raw changed: %q", raw)
-					}
-					if tc.invalid {
-						return usecase.Identity{}, errors.New("invalid")
-					}
-					return usecase.Identity{Platform: platform, ExternalID: 42}, nil
-				})
-			}
-			users := &mockUserService{resolveFunc: func(_ context.Context, i usecase.Identity) (usecase.Account, error) {
+			calls := 0
+			account := func(platform string, id int64) (usecase.Account, error) {
+				calls++
 				if tc.dbFailure {
 					return usecase.Account{}, errors.New("database unavailable")
 				}
-				return usecase.Account{User: contracts.User{ID: 900, FirstName: "Saved"}, Platform: i.Platform, ProfileComplete: !tc.incomplete}, nil
-			}}
+				saved := usecase.Account{User: contracts.User{ID: id, FirstName: "Saved"}, ProfileComplete: !tc.incomplete}
+				if platform == "max" {
+					saved.MaxID = 42
+				} else {
+					saved.TgID = 42
+				}
+				return saved, nil
+			}
+			users := &mockUserService{
+				maxFunc: func(_ context.Context, p usecase.MAXUserParams) (usecase.Account, error) {
+					if p.MaxID != 42 {
+						t.Fatalf("MAX external ID: %d", p.MaxID)
+					}
+					return account("max", 900)
+				},
+				telegramFunc: func(_ context.Context, p usecase.TelegramUserParams) (usecase.Account, error) {
+					if p.TgID != 42 {
+						t.Fatalf("Telegram external ID: %d", p.TgID)
+					}
+					return account("telegram", 901)
+				},
+			}
 			called := false
 			next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 				called = true
 				id, _ := UserIDFromContext(r.Context())
 				if id != tc.wantID {
-					t.Fatalf("id=%d", id)
+					t.Fatalf("internal id=%d, want %d", id, tc.wantID)
 				}
 				name, _ := UserNameFromContext(r.Context())
 				if id != 0 && name != "Saved" {
 					t.Fatalf("name=%s", name)
 				}
 			})
+			raw := generateValidInitData(map[string]string{"auth_date": fmt.Sprint(time.Now().Unix()), "user": `{"id":42,"first_name":"Remote","username":"same"}`}, "secret")
+			if tc.invalid {
+				raw += "tamper"
+			}
 			request := httptest.NewRequest("GET", "/api/sets", nil)
-			request.Header.Set("Authorization", tc.header)
+			if tc.scheme != "" {
+				request.Header.Set("Authorization", tc.scheme+" "+raw)
+			}
 			request.Header.Set("X-Init-Data", "ignored")
 			response := httptest.NewRecorder()
-			AuthMiddleware(makeProvider("max"), makeProvider("telegram"), users)(next).ServeHTTP(response, request)
+			AuthMiddleware("secret", "secret", users)(next).ServeHTTP(response, request)
 			if response.Code != tc.status {
 				t.Fatalf("%d: %s", response.Code, response.Body.String())
 			}
-			if len(calls) > 1 {
-				t.Fatal("called both providers")
+			wantCalls := 0
+			if tc.scheme == "max" || tc.scheme == "tma" && !tc.invalid {
+				wantCalls = 1
+			}
+			if calls != wantCalls {
+				t.Fatalf("upsert calls=%d, want %d", calls, wantCalls)
 			}
 			if tc.incomplete && !strings.Contains(response.Body.String(), "profile_required") {
 				t.Fatal(response.Body.String())
