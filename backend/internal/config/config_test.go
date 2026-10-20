@@ -86,6 +86,22 @@ func TestLoadProd(t *testing.T) {
 
 }
 
+func TestLoadProdWithoutTelegramToken(t *testing.T) {
+	for _, token := range []string{"", "   "} {
+		t.Run("token="+token, func(t *testing.T) {
+			setProdEnv(t)
+			t.Setenv("TG_BOT_TOKEN", token)
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("production must work without Telegram: %v", err)
+			}
+			if cfg.TelegramBotToken != "" || cfg.MaxBotToken != "test-token" {
+				t.Fatal("expected Telegram to be disabled and MAX to remain configured")
+			}
+		})
+	}
+}
+
 // Qwen on Yandex AI Studio does it all by default: it serves two requests at
 // once against the GigaChat plan's one, and its key and folder are the OCR's.
 func TestLoadProdDefaultsToQwenFirst(t *testing.T) {

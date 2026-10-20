@@ -155,7 +155,7 @@ cp .env.example .env
 | Переменная | .env.example | Назначение |
 |---|---|---|
 | `BOT_TOKEN` | — | токен бота MAX (секрет) |
-| `TG_BOT_TOKEN` | — | токен Telegram BotFather, обязателен в prod; бот отключён в local |
+| `TG_BOT_TOKEN` | — | необязательный токен Telegram BotFather; без него бот отключён с записью в лог; в local бот отключён |
 | `MAX_API_URL` | `https://platform-api2.max.ru` | адрес MAX Bot API |
 | `MAX_INSECURE_SKIP_VERIFY` | `false` | `true` отключает проверку TLS-сертификата MAX API; только для отладки |
 
@@ -278,6 +278,8 @@ cp .env.example .env
 Пользователь определяется по подписанному `initData` в `Authorization: max <initData>` или `Authorization: tma <initData>`. Отсутствующая или неверная авторизация использует общий тестовый аккаунт `0`, включая production. Ошибки БД возвращают `500`. Аккаунты платформ раздельные, наборы и рейтинги общие.
 
 В BotFather укажите `https://<DOMAIN>/` для Mini App и кнопки меню (`/setmenubutton`). Добавьте команды `/start` и `/profile`. В личном чате Telegram бот сначала спрашивает фамилию, затем имя; профиль также можно заполнить в Mini App.
+
+Telegram запускается в фоне: отсутствие `TG_BOT_TOKEN` или ошибка запуска бота записываются в лог и не мешают работе веб-приложения и MAX-бота. Ошибки Telegram polling также записываются в лог, после чего бот повторяет запросы.
 
 ## Тестовые данные
 
