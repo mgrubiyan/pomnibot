@@ -67,10 +67,19 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	if cfg.Environment == config.Prod {
-		// One generator for every bot: they share its queue, so together
-		// they stay within what the model serves at once.
+		// One extractor and one generator for every bot: they share the
+		// generator's queue, so together they stay within what the model
+		// serves at once.
+		ocr, err := yandex.New(cfg.OCR)
+		if err != nil {
+			return fmt.Errorf("initialize OCR: %w", err)
+		}
+		extractor, err := ingest.NewExtractor(&ingest.VisionOCR{Model: llm.vision, Checker: ocr}, ingest.Options{})
+		if err != nil {
+			return fmt.Errorf("initialize extractor: %w", err)
+		}
 		cardGenerator := generator.NewGenerator(llm.text, generator.Options{Slots: llm.slots})
-		if err := startBot(ctx, cfg, llm, cardGenerator, users, sets); err != nil {
+		if err := startBot(ctx, cfg, extractor, cardGenerator, users, sets); err != nil {
 			return err
 		}
 	}
@@ -122,7 +131,10 @@ func newModels(cfg config.Config) (models, error) {
 		return models{}, fmt.Errorf("initialize AI Studio: %w", err)
 	}
 
-	first := providers.Backend{Name: "aistudio", Provider: studio}
+	// Cards, photos and answer checks all go to the same key: past its
+	// limit AI Studio answers 429, and the fallback would then skip it for
+	// the cooldown. Extra requests wait their turn instead, as on GigaChat.
+	first := providers.Backend{Name: "aistudio", Provider: providers.Limit(studio, aiStudioSlots)}
 	second := providers.Backend{Name: "gigachat", Provider: gigaOne}
 	slots := aiStudioSlots
 	if cfg.LLM.Primary == config.PrimaryGigaChat {
@@ -136,18 +148,11 @@ func newModels(cfg config.Config) (models, error) {
 	return models{text: chain, vision: chain, slots: slots}, nil
 }
 
-func startBot(ctx context.Context, cfg config.Config, llm models, cardGenerator *generator.Generator, users usecase.UserService, sets usecase.SetService) error {
+func startBot(ctx context.Context, cfg config.Config, extractor bot.FileExtractor, cardGenerator *generator.Generator,
+	users usecase.UserService, sets usecase.SetService) error {
 	client, err := bot.NewClient(cfg.BotToken, cfg.MaxAPIURL, cfg.MaxInsecureSkipVerify)
 	if err != nil {
 		return fmt.Errorf("initialize MAX client: %w", err)
-	}
-	ocr, err := yandex.New(cfg.OCR)
-	if err != nil {
-		return fmt.Errorf("initialize OCR: %w", err)
-	}
-	extractor, err := ingest.NewExtractor(&ingest.VisionOCR{Model: llm.vision, Checker: ocr}, ingest.Options{})
-	if err != nil {
-		return fmt.Errorf("initialize extractor: %w", err)
 	}
 	runner, err := bot.NewBot(client, cfg.AppURL, users, sets, extractor, bot.NewGeneratorAdapter(cardGenerator), cfg.Notifications)
 	if err != nil {
