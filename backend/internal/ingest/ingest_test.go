@@ -10,7 +10,6 @@ import (
 	"image/jpeg"
 	"image/png"
 	"os"
-	"os/exec"
 	"strings"
 	"testing"
 )
@@ -343,9 +342,6 @@ func minimalPDF(text string) []byte {
 }
 
 func TestPDFToTextBinary(t *testing.T) {
-	if _, err := exec.LookPath("pdftotext"); err != nil {
-		t.Skip("pdftotext not installed")
-	}
 	p, err := newPDFToText("pdftotext")
 	if err != nil {
 		t.Fatal(err)
