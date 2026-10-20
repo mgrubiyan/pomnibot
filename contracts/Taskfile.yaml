@@ -1,0 +1,32 @@
+version: '3'
+
+tasks:
+  gen-openapi:
+    desc: "Generate OpenAPI Go handlers and TS clients"
+    sources:
+      - openapi.yaml
+      - client.ts
+    generates:
+      - ../backend/contracts/**/*
+      - ../miniapp/contracts/**/*
+    cmds:
+      - mkdir -p ../backend/contracts
+      - go tool -C ../backend ogen --package contracts --target ../backend/contracts --clean ../contracts/openapi.yaml
+      - rm -rf ../miniapp/contracts
+      - mkdir -p ../miniapp/contracts
+      - bunx openapi-typescript openapi.yaml -o ../miniapp/contracts/schema.ts
+      - cp client.ts ../miniapp/contracts/index.ts
+  gen-data-api:
+    desc: "Generate DATA-API.yaml"
+    sources:
+      - openapi.yaml
+    generates:
+      - data-api/DATA-API.yaml
+    cmds:
+      - >-
+        python data-api/generate_data_api.py -i openapi.yaml
+        -o data-api/DATA-API.yaml
+        --solution-name 'Pomnibot API'
+        --team-id t583_hakaton_max_bot
+        --base-url https://pomnibot.pslu.ru/api/
+        --default-role user

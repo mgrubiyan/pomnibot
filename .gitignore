@@ -1,0 +1,17 @@
+.idea/
+.DS_Store
+.env
+*.local
+*.log
+node_modules/
+.venv/
+.task/
+
+# Go binaries
+backend/server
+backend/cmd/server/server
+backend/cmd/server/dist/*
+!backend/cmd/server/dist/.gitkeep
+
+# Docker compose overrides
+docker-compose*.override.yml
