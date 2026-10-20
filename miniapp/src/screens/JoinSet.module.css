@@ -1,0 +1,19 @@
+/* Set code entry screen. There is no mockup — the composition follows
+   the other screens: header, content in the middle, button at the bottom. */
+
+.body {
+    flex: 1;
+    min-height: 0;
+    justify-content: center;
+}
+
+.codeInput {
+    /* The code reads as a number, so the digits share one width. */
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 2px;
+    text-align: center;
+}
+
+.hint {
+    text-wrap: pretty;
+}

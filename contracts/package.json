@@ -1,0 +1,7 @@
+{
+  "name": "contracts",
+  "packageManager": "bun@1.4.0",
+  "devDependencies": {
+    "openapi-typescript": "^7.13.0"
+  }
+}
