@@ -1,5 +1,6 @@
-// Package bot implements MAX Bot API client and bot event loop.
-package bot
+// Package max is the MAX bot: the MAX Bot API client, the event loop,
+// receiving notes and review reminders.
+package max
 
 import (
 	"context"

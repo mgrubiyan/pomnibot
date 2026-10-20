@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mgrubiyan/pomnibot/backend/internal/bot"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest/yandex"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/aistudio"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
+	maxtransport "github.com/mgrubiyan/pomnibot/backend/internal/transport/max"
 )
 
 // Environment selects the local or production runtime.
@@ -33,7 +33,7 @@ type Config struct {
 	AppURL                string
 	MaxAPIURL             string
 	MaxInsecureSkipVerify bool
-	Notifications         bot.NotificationConfig
+	Notifications         maxtransport.NotificationConfig
 	GigaChat              gigachat.Config
 	// AIStudio is the main model, Qwen by default: it writes the cards,
 	// grades answers and reads photos, GigaChat backs it up (see LLM). nil
@@ -126,20 +126,20 @@ func Load() (Config, error) {
 	return cfg, errors.Join(errs...)
 }
 
-func notificationsFromEnv() (bot.NotificationConfig, error) {
+func notificationsFromEnv() (maxtransport.NotificationConfig, error) {
 	enabled, err := strconv.ParseBool(value("NOTIFICATIONS_ENABLED", "true"))
 	if err != nil {
-		return bot.NotificationConfig{}, fmt.Errorf("NOTIFICATIONS_ENABLED: %w", err)
+		return maxtransport.NotificationConfig{}, fmt.Errorf("NOTIFICATIONS_ENABLED: %w", err)
 	}
 	at, err := time.Parse("15:04", value("NOTIFICATION_TIME", "10:00"))
 	if err != nil {
-		return bot.NotificationConfig{}, fmt.Errorf("NOTIFICATION_TIME: %w", err)
+		return maxtransport.NotificationConfig{}, fmt.Errorf("NOTIFICATION_TIME: %w", err)
 	}
 	loc, err := time.LoadLocation(value("NOTIFICATION_TZ", "Europe/Moscow"))
 	if err != nil {
-		return bot.NotificationConfig{}, fmt.Errorf("NOTIFICATION_TZ: %w", err)
+		return maxtransport.NotificationConfig{}, fmt.Errorf("NOTIFICATION_TZ: %w", err)
 	}
-	return bot.NotificationConfig{Enabled: enabled, Hour: at.Hour(), Minute: at.Minute(), Location: loc}, nil
+	return maxtransport.NotificationConfig{Enabled: enabled, Hour: at.Hour(), Minute: at.Minute(), Location: loc}, nil
 }
 
 func llmFromEnv(withAIStudio bool) (LLMConfig, error) {

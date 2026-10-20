@@ -67,11 +67,12 @@
 | Каталог | Что внутри |
 |---|---|
 | `backend/cmd/server` | точка входа сервиса: HTTP-сервер, бот, миграции, автозаливка демо-данных |
-| `backend/internal/bot` | клиент MAX Bot API, long polling, приём файлов, напоминания |
+| `backend/internal/notes` | набор из присланных файлов: очередь к модели, распознавание, генерация, название, сохранение; общий для всех ботов |
 | `backend/internal/ingest` | извлечение текста: `pdftotext` для PDF с текстовым слоем, OCR для фото и сканов |
 | `backend/internal/generator` | нарезка конспекта на фрагменты и генерация карточек через модель (Qwen или GigaChat) с проверкой цитат |
 | `backend/internal/grader` | проверка печатного ответа: локальное сравнение, затем модель по смыслу |
 | `backend/internal/transport/http` | роутер, авторизация по `initData` от MAX, отдача статики |
+| `backend/internal/transport/max` | бот в MAX: клиент MAX Bot API, long polling, приём файлов, напоминания |
 | `backend/internal/usecase` | бизнес-логика: наборы, лента, результаты, интервальные повторения |
 | `backend/internal/repository` | миграции (goose), SQL-запросы (sqlc), демо-данные |
 | `miniapp/` | мини-приложение: React 19, TypeScript, Vite, `@maxhub/max-ui` |

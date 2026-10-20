@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/mgrubiyan/pomnibot/backend/internal/bot"
 	"github.com/mgrubiyan/pomnibot/backend/internal/config"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/grader"
@@ -24,6 +23,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 	httptransport "github.com/mgrubiyan/pomnibot/backend/internal/transport/http"
+	maxtransport "github.com/mgrubiyan/pomnibot/backend/internal/transport/max"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
@@ -147,11 +147,11 @@ func newModels(cfg config.Config) (models, error) {
 }
 
 func startBot(ctx context.Context, cfg config.Config, maker *notes.Maker, users usecase.UserService) error {
-	client, err := bot.NewClient(cfg.BotToken, cfg.MaxAPIURL, cfg.MaxInsecureSkipVerify)
+	client, err := maxtransport.NewClient(cfg.BotToken, cfg.MaxAPIURL, cfg.MaxInsecureSkipVerify)
 	if err != nil {
 		return fmt.Errorf("initialize MAX client: %w", err)
 	}
-	runner, err := bot.NewBot(client, cfg.AppURL, users, maker, cfg.Notifications)
+	runner, err := maxtransport.NewBot(client, cfg.AppURL, users, maker, cfg.Notifications)
 	if err != nil {
 		return fmt.Errorf("initialize MAX bot: %w", err)
 	}
