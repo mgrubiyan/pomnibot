@@ -87,6 +87,63 @@ func TestAboutExample(t *testing.T) {
 	}
 }
 
+// sqlFragment is slides of a database lecture: the queries show the syntax,
+// their tables, columns and values are invented.
+const sqlFragment = `CREATE TABLE Student (
+Id INTEGER,
+Name CHAR(20) NOT NULL,
+Status CHAR(10) DEFAULT 'freshman',
+PRIMARY KEY (Id))
+FOREIGN KEY (ProfId) REFERENCES Professor (Id) ON DELETE NO ACTION
+INSERT INTO Store_Information (store_name, Sales, Date) VALUES ('Los Angeles', 900, 'Jan-10-1999')
+SELECT * FROM Persons WHERE City='Sandnes'
+CREATE INDEX PersonIndex ON Person (LastName DESC)
+UPDATE "table_name" SET "column_1" = [new value] WHERE {condition}
+SELECT column_name FROM table_name WHERE column_name BETWEEN value1 AND value2
+Ограничение NOT NULL запрещает пустые значения.`
+
+func TestExampleNamesSQL(t *testing.T) {
+	got := exampleNames(sqlFragment, "Введение в SQL")
+	for _, name := range []string{"Student", "Id", "Name", "Status", "freshman", "ProfId", "Professor",
+		"Store_Information", "store_name", "Sales", "Los Angeles", "Persons", "City", "Sandnes",
+		"PersonIndex", "Person", "LastName"} {
+		if !got.has(name) {
+			t.Errorf("%q not found among %v", name, got)
+		}
+	}
+	// Keywords, types (a column named Date too) and the placeholders of a
+	// syntax template are what the lecture teaches.
+	for _, name := range []string{"SELECT", "FROM", "WHERE", "INTEGER", "CHAR", "NOT", "NULL", "DEFAULT", "PRIMARY",
+		"KEY", "DESC", "NO", "ACTION", "VALUES", "Date", "table_name", "column_name", "column_1", "value1", "value2", "condition"} {
+		if got.has(name) {
+			t.Errorf("%q taken for an example name", name)
+		}
+	}
+}
+
+func TestAboutExampleSQL(t *testing.T) {
+	names := exampleNames(sqlFragment, "Введение в SQL")
+	for _, tc := range []struct {
+		name string
+		card modelCard
+		want bool
+	}{
+		{"a column type of the example table", modelCard{Kind: cards.KindInput, Question: "Какой тип данных у поля Id в таблице Student?", Answer: "INTEGER"}, true},
+		{"a constraint of an example column", modelCard{Kind: cards.KindChoice, Question: "Какое ограничение указано для поля Name?", Answer: "NOT NULL"}, true},
+		{"a claim about example data", modelCard{Kind: cards.KindBoolean, Question: "Удаляются все записи, где store_name = 'Los Angeles'.", Answer: cards.AnswerTrue}, true},
+		{"the construct the example shows", modelCard{Kind: cards.KindInput, Question: "Какое ограничение запрещает оставлять столбец пустым?", Answer: "NOT NULL"}, false},
+		{"the query shown in the question", modelCard{Kind: cards.KindChoice, Question: "Что делает WHERE в запросе SELECT * FROM Persons WHERE City='Sandnes'?", Answer: "фильтрует строки"}, false},
+		{"a syntax template", modelCard{Kind: cards.KindFlip, Question: "Что задаёт WHERE в UPDATE table_name SET column_1 = value1 WHERE condition?", Answer: "Какие записи изменить"}, false},
+		{"a type, not the Date column", modelCard{Kind: cards.KindInput, Question: "Какой тип хранит дату?", Answer: "date"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := aboutExample(tc.card, names); got != tc.want {
+				t.Errorf("aboutExample(%q, %q) = %v, want %v", tc.card.Question, tc.card.Answer, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestExampleNamesLowercaseLetterAfterClass(t *testing.T) {
 	got := exampleNames("Class a -> Class b: класс b наследуется от a.", "")
 	if !got.has("a") || !got.has("b") {
