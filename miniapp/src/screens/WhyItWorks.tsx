@@ -1,0 +1,70 @@
+import { CellList, CellSimple, Flex, Typography } from '@maxhub/max-ui';
+import { Screen } from '../components/Screen';
+import { ScreenHeader } from '../components/ScreenHeader';
+import s from './WhyItWorks.module.css';
+
+interface Fact {
+    title: string;
+    text: string;
+    source: string;
+}
+
+const FACTS: Fact[] = [
+    {
+        title: 'Вспоминать полезнее, чем перечитывать',
+        text: 'Через неделю студенты, которые проверяли себя, вспомнили 61% текста, а те, кто перечитывал, — 40%.',
+        source: 'Roediger, Karpicke · Psychological Science, 2006',
+    },
+    {
+        title: 'Паузы важнее количества',
+        text: 'Разнесённые по дням повторения запоминаются лучше, чем подряд. Чем дальше экзамен, тем длиннее могут быть паузы.',
+        source: 'Cepeda и др. · обзор 317 экспериментов, 2006',
+    },
+    {
+        title: 'Повтор — когда начинаете забывать',
+        text: 'Карточка возвращается, когда вероятность её вспомнить падает примерно до 90%. Так каждое повторение укрепляет память сильнее.',
+        source: 'Open Spaced Repetition',
+    },
+];
+
+export interface WhyItWorksProps {
+    onBack: () => void;
+}
+
+/** The research behind the reviews, opened from the quiet line on home:
+    on the set screen it pushed the set itself into a scroll. */
+export function WhyItWorks({ onBack }: WhyItWorksProps) {
+    return (
+        <Screen>
+            <ScreenHeader title="Почему это работает" subtitle="Что говорят исследования" onBack={onBack} />
+
+            <div className={s.body}>
+                <CellList mode="island" filled className={s.factsList}>
+                    {FACTS.map((fact, index) => (
+                        <CellSimple
+                            key={fact.title}
+                            separator={index > 0}
+                            title={fact.title}
+                            subtitle={
+                                <Flex direction="column" align="stretch" gap={4}>
+                                    <Typography.Text
+                                        variant="description"
+                                        color="secondary"
+                                        className={s.factText}
+                                    >
+                                        {fact.text}
+                                    </Typography.Text>
+                                    <Typography.Text variant="label" color="tertiary">
+                                        {fact.source}
+                                    </Typography.Text>
+                                </Flex>
+                            }
+                        />
+                    ))}
+                </CellList>
+            </div>
+        </Screen>
+    );
+}
+
+export default WhyItWorks;
