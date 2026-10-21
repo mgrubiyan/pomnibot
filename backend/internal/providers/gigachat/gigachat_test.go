@@ -844,3 +844,21 @@ func TestBackgroundRefreshStopsAfterExpiry(t *testing.T) {
 		t.Errorf("OAuth called %d times, want refresh attempts before expiry", settled)
 	}
 }
+
+func TestCompletePreservesAndCleansMultipleSourceImages(t *testing.T) {
+	api := &fakeAPI{chat: func(_ int, r chatRequest) chatReply {
+		if len(r.Messages[len(r.Messages)-1].Attachments) != 2 {
+			t.Error("source image lost")
+		}
+		return ok(`{}`)
+	}}
+	_, err := newTestClient(t, api).Complete(context.Background(), providers.Request{User: "pages", Images: []providers.Image{{MimeType: "image/png", Data: []byte("first")}, {MimeType: "image/jpeg", Data: []byte("second")}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	if len(api.uploads) != 2 || len(api.deleted) != 2 {
+		t.Error("images not uploaded/cleaned")
+	}
+}

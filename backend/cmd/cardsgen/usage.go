@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"math"
 	"os"
 	"strings"
 	"sync"
@@ -35,7 +37,7 @@ type trackedProvider struct {
 
 func (p trackedProvider) Complete(ctx context.Context, req providers.Request) (providers.Response, error) {
 	res, err := p.Provider.Complete(ctx, req)
-	if err != nil {
+	if err != nil || res.Cached {
 		return res, err
 	}
 	p.usage.mu.Lock()
@@ -60,4 +62,31 @@ func (u *runUsage) snapshot() map[string]modelUsage {
 		result[model] = stats
 	}
 	return result
+}
+
+func modelProfile(name string) providers.Profile {
+	switch name {
+	case "openrouter":
+		return providers.OpenRouterProfile()
+	case "qwen", "yandexgpt":
+		return providers.QwenProfile()
+	default:
+		return providers.GigaChatProfile()
+	}
+}
+func limitModel(p providers.Provider, name string) providers.Provider {
+	return providers.Limit(p, modelProfile(name).Requests)
+}
+
+func processingLimits(provider string, explicit bool, usd float64, calls int) (providers.BudgetLimits, error) {
+	if !explicit {
+		usd = 0
+		if provider == "openrouter" {
+			usd = .15
+		}
+	}
+	if usd < 0 || math.IsNaN(usd) || math.IsInf(usd, 0) || calls < 1 {
+		return providers.BudgetLimits{}, errors.New("budget must be finite and nonnegative, max-calls positive")
+	}
+	return providers.BudgetLimits{Calls: calls, USD: usd}, nil
 }

@@ -271,13 +271,13 @@ func (c *Client) Complete(ctx context.Context, req providers.Request) (providers
 }
 
 func (c *Client) complete(ctx context.Context, req providers.Request) (providers.Response, error) {
-	var fileID string
-	if req.Image != nil {
-		id, err := c.upload(ctx, req.Image)
+	var fileIDs []string
+	for _, img := range providers.RequestImages(req) {
+		id, err := c.upload(ctx, &img)
 		if err != nil {
 			return providers.Response{}, err
 		}
-		fileID = id
+		fileIDs = append(fileIDs, id)
 		defer c.deleteFile(id)
 	}
 
@@ -285,7 +285,7 @@ func (c *Client) complete(ctx context.Context, req providers.Request) (providers
 	var err error
 	for i, model := range models {
 		var resp providers.Response
-		resp, err = c.completeWith(ctx, model, req, fileID)
+		resp, err = c.completeWith(ctx, model, req, fileIDs)
 		if err == nil {
 			return resp, nil
 		}
@@ -344,11 +344,11 @@ func (c *Client) setStrictOff(model string) {
 // model. If the API rejects it with 400 or 422, the same request goes again
 // without it, the schema moved into the system prompt; when that works, the
 // model is remembered and later calls skip straight to the plain form.
-func (c *Client) completeWith(ctx context.Context, model string, req providers.Request, fileID string) (providers.Response, error) {
+func (c *Client) completeWith(ctx context.Context, model string, req providers.Request, fileIDs []string) (providers.Response, error) {
 	strict := len(req.Schema) > 0 && !c.strictOff(model)
 	droppedStrict := false
 	for attempt := 1; ; attempt++ {
-		resp, err := c.call(ctx, model, req, strict, fileID)
+		resp, err := c.call(ctx, model, req, strict, fileIDs)
 		if err == nil {
 			if droppedStrict {
 				c.setStrictOff(model)
@@ -418,7 +418,7 @@ type chatResponse struct {
 
 const schemaPromptNote = "\n\nОтвет — только JSON, соответствующий этой JSON Schema:\n"
 
-func (c *Client) call(ctx context.Context, model string, req providers.Request, strict bool, fileID string) (providers.Response, error) {
+func (c *Client) call(ctx context.Context, model string, req providers.Request, strict bool, fileIDs []string) (result providers.Response, callErr error) {
 	system := req.System
 	var format *responseFormat
 	switch {
@@ -428,8 +428,8 @@ func (c *Client) call(ctx context.Context, model string, req providers.Request, 
 		system += schemaPromptNote + string(req.Schema)
 	}
 	user := chatMessage{Role: "user", Content: req.User}
-	if fileID != "" {
-		user.Attachments = []string{fileID}
+	if len(fileIDs) > 0 {
+		user.Attachments = fileIDs
 	}
 
 	body, err := json.Marshal(chatRequest{
@@ -457,6 +457,11 @@ func (c *Client) call(ctx context.Context, model string, req providers.Request, 
 	httpReq.Header.Set("Accept", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+token)
 
+	finish, reserveErr := providers.ReserveCall(ctx, 0)
+	if reserveErr != nil {
+		return providers.Response{}, reserveErr
+	}
+	defer func() { finish(result.Usage, false) }()
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
 		return providers.Response{}, fmt.Errorf("gigachat: chat request: %w", transportError{err})

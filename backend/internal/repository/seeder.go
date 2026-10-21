@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -35,6 +36,20 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title str
 	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("create user set: %w", err)
+	}
+
+	if genResult.Artifact != nil {
+		data, marshalErr := json.Marshal(genResult)
+		if marshalErr != nil {
+			return nil, 0, fmt.Errorf("encode private processing report: %w", marshalErr)
+		}
+		affected, saveErr := q.SaveProcessingReport(ctx, db.SaveProcessingReportParams{ID: newSet.ID, AuthorID: userID, Version: genResult.Artifact.Version, Report: data})
+		if saveErr != nil {
+			return nil, 0, fmt.Errorf("save private processing report: %w", saveErr)
+		}
+		if affected != 1 {
+			return nil, 0, errors.New("processing report owner mismatch")
+		}
 	}
 
 	if _, err := q.JoinSet(ctx, db.JoinSetParams{

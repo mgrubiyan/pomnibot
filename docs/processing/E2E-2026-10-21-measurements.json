@@ -1,0 +1,271 @@
+{
+  "recordedAtUTC": "2026-10-21T16:12:59.679064+00:00",
+  "status": "limited real attempt: two vision pages saved; PLAN timed out; generation not reached",
+  "objectiveAchieved": false,
+  "fullRunPerformed": false,
+  "privateArtifacts": ".task/processing/e2e-20261021",
+  "preflight": {
+    "recordedAtUTC": "2026-10-21T15:55:44.319652+00:00",
+    "decision": "one bounded sequential end-to-end subset; full SQL run prohibited by estimate",
+    "fullReadingOutputOnlyEnvelopeUSD": 0.144,
+    "availableUSD": 0.0665787,
+    "sourcePDF": "/home/brawler/Downloads/Telegram Desktop/БД_Сем5_Лекция3. Введение в SQL.pdf",
+    "sourceSHA256": "124e265eabf075590bbaef74b6cf98af64c99482f6340cc093686bcafc3b0198",
+    "selectedOriginalPages": [
+      28,
+      29
+    ],
+    "selectionBasis": "Original images independently viewed. UPDATE/DELETE templates, queries and complete before/after tables allow reasoning about AND/date predicates and changed/deleted rows, not just naming operators. UPDATE TABLE secondary template is a source syntax risk; do not generalize it as portable executable SQL.",
+    "model": "anthropic/claude-haiku-5.5",
+    "maxOutputTokens": 8000,
+    "readingVersion": "structured-reading-v2",
+    "pipelineVersion": "topics-reviewed-v2",
+    "pricingUSDPerMillion": {
+      "prompt": 0.1,
+      "completion": 0.5
+    },
+    "freeMetadataFile": "free-model-metadata.json",
+    "limits": {
+      "USD": 0.056,
+      "transportAttempts": 7,
+      "perAttemptBoundUSD": 0.008,
+      "parallelRequests": 1,
+      "logicalTimeoutSeconds": 80,
+      "processContextSeconds": 480,
+      "wrapperTimeoutSeconds": 510,
+      "coverageRepairs": 0
+    },
+    "envelope": {
+      "outputUSDPerAttempt": 0.004,
+      "inputAllowanceUSDPerAttempt": 0.004,
+      "inputBoundTokensMax": 40000,
+      "attemptsIncludingRetries": 7,
+      "allLostOrMaxChargedUSD": 0.056,
+      "marginUSD": 0.0105787,
+      "nominalStages": [
+        "read page 28",
+        "read page 29",
+        "plan",
+        "generate UPDATE",
+        "review UPDATE",
+        "generate DELETE",
+        "review DELETE"
+      ],
+      "retryPolicy": "Internal transport/model retries share the same seven attempts and money. A retry may prevent later stages. No subsequent paid rerun. A request exceeding per-attempt envelope is blocked, never truncated."
+    },
+    "persistence": {
+      "path": ".task/processing/e2e-20261021",
+      "fsync": true,
+      "requestImages": "exact bytes saved before model call",
+      "rawStages": "request and response files; transport metadata per attempt",
+      "acceptedCards": "accepted-batch events before further stages",
+      "partialCoverage": "source scope and raw plan retained; accepted-batch events distinguish accepted cards from unverified candidates; final result reconciles coverage if normal cancellation",
+      "cache": "no reused reading; ReadFailed prohibits generation"
+    },
+    "precisionLimits": [
+      "This subset cannot validate full-document quality or all SQL visual controls.",
+      "61 reference objectives retain their original denominator; individual IDs/text unavailable.",
+      "Independent audit follows generation without edits to original cards."
+    ]
+  },
+  "run": {
+    "sourcePDFSHA256": "124e265eabf075590bbaef74b6cf98af64c99482f6340cc093686bcafc3b0198",
+    "selectedOriginalPages": [
+      28,
+      29
+    ],
+    "sourceReadingVersion": "structured-reading-v2",
+    "readingIdentity": "bb7d1b092f17da05f3a678bbd0b787e89548eacf790d18222dbcdec3a6febc69",
+    "pipelineVersion": "topics-reviewed-v2",
+    "cacheHit": false,
+    "modelConfigured": "anthropic/claude-haiku-5.5",
+    "modelActuallyReported": "anthropic/claude-haiku-5.5",
+    "successfulVisualPages": 2,
+    "successfulStructuredBlocks": 13,
+    "generatedCandidates": 0,
+    "modelAcceptedCards": 0,
+    "independentlyUsableCards": 0,
+    "realUsableApplicationTasks": 0,
+    "substantialCardErrors": null,
+    "semanticDuplicates": null,
+    "readingSeconds": 21.69803581,
+    "readingTimingDefinition": "wall time of sequential model reading and per-page durable serialization; excludes initial local text extraction",
+    "planningSeconds": 80.00309893,
+    "generationSeconds": null,
+    "verificationSeconds": null,
+    "firstVerifiedSeconds": null,
+    "elapsedSeconds": 101.937668133,
+    "successfulEndToEndSeconds": null,
+    "error": "plan: context deadline exceeded",
+    "apiCalls": 3,
+    "knownPromptTokens": 8797,
+    "knownCompletionTokens": 3024,
+    "lostResponsePromptTokens": null,
+    "lostResponseCompletionTokens": null,
+    "allPromptTokens": null,
+    "allCompletionTokens": null,
+    "requests": [
+      {
+        "logicalID": 1,
+        "stage": "READ",
+        "status": "success",
+        "seconds": 11.543188844,
+        "reservationUSD": 0.0062328,
+        "reportedUSD": 0.0013626,
+        "conservativeAccountedUSD": 0.0013626,
+        "promptTokens": 4481,
+        "completionTokens": 1829,
+        "modelActuallyReported": "anthropic/claude-haiku-5.5",
+        "truncated": false
+      },
+      {
+        "logicalID": 2,
+        "stage": "READ",
+        "status": "success",
+        "seconds": 9.971845149,
+        "reservationUSD": 0.0062016,
+        "reportedUSD": 0.0010291,
+        "conservativeAccountedUSD": 0.0010291,
+        "promptTokens": 4316,
+        "completionTokens": 1195,
+        "modelActuallyReported": "anthropic/claude-haiku-5.5",
+        "truncated": false
+      },
+      {
+        "logicalID": 3,
+        "stage": "PLAN",
+        "status": "timeout",
+        "seconds": 79.998010523,
+        "reservationUSD": 0.0050726,
+        "reportedUSD": null,
+        "conservativeAccountedUSD": 0.0050726,
+        "promptTokens": null,
+        "completionTokens": null,
+        "modelActuallyReported": null,
+        "truncated": null
+      }
+    ]
+  },
+  "budget": {
+    "originalAuthorizedUSD": 0.2,
+    "priorConservativeAccountedUSD": 0.1334213,
+    "availableThisDialogueUSD": 0.0665787,
+    "newReportedUSD": 0.0023917,
+    "newUnknownActualUSD": null,
+    "newUnknownResponseReservedUSD": 0.0050726,
+    "newConservativeAccountedUSD": 0.0074643,
+    "totalConservativeAccountedUSD": 0.1408856,
+    "remainingUSD": 0.0591144,
+    "subsetReportedCostUSD": 0.0023917,
+    "subsetConservativeCostUSD": 0.0074643,
+    "completedSubsetCostUSD": null,
+    "fullDocumentCostUSD": null,
+    "costPerUsableCardUSD": null,
+    "unknownChargeReason": "PLAN request reached transport but no response returned before cancellation; entire $0.0050726 reserve retained. Do not add known costs again.",
+    "freeModelMetadataRequestsCompleted": 1,
+    "additionalCorpusPaidCalls": 0
+  },
+  "continuation": {
+    "sameExperiment": true,
+    "preflightSaved": true,
+    "executed": false,
+    "newPaidCalls": 0,
+    "approvalResult": "automatic review timed out; command not executed",
+    "noRetryReason": "original eight-minute deadline expired",
+    "successfulReadingReusedInPaidContinuation": false
+  },
+  "coverage": {
+    "referenceObjectives": 61,
+    "referenceTopics": 19,
+    "individualObjectiveIDsAndTextsAvailable": false,
+    "newConfirmedObjectives": 0,
+    "fullDocumentCoveredObjectives": null
+  },
+  "checks": {
+    "taskTest": "passed uncached, GOFLAGS=-count=1; final log task-test-final-all.log, includes temporary PostgreSQL",
+    "taskLint": "passed frontend/backend, 0 issues; task-lint-final.log",
+    "allPaidTestsExplicitlyDisabled": [
+      "POMNIBOT_LIVE_CORPUS=0",
+      "POMNIBOT_LIVE_REPLAY=0",
+      "POMNIBOT_LIVE_BUDGETED=0",
+      "POMNIBOT_LIVE_SQL_SUBSET=0",
+      "POMNIBOT_LIVE_SQL_SUBSET_CONTINUE=0"
+    ],
+    "liveOptOutObservedInFinalLog": true,
+    "journalAndBoundFakeTests": "passed uncached",
+    "continuationLedgerFakeTest": "passed; lost response reserve retained, eighth attempt prohibited",
+    "realLocalSQLRegression": "passed uncached; no external model",
+    "raceThisDialogue": null,
+    "sandboxInitialTaskTest": "failed due to httptest sockets; fresh permitted run passed",
+    "newProductionFixes": [],
+    "newEvaluationCode": "backend/cmd/cardsgen/subset_eval_test.go",
+    "continuationCodeLiveValidated": false
+  },
+  "localCorpus": [
+    {
+      "name": "БД_Сем5_Лекция3. Введение в SQL.pdf",
+      "sha256": "124e265eabf075590bbaef74b6cf98af64c99482f6340cc093686bcafc3b0198",
+      "pages": 36,
+      "textCharacters": 17399,
+      "emptyTextPages": [],
+      "localTextReadSeconds": 0.15407894999952987,
+      "apiSentThisRun": true,
+      "imagePagesSentThisRun": [
+        28,
+        29
+      ],
+      "fullVisualReadVerified": false
+    },
+    {
+      "name": "БД_Сем5_Лекция2.pdf",
+      "sha256": "ee22e21ab5a18e8be184b53d4d51c5302892e440aa3d5663a73e391f37d57451",
+      "pages": 53,
+      "textCharacters": 21850,
+      "emptyTextPages": [
+        6,
+        10,
+        53
+      ],
+      "localTextReadSeconds": 0.384495076001258,
+      "apiSentThisRun": false,
+      "imagePagesSentThisRun": [],
+      "fullVisualReadVerified": false
+    },
+    {
+      "name": "БД_Сем5_Лекция4_SELECT_великий_и_ужасный (2).pdf",
+      "sha256": "e1849d01d9d699469c1a70c4733889613585a2a8588fc42219f99d1b3235e1fd",
+      "pages": 45,
+      "textCharacters": 22536,
+      "emptyTextPages": [],
+      "localTextReadSeconds": 0.19077757300146914,
+      "apiSentThisRun": false,
+      "imagePagesSentThisRun": [],
+      "fullVisualReadVerified": false
+    },
+    {
+      "name": "БД_Сем5_Лекция10_Индексирование_БД.pdf",
+      "sha256": "b5417a8389cd4b097805873c726608e748c4285bc102368f12b3b5dd669e82e5",
+      "pages": 27,
+      "textCharacters": 17539,
+      "emptyTextPages": [],
+      "localTextReadSeconds": 0.08487511599923891,
+      "apiSentThisRun": false,
+      "imagePagesSentThisRun": [],
+      "fullVisualReadVerified": false
+    }
+  ],
+  "comparison": "Unsuccessful two-page attempt has no comparable generation/verification timing. Do not compare with full baseline 206s or previous complete pipeline 294s; no quality/cost improvement established.",
+  "whatIsValidated": [
+    "actual vision read of selected original pages with correct before/after tables and WHERE conditions",
+    "configured model and 8000-token cap; exact prompt/schema/image request artifacts",
+    "local budget, fake providers, journal persistence and reserve reconstruction",
+    "all ordinary tests uncached with live opt-outs; lint"
+  ],
+  "whatIsNotValidated": [
+    "any real card generation, semantic review, independent card correctness, distractors or duplicates",
+    "full SQL source vision reading and remaining control cases",
+    "61-goal full-document coverage and actual application tasks",
+    "successful persistence of accepted live cards under cancellation: no live cards existed",
+    "paid continuation and local-only reserve-restoration code"
+  ]
+}

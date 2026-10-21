@@ -3,6 +3,7 @@ package repository_test
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"sync"
 	"testing"
 
@@ -10,12 +11,15 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
+	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
+	"github.com/mgrubiyan/pomnibot/backend/internal/material"
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 )
 
 type testQuerier struct {
+	reports []db.SaveProcessingReportParams
 	db.Querier
 	mu                    sync.Mutex
 	setsByShareCode       map[string]db.GetSetByShareCodeRow
@@ -239,5 +243,28 @@ func TestSaveGeneratedSet_TableCard(t *testing.T) {
 	}
 	if tq.createdCards[0].AnswerText.Valid {
 		t.Errorf("answer = %+v, want none: the layout is the answer", tq.createdCards[0].AnswerText)
+	}
+}
+
+func (q *testQuerier) SaveProcessingReport(_ context.Context, arg db.SaveProcessingReportParams) (int64, error) {
+	q.reports = append(q.reports, arg)
+	return 1, nil
+}
+func TestSaveGeneratedSetPreservesPrivateSourceArtifact(t *testing.T) {
+	q := newTestQuerier()
+	result := generator.Result{Artifact: &generator.Artifact{Version: generator.PipelineVersion, Files: []ingest.File{{Name: "private.txt", Data: []byte("source")}}}, Cards: []cards.Card{{FactID: "f", Evidence: []material.Evidence{{BlockID: "p1-b1", Kind: "text", Quote: "source"}}}}}
+	_, _, err := repository.SaveGeneratedSet(context.Background(), q, 42, "notes", result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(q.reports) != 1 || q.reports[0].AuthorID != 42 {
+		t.Fatal("private artifact not saved for owner")
+	}
+	var restored generator.Result
+	if err := json.Unmarshal(q.reports[0].Report, &restored); err != nil {
+		t.Fatal(err)
+	}
+	if string(restored.Artifact.Files[0].Data) != "source" || restored.Cards[0].Evidence[0].Quote != "source" {
+		t.Fatal("lost evidence or original")
 	}
 }

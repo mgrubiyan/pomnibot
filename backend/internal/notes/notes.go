@@ -15,15 +15,20 @@ package notes
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
+	"github.com/mgrubiyan/pomnibot/backend/internal/processingcache"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
 // Extractor reads text from files and photos.
@@ -60,10 +65,13 @@ func FromGenerator(g *generator.Generator) Generator {
 
 // Maker turns files into saved sets. It is safe for concurrent use.
 type Maker struct {
-	queue     *generator.Queue
-	extractor Extractor
-	generator Generator
-	sets      Saver
+	cache         *processingcache.Cache
+	cacheIdentity string
+	budget        providers.BudgetLimits
+	queue         *generator.Queue
+	extractor     Extractor
+	generator     Generator
+	sets          Saver
 }
 
 // New returns a Maker that works on slots documents at once, at least one:
@@ -73,10 +81,48 @@ type Maker struct {
 func New(extractor Extractor, gen Generator, sets Saver, slots int) *Maker {
 	return &Maker{
 		queue:     generator.NewQueue(slots),
+		budget:    providers.DefaultDocumentLimits(),
 		extractor: extractor,
 		generator: gen,
 		sets:      sets,
 	}
+}
+
+// WithBudget configures the shared per-document provider ledger.
+func (m *Maker) WithBudget(l providers.BudgetLimits) *Maker { m.budget = l; return m }
+
+// WithCache enables bounded reading reuse within a user. identity must include
+// concrete reader models, prompts/schema, and extraction settings.
+func (m *Maker) WithCache(c *processingcache.Cache, identity string) *Maker {
+	m.cache = c
+	m.cacheIdentity = identity
+	return m
+}
+
+func (m *Maker) extract(ctx context.Context, files []ingest.File) (ingest.Result, error) {
+	key := processingcache.Key(processingcache.Scope(ctx), m.cacheIdentity, ingest.ProcessingIdentity(), files)
+	if m.cache != nil {
+		if data, ok := m.cache.Get(key); ok {
+			var res ingest.Result
+			if json.Unmarshal(data, &res) == nil {
+				slog.Info("notes: reading cache hit")
+				return res, nil
+			}
+		}
+	}
+	began := time.Now()
+	res, err := m.extractor.Extract(ctx, files)
+	slog.Info("notes: reading done", "pages", len(res.Pages), "took", time.Since(began), "error", err)
+	if err == nil && ctx.Err() == nil && m.cache != nil {
+		// Never reuse an incomplete/uncertain reading: a new attempt must have a
+		// chance to recover from a temporary vision failure.
+		reusable := ingest.ReusableReading(res)
+		if reusable {
+			data, _ := json.Marshal(res)
+			m.cache.Put(key, data)
+		}
+	}
+	return res, err
 }
 
 // Request is one document: the files a student sent at once, already
@@ -135,6 +181,7 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 		slog.Error("no files to read among attachments", "user_id", req.UserID)
 		return Result{}, ErrNoFiles
 	}
+	ctx = processingcache.WithScope(ctx, strconv.FormatInt(req.UserID, 10))
 	title := resolveSetTitle(req.Caption, req.Files[0].Name)
 	log := slog.With("user_id", req.UserID, "title", title)
 
@@ -152,7 +199,8 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 		p.Reading()
 	}
 
-	extracted, err := m.extractor.Extract(ctx, req.Files)
+	ctx = providers.WithBudget(ctx, providers.NewBudget(m.budget))
+	extracted, err := m.extract(ctx, req.Files)
 	if err != nil {
 		log.Error("failed to extract text from files", "error", err)
 		return Result{}, &extractError{err: err, files: len(req.Files)}
@@ -166,6 +214,9 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 	}
 
 	doc := generator.Document{Text: extracted.Text, Title: title}
+	if len(extracted.Document.Blocks) > 0 {
+		doc.Structure = &extracted.Document
+	}
 	for _, page := range extracted.Pages {
 		doc.PageStarts = append(doc.PageStarts, page.Start)
 	}
@@ -195,12 +246,24 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 			title = t
 		}
 	}
+	genResult.Artifact = &generator.Artifact{Version: generator.PipelineVersion, Reading: extracted.Document, Files: req.Files}
 	set, err := m.sets.SaveGeneratedSet(ctx, req.UserID, title, genResult)
 	if err != nil {
 		log.Error("failed to save generated set to database", "error", err)
 		return Result{}, fmt.Errorf("save set: %w", err)
 	}
-	return Result{Set: set, Warnings: extracted.Warnings}, nil
+	var warnings []string
+	if len(genResult.Coverage.Missing) > 0 {
+		warnings = append(warnings, fmt.Sprintf("Не покрыто учебных целей: %d. Подробности сохранены в отчёте обработки.", len(genResult.Coverage.Missing)))
+	}
+	for _, issue := range genResult.Coverage.Issues {
+		if strings.Contains(issue, providers.ErrBudget.Error()) {
+			warnings = append(warnings, "Достигнут бюджет обработки; сохранены уже проверенные карточки.")
+			break
+		}
+	}
+	warnings = append(warnings, extracted.Warnings...)
+	return Result{Set: set, Warnings: warnings}, nil
 }
 
 func call(f func(int), n int) {

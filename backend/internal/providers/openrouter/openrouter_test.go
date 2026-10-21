@@ -219,3 +219,58 @@ func TestConfigFromEnv(t *testing.T) {
 		})
 	}
 }
+
+func TestCompletePreservesMultipleSourceImages(t *testing.T) {
+	c := clientFor(t, func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Messages []struct {
+				Content json.RawMessage `json:"content"`
+			} `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+		var parts []part
+		if len(body.Messages) != 2 {
+			t.Error("messages lost")
+		} else if err := json.Unmarshal(body.Messages[1].Content, &parts); err != nil || len(parts) != 3 {
+			t.Errorf("image pages lost: %s", body.Messages[1].Content)
+		}
+		_, _ = fmt.Fprint(w, `{"choices":[{"message":{"content":"{}"},"finish_reason":"stop"}]}`)
+	})
+	_, err := c.Complete(context.Background(), providers.Request{User: "pages 3 and 22", Images: []providers.Image{{MimeType: "image/png", Data: []byte("first")}, {MimeType: "image/jpeg", Data: []byte("second")}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestBudgetCountsTransportRetriesAndStopsBeforeSending(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { calls++; w.WriteHeader(http.StatusInternalServerError) }))
+	defer server.Close()
+	c, err := New(Config{APIKey: "test", Model: DefaultModel, BaseURL: server.URL, MaxTokens: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.backoff = 0
+	b := providers.NewBudget(providers.BudgetLimits{Calls: 1, USD: .01, CallUSD: .01})
+	_, err = c.Complete(providers.WithBudget(context.Background(), b), providers.Request{User: "test"})
+	if !errors.Is(err, providers.ErrBudget) || calls != 1 {
+		t.Fatalf("retry escaped budget: calls=%d err=%v", calls, err)
+	}
+}
+
+func TestBudgetRetainsReservationWhenUsageCostIsMissing(t *testing.T) {
+	c := clientFor(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, `{"choices":[{"message":{"content":"{}"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":10}}`)
+	})
+	b := providers.NewBudget(providers.BudgetLimits{Calls: 2, USD: .02})
+	_, err := c.Complete(providers.WithBudget(context.Background(), b), providers.Request{User: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := b.Snapshot()
+	if s.CommittedUSD <= 0 || s.ReportedUSD != 0 || s.ReservedUSD != 0 {
+		t.Fatalf("unreported cost treated as free: %+v", s)
+	}
+}

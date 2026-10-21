@@ -7,6 +7,7 @@ import (
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
 // What the student reads when a document does not become a set. Each text
@@ -14,12 +15,13 @@ import (
 // different one, or wait. Our own failures, such as the model or the database,
 // are not explained; the student cannot fix them.
 const (
-	TextTryLater  = "😕 Не получилось сделать карточки. Пришли конспект ещё раз через пару минут."
-	TextResend    = "😕 Не получилось получить файл. Пришли его ещё раз."
-	TextNoText    = "😕 Не нашёл в файле текста. Если это фото, сними страницу целиком, при хорошем свете и без размытия."
-	TextOnlyJunk  = "😕 В этом файле нет материала для карточек. Пришли конспект лекции или страницы учебника."
-	TextOtherText = "😕 По этому тексту не получилось составить карточки. Попробуй прислать другой конспект."
-	TextNoCards   = "😕 По этому тексту не получилось составить карточки. Пришли конспект подробнее: с определениями, свойствами, причинами и следствиями."
+	TextBudgetExceeded = "😕 Достигнут лимит обработки этого документа. Проверенных карточек пока нет. Пришли меньший фрагмент."
+	TextTryLater       = "😕 Не получилось сделать карточки. Пришли конспект ещё раз через пару минут."
+	TextResend         = "😕 Не получилось получить файл. Пришли его ещё раз."
+	TextNoText         = "😕 Не нашёл в файле текста. Если это фото, сними страницу целиком, при хорошем свете и без размытия."
+	TextOnlyJunk       = "😕 В этом файле нет материала для карточек. Пришли конспект лекции или страницы учебника."
+	TextOtherText      = "😕 По этому тексту не получилось составить карточки. Попробуй прислать другой конспект."
+	TextNoCards        = "😕 По этому тексту не получилось составить карточки. Пришли конспект подробнее: с определениями, свойствами, причинами и следствиями."
 )
 
 // maxWarningsShown keeps a long scan with many blurry pages from burying the
@@ -36,6 +38,8 @@ func FailureText(err error) string {
 	switch {
 	case errors.Is(err, ErrGaveUp):
 		return ""
+	case errors.Is(err, providers.ErrBudget):
+		return TextBudgetExceeded
 	case errors.Is(err, ErrNoFiles):
 		return TextResend
 	case errors.Is(err, ErrNoText):

@@ -22,11 +22,14 @@ var ErrRefused = errors.New("refused by the content filter")
 // The completion budget (max tokens) is not here: it depends on the model's
 // tokenizer and price, so each provider sets it in its own config.
 type Request struct {
+	NoCache bool // caller must still validate semantics/source links after the response
+
 	System      string
 	User        string
 	Schema      json.RawMessage
 	Temperature float64
-	Image       *Image // shown to the model with the user message; nil for text only
+	Images      []Image // ordered additional source pages
+	Image       *Image  // shown to the model with the user message; nil for text only
 }
 
 // Image is a picture the model reads, such as a photo of a page of notes.
@@ -45,6 +48,7 @@ type Usage struct {
 // Response is the raw model answer. Content may be wrapped in markdown or
 // surrounded by prose: providers do not clean it up.
 type Response struct {
+	Cached  bool // a reused private processing artifact, no new API billing
 	Content []byte
 	Usage   Usage
 	Model   string // model that actually answered, may be a fallback
@@ -57,4 +61,13 @@ type Response struct {
 // transport retries; the caller handles invalid answers.
 type Provider interface {
 	Complete(ctx context.Context, req Request) (Response, error)
+}
+
+// RequestImages returns images in prompt order, preserving the legacy single image.
+func RequestImages(r Request) []Image {
+	out := make([]Image, 0, len(r.Images)+1)
+	if r.Image != nil {
+		out = append(out, *r.Image)
+	}
+	return append(out, r.Images...)
 }

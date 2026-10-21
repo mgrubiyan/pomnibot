@@ -29,6 +29,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/mgrubiyan/pomnibot/backend/internal/material"
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
@@ -41,7 +42,6 @@ const (
 	// this many fragments in a row, after its own retries and fallback model:
 	// bad credentials or an outage, not a flaky fragment.
 	maxConsecutiveFailures = 3
-	logAnswerLength        = 300
 )
 
 // Generator makes cards from documents. It is safe for concurrent use.
@@ -82,7 +82,14 @@ func (g *Generator) WithOnBatch(onBatch func(Batch)) *Generator {
 // ctx is cancelled, when the provider fails on maxConsecutiveFailures
 // fragments in a row, or when it fails on every fragment; the Result then
 // holds what was made before.
-func (g *Generator) Generate(ctx context.Context, doc Document) (Result, error) {
+func (g *Generator) Generate(ctx context.Context, doc Document) (finalResult Result, finalErr error) {
+	if providers.BudgetFrom(ctx) == nil {
+		ctx = providers.WithBudget(ctx, providers.NewBudget(g.opts.Budget))
+	}
+	defer func() { finalResult.Budget = providers.BudgetFrom(ctx).Snapshot() }()
+	if doc.Structure != nil {
+		return g.generateSemantic(ctx, doc)
+	}
 	began := time.Now()
 	log := slog.Default()
 
@@ -153,6 +160,10 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (Result, error) 
 			case r.err != nil:
 				failures++
 				log.Warn("cards: fragment failed", "fragment", r.chunk.Index+1, "err", r.err)
+				if errors.Is(r.err, providers.ErrBudget) && runErr == nil {
+					runErr = r.err
+					cancel()
+				}
 				if failures >= maxConsecutiveFailures && runErr == nil {
 					runErr = fmt.Errorf("provider failed on %d fragments in a row: %w", failures, r.err)
 					cancel()
@@ -238,15 +249,17 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, examples nam
 
 	maxFacts := factCap(r.chunk.Text, g.opts.MaxFactsPerChunk)
 	req := providers.Request{
+		NoCache:     true,
 		System:      g.system,
+		Images:      doc.Images,
 		Schema:      g.schema,
 		Temperature: 0,
 	}
 	var parsed []modelFact
 	answered := false
 	for attempt := range answerAttempts {
-		req.User = buildUserPrompt(doc.Title, r.chunk, total, attempt > 0)
-		if attempt == 0 && maxFacts != g.opts.MaxFactsPerChunk {
+		req.User = doc.Context + "\n" + buildUserPrompt(doc.Title, r.chunk, total, attempt > 0)
+		if doc.EvidenceSource == nil && attempt == 0 && maxFacts != g.opts.MaxFactsPerChunk {
 			req.System, req.Schema = buildSystemPrompt(maxFacts), cardSchema(maxFacts)
 		}
 		callCtx, cancel := context.WithTimeout(ctx, g.opts.CallTimeout)
@@ -266,6 +279,10 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, examples nam
 			break
 		}
 
+		if resp.Cached {
+			r.cacheHits++
+		}
+		r.usage.CostUSD += resp.Usage.CostUSD
 		r.usage.PromptTokens += resp.Usage.PromptTokens
 		r.usage.CompletionTokens += resp.Usage.CompletionTokens
 		model := resp.Model
@@ -284,11 +301,11 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, examples nam
 		if err != nil {
 			r.invalidResponses++
 			log.Warn("cards: invalid model answer",
-				"attempt", attempt+1, "err", err, "answer", clip(resp.Content, logAnswerLength))
+				"attempt", attempt+1, "err", err)
 			continue
 		}
 		if log.Enabled(ctx, slog.LevelDebug) {
-			log.Debug("cards: model answer", "answer", string(resp.Content))
+			log.Debug("cards: model answer parsed", "bytes", len(resp.Content))
 		}
 		parsed, r.droppedInvalid, answered = facts, invalid, true
 		break
@@ -307,10 +324,22 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, examples nam
 		start, end, ok := locateQuote(r.chunk.Text, f.Quote)
 		if !ok {
 			r.droppedQuote += len(f.Cards)
-			log.Info("cards: quote not found in fragment", "topic", f.Topic, "quote", f.Quote)
+			log.Info("cards: quote not found in fragment", "topic", f.Topic)
 			continue
 		}
 		f.Quote = r.chunk.Text[start:end]
+		support := f.Quote
+		if doc.EvidenceSource != nil {
+			var valid bool
+			f.Evidence, f.Quote, valid = groundFact(f, *doc.EvidenceSource)
+			if !valid {
+				r.droppedQuote += len(f.Cards)
+				continue
+			}
+			for _, e := range f.Evidence {
+				support += "\n" + e.Quote
+			}
+		}
 		if personalData(f.Quote) {
 			r.droppedPersonal += len(f.Cards)
 			log.Info("cards: fact with personal data dropped", "topic", f.Topic)
@@ -319,32 +348,41 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, examples nam
 		f.Start, f.End = r.chunk.Start+start, r.chunk.Start+end
 		f.ID = factID(doc.ID, factKey(f))
 
+		visual := slices.ContainsFunc(f.Evidence, func(e material.Evidence) bool { return e.Kind == "image" })
 		kept := f.Cards[:0]
 		for _, c := range f.Cards {
 			if c.Kind == cards.KindTable {
 				if !tableGrounded(c.Table, f.Quote) {
 					r.droppedTable++
-					log.Info("cards: table not in the quote as laid out", "question", c.Question, "table", c.Table, "quote", f.Quote)
+					log.Info("cards: table not in the quote as laid out", "kind", c.Kind)
 					continue
 				}
 				c.Table = shuffleTable(labelPipeItems(c.Table, f.Quote), f.ID)
 			}
-			if answerChecked(c.Kind) && !answerSupported(c, f.Quote) ||
-				c.Kind == cards.KindFlip && (namedIn(c.Answer, c.Question) || !claimSupported(c.Answer, f.Quote)) ||
-				c.Kind == cards.KindBoolean && !claimSupported(trueClaim(c), f.Quote) {
+			// Sentence answers test reasoning better as open answers. This keeps
+			// the existing claim-support gate and still requires semantic review.
+			if doc.EvidenceSource != nil && c.Kind == cards.KindChoice && (c.LearningMode == "distinguish" || c.LearningMode == "explain") && len(contentWords(c.Answer)) >= 8 && claimSupported(c.Answer, support) && !namedIn(c.Answer, c.Question) {
+				c.Kind = cards.KindFlip
+				c.Distractors = nil
+				r.explanatoryChoiceToFlip++
+			}
+			application := doc.EvidenceSource != nil && c.LearningMode == "apply" && hasApplicationContext(c.Question)
+			if !application && !visual && (answerChecked(c.Kind) && !answerSupported(c, support) ||
+				c.Kind == cards.KindFlip && (namedIn(c.Answer, c.Question) || !claimSupported(c.Answer, support)) ||
+				c.Kind == cards.KindBoolean && !claimSupported(trueClaim(c), support)) || !application && visual && namedIn(c.Answer, c.Question) {
 				r.droppedUnsupported++
 				log.Info("cards: answer not in the quote or given in the question",
-					"kind", c.Kind, "question", c.Question, "answer", c.Answer)
+					"kind", c.Kind)
 				continue
 			}
-			if aboutExample(c, examples) {
+			if doc.EvidenceSource == nil && aboutExample(c, examples) {
 				r.droppedExample++
-				log.Info("cards: card about the names of an example", "kind", c.Kind, "question", c.Question, "answer", c.Answer)
+				log.Info("cards: card about the names of an example", "kind", c.Kind)
 				continue
 			}
 			if clean := cleanExplanation(c.Explanation, r.chunk.Text); clean != c.Explanation {
 				r.trimmedExplains++
-				log.Debug("cards: explanation trimmed to the fragment", "was", c.Explanation, "now", clean)
+				log.Debug("cards: explanation trimmed to the fragment", "kind", c.Kind)
 				c.Explanation = clean
 			}
 			kept = append(kept, c)
@@ -352,7 +390,7 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, examples nam
 		if !vocab {
 			kept = dropFlipRepeats(kept, func(c modelCard) {
 				r.droppedVariants++
-				log.Info("cards: flip asks another card's question in other words", "question", c.Question, "answer", c.Answer)
+				log.Info("cards: flip asks another card's question in other words", "kind", c.Kind)
 			})
 		}
 		if f.Cards = kept; len(f.Cards) > 0 {
@@ -386,12 +424,4 @@ func factID(docID, quote string) string {
 	_, _ = h.Write([]byte{0})
 	_, _ = h.Write([]byte(fold(quote).s))
 	return fmt.Sprintf("%016x", h.Sum64())
-}
-
-func clip(b []byte, n int) string {
-	r := []rune(string(b))
-	if len(r) <= n {
-		return string(r)
-	}
-	return string(r[:n]) + "…"
 }

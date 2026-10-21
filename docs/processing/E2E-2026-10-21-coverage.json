@@ -1,0 +1,303 @@
+{
+  "referenceMap": "sql-map.json",
+  "referenceMapSHA256": "78db6ed28b595811e7eae33c647fcb68bd3bf92d8c1398cf6f01132f22984732",
+  "referenceTopics": 19,
+  "referenceObjectiveCount": 61,
+  "individualObjectiveIDsAndTextAvailable": false,
+  "runType": "limited subset; stopped at PLAN timeout",
+  "selectedOriginalPages": [
+    28,
+    29
+  ],
+  "modelAcceptedCards": 0,
+  "independentlyUsableCards": 0,
+  "newConfirmedCoverage": 0,
+  "fullDocumentCoveredObjectives": null,
+  "fullDocumentMissingObjectives": null,
+  "unconfirmedReferenceObjectives": 61,
+  "mappingPrecision": "All 19 original rows and their counts are preserved. The 61 individual ID/text pairs are unavailable; none reconstructed. No replacement plan exists. Zero cards demonstrates no new coverage, not the measured quality/coverage of a completed full-document pipeline.",
+  "rows": [
+    {
+      "title": "Введение в SQL",
+      "pages": [
+        1
+      ],
+      "relatedPages": null,
+      "objectives": 1,
+      "selectedForSubset": false,
+      "independentCoverage": "not demonstrated; no generated or accepted cards",
+      "coveredOriginalObjectiveIDs": null
+    },
+    {
+      "title": "Пример реляционной таблицы",
+      "pages": [
+        2
+      ],
+      "relatedPages": null,
+      "objectives": 1,
+      "selectedForSubset": false,
+      "independentCoverage": "not demonstrated; no generated or accepted cards",
+      "coveredOriginalObjectiveIDs": null
+    },
+    {
+      "title": "Первичный и внешний ключи",
+      "pages": [
+        3,
+        4,
+        19,
+        20,
+        21,
+        22
+      ],
+      "relatedPages": [
+        16,
+        18
+      ],
+      "objectives": 6,
+      "selectedForSubset": false,
+      "independentCoverage": "not demonstrated; no generated or accepted cards",
+      "coveredOriginalObjectiveIDs": null
+    },
+    {
+      "title": "Типы отношений между таблицами",
+      "pages": [
+        5
+      ],
+      "relatedPages": null,
+      "objectives": 1,
+      "selectedForSubset": false,
+      "independentCoverage": "not demonstrated; no generated or accepted cards",
+      "coveredOriginalObjectiveIDs": null
+    },
+    {
+      "title": "Терминология реляционной модели",
+      "pages": [
+        6
+      ],
+      "relatedPages": null,
+      "objectives": 1,
+      "selectedForSubset": false,
+      "independentCoverage": "not demonstrated; no generated or accepted cards",
+      "coveredOriginalObjectiveIDs": null
+    },
+    {
+      "title": "История SQL и разработчики",
+      "pages": [
+        7,
+        12,
+        13
+      ],
+      "relatedPages": null,
+      "objectives": 4,
+      "selectedForSubset": false,
+      "independentCoverage": "not demonstrated; no generated or accepted cards",
+      "coveredOriginalObjectiveIDs": null
+    },
+    {
+      "title": "12 правил Кодда",
+      "pages": [
+        8,
+        9,
+        10,
+        11
+      ],
+      "relatedPages": null,
+      "objectives": 4,
+      "selectedForSubset": false,
+      "independentCoverage": "not demonstrated; no generated or accepted cards",
+      "coveredOriginalObjectiveIDs": null
+    },
+    {
+      "title": "Группы операторов определения данных (DDL)",
+      "pages": [
+        14,
+        15
+      ],
+      "relatedPages": [
+        16,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        26,
+        30
+      ],
+      "objectives": 5,
+      "selectedForSubset": false,
+      "independentCoverage": "not demonstrated; no generated or accepted cards",
+      "coveredOriginalObjectiveIDs": null
+    },
+    {
+      "title": "Создание таблицы: общий синтаксис CREATE TABLE",
+      "pages": [
+        16,
+        18
+      ],
+      "relatedPages": [
+        19,
+        20,
+        21,
+        22
+      ],
+      "objectives": 3,
+      "selectedForSubset": false,
+      "independentCoverage": "not demonstrated; no generated or accepted cards",
+      "coveredOriginalObjectiveIDs": null
+    },
+    {
+      "title": "Типы данных SQL",
+      "pages": [
+        17
+      ],
+      "relatedPages": null,
+      "objectives": 6,
+      "selectedForSubset": false,
+      "independentCoverage": "not demonstrated; no generated or accepted cards",
+      "coveredOriginalObjectiveIDs": null
+    },
+    {
+      "title": "Создание индекса: CREATE INDEX",
+      "pages": [
+        23
+      ],
+      "relatedPages": null,
+      "objectives": 3,
+      "selectedForSubset": false,
+      "independentCoverage": "not demonstrated; no generated or accepted cards",
+      "coveredOriginalObjectiveIDs": null
+    },
+    {
+      "title": "Удаление таблицы и данных: DROP TABLE и TRUNCATE TABLE",
+      "pages": [
+        24,
+        25
+      ],
+      "relatedPages": null,
+      "objectives": 3,
+      "selectedForSubset": false,
+      "independentCoverage": "not demonstrated; no generated or accepted cards",
+      "coveredOriginalObjectiveIDs": null
+    },
+    {
+      "title": "Добавление столбца в таблицу (ALTER TABLE ADD)",
+      "pages": [
+        25,
+        26
+      ],
+      "relatedPages": [
+        30
+      ],
+      "objectives": 4,
+      "selectedForSubset": false,
+      "independentCoverage": "not demonstrated; no generated or accepted cards",
+      "coveredOriginalObjectiveIDs": null
+    },
+    {
+      "title": "Добавление записей (INSERT)",
+      "pages": [
+        27,
+        34,
+        35
+      ],
+      "relatedPages": null,
+      "objectives": 8,
+      "selectedForSubset": false,
+      "independentCoverage": "not demonstrated; no generated or accepted cards",
+      "coveredOriginalObjectiveIDs": null
+    },
+    {
+      "title": "Изменение существующих записей (UPDATE)",
+      "pages": [
+        28
+      ],
+      "relatedPages": null,
+      "objectives": 2,
+      "selectedForSubset": true,
+      "independentCoverage": "not demonstrated; no generated or accepted cards",
+      "coveredOriginalObjectiveIDs": null
+    },
+    {
+      "title": "Удаление записей (DELETE)",
+      "pages": [
+        29
+      ],
+      "relatedPages": null,
+      "objectives": 2,
+      "selectedForSubset": true,
+      "independentCoverage": "not demonstrated; no generated or accepted cards",
+      "coveredOriginalObjectiveIDs": null
+    },
+    {
+      "title": "Ограничение на значение (CHECK)",
+      "pages": [
+        30
+      ],
+      "relatedPages": [
+        26
+      ],
+      "objectives": 1,
+      "selectedForSubset": false,
+      "independentCoverage": "not demonstrated; no generated or accepted cards",
+      "coveredOriginalObjectiveIDs": null
+    },
+    {
+      "title": "Выборка данных (SELECT): синтаксис",
+      "pages": [
+        31
+      ],
+      "relatedPages": null,
+      "objectives": 2,
+      "selectedForSubset": false,
+      "independentCoverage": "not demonstrated; no generated or accepted cards",
+      "coveredOriginalObjectiveIDs": null
+    },
+    {
+      "title": "Действия при изменении связанных данных (ON DELETE / ON UPDATE)",
+      "pages": [
+        32,
+        33
+      ],
+      "relatedPages": [
+        22
+      ],
+      "objectives": 4,
+      "selectedForSubset": false,
+      "independentCoverage": "not demonstrated; no generated or accepted cards",
+      "coveredOriginalObjectiveIDs": null
+    }
+  ],
+  "assessmentModes": {
+    "definitions": {
+      "assessed": false,
+      "confirmedUsableCards": 0,
+      "reason": "generation stage not reached"
+    },
+    "conceptsAndRelationships": {
+      "assessed": false,
+      "confirmedUsableCards": 0,
+      "reason": "generation stage not reached"
+    },
+    "distinctions": {
+      "assessed": false,
+      "confirmedUsableCards": 0,
+      "reason": "generation stage not reached"
+    },
+    "causes": {
+      "assessed": false,
+      "confirmedUsableCards": 0,
+      "reason": "generation stage not reached"
+    },
+    "conditionsOfUse": {
+      "assessed": false,
+      "confirmedUsableCards": 0,
+      "reason": "generation stage not reached"
+    },
+    "realApplicationTasks": {
+      "assessed": false,
+      "confirmedUsableCards": 0,
+      "reason": "generation stage not reached"
+    }
+  }
+}

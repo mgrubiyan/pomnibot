@@ -1,0 +1,91 @@
+[
+  {
+    "name": "БД_Сем5_Лекция2.pdf",
+    "sha256": "ee22e21ab5a18e8be184b53d4d51c5302892e440aa3d5663a73e391f37d57451",
+    "totalPages": 53,
+    "selectedPages": [
+      11,
+      12,
+      14,
+      15
+    ],
+    "emptyTextPages": [
+      6,
+      10,
+      53
+    ],
+    "localTextCharacters": 22543,
+    "localReadSeconds": 0.3287,
+    "apiSent": true,
+    "evaluationStatus": "selected pages read; 0 accepted cards due to unsupported verifier evidence",
+    "currentSessionLocalInspection": {
+      "name": "БД_Сем5_Лекция2.pdf",
+      "sha256": "ee22e21ab5a18e8be184b53d4d51c5302892e440aa3d5663a73e391f37d57451",
+      "pages": 53,
+      "textCharacters": 22543,
+      "emptyTextPages": [
+        6,
+        10,
+        53
+      ],
+      "localSeconds": 0.9097,
+      "apiCalls": 0,
+      "visualReadingVerified": false
+    },
+    "currentSessionApiStatus": "One selected page read; next page timed out; generation not reached"
+  },
+  {
+    "name": "БД_Сем5_Лекция4_SELECT_великий_и_ужасный (2).pdf",
+    "sha256": "e1849d01d9d699469c1a70c4733889613585a2a8588fc42219f99d1b3235e1fd",
+    "totalPages": 45,
+    "selectedPages": [
+      9,
+      10,
+      37,
+      39
+    ],
+    "emptyTextPages": [],
+    "localTextCharacters": 23042,
+    "localReadSeconds": 0.1802,
+    "apiSent": true,
+    "evaluationStatus": "selected pages read; interrupted after verifier timeout",
+    "currentSessionLocalInspection": {
+      "name": "БД_Сем5_Лекция4_SELECT_великий_и_ужасный (2).pdf",
+      "sha256": "e1849d01d9d699469c1a70c4733889613585a2a8588fc42219f99d1b3235e1fd",
+      "pages": 45,
+      "textCharacters": 23042,
+      "emptyTextPages": [],
+      "localSeconds": 0.4718,
+      "apiCalls": 0,
+      "visualReadingVerified": false
+    },
+    "currentSessionApiStatus": "Not sent in current session"
+  },
+  {
+    "name": "БД_Сем5_Лекция10_Индексирование_БД.pdf",
+    "sha256": "b5417a8389cd4b097805873c726608e748c4285bc102368f12b3b5dd669e82e5",
+    "totalPages": 27,
+    "selectedPages": [
+      4,
+      11,
+      16,
+      24
+    ],
+    "emptyTextPages": [],
+    "localTextCharacters": 17882,
+    "localReadSeconds": 0.0757,
+    "apiSent": false,
+    "evaluationStatus": "local extraction only; external evaluation not reached",
+    "currentSessionLocalInspection": {
+      "name": "БД_Сем5_Лекция10_Индексирование_БД.pdf",
+      "sha256": "b5417a8389cd4b097805873c726608e748c4285bc102368f12b3b5dd669e82e5",
+      "pages": 27,
+      "textCharacters": 17882,
+      "emptyTextPages": [],
+      "localSeconds": 0.2101,
+      "apiCalls": 0,
+      "visualReadingVerified": false
+    },
+    "currentSessionApiStatus": "Not sent in current session"
+  }
+]

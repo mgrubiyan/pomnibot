@@ -16,6 +16,8 @@ import (
 	"net/http"
 	"strings"
 	"unicode"
+
+	"github.com/mgrubiyan/pomnibot/backend/internal/material"
 )
 
 // File is one file as received, with whatever name the messenger gave it.
@@ -36,24 +38,33 @@ const (
 
 // PageInfo describes one page of the result.
 type PageInfo struct {
-	Number   int    `json:"number"` // 1-based across all files, as the student sees them
-	File     int    `json:"file"`   // index in the files passed to Extract
-	Page     int    `json:"page"`   // 1-based within its file
-	Source   Source `json:"source"`
-	Chars    int    `json:"chars"`             // non-space characters of the page text
-	NeedsOCR bool   `json:"needsOcr"`          // a photo, or a PDF page with almost no text layer
-	Poor     bool   `json:"poor"`              // recognized badly: the student should retake it
-	Recoded  bool   `json:"recoded,omitempty"` // text layer had Cyrillic read as Latin-1, see recodeLatin1
-	Start    int    `json:"start"`             // byte offset in Result.Text where the page's text starts
+	ReadFailed bool `json:"readFailed,omitempty"` // a required image read failed or was unavailable
+
+	ImageMime    string           `json:"imageMime,omitempty"`
+	Image        []byte           `json:"image,omitempty"`
+	TextLayer    string           `json:"textLayer,omitempty"`
+	Observations string           `json:"observations,omitempty"`
+	Issues       []string         `json:"issues,omitempty"`
+	Blocks       []material.Block `json:"blocks,omitempty"`
+	Number       int              `json:"number"` // 1-based across all files, as the student sees them
+	File         int              `json:"file"`   // index in the files passed to Extract
+	Page         int              `json:"page"`   // 1-based within its file
+	Source       Source           `json:"source"`
+	Chars        int              `json:"chars"`             // non-space characters of the page text
+	NeedsOCR     bool             `json:"needsOcr"`          // a photo, or a PDF page with almost no text layer
+	Poor         bool             `json:"poor"`              // recognized badly: the student should retake it
+	Recoded      bool             `json:"recoded,omitempty"` // text layer had Cyrillic read as Latin-1, see recodeLatin1
+	Start        int              `json:"start"`             // byte offset in Result.Text where the page's text starts
 }
 
 // Result is the extracted text. Warnings are for the student, in Russian: the
 // confirmation screen shows them before cards are made.
 type Result struct {
-	Text     string     `json:"text"`
-	Source   Source     `json:"source"`
-	Pages    []PageInfo `json:"pages"`
-	Warnings []string   `json:"warnings,omitempty"`
+	Document material.Document `json:"document"`
+	Text     string            `json:"text"`
+	Source   Source            `json:"source"`
+	Pages    []PageInfo        `json:"pages"`
+	Warnings []string          `json:"warnings,omitempty"`
 }
 
 // DefaultMinPageChars is the text layer size, in non-space characters, below
@@ -87,6 +98,13 @@ type OCRRequest struct {
 // OCRPage is the text of one page. Confidence is the mean over the page when
 // the service reports it.
 type OCRPage struct {
+	ReadFailed bool
+
+	ImageMime     string
+	Image         []byte
+	Observations  string
+	Issues        []string
+	Blocks        []material.Block
 	Text          string
 	FromTextLayer bool // a full-page reader fell back to the original PDF text
 	Confidence    float64
@@ -100,6 +118,7 @@ type Options struct {
 	PDF             PDFText // nil: pdftotext from PATH, checked in NewExtractor
 	DisablePDF      bool    // no pdftotext needed; PDFs are rejected
 	OCRModel        string  // overrides the choice of ModelPhoto or ModelScan
+	AssessPDF       bool    // inspect bitmaps/layout even when a text layer is present
 	ReadAllPDFPages bool    // read full page images even when the PDF has a text layer
 }
 
@@ -176,7 +195,7 @@ func (e *Extractor) Extract(ctx context.Context, files []File) (Result, error) {
 			text, err = e.readWord(&res, i, f)
 			pages = []string{text}
 		case KindPPTX:
-			pages, err = e.readSlides(&res, i, f)
+			pages, err = e.readSlides(ctx, &res, i, f)
 		case KindJPEG, KindPNG, KindWebP:
 			var text string
 			text, err = e.readImage(ctx, &res, i, f)
@@ -219,6 +238,7 @@ func (e *Extractor) Extract(ctx context.Context, files []File) (Result, error) {
 	}
 	res.Text = b.String()
 	res.Source = overallSource(res.Pages)
+	res.Document = buildDocument(res)
 	return res, nil
 }
 
@@ -250,16 +270,21 @@ func (e *Extractor) readWord(res *Result, file int, f File) (string, error) {
 }
 
 // readSlides takes the text of each slide of a deck as a page of its own.
-func (e *Extractor) readSlides(res *Result, file int, f File) ([]string, error) {
-	slides, err := pptxSlides(f.Data)
+func (e *Extractor) readSlides(ctx context.Context, res *Result, file int, f File) ([]string, error) {
+	slides, err := e.structuredSlides(ctx, f.Data)
 	if err != nil {
 		return nil, &Error{File: f.Name, Err: fmt.Errorf("%w: powerpoint: %w", ErrUnsupported, err),
 			Message: "Не удалось открыть презентацию: сохраните её заново или пришлите PDF."}
 	}
-	for k, text := range slides {
-		res.Pages = append(res.Pages, PageInfo{Number: len(res.Pages) + 1, File: file, Page: k + 1, Source: SourceText, Chars: countChars(text)})
+	var texts []string
+	for k, s := range slides {
+		texts = append(texts, s.text)
+		res.Pages = append(res.Pages, PageInfo{Number: len(res.Pages) + 1, File: file, Page: k + 1, Source: SourceText, Chars: countChars(s.text), Blocks: s.blocks, Issues: s.issues})
+		if len(s.issues) > 0 {
+			res.Warnings = append(res.Warnings, fmt.Sprintf("Слайд %d: часть визуального контекста не проверена; для связей между объектами пришлите PDF.", k+1))
+		}
 	}
-	return slides, nil
+	return texts, nil
 }
 
 // readPDF takes the text layer page by page and returns the text of each
@@ -282,22 +307,38 @@ func (e *Extractor) readPDF(ctx context.Context, res *Result, file int, f File) 
 	// Text-only PDFs previously bypassed OCR service limits. If a document
 	// exceeds them, keep that behavior and only request OCR for actual scans.
 	fullRead := e.opts.ReadAllPDFPages && len(pages) <= e.lim.pages && len(f.Data) <= e.lim.bytes
+	var risks []bool
+	if e.opts.AssessPDF {
+		if inspect, ok := e.pdf.(PDFVisualRisk); ok {
+			risks, err = inspect.VisualPages(ctx, f.Data, pages)
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			if err != nil {
+				fullRead = true
+				res.Warnings = append(res.Warnings, "Структуру PDF не удалось проверить локально; требуется чтение изображений.")
+			}
+		} else {
+			fullRead = true
+		}
+	}
 	var scanned []int
 	for i, text := range pages {
 		text, recoded := recodeLatin1(text)
 		pages[i] = text
 		info := PageInfo{
-			Number:  first + i + 1,
-			File:    file,
-			Page:    i + 1,
-			Source:  SourceText,
-			Chars:   countChars(text),
-			Recoded: recoded,
+			Number:    first + i + 1,
+			File:      file,
+			Page:      i + 1,
+			Source:    SourceText,
+			Chars:     countChars(text),
+			Recoded:   recoded,
+			TextLayer: text,
 		}
 		if info.Chars < e.opts.MinPageChars {
 			info.NeedsOCR = true
 		}
-		if info.NeedsOCR || fullRead {
+		if info.NeedsOCR || fullRead || i < len(risks) && risks[i] {
 			scanned = append(scanned, i)
 		}
 		res.Pages = append(res.Pages, info)
@@ -306,8 +347,10 @@ func (e *Extractor) readPDF(ctx context.Context, res *Result, file int, f File) 
 	if len(scanned) > 0 {
 		if e.ocr == nil {
 			for _, i := range scanned {
+				res.Pages[first+i].ReadFailed = true
+				res.Pages[first+i].Issues = append(res.Pages[first+i].Issues, "Страница требует чтения изображения; доступен только текстовый слой.")
 				res.Warnings = append(res.Warnings, fmt.Sprintf(
-					"Страница %d похожа на скан: в ней почти нет текста, а распознавание не настроено.", first+i+1))
+					"Страница %d требует чтения изображения (скан, вёрстка или графика), а распознавание не настроено.", first+i+1))
 			}
 		} else if err := e.recognizePDF(ctx, res, f, pages, scanned, first); err != nil {
 			return nil, err
@@ -379,6 +422,12 @@ func (e *Extractor) readImage(ctx context.Context, res *Result, file int, f File
 }
 
 func (e *Extractor) markOCR(res *Result, info *PageInfo, page OCRPage) {
+	info.ReadFailed = page.ReadFailed
+	info.Observations, info.Issues, info.Blocks = page.Observations, page.Issues, page.Blocks
+	info.Image, info.ImageMime = page.Image, page.ImageMime
+	if len(page.Issues) > 0 {
+		res.Warnings = append(res.Warnings, fmt.Sprintf("Страница %d: есть неопределённость распознавания; проверьте исходник.", info.Number))
+	}
 	if page.FromTextLayer {
 		info.Source, info.Chars = SourceText, countChars(page.Text)
 		return
@@ -428,4 +477,19 @@ func countChars(s string) int {
 		}
 	}
 	return n
+}
+
+// ReusableReading preserves successful readings with honest source limitations.
+// Transport failures and poor unstructured OCR must retry. Sparse diagrams
+// with a complete structured image reading retain the image and warnings.
+func ReusableReading(r Result) bool {
+	if len(r.Pages) == 0 {
+		return false
+	}
+	for _, p := range r.Pages {
+		if p.ReadFailed || p.Poor && (len(p.Image) == 0 || len(p.Blocks) == 0) {
+			return false
+		}
+	}
+	return true
 }

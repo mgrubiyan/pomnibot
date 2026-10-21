@@ -277,7 +277,7 @@ type completionResponse struct {
 
 const schemaPromptNote = "\n\nОтвет — только JSON, соответствующий этой JSON Schema:\n"
 
-func (c *Client) call(ctx context.Context, req providers.Request, withSchema bool) (providers.Response, error) {
+func (c *Client) call(ctx context.Context, req providers.Request, withSchema bool) (result providers.Response, callErr error) {
 	system := req.System
 	var schema *jsonSchema
 	switch {
@@ -309,6 +309,11 @@ func (c *Client) call(ctx context.Context, req providers.Request, withSchema boo
 	httpReq.Header.Set("Authorization", "Api-Key "+c.cfg.APIKey)
 	httpReq.Header.Set("x-folder-id", c.cfg.FolderID)
 
+	finish, reserveErr := providers.ReserveCall(ctx, 0)
+	if reserveErr != nil {
+		return providers.Response{}, reserveErr
+	}
+	defer func() { finish(result.Usage, false) }()
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
 		return providers.Response{}, fmt.Errorf("yandexgpt: completion request: %w", transportError{err})

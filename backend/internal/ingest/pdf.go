@@ -51,7 +51,7 @@ func (p *pdftotext) Pages(ctx context.Context, pdf []byte) ([]string, error) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, p.path, "-enc", "UTF-8", "-eol", "unix", f.Name(), "-")
+	cmd := exec.CommandContext(ctx, p.path, "-layout", "-enc", "UTF-8", "-eol", "unix", f.Name(), "-")
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {

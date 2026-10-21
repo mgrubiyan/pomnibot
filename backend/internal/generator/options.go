@@ -3,7 +3,10 @@ package generator
 import (
 	"time"
 
+	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
+	"github.com/mgrubiyan/pomnibot/backend/internal/material"
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
 // Document is the input: plain text of the notes and their title.
@@ -17,18 +20,34 @@ import (
 // ingest.PageInfo.Start gives them: cards then cite pages. Without them, as
 // for plain text, cards cite the title only.
 type Document struct {
-	Text       string
-	Title      string
-	ID         string
-	PageStarts []int
+	Images         []providers.Image
+	Structure      *material.Document
+	EvidenceSource *material.Document // source anchors for an individual topic task
+	Context        string             // topic, objectives, uncertainty and review feedback
+	Text           string
+	Title          string
+	ID             string
+	PageStarts     []int
 }
 
-// Result is what Generate returns: the facts and their cards in document
-// order, and stats.
+// Artifact retains private originals and the source representation for auditing.
+type Artifact struct {
+	Version string            `json:"version"`
+	Reading material.Document `json:"reading"`
+	Files   []ingest.File     `json:"files"` // private originals for reproducible region references
+}
+
+// Result includes reviewed cards, the thematic plan, coverage and processing metrics.
 type Result struct {
-	Facts []cards.Fact `json:"facts"`
-	Cards []cards.Card `json:"cards"`
-	Stats Stats        `json:"stats"`
+	Budget providers.BudgetSnapshot `json:"budget"`
+
+	Artifact *Artifact      `json:"artifact,omitempty"`
+	Facts    []cards.Fact   `json:"facts"`
+	Cards    []cards.Card   `json:"cards"`
+	Stats    Stats          `json:"stats"`
+	Plan     Plan           `json:"plan,omitempty"`
+	Coverage Coverage       `json:"coverage"`
+	Reviews  []ReviewRecord `json:"reviews,omitempty"`
 }
 
 // Batch is what OnBatch receives: cards now final and the facts first met
@@ -43,13 +62,19 @@ type Batch struct {
 // did not reach the model is counted with its reason: these numbers are how we
 // show that the "no made-up facts" filter actually works.
 type Stats struct {
-	Chunks         int            `json:"chunks"`         // fragments after splitting
-	ChunksFiltered int            `json:"chunksFiltered"` // junk, never sent to the model
-	FilteredBy     map[string]int `json:"filteredBy"`     // junk reason → fragments
-	ChunksSkipped  int            `json:"chunksSkipped"`  // not sent: MaxFactsPerDoc already used up
-	ChunksFailed   int            `json:"chunksFailed"`   // provider error after its retries and fallback
-	ChunksInvalid  int            `json:"chunksInvalid"`  // no valid JSON after the retry, fragment skipped
-	ChunksRefused  int            `json:"chunksRefused"`  // the content filter of every model blocked it
+	CacheHits       int                      `json:"cacheHits"`
+	CostUSD         float64                  `json:"costUsd"` // provider-reported charges only
+	StageTimes      map[string]time.Duration `json:"stageTimes,omitempty"`
+	ReviewRejected  int                      `json:"reviewRejected"`
+	ReviewFailures  int                      `json:"reviewFailures"`
+	CoverageRetries int                      `json:"coverageRetries"`
+	Chunks          int                      `json:"chunks"`         // fragments after splitting
+	ChunksFiltered  int                      `json:"chunksFiltered"` // junk, never sent to the model
+	FilteredBy      map[string]int           `json:"filteredBy"`     // junk reason → fragments
+	ChunksSkipped   int                      `json:"chunksSkipped"`  // not sent: MaxFactsPerDoc already used up
+	ChunksFailed    int                      `json:"chunksFailed"`   // provider error after its retries and fallback
+	ChunksInvalid   int                      `json:"chunksInvalid"`  // no valid JSON after the retry, fragment skipped
+	ChunksRefused   int                      `json:"chunksRefused"`  // the content filter of every model blocked it
 
 	ModelCalls       int            `json:"modelCalls"`       // including retries
 	InvalidResponses int            `json:"invalidResponses"` // responses that failed JSON/schema parsing
@@ -61,20 +86,21 @@ type Stats struct {
 	Facts          int `json:"facts"`          // distinct facts among the cards returned
 
 	// Card counts. CardsFromModel = every Dropped* + Cards.
-	CardsFromModel     int `json:"cardsFromModel"`     // cards in parsed responses
-	DroppedInvalid     int `json:"droppedInvalid"`     // card breaks the schema: empty field, unknown kind
-	DroppedQuote       int `json:"droppedQuote"`       // its fact's quote not found in the fragment
-	DroppedPersonal    int `json:"droppedPersonal"`    // its fact's quote holds a password, a phone number or the like
-	DroppedUnsupported int `json:"droppedUnsupported"` // choice or input answer not in the quote, or given in the question; a flip answer its question names; a flip answer or a true claim the quote does not back
-	DroppedTable       int `json:"droppedTable"`       // table whose terms the quote does not put in their columns
-	DroppedExample     int `json:"droppedExample"`     // asks about names an example invents: «От какого класса наследуется класс B?»
-	DroppedDuplicate   int `json:"droppedDuplicate"`   // same fact or same question as earlier
-	DroppedByLimit     int `json:"droppedByLimit"`     // its fact is over MaxFactsPerDoc
-	DroppedVariants    int `json:"droppedVariants"`    // could not keep its kind, other cards cover the fact
-	DowngradedToFlip   int `json:"downgradedToFlip"`   // choice without enough distractors, the fact's only card
-	DroppedDistractors int `json:"droppedDistractors"` // wrong options the quote or the question names: likely right too
-	InputToFlip        int `json:"inputToFlip"`        // input with an answer too long to type, the fact's only card
-	Cards              int `json:"cards"`              // cards returned
+	CardsFromModel          int `json:"cardsFromModel"`     // cards in parsed responses
+	DroppedInvalid          int `json:"droppedInvalid"`     // card breaks the schema: empty field, unknown kind
+	DroppedQuote            int `json:"droppedQuote"`       // its fact's quote not found in the fragment
+	DroppedPersonal         int `json:"droppedPersonal"`    // its fact's quote holds a password, a phone number or the like
+	DroppedUnsupported      int `json:"droppedUnsupported"` // choice or input answer not in the quote, or given in the question; a flip answer its question names; a flip answer or a true claim the quote does not back
+	DroppedTable            int `json:"droppedTable"`       // table whose terms the quote does not put in their columns
+	DroppedExample          int `json:"droppedExample"`     // asks about names an example invents: «От какого класса наследуется класс B?»
+	DroppedDuplicate        int `json:"droppedDuplicate"`   // same fact or same question as earlier
+	DroppedByLimit          int `json:"droppedByLimit"`     // its fact is over MaxFactsPerDoc
+	DroppedVariants         int `json:"droppedVariants"`    // could not keep its kind, other cards cover the fact
+	DowngradedToFlip        int `json:"downgradedToFlip"`   // choice without enough distractors, the fact's only card
+	DroppedDistractors      int `json:"droppedDistractors"` // wrong options the quote or the question names: likely right too
+	ExplanatoryChoiceToFlip int `json:"explanatoryChoiceToFlip"`
+	InputToFlip             int `json:"inputToFlip"` // input with an answer too long to type, the fact's only card
+	Cards                   int `json:"cards"`       // cards returned
 
 	// TrimmedExplanations lost a lead-in naming the notes or sentences
 	// about the notes or from outside them; the cards stay.
@@ -99,12 +125,18 @@ const (
 
 // Options configure a Generator. Zero values mean defaults.
 type Options struct {
-	Concurrency      int           // parallel model calls, default 1
-	ChunkSize        int           // fragment size in characters, default 2500
-	ChunkOverlap     int           // characters shared with the previous fragment, default 150, negative for none
-	MaxFactsPerChunk int           // facts per fragment, default 5; each fact gets up to 4 cards
-	MaxFactsPerDoc   int           // 0 means no limit
-	CallTimeout      time.Duration // per model call, retries of the provider included
+	Budget providers.BudgetLimits // document limits; shared context ledger takes precedence
+
+	MaxCoverageRepairs int           // total repair generations per document; default 3, negative disables
+	PlanningBudget     int           // target UTF-8 bytes per planning batch, default 12000; whole blocks retained
+	SourceBudget       int           // maximum UTF-8 bytes per source/planning request, default 24000
+	ReviewBatch        int           // maximum cards reviewed per call, default 8
+	Concurrency        int           // parallel model calls, default 1
+	ChunkSize          int           // fragment size in characters, default 2500
+	ChunkOverlap       int           // characters shared with the previous fragment, default 150, negative for none
+	MaxFactsPerChunk   int           // facts per fragment, default 5; each fact gets up to 4 cards
+	MaxFactsPerDoc     int           // 0 means no limit
+	CallTimeout        time.Duration // per model call, retries of the provider included
 	// OnBatch receives cards as soon as they are final, with their new facts,
 	// so a long document shows progress in minutes rather than all at once at
 	// the end. It is called from a single goroutine, outside locks, only with
@@ -113,6 +145,21 @@ type Options struct {
 }
 
 func (o Options) withDefaults() Options {
+	if o.Budget == (providers.BudgetLimits{}) {
+		o.Budget = providers.DefaultDocumentLimits()
+	}
+	if o.MaxCoverageRepairs == 0 {
+		o.MaxCoverageRepairs = 3
+	}
+	if o.PlanningBudget <= 0 {
+		o.PlanningBudget = 12000
+	}
+	if o.SourceBudget <= 0 {
+		o.SourceBudget = 24000
+	}
+	if o.ReviewBatch <= 0 {
+		o.ReviewBatch = 8
+	}
 	if o.Concurrency <= 0 {
 		o.Concurrency = DefaultConcurrency
 	}

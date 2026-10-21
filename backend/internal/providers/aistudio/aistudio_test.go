@@ -317,3 +317,18 @@ func TestConfigErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestCompletePreservesMultipleSourceImages(t *testing.T) {
+	api := &fakeAPI{reply: func(_ int, raw map[string]any) reply {
+		msgs := raw["messages"].([]any)
+		parts := msgs[1].(map[string]any)["content"].([]any)
+		if len(parts) != 3 {
+			t.Error("source page images lost")
+		}
+		return ok(`{}`)
+	}}
+	_, err := newTestClient(t, api).Complete(context.Background(), providers.Request{User: "pages", Images: []providers.Image{{MimeType: "image/png", Data: []byte("first")}, {MimeType: "image/jpeg", Data: []byte("second")}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+}

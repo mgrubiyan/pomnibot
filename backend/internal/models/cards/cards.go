@@ -2,6 +2,8 @@
 // storage keeps and the feed shows. No logic lives here.
 package cards
 
+import "github.com/mgrubiyan/pomnibot/backend/internal/material"
+
 // Kind is the card type. Mirrors CardKind in miniapp/src/types.ts.
 type Kind string
 
@@ -37,15 +39,17 @@ type Fact struct {
 // Cards of one fact share the quote. The feed is meant to show one of them
 // at a time and rotate the form between repetitions.
 type Card struct {
-	FactID      string   `json:"factId"`
-	Kind        Kind     `json:"kind"`
-	Question    string   `json:"question"`
-	Options     []string `json:"options,omitempty"` // choice only, includes Answer
-	Answer      string   `json:"answer"`            // "true" | "false" for boolean
-	Explanation string   `json:"explanation"`
-	SourceQuote string   `json:"sourceQuote"` // exact text of the normalized notes
-	SourceRef   string   `json:"sourceRef,omitempty"`
-	Table       *Table   `json:"table,omitempty"` // table only; Answer is empty
+	LearningMode string              `json:"learningMode,omitempty"`
+	Evidence     []material.Evidence `json:"evidence,omitempty"`
+	FactID       string              `json:"factId"`
+	Kind         Kind                `json:"kind"`
+	Question     string              `json:"question"`
+	Options      []string            `json:"options,omitempty"` // choice only, includes Answer
+	Answer       string              `json:"answer"`            // "true" | "false" for boolean
+	Explanation  string              `json:"explanation"`
+	SourceQuote  string              `json:"sourceQuote"` // exact text of the normalized notes
+	SourceRef    string              `json:"sourceRef,omitempty"`
+	Table        *Table              `json:"table,omitempty"` // table only; Answer is empty
 }
 
 // Table mirrors TableLayout in miniapp/src/types.ts: terms and the column

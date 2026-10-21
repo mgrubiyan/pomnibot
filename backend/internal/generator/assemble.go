@@ -26,21 +26,23 @@ type chunkResult struct {
 	refused   bool // the content filter blocked it, see providers.ErrRefused
 	err       error
 
-	calls              int
-	invalidResponses   int
-	factsFromModel     int
-	cardsFromModel     int
-	droppedInvalid     int
-	droppedQuote       int
-	droppedPersonal    int
-	droppedUnsupported int
-	droppedTable       int
-	droppedExample     int
-	droppedVariants    int
-	trimmedExplains    int
-	usage              providers.Usage
-	models             map[string]int
-	elapsed            time.Duration
+	explanatoryChoiceToFlip int
+	cacheHits               int
+	calls                   int
+	invalidResponses        int
+	factsFromModel          int
+	cardsFromModel          int
+	droppedInvalid          int
+	droppedQuote            int
+	droppedPersonal         int
+	droppedUnsupported      int
+	droppedTable            int
+	droppedExample          int
+	droppedVariants         int
+	trimmedExplains         int
+	usage                   providers.Usage
+	models                  map[string]int
+	elapsed                 time.Duration
 }
 
 type pendingChoice struct {
@@ -204,14 +206,16 @@ func (a *assembler) acceptFact(f modelFact, pos int) (ready []cards.Card, ok boo
 		questions = append(questions, mc.Question)
 
 		card := cards.Card{
-			FactID:      f.ID,
-			Kind:        mc.Kind,
-			Question:    mc.Question,
-			Answer:      mc.Answer,
-			Explanation: mc.Explanation,
-			SourceQuote: f.Quote,
-			SourceRef:   sourceRef(a.title, a.pages, f.Start, f.End),
-			Table:       mc.Table,
+			LearningMode: mc.LearningMode,
+			FactID:       f.ID,
+			Kind:         mc.Kind,
+			Question:     mc.Question,
+			Answer:       mc.Answer,
+			Explanation:  mc.Explanation,
+			SourceQuote:  f.Quote,
+			Evidence:     f.Evidence,
+			SourceRef:    sourceRef(a.title, a.pages, f.Start, f.End),
+			Table:        mc.Table,
 		}
 		a.seq++
 		switch {
@@ -481,6 +485,9 @@ func (a *assembler) count(r chunkResult) {
 	case r.refused:
 		s.ChunksRefused++
 	}
+	s.ExplanatoryChoiceToFlip += r.explanatoryChoiceToFlip
+	s.CacheHits += r.cacheHits
+	s.CostUSD += r.usage.CostUSD
 	s.ModelCalls += r.calls
 	s.InvalidResponses += r.invalidResponses
 	s.PromptTokens += r.usage.PromptTokens

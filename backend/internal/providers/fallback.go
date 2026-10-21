@@ -16,8 +16,9 @@ var ErrUnavailable = errors.New("provider unavailable")
 
 // Backend is one provider in a Fallback chain.
 type Backend struct {
-	Name     string // for logs: gigachat, yandexgpt
-	Provider Provider
+	Capabilities *Capabilities // nil preserves compatibility for custom providers
+	Name         string        // for logs: gigachat, yandexgpt
+	Provider     Provider
 	// Timeout bounds one call to this backend, its retries included, so that
 	// a backend that hangs leaves time for the next one. When it fires, the
 	// backend counts as unavailable. 0: only the caller's deadline.
@@ -65,10 +66,25 @@ func (f *Fallback) Complete(ctx context.Context, req Request) (Response, error) 
 			budgetLimited = share < b.Timeout
 			b.Timeout = min(b.Timeout, share)
 		}
-		resp, err := f.call(ctx, b, req)
+		adapted := req
+		if b.Capabilities != nil {
+			ability := b.Capabilities
+			if len(RequestImages(req)) > 0 && !ability.Images || ability.MaxInputBytes > 0 && len(req.System)+len(req.User)+len(req.Schema) > ability.MaxInputBytes {
+				errs = append(errs, fmt.Errorf("%s: %w", b.Name, ErrCapability))
+				continue
+			}
+			if len(req.Schema) > 0 && !ability.Structured {
+				adapted.System += "\nReturn JSON conforming to this schema:\n" + string(req.Schema)
+				adapted.Schema = nil
+			}
+		}
+		resp, err := f.call(ctx, b, adapted)
 		if err == nil {
 			f.markUp(idx)
 			return resp, nil
+		}
+		if errors.Is(err, ErrBudget) {
+			return resp, err
 		}
 		if ctx.Err() != nil {
 			// The caller gave up: no time for another backend, and this one

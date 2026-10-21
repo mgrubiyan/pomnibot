@@ -13,6 +13,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 	"unicode"
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
@@ -29,13 +31,25 @@ import (
 // judge by and pass unchecked. Without a Checker the model's text is taken as
 // is, and a photo is turned upright only by its EXIF orientation.
 type VisionOCR struct {
-	Model   providers.Provider
-	Checker OCR // optional
+	Model       providers.Provider
+	Checker     OCR           // optional
+	CallTimeout time.Duration // per model call; default two minutes, including transport retries
 	// FullPage reads the whole page with a structured response, preserving
 	// tables and labels. Visual interpretations never enter the quoted text.
-	FullPage bool
+	FullPage    bool
+	Concurrency int // page tasks, independent of the shared provider request limit
 	// Render turns page (0-based) of a PDF into a JPEG; nil: pdftoppm.
 	Render func(ctx context.Context, pdf []byte, page int) ([]byte, error)
+}
+
+func (v *VisionOCR) completeBounded(ctx context.Context, req providers.Request) (providers.Response, error) {
+	timeout := v.CallTimeout
+	if timeout <= 0 {
+		timeout = 2 * time.Minute
+	}
+	callCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	return v.Model.Complete(callCtx, req)
 }
 
 var _ OCR = (*VisionOCR)(nil)
@@ -103,37 +117,66 @@ func (v *VisionOCR) Recognize(ctx context.Context, req OCRRequest) ([]OCRPage, e
 		render = renderPDFPage
 	}
 	out := make([]OCRPage, req.Pages)
-	for _, n := range only {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if n < 0 || n >= req.Pages {
-			continue
-		}
-		img, err := render(ctx, req.Data, n)
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	readOne := func(n int) error {
+		img, err := render(runCtx, req.Data, n)
 		if err != nil {
 			if ctx.Err() != nil {
-				return nil, ctx.Err()
+				return ctx.Err()
 			}
 			if v.FullPage && n < len(req.TextLayers) && strings.TrimSpace(req.TextLayers[n]) != "" {
-				out[n] = OCRPage{Text: req.TextLayers[n], FromTextLayer: true}
-				continue
+				out[n] = OCRPage{Text: req.TextLayers[n], FromTextLayer: true, ReadFailed: true, Issues: []string{"Изображение страницы не прочитано; сохранён только текстовый слой."}}
+				return nil
 			}
-			return nil, fmt.Errorf("render page %d: %w", n+1, err)
+			return fmt.Errorf("render page %d: %w", n+1, err)
 		}
 		if v.FullPage {
 			reference := ""
 			if n < len(req.TextLayers) {
 				reference = req.TextLayers[n]
 			}
-			out[n], err = v.readFullPage(ctx, img, "image/jpeg", req.Model, reference)
+			out[n], err = v.readFullPage(runCtx, img, "image/jpeg", req.Model, reference)
 		} else {
-			out[n], err = v.readPage(ctx, img, "image/jpeg", req.Model)
+			out[n], err = v.readPage(runCtx, img, "image/jpeg", req.Model)
 		}
 		if err != nil {
-			return nil, err
+			return err
 		}
+		return nil
 	}
+	// Workers share the provider limiter across documents, reading and grading.
+	slots := make(chan struct{}, max(v.Concurrency, 1))
+	errs := make(chan error, len(only))
+	var wg sync.WaitGroup
+	for _, n := range only {
+		if n < 0 || n >= req.Pages {
+			continue
+		}
+		select {
+		case slots <- struct{}{}:
+		case <-runCtx.Done():
+		}
+		if runCtx.Err() != nil {
+			break
+		}
+		wg.Go(func() {
+			defer func() { <-slots }()
+			if err := readOne(n); err != nil {
+				errs <- err
+				cancel()
+			}
+		})
+	}
+	wg.Wait()
+	close(errs)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	for err := range errs {
+		return nil, err
+	}
+
 	return out, nil
 }
 
@@ -211,7 +254,7 @@ func (v *VisionOCR) read(ctx context.Context, data []byte, rotate int) (string, 
 		if err := jpeg.Encode(&b, part, &jpeg.Options{Quality: 90}); err != nil {
 			return "", fmt.Errorf("encode image: %w", err)
 		}
-		resp, err := v.Model.Complete(ctx, providers.Request{
+		resp, err := v.completeBounded(ctx, providers.Request{
 			System: system,
 			User:   visionUser,
 			Image:  &providers.Image{Data: b.Bytes(), MimeType: "image/jpeg"},

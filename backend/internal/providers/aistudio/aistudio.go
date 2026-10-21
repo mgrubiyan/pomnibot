@@ -276,7 +276,7 @@ type chatResponse struct {
 
 const schemaPromptNote = "\n\nОтвет — только JSON, соответствующий этой JSON Schema:\n"
 
-func (c *Client) call(ctx context.Context, req providers.Request, withSchema bool) (providers.Response, error) {
+func (c *Client) call(ctx context.Context, req providers.Request, withSchema bool) (result providers.Response, callErr error) {
 	system := req.System
 	var format *responseFormat
 	switch {
@@ -287,13 +287,12 @@ func (c *Client) call(ctx context.Context, req providers.Request, withSchema boo
 	}
 
 	var user any = req.User
-	if req.Image != nil {
-		user = []contentPart{
-			{Type: "text", Text: req.User},
-			{Type: "image_url", ImageURL: &imageURL{
-				URL: "data:" + req.Image.MimeType + ";base64," + base64.StdEncoding.EncodeToString(req.Image.Data),
-			}},
+	if images := providers.RequestImages(req); len(images) > 0 {
+		parts := []contentPart{{Type: "text", Text: req.User}}
+		for _, img := range images {
+			parts = append(parts, contentPart{Type: "image_url", ImageURL: &imageURL{URL: "data:" + img.MimeType + ";base64," + base64.StdEncoding.EncodeToString(img.Data)}})
 		}
+		user = parts
 	}
 
 	body, err := json.Marshal(chatRequest{
@@ -317,6 +316,11 @@ func (c *Client) call(ctx context.Context, req providers.Request, withSchema boo
 	httpReq.Header.Set("Authorization", "Api-Key "+c.cfg.APIKey)
 	httpReq.Header.Set("x-folder-id", c.cfg.FolderID)
 
+	finish, reserveErr := providers.ReserveCall(ctx, 0)
+	if reserveErr != nil {
+		return providers.Response{}, reserveErr
+	}
+	defer func() { finish(result.Usage, false) }()
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
 		return providers.Response{}, fmt.Errorf("aistudio: chat request: %w", transportError{err})

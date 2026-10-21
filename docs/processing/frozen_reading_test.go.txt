@@ -1,0 +1,9 @@
+package generator
+import("context";"testing";"os";"time";"github.com/mgrubiyan/pomnibot/backend/internal/ingest")
+func TestFrozenReadingBaseline(t *testing.T){
+ data,err:=os.ReadFile(os.Getenv("POMNIBOT_EVAL_PDF"));if err!=nil{t.Fatal(err)}
+ began:=time.Now();ex,err:=ingest.NewExtractor(nil,ingest.Options{});if err!=nil{t.Fatal(err)}
+ r,err:=ex.Extract(context.Background(),[]ingest.File{{Name:"lecture.pdf",Data:data}});if err!=nil{t.Fatal(err)}
+ chunks:=splitChunks(normalizeText(r.Text),2500,150)
+ t.Logf("frozen baseline: pages=%d chars=%d chunks=%d warnings=%d local_time=%s",len(r.Pages),len([]rune(r.Text)),len(chunks),len(r.Warnings),time.Since(began))
+}

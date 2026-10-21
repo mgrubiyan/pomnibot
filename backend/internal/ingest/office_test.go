@@ -98,3 +98,39 @@ func TestExtractRejectsOtherArchives(t *testing.T) {
 		t.Errorf("Extract() error = %v, want unsupported", err)
 	}
 }
+
+func TestPresentationPreservesTablesAndFlagsUnrenderedConnections(t *testing.T) {
+	slide := `<sld><cSld><spTree><sp><txBody><p><r><t>Типы</t></r></p></txBody></sp><graphicFrame><tbl><tr><tc><p><r><t>Тип</t></r></p></tc><tc><p><r><t>Описание</t></r></p></tc></tr><tr><tc><p><r><t>INT</t></r></p></tc><tc><p><r><t>Целое</t></r></p></tc></tr></tbl></graphicFrame><cxnSp><nvCxnSpPr><cNvCxnSpPr><stCxn id="2"/><endCxn id="3"/></cNvCxnSpPr></nvCxnSpPr></cxnSp></spTree></cSld></sld>`
+	data := zipOf(t, map[string]string{"ppt/slides/slide1.xml": slide})
+	ex := newExtractor(t, &fakePDF{})
+	res, err := ex.Extract(context.Background(), []File{{Name: "tables.pptx", Data: data}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, b := range res.Document.Blocks {
+		if b.Kind == "table" {
+			found = true
+			if len(b.Cells) != 2 || b.Cells[1][1] != "Целое" {
+				t.Fatalf("columns lost: %+v", b)
+			}
+		}
+	}
+	if !found || len(res.Document.Pages[0].Issues) == 0 {
+		t.Fatal("table structure or connection uncertainty lost")
+	}
+}
+
+func TestPresentationUsesDeclaredSlideOrder(t *testing.T) {
+	data := zipOf(t, map[string]string{
+		"ppt/presentation.xml":            `<presentation xmlns:r="r"><sldIdLst><sldId id="1" r:id="first"/><sldId id="2" r:id="second"/></sldIdLst></presentation>`,
+		"ppt/_rels/presentation.xml.rels": `<Relationships><Relationship Id="first" Target="slides/slide7.xml"/><Relationship Id="second" Target="slides/slide2.xml"/></Relationships>`,
+		"ppt/slides/slide2.xml":           `<sld><p><t>Второй слайд</t></p></sld>`,
+		"ppt/slides/slide7.xml":           `<sld><p><t>Первый слайд</t></p></sld>`,
+	})
+	ex := newExtractor(t, &fakePDF{})
+	res, err := ex.Extract(context.Background(), []File{{Name: "order.pptx", Data: data}})
+	if err != nil || !strings.HasPrefix(res.Text, "Первый слайд") {
+		t.Fatalf("declared order lost: %q %v", res.Text, err)
+	}
+}

@@ -1,0 +1,23 @@
+{
+  "runType": "limited failed end-to-end attempt",
+  "modelAcceptedCards": 0,
+  "cardsAudited": 0,
+  "independentlyUsableCards": 0,
+  "confirmedRealApplicationTasks": 0,
+  "cards": [],
+  "cardLevelErrorCount": null,
+  "semanticDuplicateCount": null,
+  "reason": "No candidates or accepted cards; PLAN timed out before generation. There is no final card set to audit.",
+  "dimensions": [
+    "factual and semantic correctness",
+    "conditions, negations and scope",
+    "self-contained question and unambiguous answer",
+    "hints and every distractor",
+    "source accuracy and quote vs image interpretation",
+    "semantic duplicates",
+    "usable without manual edits"
+  ],
+  "originalOutputEdited": false,
+  "independentSourceAuditPrivate": "independent-source-audit.json",
+  "historicalAuditReused": false
+}

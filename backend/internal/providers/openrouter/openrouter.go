@@ -9,6 +9,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	_ "image/jpeg" // Decode image dimensions for conservative vision reservations.
+	_ "image/png"  // Decode image dimensions for conservative vision reservations.
 	"io"
 	"log/slog"
 	"math/rand/v2"
@@ -179,7 +182,8 @@ type chatRequest struct {
 		Enabled bool `json:"enabled"`
 	} `json:"reasoning"`
 	Provider struct {
-		RequireParameters bool `json:"require_parameters"`
+		RequireParameters bool               `json:"require_parameters"`
+		MaxPrice          map[string]float64 `json:"max_price,omitempty"`
 	} `json:"provider"`
 }
 type chatResponse struct {
@@ -195,17 +199,22 @@ type chatResponse struct {
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
 	Usage struct {
-		PromptTokens     int     `json:"prompt_tokens"`
-		CompletionTokens int     `json:"completion_tokens"`
-		Cost             float64 `json:"cost"`
+		PromptTokens     int      `json:"prompt_tokens"`
+		CompletionTokens int      `json:"completion_tokens"`
+		Cost             *float64 `json:"cost"`
 	} `json:"usage"`
 }
 
-func (c *Client) call(ctx context.Context, req providers.Request) (providers.Response, error) {
+func (c *Client) call(ctx context.Context, req providers.Request) (result providers.Response, callErr error) {
 	var user any = req.User
-	if req.Image != nil {
-		user = []part{{Type: "text", Text: req.User}, {Type: "image_url", ImageURL: &imageURL{URL: "data:" + req.Image.MimeType + ";base64," + base64.StdEncoding.EncodeToString(req.Image.Data)}}}
+	if images := providers.RequestImages(req); len(images) > 0 {
+		parts := []part{{Type: "text", Text: req.User}}
+		for _, img := range images {
+			parts = append(parts, part{Type: "image_url", ImageURL: &imageURL{URL: "data:" + img.MimeType + ";base64," + base64.StdEncoding.EncodeToString(img.Data)}})
+		}
+		user = parts
 	}
+
 	body := chatRequest{Model: c.cfg.Model, Messages: []message{{Role: "system", Content: req.System}, {Role: "user", Content: user}}, MaxTokens: c.cfg.MaxTokens}
 	// Haiku 5.5 removed sampling parameters. With require_parameters enabled,
 	// even temperature=0 excludes every endpoint and OpenRouter returns 404.
@@ -215,6 +224,9 @@ func (c *Client) call(ctx context.Context, req providers.Request) (providers.Res
 	}
 	body.Reasoning.Enabled = false
 	body.Provider.RequireParameters = true
+	if b := providers.BudgetFrom(ctx); b != nil && b.MonetaryLimited() {
+		body.Provider.MaxPrice = map[string]float64{"prompt": .1, "completion": .5}
+	}
 	if len(req.Schema) > 0 {
 		body.ResponseFormat = &responseFormat{Type: "json_schema", JSONSchema: schema{Name: "answer", Schema: req.Schema}}
 	}
@@ -229,16 +241,32 @@ func (c *Client) call(ctx context.Context, req providers.Request) (providers.Res
 	r.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set("Accept", "application/json")
+	if b := providers.BudgetFrom(ctx); b != nil && b.MonetaryLimited() && c.inputBound(req) >= 100000 {
+		return providers.Response{}, providers.ErrBudget
+	}
+	charge := providers.Usage{}
+	chargeKnown := false
+	finish, reserveErr := providers.ReserveCall(ctx, c.costBound(req))
+	if reserveErr != nil {
+		return providers.Response{}, reserveErr
+	}
+	defer func() { finish(charge, chargeKnown) }()
+	traceCtx, trace := traceRequest(ctx)
+	r = r.WithContext(traceCtx)
+	began := time.Now()
 	resp, err := c.http.Do(r)
 	if err != nil {
+		slog.Warn("openrouter: request failed", "phase", trace.label(), "took", time.Since(began), "timeout", errors.Is(err, context.DeadlineExceeded))
 		return providers.Response{}, transportError{}
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return providers.Response{}, &APIError{Status: resp.StatusCode, retryAfter: retryDelay(resp.Header.Get("Retry-After"))}
 	}
+	trace.phase.Store(traceReadingBody)
 	data, err = io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes+1))
 	if err != nil {
+		slog.Warn("openrouter: response read failed", "phase", trace.label(), "took", time.Since(began), "timeout", errors.Is(err, context.DeadlineExceeded))
 		return providers.Response{}, transportError{}
 	}
 	if len(data) > maxBodyBytes {
@@ -247,6 +275,10 @@ func (c *Client) call(ctx context.Context, req providers.Request) (providers.Res
 	var cr chatResponse
 	if json.Unmarshal(data, &cr) != nil {
 		return providers.Response{}, errors.New("openrouter: invalid response JSON")
+	}
+	if cr.Usage.Cost != nil {
+		chargeKnown = true
+		charge = providers.Usage{PromptTokens: cr.Usage.PromptTokens, CompletionTokens: cr.Usage.CompletionTokens, CostUSD: *cr.Usage.Cost}
 	}
 	if cr.Error != nil {
 		return providers.Response{}, &APIError{Status: cr.Error.Code}
@@ -265,8 +297,8 @@ func (c *Client) call(ctx context.Context, req providers.Request) (providers.Res
 	if model == "" {
 		model = c.cfg.Model
 	}
-	slog.Info("openrouter: completed", "model", model, "prompt_tokens", cr.Usage.PromptTokens, "completion_tokens", cr.Usage.CompletionTokens, "cost_usd", cr.Usage.Cost)
-	return providers.Response{Content: []byte(*choice.Message.Content), Model: model, Usage: providers.Usage{PromptTokens: cr.Usage.PromptTokens, CompletionTokens: cr.Usage.CompletionTokens, CostUSD: cr.Usage.Cost}, Truncated: choice.FinishReason == "length"}, nil
+	slog.Info("openrouter: completed", "model", model, "prompt_tokens", cr.Usage.PromptTokens, "completion_tokens", cr.Usage.CompletionTokens, "cost_usd", charge.CostUSD)
+	return providers.Response{Content: []byte(*choice.Message.Content), Model: model, Usage: providers.Usage{PromptTokens: cr.Usage.PromptTokens, CompletionTokens: cr.Usage.CompletionTokens, CostUSD: charge.CostUSD}, Truncated: choice.FinishReason == "length"}, nil
 }
 
 func retryDelay(s string) time.Duration {
@@ -277,4 +309,25 @@ func retryDelay(s string) time.Duration {
 		return max(0, min(time.Until(date), time.Minute))
 	}
 	return 0
+}
+
+// costBound deliberately counts every UTF-8 byte as a token, plus a generous
+// image allowance. Routing enforces the corresponding price ceiling. Unknown
+// image formats are charged by encoded size instead of assuming cheap vision.
+func (c *Client) costBound(r providers.Request) float64 {
+	return float64(c.inputBound(r))*.1/1e6 + float64(c.cfg.MaxTokens)*.5/1e6
+}
+func (c *Client) inputBound(r providers.Request) int {
+	tokens := len(r.System) + len(r.User) + len(r.Schema) + 2048
+	for _, img := range providers.RequestImages(r) {
+		dims, _, err := image.DecodeConfig(bytes.NewReader(img.Data))
+		if err != nil {
+			tokens += max(32768, len(img.Data))
+			continue
+		}
+		// Haiku scales images and charges vision tokens by pixel area. This is
+		// deliberately much larger than the normal image tokenization allowance.
+		tokens += max(4096, (dims.Width*dims.Height+127)/128)
+	}
+	return tokens
 }

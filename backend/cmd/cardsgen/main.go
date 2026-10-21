@@ -62,24 +62,39 @@ func main() {
 
 func run() error {
 	var (
-		file        = flag.String("file", "", "file with the notes; more files can follow as arguments")
-		title       = flag.String("title", "", "document title for sourceRef (default: first file name)")
-		provider    = flag.String("provider", defaultProvider(), "who writes the cards: openrouter, gigachat, yandexgpt or qwen")
-		model       = flag.String("model", "", "override the selected provider's model")
-		chunk       = flag.Int("chunk", generator.DefaultChunkSize, "fragment size in characters")
-		overlap     = flag.Int("overlap", generator.DefaultChunkOverlap, "fragment overlap in characters, -1 for none")
-		limit       = flag.Int("limit", 0, "max facts per document, 0 for no limit")
-		perChunk    = flag.Int("per-chunk", generator.DefaultMaxFactsPerChunk, "max facts per fragment, each with up to 4 cards")
-		concurrency = flag.Int("concurrency", generator.DefaultConcurrency, "parallel model calls; freemium allows 1")
-		timeout     = flag.Duration("call-timeout", generator.DefaultCallTimeout, "timeout per model call")
-		ocrMode     = flag.String("ocr", "vision", "how photos and scans are read: vision (GigaChat, checked by Yandex OCR) or yandex (Yandex OCR alone)")
-		visionBy    = flag.String("vision-provider", "", "who reads pages: openrouter, gigachat or qwen; defaults to openrouter with -provider openrouter, otherwise gigachat")
-		ocrModel    = flag.String("ocr-model", os.Getenv("YC_OCR_MODEL"), "Yandex OCR model for every page (handwritten, page...); default: handwritten for photos, page for scans")
-		extractOnly = flag.Bool("extract", false, "only extract the text of the notes and print it, no cards")
-		asJSON      = flag.Bool("json", false, "print the result as JSON to stdout")
-		verbose     = flag.Bool("v", false, "debug logs")
+		file         = flag.String("file", "", "file with the notes; more files can follow as arguments")
+		title        = flag.String("title", "", "document title for sourceRef (default: first file name)")
+		provider     = flag.String("provider", defaultProvider(), "who writes the cards: openrouter, gigachat, yandexgpt or qwen")
+		model        = flag.String("model", "", "override the selected provider's model")
+		chunk        = flag.Int("chunk", generator.DefaultChunkSize, "fragment size in characters")
+		overlap      = flag.Int("overlap", generator.DefaultChunkOverlap, "fragment overlap in characters, -1 for none")
+		limit        = flag.Int("limit", 0, "max facts per document, 0 for no limit")
+		perChunk     = flag.Int("per-chunk", generator.DefaultMaxFactsPerChunk, "max facts per fragment, each with up to 4 cards")
+		concurrency  = flag.Int("concurrency", 0, "parallel topic tasks; 0 chooses provider defaults")
+		timeout      = flag.Duration("call-timeout", generator.DefaultCallTimeout, "timeout per model call")
+		ocrMode      = flag.String("ocr", "vision", "how photos and scans are read: vision (GigaChat, checked by Yandex OCR) or yandex (Yandex OCR alone)")
+		visionBy     = flag.String("vision-provider", "", "who reads pages: openrouter, gigachat or qwen; defaults to openrouter with -provider openrouter, otherwise gigachat")
+		ocrModel     = flag.String("ocr-model", os.Getenv("YC_OCR_MODEL"), "Yandex OCR model for every page (handwritten, page...); default: handwritten for photos, page for scans")
+		extractOnly  = flag.Bool("extract", false, "only extract the text of the notes and print it, no cards")
+		asJSON       = flag.Bool("json", false, "print the result as JSON to stdout")
+		budgetUSD    = flag.Float64("budget-usd", .15, "document USD cap with conservative in-flight reservations; unknown-price fallback is blocked")
+		maxCalls     = flag.Int("max-calls", 96, "total provider attempts for reading, generation and review")
+		readingCache = flag.String("reading-cache", "", "private persistent reading snapshot; independent of generator version")
+		repairs      = flag.Int("coverage-repairs", 3, "maximum targeted generations per document; -1 disables")
+		legacy       = flag.Bool("legacy", false, "use the original text/chunk pipeline for comparison")
+		verbose      = flag.Bool("v", false, "debug logs")
 	)
 	flag.Parse()
+	explicitBudget := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "budget-usd" {
+			explicitBudget = true
+		}
+	})
+	limits, limitErr := processingLimits(*provider, explicitBudget, *budgetUSD, *maxCalls)
+	if limitErr != nil {
+		return limitErr
+	}
 	if *visionBy == "" {
 		*visionBy = "gigachat"
 		if *provider == "openrouter" {
@@ -104,8 +119,8 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if *ocrMode != "vision" && *ocrMode != "yandex" {
-		return fmt.Errorf("-ocr %q: want vision or yandex", *ocrMode)
+	if *ocrMode != "vision" && *ocrMode != "yandex" && *ocrMode != "local" {
+		return fmt.Errorf("-ocr %q: want vision, yandex or local", *ocrMode)
 	}
 	if *provider != "gigachat" && *provider != "yandexgpt" && *provider != "qwen" && *provider != "openrouter" {
 		return fmt.Errorf("-provider %q: want openrouter, gigachat, yandexgpt or qwen", *provider)
@@ -198,11 +213,55 @@ func run() error {
 	if vision != nil {
 		vision = trackedProvider{Provider: vision, usage: usage}
 	}
-	started := time.Now()
-	notes, err := extract(ctx, paths, *ocrModel, vision, *ocrMode == "vision" && *visionBy == "openrouter")
-	if err != nil {
-		return err
+	profile := modelProfile(*provider)
+	readerProfile := modelProfile(*visionBy)
+	if *concurrency <= 0 {
+		*concurrency = profile.Tasks
 	}
+	// CLI reading and writing are sequential phases; task limits remain separate.
+	if writer != nil {
+		writer = limitModel(writer, *provider)
+	}
+	if vision != nil {
+		vision = limitModel(vision, *visionBy)
+	}
+	ledger := providers.NewBudget(limits)
+	ctx = providers.WithBudget(ctx, ledger)
+	started := time.Now()
+	var notes ingest.Result
+	readingHit := false
+	cacheKey := ""
+	if *readingCache != "" {
+		readerIdentity := []any{*ocrMode, *ocrModel, *legacy, os.Getenv("YC_OCR_BASE_URL"), os.Getenv("YC_FOLDER_ID"), os.Getenv("YC_API_KEY") != ""}
+		if *ocrMode == "vision" {
+			readerIdentity = append(readerIdentity, readerEnvironment(*visionBy))
+		}
+		// The router override also changes the actual reader if the client is shared.
+		if *ocrMode == "vision" && *visionBy == *provider {
+			readerIdentity = append(readerIdentity, *model)
+		}
+		var keyErr error
+		cacheKey, keyErr = readingKey(paths, readerIdentity)
+		if keyErr != nil {
+			return keyErr
+		}
+		notes, readingHit = loadReading(*readingCache, cacheKey)
+	}
+	if !readingHit {
+		var readErr error
+		notes, readErr = extract(ctx, paths, *ocrModel, vision, !*legacy, *ocrMode == "local", readerProfile.Tasks, *timeout)
+		if readErr != nil {
+			return readErr
+		}
+		if *readingCache != "" {
+			if cacheErr := saveReading(*readingCache, cacheKey, notes); cacheErr != nil {
+				return fmt.Errorf("save private reading: %w", cacheErr)
+			}
+		}
+	} else {
+		slog.Info("cardsgen: reused private reading")
+	}
+
 	if *title == "" {
 		*title = strings.TrimSuffix(filepath.Base(paths[0]), filepath.Ext(paths[0]))
 	}
@@ -217,16 +276,22 @@ func run() error {
 		return nil
 	}
 
+	readingSeconds := time.Since(started).Seconds()
 	began := time.Now()
+	firstVerified := 0.0
 	delivered := 0
 	gen := generator.NewGenerator(writer, generator.Options{
-		Concurrency:      *concurrency,
-		ChunkSize:        *chunk,
-		ChunkOverlap:     *overlap,
-		MaxFactsPerChunk: *perChunk,
-		MaxFactsPerDoc:   *limit,
-		CallTimeout:      *timeout,
+		Concurrency:        *concurrency,
+		MaxCoverageRepairs: *repairs,
+		ChunkSize:          *chunk,
+		ChunkOverlap:       *overlap,
+		MaxFactsPerChunk:   *perChunk,
+		MaxFactsPerDoc:     *limit,
+		CallTimeout:        *timeout,
 		OnBatch: func(b generator.Batch) {
+			if firstVerified == 0 {
+				firstVerified = time.Since(started).Seconds()
+			}
 			delivered += len(b.Cards)
 			refs := map[string]bool{}
 			for _, c := range b.Cards {
@@ -239,6 +304,9 @@ func run() error {
 
 	fmt.Fprintf(os.Stderr, "%s: %d символов, модель %s\n", strings.Join(paths, ", "), len([]rune(notes.Text)), modelName)
 	doc := generator.Document{Text: notes.Text, Title: *title}
+	if !*legacy {
+		doc.Structure = &notes.Document
+	}
 	for _, p := range notes.Pages {
 		doc.PageStarts = append(doc.PageStarts, p.Start)
 	}
@@ -250,11 +318,21 @@ func run() error {
 		enc.SetEscapeHTML(false)
 		out := struct {
 			generator.Result
-			Ingest         ingest.Result         `json:"ingest"`
-			ModelUsage     map[string]modelUsage `json:"modelUsage"`
-			ElapsedSeconds float64               `json:"elapsedSeconds"`
-		}{res, notes, usage.snapshot(), time.Since(started).Seconds()}
+			Ingest               ingest.Result            `json:"ingest"`
+			ModelUsage           map[string]modelUsage    `json:"modelUsage"`
+			ElapsedSeconds       float64                  `json:"elapsedSeconds"`
+			ReadingSeconds       float64                  `json:"readingSeconds"`
+			FirstVerifiedSeconds float64                  `json:"firstVerifiedSeconds"`
+			Budget               providers.BudgetSnapshot `json:"budget"`
+			ReadingCacheHit      bool                     `json:"readingCacheHit"`
+		}{res, notes, usage.snapshot(), time.Since(started).Seconds(), readingSeconds, firstVerified, ledger.Snapshot(), readingHit}
 		out.Ingest.Text = "" // the notes themselves are not the output
+		for i := range out.Ingest.Pages {
+			out.Ingest.Pages[i].Image = nil
+		}
+		for i := range out.Ingest.Document.Pages {
+			out.Ingest.Document.Pages[i].Image = nil
+		}
 		if err := enc.Encode(out); err != nil {
 			return fmt.Errorf("encode result: %w", err)
 		}
@@ -275,7 +353,7 @@ func run() error {
 
 // extract reads the files and pulls the text out of them. pdftotext is
 // required only when one of them is a PDF.
-func extract(ctx context.Context, paths []string, ocrModel string, vision providers.Provider, fullPages bool) (ingest.Result, error) {
+func extract(ctx context.Context, paths []string, ocrModel string, vision providers.Provider, structured, local bool, concurrency int, callTimeout time.Duration) (ingest.Result, error) {
 	files := make([]ingest.File, 0, len(paths))
 	hasPDF := false
 	for _, path := range paths {
@@ -289,19 +367,27 @@ func extract(ctx context.Context, paths []string, ocrModel string, vision provid
 
 	// Yandex OCR turns photos upright and checks GigaChat's reading, or
 	// reads them alone with -ocr yandex.
-	cfg, err := yandex.ConfigFromEnv()
-	if err != nil {
-		return ingest.Result{}, err
+	var ocr ingest.OCR
+	if !local {
+		cfg, err := yandex.ConfigFromEnv()
+		var checker ingest.OCR
+		if err == nil {
+			client, createErr := yandex.New(cfg)
+			if createErr != nil {
+				return ingest.Result{}, createErr
+			}
+			checker = client
+		}
+		if vision != nil {
+			ocr = &ingest.VisionOCR{Model: vision, Checker: checker, FullPage: structured, Concurrency: concurrency, CallTimeout: callTimeout}
+		} else {
+			if err != nil {
+				return ingest.Result{}, err
+			}
+			ocr = checker
+		}
 	}
-	client, err := yandex.New(cfg)
-	if err != nil {
-		return ingest.Result{}, err
-	}
-	var ocr ingest.OCR = client
-	if vision != nil {
-		ocr = &ingest.VisionOCR{Model: vision, Checker: client, FullPage: fullPages}
-	}
-	ext, err := ingest.NewExtractor(ocr, ingest.Options{DisablePDF: !hasPDF, OCRModel: ocrModel, ReadAllPDFPages: fullPages})
+	ext, err := ingest.NewExtractor(ocr, ingest.Options{DisablePDF: !hasPDF, OCRModel: ocrModel, AssessPDF: structured})
 	if err != nil {
 		return ingest.Result{}, err
 	}

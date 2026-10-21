@@ -81,14 +81,14 @@ func TestFullPageFailureKeepsReferenceOrChecker(t *testing.T) {
 	}
 }
 
-func TestFullPageReadsWholeImageAndKeepsConfirmedText(t *testing.T) {
+func TestFullPageReadsWholeImageAndFlagsDisagreement(t *testing.T) {
 	model := &fakeModel{texts: []string{`{"text":"Митоз — непрямое деление клеток.\nВыдуманное описание планет солнечной системы.","observations":"Схема деления."}`}}
 	ocr := &VisionOCR{Model: model, FullPage: true, Checker: &fakeChecker{text: "Митоз — непрямое деление клеток."}}
 	res, err := ocr.Recognize(context.Background(), OCRRequest{Data: jpegOf(t, 1200, 1600), MimeType: "image/jpeg", Pages: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(model.sizes) != 1 || model.sizes[0].Y != 1600 || strings.Contains(res[0].Text, "планет") || strings.Contains(res[0].Text, "Схема") {
+	if len(model.sizes) != 1 || model.sizes[0].Y != 1600 || !strings.Contains(res[0].Text, "планет") || len(res[0].Issues) == 0 || res[0].HasConfidence || strings.Contains(res[0].Text, "Схема") {
 		t.Fatalf("sizes=%v pages=%+v", model.sizes, res)
 	}
 }
@@ -139,5 +139,34 @@ func TestFullPagePDFWithPoppler(t *testing.T) {
 	}
 	if len(model.sizes) != 1 || len(res.Pages) != 1 || !strings.Contains(res.Text, "sin 30") {
 		t.Fatalf("result=%+v sizes=%v", res, model.sizes)
+	}
+}
+
+func TestFullPageDoesNotPromoteAdmittedReconstructionToSource(t *testing.T) {
+	model := &fakeModel{texts: []string{`{"text":"SELECT x FROM t","observations":"","issues":["Обрезанные слова восстановлены по стандартному синтаксису"],"blocks":[]}`}}
+	reader := &VisionOCR{Model: model, FullPage: true}
+	p, err := reader.readFullPage(context.Background(), jpegOf(t, 600, 800), "image/jpeg", ModelScan, "ELECT x\nROM t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Text != "ELECT x\nROM t" || len(p.Issues) == 0 || strings.Contains(p.Text, "SELECT") {
+		t.Fatalf("reconstruction presented as transcription: %q issues=%v", p.Text, p.Issues)
+	}
+}
+
+func TestMissingPageNumberDoesNotDuplicateAllSourceBlocks(t *testing.T) {
+	model := &fakeModel{texts: []string{`{"text":"Определение\nКлюч однозначно определяет строку.\n17","observations":"","issues":[],"blocks":[{"kind":"heading","text":"Определение"},{"kind":"text","text":"Ключ однозначно определяет строку."}]}`}}
+	p, err := (&VisionOCR{Model: model, FullPage: true}).readFullPage(context.Background(), jpegOf(t, 600, 800), "image/jpeg", ModelScan, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, b := range p.Blocks {
+		if strings.Contains(b.Text, "Ключ однозначно") {
+			count++
+		}
+	}
+	if count != 1 || len(p.Issues) != 0 {
+		t.Fatalf("source duplicated for omitted page number: count=%d issues=%v", count, p.Issues)
 	}
 }

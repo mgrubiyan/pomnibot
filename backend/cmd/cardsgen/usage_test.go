@@ -3,7 +3,11 @@ package main
 import (
 	"context"
 	"errors"
+	"math"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
@@ -45,5 +49,55 @@ func TestDefaultProvider(t *testing.T) {
 		if got := defaultProvider(); got != tc.want {
 			t.Fatalf("got %s, want %s", got, tc.want)
 		}
+	}
+}
+
+func TestConfiguredProviderKeepsItsOwnRequestLimit(t *testing.T) {
+	for _, name := range []string{"gigachat", "openrouter"} {
+		t.Run(name, func(t *testing.T) {
+			var current, peak atomic.Int32
+			p := limitModel(providerFunc(func(context.Context, providers.Request) (providers.Response, error) {
+				n := current.Add(1)
+				defer current.Add(-1)
+				for old := peak.Load(); n > old; old = peak.Load() {
+					if peak.CompareAndSwap(old, n) {
+						break
+					}
+				}
+				time.Sleep(20 * time.Millisecond)
+				return providers.Response{}, nil
+			}), name)
+			var wg sync.WaitGroup
+			for range 4 {
+				wg.Go(func() { _, _ = p.Complete(context.Background(), providers.Request{}) })
+			}
+			wg.Wait()
+			if name == "gigachat" && peak.Load() != 1 || name == "openrouter" && peak.Load() < 2 {
+				t.Fatalf("wrong provider limit: %s peak=%d", name, peak.Load())
+			}
+		})
+	}
+}
+
+func TestDefaultDollarBudgetDoesNotDisableUnpricedProviders(t *testing.T) {
+	for _, provider := range []string{"gigachat", "qwen", "yandexgpt", "openrouter"} {
+		limits, err := processingLimits(provider, false, .15, 96)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := 0.
+		if provider == "openrouter" {
+			want = .15
+		}
+		if limits.USD != want || limits.Calls != 96 {
+			t.Fatalf("wrong automatic limits for %s: %+v", provider, limits)
+		}
+		limits, err = processingLimits(provider, true, .07, 32)
+		if err != nil || limits.USD != .07 || limits.Calls != 32 {
+			t.Fatalf("explicit user budget lost: %+v %v", limits, err)
+		}
+	}
+	if _, err := processingLimits("openrouter", true, math.NaN(), 96); err == nil {
+		t.Fatal("NaN accepted")
 	}
 }

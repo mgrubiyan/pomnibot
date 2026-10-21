@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/mgrubiyan/pomnibot/backend/internal/material"
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 )
 
@@ -16,6 +17,7 @@ import (
 // test it in different forms. After the quote check, Quote holds the span of
 // the notes and ID identifies the fact.
 type modelFact struct {
+	Evidence   []material.Evidence
 	ID         string
 	Quote      string
 	Start, End int // the quote's byte offsets in the normalized document
@@ -26,11 +28,12 @@ type modelFact struct {
 
 // modelCard is one card of a fact as the model returned it.
 type modelCard struct {
-	Kind        cards.Kind
-	Question    string
-	Answer      string
-	Explanation string
-	Distractors []string // choice only; may be missing, the pool then fills in
+	LearningMode string
+	Kind         cards.Kind
+	Question     string
+	Answer       string
+	Explanation  string
+	Distractors  []string // choice only; may be missing, the pool then fills in
 	// Alt is, for boolean only, the claim with the opposite answer: the
 	// assembler shows one of the two so that true and false stay even.
 	Alt string
@@ -142,7 +145,7 @@ func decodeAnswer(data []byte, maxFacts int) ([]modelFact, int, error) {
 		f, ok := parseTable(item)
 		if !ok || i >= maxTablesInChunk {
 			invalid++
-			slog.Debug("cards: table breaks the rules or the limit", "table", string(item))
+			slog.Debug("cards: table breaks the rules or the limit", "bytes", len(item))
 			continue
 		}
 		facts = append(facts, f)
@@ -195,6 +198,11 @@ func parseFact(data json.RawMessage) (modelFact, int) {
 	}
 
 	f := modelFact{Quote: quote, Topic: topic, Name: factName(fields, topic)}
+	if raw, ok := fields["evidence"]; ok {
+		if json.Unmarshal(raw, &f.Evidence) != nil {
+			return modelFact{}, len(items)
+		}
+	}
 	invalid := 0
 	for i, item := range items {
 		if i >= maxCardsPerFact {
@@ -209,7 +217,7 @@ func parseFact(data json.RawMessage) (modelFact, int) {
 		c, ok := parseCard(cardFields)
 		if !ok {
 			invalid++
-			slog.Debug("cards: card breaks the rules", "card", string(item))
+			slog.Debug("cards: card breaks the rules", "bytes", len(item))
 			continue
 		}
 		f.Cards = append(f.Cards, c)
@@ -263,6 +271,7 @@ func parseCard(fields map[string]json.RawMessage) (modelCard, bool) {
 	if reAboutNotesQuestion.MatchString(c.Question) {
 		return modelCard{}, false
 	}
+	c.LearningMode, _ = stringField(fields, "learningMode")
 	c.Kind = cards.Kind(strings.ToLower(kind))
 	switch c.Kind {
 	case cards.KindChoice:
