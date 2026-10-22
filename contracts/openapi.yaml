@@ -543,6 +543,62 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /sets/{setId}/issues:
+    get:
+      tags:
+        - Cards
+      summary: Open complaints about the cards of the author's set
+      description: >-
+        Grouped by card and reason. A complaint is open until the card is
+        edited after it or the author keeps the card as it is.
+      operationId: GetSetIssues
+      parameters:
+        - name: setId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SetIssue'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /cards/{cardId}/issue/resolve:
+    post:
+      tags:
+        - Cards
+      summary: Keep a card as it is and close its complaints
+      operationId: ResolveCardIssues
+      parameters:
+        - name: cardId
+          in: path
+          required: true
+          description: The ID of the card
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '204':
+          description: Complaints closed
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
 components:
   securitySchemes:
     MiniAppAuthorization:
@@ -787,6 +843,26 @@ components:
       properties:
         reason:
           $ref: '#/components/schemas/CardIssueReason'
+
+    SetIssue:
+      type: object
+      required:
+        - cardId
+        - reason
+        - count
+        - lastReportedAt
+      properties:
+        cardId:
+          type: string
+          format: uuid
+        reason:
+          $ref: '#/components/schemas/CardIssueReason'
+        count:
+          type: integer
+          description: How many complaints with this reason
+        lastReportedAt:
+          type: string
+          format: date-time
 
     User:
       type: object

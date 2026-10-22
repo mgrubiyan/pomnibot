@@ -17,6 +17,7 @@ const (
 	GetHealthOperation          OperationName = "GetHealth"
 	GetProfileOperation         OperationName = "GetProfile"
 	GetSetOperation             OperationName = "GetSet"
+	GetSetIssuesOperation       OperationName = "GetSetIssues"
 	GetSetLeaderboardOperation  OperationName = "GetSetLeaderboard"
 	GetSetPlanOperation         OperationName = "GetSetPlan"
 	GetSetShareCodeOperation    OperationName = "GetSetShareCode"
@@ -24,6 +25,7 @@ const (
 	JoinSetByShareCodeOperation OperationName = "JoinSetByShareCode"
 	PutProfileOperation         OperationName = "PutProfile"
 	ReportCardIssueOperation    OperationName = "ReportCardIssue"
+	ResolveCardIssuesOperation  OperationName = "ResolveCardIssues"
 	SendResultsOperation        OperationName = "SendResults"
 	UpdateCardOperation         OperationName = "UpdateCard"
 )

@@ -47,6 +47,22 @@ type mockQuerier struct {
 	getUserSetRatingFunc           func(ctx context.Context, arg db.GetUserSetRatingParams) (db.GetUserSetRatingRow, error)
 	getUsersWithDueFactsFunc       func(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]int64, error)
 	createCardIssueFunc            func(ctx context.Context, arg db.CreateCardIssueParams) (int64, error)
+	getOpenCardIssuesBySetFunc     func(ctx context.Context, arg db.GetOpenCardIssuesBySetParams) ([]db.GetOpenCardIssuesBySetRow, error)
+	resolveCardIssuesFunc          func(ctx context.Context, arg db.ResolveCardIssuesParams) (bool, error)
+}
+
+func (m *mockQuerier) GetOpenCardIssuesBySet(ctx context.Context, arg db.GetOpenCardIssuesBySetParams) ([]db.GetOpenCardIssuesBySetRow, error) {
+	if m.getOpenCardIssuesBySetFunc != nil {
+		return m.getOpenCardIssuesBySetFunc(ctx, arg)
+	}
+	return nil, nil
+}
+
+func (m *mockQuerier) ResolveCardIssues(ctx context.Context, arg db.ResolveCardIssuesParams) (bool, error) {
+	if m.resolveCardIssuesFunc != nil {
+		return m.resolveCardIssuesFunc(ctx, arg)
+	}
+	return false, nil
 }
 
 func (m *mockQuerier) CreateCardIssue(ctx context.Context, arg db.CreateCardIssueParams) (int64, error) {

@@ -9,6 +9,7 @@ import Home from './screens/Home';
 import JoinSet from './screens/JoinSet';
 import SetScreen from './screens/SetScreen';
 import SetCards from './screens/SetCards';
+import SetIssues from './screens/SetIssues';
 import Share from './screens/Share';
 import Leaderboard from './screens/Leaderboard';
 import WhyItWorks from './screens/WhyItWorks';
@@ -21,6 +22,7 @@ type Screen =
     | { name: 'home' }
     | { name: 'set'; setId: string }
     | { name: 'set-cards'; setId: string }
+    | { name: 'set-issues'; setId: string }
     | {
           name: 'feed';
           setId?: string;
@@ -53,6 +55,8 @@ type Screen =
           feedSetId?: string;
           feedIndex?: number;
           feedResults?: AnswerResult[];
+          /** Where to go after the edit when it did not start in the feed. */
+          returnTo?: Screen;
       };
 
 /** What to report on the cards screen after an action on a card. */
@@ -116,6 +120,7 @@ function App() {
         feedSetTitle?: string,
         feedIndex?: number,
         feedResults?: AnswerResult[],
+        returnTo?: Screen,
     ) => {
         try {
             await api.DELETE('/cards/{cardId}', {
@@ -137,6 +142,8 @@ function App() {
                 initialIndex: feedIndex,
                 initialResults: feedResults,
             });
+        } else if (returnTo) {
+            setScreen(returnTo);
         } else {
             setScreen({ name: 'set-cards', setId });
             setToast({ kind: 'removed', cardId });
@@ -152,6 +159,7 @@ function App() {
         feedSetTitle?: string,
         feedIndex?: number,
         feedResults?: AnswerResult[],
+        returnTo?: Screen,
     ) => {
         try {
             const { error } = await api.PUT('/cards/{cardId}', {
@@ -183,6 +191,8 @@ function App() {
                 initialIndex: feedIndex,
                 initialResults: feedResults,
             });
+        } else if (returnTo) {
+            setScreen(returnTo);
         } else {
             setScreen({ name: 'set-cards', setId });
             setToast({ kind: 'edited' });
@@ -306,6 +316,7 @@ function App() {
             feedSetId,
             feedIndex,
             feedResults,
+            returnTo,
         } = screen;
 
         if (!isOwner) {
@@ -337,7 +348,7 @@ function App() {
                             initialResults: feedResults,
                         });
                     } else {
-                        go({ name: 'set-cards', setId: card.setId });
+                        go(returnTo ?? { name: 'set-cards', setId: card.setId });
                     }
                 }}
                 onSave={(patch) =>
@@ -350,6 +361,7 @@ function App() {
                         setTitle,
                         feedIndex,
                         feedResults,
+                        returnTo,
                     )
                 }
                 onRemove={() =>
@@ -361,6 +373,7 @@ function App() {
                         setTitle,
                         feedIndex,
                         feedResults,
+                        returnTo,
                     )
                 }
             />
@@ -410,6 +423,20 @@ function App() {
         return <WhyItWorks onBack={goHome} />;
     }
 
+    if (screen.name === 'set-issues') {
+        const issues: Screen = { name: 'set-issues', setId: screen.setId };
+        return (
+            <SetIssues
+                key={screen.setId}
+                setId={screen.setId}
+                onBack={() => openSet(screen.setId)}
+                onEditCard={(card, setTitle) =>
+                    go({ name: 'card-edit', card, setTitle, isOwner: true, returnTo: issues })
+                }
+            />
+        );
+    }
+
     if (screen.name === 'set-cards') {
         return (
             <SetCards
@@ -442,6 +469,7 @@ function App() {
                 onStart={(setId, setTitle) => go({ name: 'feed', setId, setTitle })}
                 onRemove={removeSet}
                 onOpenCards={(setId) => go({ name: 'set-cards', setId })}
+                onOpenIssues={(setId) => go({ name: 'set-issues', setId })}
                 onShare={(setId, setTitle) => go({ name: 'share', setId, setTitle })}
                 onOpenLeaderboard={(setId, setTitle) =>
                     go({

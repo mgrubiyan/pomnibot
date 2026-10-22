@@ -38,3 +38,89 @@ func (q *Queries) CreateCardIssue(ctx context.Context, arg CreateCardIssueParams
 	}
 	return result.RowsAffected(), nil
 }
+
+const getOpenCardIssuesBySet = `-- name: GetOpenCardIssuesBySet :many
+SELECT
+    i.card_id,
+    i.reason,
+    COUNT(*)::int AS count,
+    MAX(i.created_at)::timestamptz AS last_reported_at
+FROM card_issues i
+JOIN cards c ON c.id = i.card_id
+JOIN facts f ON f.id = c.fact_id
+JOIN sets s ON s.id = f.set_id
+WHERE f.set_id = $1
+  AND s.author_id = $2
+  AND i.resolved_at IS NULL
+  AND i.created_at > c.updated_at
+GROUP BY i.card_id, i.reason
+ORDER BY last_reported_at DESC, i.card_id, i.reason
+`
+
+type GetOpenCardIssuesBySetParams struct {
+	SetID  pgtype.UUID `json:"set_id"`
+	UserID int64       `json:"user_id"`
+}
+
+type GetOpenCardIssuesBySetRow struct {
+	CardID         pgtype.UUID        `json:"card_id"`
+	Reason         CardIssueReason    `json:"reason"`
+	Count          int32              `json:"count"`
+	LastReportedAt pgtype.Timestamptz `json:"last_reported_at"`
+}
+
+// Open complaints of the author's set: made after the card's last edit and
+// not dismissed. Complaints about deleted cards are not listed.
+func (q *Queries) GetOpenCardIssuesBySet(ctx context.Context, arg GetOpenCardIssuesBySetParams) ([]GetOpenCardIssuesBySetRow, error) {
+	rows, err := q.db.Query(ctx, getOpenCardIssuesBySet, arg.SetID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetOpenCardIssuesBySetRow
+	for rows.Next() {
+		var i GetOpenCardIssuesBySetRow
+		if err := rows.Scan(
+			&i.CardID,
+			&i.Reason,
+			&i.Count,
+			&i.LastReportedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const resolveCardIssues = `-- name: ResolveCardIssues :one
+WITH card AS (
+    SELECT c.id
+    FROM cards c
+    JOIN facts f ON f.id = c.fact_id
+    JOIN sets s ON s.id = f.set_id
+    WHERE c.id = $1 AND s.author_id = $2
+), resolved AS (
+    UPDATE card_issues
+    SET resolved_at = CURRENT_TIMESTAMP
+    WHERE card_id IN (SELECT id FROM card) AND resolved_at IS NULL
+)
+SELECT EXISTS (SELECT 1 FROM card) AS found
+`
+
+type ResolveCardIssuesParams struct {
+	CardID pgtype.UUID `json:"card_id"`
+	UserID int64       `json:"user_id"`
+}
+
+// Dismisses the open complaints of a card; false when the user is not the
+// author of its set or the card is gone.
+func (q *Queries) ResolveCardIssues(ctx context.Context, arg ResolveCardIssuesParams) (bool, error) {
+	row := q.db.QueryRow(ctx, resolveCardIssues, arg.CardID, arg.UserID)
+	var found bool
+	err := row.Scan(&found)
+	return found, err
+}

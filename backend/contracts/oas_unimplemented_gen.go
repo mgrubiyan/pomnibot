@@ -114,6 +114,16 @@ func (UnimplementedHandler) GetSet(ctx context.Context, params GetSetParams) (r 
 	return r, ht.ErrNotImplemented
 }
 
+// GetSetIssues implements GetSetIssues operation.
+//
+// Grouped by card and reason. A complaint is open until the card is edited after it or the author
+// keeps the card as it is.
+//
+// GET /sets/{setId}/issues
+func (UnimplementedHandler) GetSetIssues(ctx context.Context, params GetSetIssuesParams) (r GetSetIssuesRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // GetSetLeaderboard implements GetSetLeaderboard operation.
 //
 // Get set leaderboard for author.
@@ -175,6 +185,15 @@ func (UnimplementedHandler) PutProfile(ctx context.Context, req *ProfileRequest)
 //
 // POST /cards/{cardId}/issue
 func (UnimplementedHandler) ReportCardIssue(ctx context.Context, req *ReportCardIssueRequest, params ReportCardIssueParams) (r ReportCardIssueRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// ResolveCardIssues implements ResolveCardIssues operation.
+//
+// Keep a card as it is and close its complaints.
+//
+// POST /cards/{cardId}/issue/resolve
+func (UnimplementedHandler) ResolveCardIssues(ctx context.Context, params ResolveCardIssuesParams) (r ResolveCardIssuesRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 

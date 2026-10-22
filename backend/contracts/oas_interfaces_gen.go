@@ -41,6 +41,10 @@ type GetProfileRes interface {
 	getProfileRes()
 }
 
+type GetSetIssuesRes interface {
+	getSetIssuesRes()
+}
+
 type GetSetLeaderboardRes interface {
 	getSetLeaderboardRes()
 }
@@ -71,6 +75,10 @@ type PutProfileRes interface {
 
 type ReportCardIssueRes interface {
 	reportCardIssueRes()
+}
+
+type ResolveCardIssuesRes interface {
+	resolveCardIssuesRes()
 }
 
 type SendResultsRes interface {

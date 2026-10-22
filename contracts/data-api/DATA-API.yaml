@@ -684,6 +684,19 @@ checks:
     - 204
   timeoutMs: 5000
   repeatable: false
+- id: ResolveCardIssues
+  name: Keep a card as it is and close its complaints
+  method: POST
+  path: /cards/{cardId}/issue/resolve
+  role: user
+  request:
+    path:
+      cardId: sample-id
+  expected:
+    statusCodes:
+    - 204
+  timeoutMs: 5000
+  repeatable: false
 - id: GetSet
   name: Get a card set
   method: GET
@@ -992,6 +1005,47 @@ checks:
           description: topic, used for stats
   timeoutMs: 5000
   repeatable: false
+- id: GetSetIssues
+  name: Open complaints about the cards of the author's set
+  method: GET
+  path: /sets/{setId}/issues
+  role: user
+  request:
+    path:
+      setId: ${setId}
+  expected:
+    statusCodes:
+    - 200
+    contentType: application/json
+    bodySchema:
+      type: array
+      items:
+        type: object
+        required:
+        - cardId
+        - reason
+        - count
+        - lastReportedAt
+        properties:
+          cardId:
+            type: string
+            format: uuid
+          reason:
+            type: string
+            description: What is wrong with a card, in the reader's opinion.
+            enum:
+            - answer
+            - wording
+            - not-in-notes
+            - other
+          count:
+            type: integer
+            description: How many complaints with this reason
+          lastReportedAt:
+            type: string
+            format: date-time
+  timeoutMs: 5000
+  repeatable: true
 - id: GetSetLeaderboard
   name: Get set leaderboard for author
   method: GET

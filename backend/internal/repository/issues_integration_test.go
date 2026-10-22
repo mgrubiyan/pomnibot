@@ -102,3 +102,118 @@ func TestCardIssuesPostgres(t *testing.T) {
 		}
 	}
 }
+
+// The author sees open complaints: an edit answers the ones made before it,
+// keeping the card as it is closes them, and nobody else sees them.
+func TestOpenCardIssuesPostgres(t *testing.T) {
+	pool := manualTestPool(t)
+	ctx := context.Background()
+	q := db.New(pool)
+	users := usecase.NewUserService(q)
+	writer := repository.NewManualStore(pool)
+	sets := usecase.NewSetService(q, users, writer)
+	svc := usecase.NewCardService(q, users, usecase.WithManualCards(writer))
+	for _, id := range []int64{11, 22, 33} {
+		if err := users.EnsureUser(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	generated, _, err := repository.SaveGeneratedSet(ctx, q, 11, "Set", generator.Result{
+		Facts: []cards.Fact{{ID: "f1", Name: "F1"}, {ID: "f2", Name: "F2"}},
+		Cards: []cards.Card{
+			{FactID: "f1", Kind: cards.KindFlip, Question: "Q1", Answer: "A1"},
+			{FactID: "f2", Kind: cards.KindFlip, Question: "Q2", Answer: "A2"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	setID := uuid.UUID(generated.ID.Bytes)
+	for _, id := range []int64{22, 33} {
+		if _, err = sets.JoinSetByShareCode(ctx, id, generated.ShareCode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := sets.GetCardsBySetID(ctx, 11, setID)
+	if err != nil || len(got) != 2 {
+		t.Fatalf("cards: %d %v", len(got), err)
+	}
+	first, second := got[0].ID, got[1].ID
+	report := func(user int64, card uuid.UUID, reason contracts.CardIssueReason) {
+		t.Helper()
+		if err := svc.ReportCardIssue(ctx, user, card, reason); err != nil {
+			t.Fatal(err)
+		}
+	}
+	type open struct {
+		card   uuid.UUID
+		reason contracts.CardIssueReason
+		count  int
+	}
+	openIssues := func() []open {
+		t.Helper()
+		issues, err := svc.GetSetIssues(ctx, 11, setID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res := []open{}
+		for _, i := range issues {
+			res = append(res, open{i.CardId, i.Reason, i.Count})
+		}
+		return res
+	}
+	sameIssues := func(step string, want ...open) {
+		t.Helper()
+		got := openIssues()
+		if len(got) != len(want) {
+			t.Fatalf("%s: open = %+v, want %+v", step, got, want)
+		}
+		for _, w := range want {
+			found := false
+			for _, g := range got {
+				found = found || g == w
+			}
+			if !found {
+				t.Fatalf("%s: open = %+v, want %+v", step, got, want)
+			}
+		}
+	}
+
+	report(22, first, contracts.CardIssueReasonAnswer)
+	report(33, first, contracts.CardIssueReasonAnswer)
+	report(22, second, contracts.CardIssueReasonWording)
+	sameIssues("reported", open{first, contracts.CardIssueReasonAnswer, 2}, open{second, contracts.CardIssueReasonWording, 1})
+
+	for _, id := range []int64{22, 33} {
+		if _, err = svc.GetSetIssues(ctx, id, setID); !errors.Is(err, usecase.ErrNotFound) {
+			t.Fatalf("member %d sees complaints: %v", id, err)
+		}
+		if err = svc.ResolveCardIssues(ctx, id, first); !errors.Is(err, usecase.ErrNotFound) {
+			t.Fatalf("member %d closes complaints: %v", id, err)
+		}
+	}
+
+	if _, err = svc.UpdateCard(ctx, 11, first, &contracts.UpdateCardRequest{Question: contracts.NewOptString("Q1 fixed")}); err != nil {
+		t.Fatal(err)
+	}
+	sameIssues("edited", open{second, contracts.CardIssueReasonWording, 1})
+	report(33, first, contracts.CardIssueReasonOther)
+	sameIssues("reported after the edit", open{first, contracts.CardIssueReasonOther, 1}, open{second, contracts.CardIssueReasonWording, 1})
+
+	if err = svc.ResolveCardIssues(ctx, 11, second); err != nil {
+		t.Fatal(err)
+	}
+	sameIssues("kept", open{first, contracts.CardIssueReasonOther, 1})
+	if err = svc.DeleteCard(ctx, 11, first); err != nil {
+		t.Fatal(err)
+	}
+	sameIssues("deleted")
+	if err = svc.ResolveCardIssues(ctx, 11, first); !errors.Is(err, usecase.ErrNotFound) {
+		t.Fatalf("deleted card: %v", err)
+	}
+
+	var stored int
+	if err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM card_issues").Scan(&stored); err != nil || stored != 4 {
+		t.Fatalf("stored complaints = %d, %v; closing must not delete them", stored, err)
+	}
+}

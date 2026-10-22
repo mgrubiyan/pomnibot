@@ -96,6 +96,13 @@ type Invoker interface {
 	//
 	// GET /sets/{setId}
 	GetSet(ctx context.Context, params GetSetParams) (GetSetRes, error)
+	// GetSetIssues invokes GetSetIssues operation.
+	//
+	// Grouped by card and reason. A complaint is open until the card is edited after it or the author
+	// keeps the card as it is.
+	//
+	// GET /sets/{setId}/issues
+	GetSetIssues(ctx context.Context, params GetSetIssuesParams) (GetSetIssuesRes, error)
 	// GetSetLeaderboard invokes GetSetLeaderboard operation.
 	//
 	// Get set leaderboard for author.
@@ -139,6 +146,12 @@ type Invoker interface {
 	//
 	// POST /cards/{cardId}/issue
 	ReportCardIssue(ctx context.Context, request *ReportCardIssueRequest, params ReportCardIssueParams) (ReportCardIssueRes, error)
+	// ResolveCardIssues invokes ResolveCardIssues operation.
+	//
+	// Keep a card as it is and close its complaints.
+	//
+	// POST /cards/{cardId}/issue/resolve
+	ResolveCardIssues(ctx context.Context, params ResolveCardIssuesParams) (ResolveCardIssuesRes, error)
 	// SendResults invokes SendResults operation.
 	//
 	// Send set/feed results.
@@ -1216,6 +1229,106 @@ func (c *Client) sendGetSet(ctx context.Context, params GetSetParams) (res GetSe
 	return result, nil
 }
 
+// GetSetIssues invokes GetSetIssues operation.
+//
+// Grouped by card and reason. A complaint is open until the card is edited after it or the author
+// keeps the card as it is.
+//
+// GET /sets/{setId}/issues
+func (c *Client) GetSetIssues(ctx context.Context, params GetSetIssuesParams) (GetSetIssuesRes, error) {
+	res, err := c.sendGetSetIssues(ctx, params)
+	return res, err
+}
+
+func (c *Client) sendGetSetIssues(ctx context.Context, params GetSetIssuesParams) (res GetSetIssuesRes, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("GetSetIssues"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/sets/{setId}/issues"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, GetSetIssuesOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [3]string
+	pathParts[0] = "/sets/"
+	{
+		// Encode "setId" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "setId",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.UUIDToString(params.SetId))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	pathParts[2] = "/issues"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer func() {
+		// Drain the body to EOF before closing, so the underlying
+		// connection can be reused by the Transport regardless of the
+		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
+		_, _ = io.Copy(io.Discard, body)
+		_ = body.Close()
+	}()
+
+	stage = "DecodeResponse"
+	result, err := decodeGetSetIssuesResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
 // GetSetLeaderboard invokes GetSetLeaderboard operation.
 //
 // Get set leaderboard for author.
@@ -1855,6 +1968,105 @@ func (c *Client) sendReportCardIssue(ctx context.Context, request *ReportCardIss
 
 	stage = "DecodeResponse"
 	result, err := decodeReportCardIssueResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// ResolveCardIssues invokes ResolveCardIssues operation.
+//
+// Keep a card as it is and close its complaints.
+//
+// POST /cards/{cardId}/issue/resolve
+func (c *Client) ResolveCardIssues(ctx context.Context, params ResolveCardIssuesParams) (ResolveCardIssuesRes, error) {
+	res, err := c.sendResolveCardIssues(ctx, params)
+	return res, err
+}
+
+func (c *Client) sendResolveCardIssues(ctx context.Context, params ResolveCardIssuesParams) (res ResolveCardIssuesRes, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("ResolveCardIssues"),
+		semconv.HTTPRequestMethodKey.String("POST"),
+		semconv.URLTemplateKey.String("/cards/{cardId}/issue/resolve"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, ResolveCardIssuesOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [3]string
+	pathParts[0] = "/cards/"
+	{
+		// Encode "cardId" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "cardId",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.UUIDToString(params.CardId))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	pathParts[2] = "/issue/resolve"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "POST", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer func() {
+		// Drain the body to EOF before closing, so the underlying
+		// connection can be reused by the Transport regardless of the
+		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
+		_, _ = io.Copy(io.Discard, body)
+		_ = body.Close()
+	}()
+
+	stage = "DecodeResponse"
+	result, err := decodeResolveCardIssuesResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}

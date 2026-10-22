@@ -3,14 +3,8 @@ import { Button, Flex, Radio, Typography } from '@maxhub/max-ui';
 import type { Card, CardIssueReason } from '../types';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { ISSUE_REASONS, answerPreview } from '../utils/issues';
 import s from './CardIssue.module.css';
-
-const REASONS: { value: CardIssueReason; label: string }[] = [
-    { value: 'answer', label: 'Ответ не совпадает с конспектом' },
-    { value: 'wording', label: 'Вопрос непонятно сформулирован' },
-    { value: 'not-in-notes', label: 'Этого нет в моём конспекте' },
-    { value: 'other', label: 'Другое' },
-];
 
 /** Each action saves the complaint first and rejects when it was not saved. */
 export interface CardIssueProps {
@@ -21,16 +15,6 @@ export interface CardIssueProps {
     onEdit?: (reason: CardIssueReason) => Promise<void>;
     onRemove?: (reason: CardIssueReason) => Promise<void>;
     onReport?: (reason: CardIssueReason) => Promise<void>;
-}
-
-function answerOf(card: Card): string {
-    if (typeof card.answer === 'boolean') {
-        return card.answer ? 'Верно' : 'Неверно';
-    }
-    if (typeof card.answer === 'object' && card.answer !== null) {
-        return 'Таблица';
-    }
-    return String(card.answer ?? '');
 }
 
 export function CardIssue({ card, setTitle, isOwner = false, onBack, onEdit, onRemove, onReport }: CardIssueProps) {
@@ -65,13 +49,13 @@ export function CardIssue({ card, setTitle, isOwner = false, onBack, onEdit, onR
                         {card.question}
                     </Typography.Text>
                     <Typography.Text variant="description" color="secondary" className={s.previewText}>
-                        Ответ: {answerOf(card)}
+                        Ответ: {answerPreview(card)}
                     </Typography.Text>
                 </Flex>
 
                 <fieldset className={s.reasons}>
                     <legend className={s.legend}>Причина</legend>
-                    {REASONS.map((item) => (
+                    {ISSUE_REASONS.map((item) => (
                         <label key={item.value} className={s.reason}>
                             <Radio
                                 name="reason"

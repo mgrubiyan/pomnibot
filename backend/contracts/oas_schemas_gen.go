@@ -925,6 +925,22 @@ type GetSetInternalServerError ErrorResponse
 
 func (*GetSetInternalServerError) getSetRes() {}
 
+type GetSetIssuesForbidden ErrorResponse
+
+func (*GetSetIssuesForbidden) getSetIssuesRes() {}
+
+type GetSetIssuesInternalServerError ErrorResponse
+
+func (*GetSetIssuesInternalServerError) getSetIssuesRes() {}
+
+type GetSetIssuesNotFound ErrorResponse
+
+func (*GetSetIssuesNotFound) getSetIssuesRes() {}
+
+type GetSetIssuesOKApplicationJSON []SetIssue
+
+func (*GetSetIssuesOKApplicationJSON) getSetIssuesRes() {}
+
 type GetSetLeaderboardForbidden ErrorResponse
 
 func (*GetSetLeaderboardForbidden) getSetLeaderboardRes() {}
@@ -1558,6 +1574,23 @@ func (s *ReportCardIssueRequest) SetReason(val CardIssueReason) {
 	s.Reason = val
 }
 
+type ResolveCardIssuesForbidden ErrorResponse
+
+func (*ResolveCardIssuesForbidden) resolveCardIssuesRes() {}
+
+type ResolveCardIssuesInternalServerError ErrorResponse
+
+func (*ResolveCardIssuesInternalServerError) resolveCardIssuesRes() {}
+
+// ResolveCardIssuesNoContent is response for ResolveCardIssues operation.
+type ResolveCardIssuesNoContent struct{}
+
+func (*ResolveCardIssuesNoContent) resolveCardIssuesRes() {}
+
+type ResolveCardIssuesNotFound ErrorResponse
+
+func (*ResolveCardIssuesNotFound) resolveCardIssuesRes() {}
+
 type SendResultsBadRequest ErrorResponse
 
 func (*SendResultsBadRequest) sendResultsRes() {}
@@ -1576,6 +1609,55 @@ type SendResultsNoContent struct{}
 func (*SendResultsNoContent) sendResultsRes() {}
 
 type SendResultsRequest []AnswerResult
+
+// Ref: #/components/schemas/SetIssue
+type SetIssue struct {
+	CardId uuid.UUID       `json:"cardId"`
+	Reason CardIssueReason `json:"reason"`
+	// How many complaints with this reason.
+	Count          int       `json:"count"`
+	LastReportedAt time.Time `json:"lastReportedAt"`
+}
+
+// GetCardId returns the value of CardId.
+func (s *SetIssue) GetCardId() uuid.UUID {
+	return s.CardId
+}
+
+// GetReason returns the value of Reason.
+func (s *SetIssue) GetReason() CardIssueReason {
+	return s.Reason
+}
+
+// GetCount returns the value of Count.
+func (s *SetIssue) GetCount() int {
+	return s.Count
+}
+
+// GetLastReportedAt returns the value of LastReportedAt.
+func (s *SetIssue) GetLastReportedAt() time.Time {
+	return s.LastReportedAt
+}
+
+// SetCardId sets the value of CardId.
+func (s *SetIssue) SetCardId(val uuid.UUID) {
+	s.CardId = val
+}
+
+// SetReason sets the value of Reason.
+func (s *SetIssue) SetReason(val CardIssueReason) {
+	s.Reason = val
+}
+
+// SetCount sets the value of Count.
+func (s *SetIssue) SetCount(val int) {
+	s.Count = val
+}
+
+// SetLastReportedAt sets the value of LastReportedAt.
+func (s *SetIssue) SetLastReportedAt(val time.Time) {
+	s.LastReportedAt = val
+}
 
 // Ref: #/components/schemas/SetLeaderboardResponse
 type SetLeaderboardResponse struct {

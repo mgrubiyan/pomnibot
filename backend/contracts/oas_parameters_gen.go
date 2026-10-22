@@ -476,6 +476,71 @@ func decodeGetSetParams(args [1]string, argsEscaped bool, r *http.Request) (para
 	return params, nil
 }
 
+// GetSetIssuesParams is parameters of GetSetIssues operation.
+type GetSetIssuesParams struct {
+	SetId uuid.UUID
+}
+
+func unpackGetSetIssuesParams(packed middleware.Parameters) (params GetSetIssuesParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "setId",
+			In:   "path",
+		}
+		params.SetId = packed[key].(uuid.UUID)
+	}
+	return params
+}
+
+func decodeGetSetIssuesParams(args [1]string, argsEscaped bool, r *http.Request) (params GetSetIssuesParams, _ error) {
+	// Decode path: setId.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "setId",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToUUID(val)
+				if err != nil {
+					return err
+				}
+
+				params.SetId = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "setId",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // GetSetLeaderboardParams is parameters of GetSetLeaderboard operation.
 type GetSetLeaderboardParams struct {
 	// The ID of the card set.
@@ -691,6 +756,72 @@ func unpackReportCardIssueParams(packed middleware.Parameters) (params ReportCar
 }
 
 func decodeReportCardIssueParams(args [1]string, argsEscaped bool, r *http.Request) (params ReportCardIssueParams, _ error) {
+	// Decode path: cardId.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "cardId",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToUUID(val)
+				if err != nil {
+					return err
+				}
+
+				params.CardId = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "cardId",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// ResolveCardIssuesParams is parameters of ResolveCardIssues operation.
+type ResolveCardIssuesParams struct {
+	// The ID of the card.
+	CardId uuid.UUID
+}
+
+func unpackResolveCardIssuesParams(packed middleware.Parameters) (params ResolveCardIssuesParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "cardId",
+			In:   "path",
+		}
+		params.CardId = packed[key].(uuid.UUID)
+	}
+	return params
+}
+
+func decodeResolveCardIssuesParams(args [1]string, argsEscaped bool, r *http.Request) (params ResolveCardIssuesParams, _ error) {
 	// Decode path: cardId.
 	if err := func() error {
 		param := args[0]

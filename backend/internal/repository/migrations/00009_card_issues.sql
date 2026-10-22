@@ -14,6 +14,9 @@ CREATE TABLE card_issues (
     answer_text TEXT,
     explanation TEXT NOT NULL,
     source_quote TEXT NOT NULL,
+    -- Set when the author keeps the card as it is; an edit of the card
+    -- answers the complaints made before it without touching them.
+    resolved_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

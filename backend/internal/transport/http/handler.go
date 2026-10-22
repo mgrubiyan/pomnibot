@@ -154,6 +154,22 @@ func (h *APIHandler) ReportCardIssue(ctx context.Context, req *contracts.ReportC
 	return h.UnimplementedHandler.ReportCardIssue(ctx, req, params)
 }
 
+// GetSetIssues implements contracts.Handler.GetSetIssues.
+func (h *APIHandler) GetSetIssues(ctx context.Context, params contracts.GetSetIssuesParams) (contracts.GetSetIssuesRes, error) {
+	if h.cards != nil {
+		return h.cards.GetSetIssues(ctx, params)
+	}
+	return h.UnimplementedHandler.GetSetIssues(ctx, params)
+}
+
+// ResolveCardIssues implements contracts.Handler.ResolveCardIssues.
+func (h *APIHandler) ResolveCardIssues(ctx context.Context, params contracts.ResolveCardIssuesParams) (contracts.ResolveCardIssuesRes, error) {
+	if h.cards != nil {
+		return h.cards.ResolveCardIssues(ctx, params)
+	}
+	return h.UnimplementedHandler.ResolveCardIssues(ctx, params)
+}
+
 // --- Homescreen Domain Delegation ---
 
 // GetToday implements contracts.Handler.GetToday.

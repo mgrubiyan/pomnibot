@@ -88,6 +88,7 @@ type CardIssue struct {
 	AnswerText  pgtype.Text        `json:"answer_text"`
 	Explanation string             `json:"explanation"`
 	SourceQuote string             `json:"source_quote"`
+	ResolvedAt  pgtype.Timestamptz `json:"resolved_at"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 

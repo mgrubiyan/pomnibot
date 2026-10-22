@@ -68,6 +68,35 @@ func (h *CardsHandler) ReportCardIssue(ctx context.Context, req *contracts.Repor
 	return &contracts.ReportCardIssueNoContent{}, nil
 }
 
+// GetSetIssues implements contracts.Handler.GetSetIssues.
+func (h *CardsHandler) GetSetIssues(ctx context.Context, params contracts.GetSetIssuesParams) (contracts.GetSetIssuesRes, error) {
+	userID, _ := UserIDFromContext(ctx)
+	issues, err := h.cardService.GetSetIssues(ctx, userID, params.SetId)
+	if err != nil {
+		if errors.Is(err, usecase.ErrNotFound) {
+			return &contracts.GetSetIssuesNotFound{Message: err.Error()}, nil
+		}
+		return &contracts.GetSetIssuesInternalServerError{Message: internalError(ctx, "GetSetIssues", err)}, nil
+	}
+	res := contracts.GetSetIssuesOKApplicationJSON(issues)
+	if res == nil {
+		res = contracts.GetSetIssuesOKApplicationJSON{}
+	}
+	return &res, nil
+}
+
+// ResolveCardIssues implements contracts.Handler.ResolveCardIssues.
+func (h *CardsHandler) ResolveCardIssues(ctx context.Context, params contracts.ResolveCardIssuesParams) (contracts.ResolveCardIssuesRes, error) {
+	userID, _ := UserIDFromContext(ctx)
+	if err := h.cardService.ResolveCardIssues(ctx, userID, params.CardId); err != nil {
+		if errors.Is(err, usecase.ErrNotFound) {
+			return &contracts.ResolveCardIssuesNotFound{Message: err.Error()}, nil
+		}
+		return &contracts.ResolveCardIssuesInternalServerError{Message: internalError(ctx, "ResolveCardIssues", err)}, nil
+	}
+	return &contracts.ResolveCardIssuesNoContent{}, nil
+}
+
 // AnswerQuestion implements contracts.Handler.AnswerQuestion.
 func (h *CardsHandler) AnswerQuestion(ctx context.Context, req *contracts.AnswerQuestionRequest, params contracts.AnswerQuestionParams) (contracts.AnswerQuestionRes, error) {
 	if req == nil || strings.TrimSpace(req.Answer) == "" {

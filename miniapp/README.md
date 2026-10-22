@@ -38,6 +38,7 @@ React 19 + TypeScript + Vite на Bun 1.4+, библиотека [@maxhub/max-ui
 Home ─┬─ «Начать» ─────────────► Feed (все карточки на повтор)
       ├─ тап по набору ───────► SetScreen ─┬─ «Повторить N» ──► Feed (набор)
       │                                    ├─ тап по карточке (владелец) ─► CardEdit ──► SetScreen
+      │                                    ├─ «Жалобы» (владелец) ─► SetIssues ─► CardEdit ──► SetIssues
       │                                    └─ «Удалить набор»
       ├─ «Добавить конспект» ─► AddNote
       └─ «Ввести код набора» ─► JoinSet ───► SetScreen
@@ -59,6 +60,7 @@ Feed ── «Ошибка в карточке» ──► CardIssue ─┬─ �
 | JoinSet | [src/screens/JoinSet.tsx](src/screens/JoinSet.tsx) | Ввод шестизначного кода набора |
 | AddNote | [src/screens/AddNote.tsx](src/screens/AddNote.tsx) | Объясняет, что конспект отправляют боту в чат |
 | CardIssue | [src/screens/CardIssue.tsx](src/screens/CardIssue.tsx) | Причина, почему карточка плохая: жалоба сохраняется, владелец может поправить или убрать карточку |
+| SetIssues | [src/screens/SetIssues.tsx](src/screens/SetIssues.tsx) | Жалобы на карточки набора для автора: исправить или отметить «Всё верно» |
 | CardEdit | [src/screens/CardEdit.tsx](src/screens/CardEdit.tsx) | Правка вопроса, ответа и неверных вариантов |
 
 ## Общее между экранами

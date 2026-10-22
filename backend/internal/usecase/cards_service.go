@@ -249,6 +249,49 @@ func (s *cardServiceImpl) ReportCardIssue(ctx context.Context, userID int64, car
 	return nil
 }
 
+// GetSetIssues lists the open complaints of the author's set; for anyone
+// else the set is not found.
+func (s *cardServiceImpl) GetSetIssues(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.SetIssue, error) {
+	pgSetID := pgtype.UUID{Bytes: setID, Valid: true}
+	isAuthor, err := s.querier.IsSetAuthor(ctx, db.IsSetAuthorParams{ID: pgSetID, AuthorID: userID})
+	if err != nil {
+		return nil, fmt.Errorf("check set author: %w", err)
+	}
+	if !isAuthor {
+		return nil, ErrNotFound
+	}
+	rows, err := s.querier.GetOpenCardIssuesBySet(ctx, db.GetOpenCardIssuesBySetParams{SetID: pgSetID, UserID: userID})
+	if err != nil {
+		return nil, fmt.Errorf("get open card issues: %w", err)
+	}
+	issues := make([]contracts.SetIssue, 0, len(rows))
+	for _, r := range rows {
+		issues = append(issues, contracts.SetIssue{
+			CardId:         uuid.UUID(r.CardID.Bytes),
+			Reason:         contracts.CardIssueReason(r.Reason),
+			Count:          int(r.Count),
+			LastReportedAt: r.LastReportedAt.Time,
+		})
+	}
+	return issues, nil
+}
+
+// ResolveCardIssues closes the open complaints of a card the author keeps
+// as it is. The complaints themselves stay.
+func (s *cardServiceImpl) ResolveCardIssues(ctx context.Context, userID int64, cardID uuid.UUID) error {
+	found, err := s.querier.ResolveCardIssues(ctx, db.ResolveCardIssuesParams{
+		CardID: pgtype.UUID{Bytes: cardID, Valid: true},
+		UserID: userID,
+	})
+	if err != nil {
+		return fmt.Errorf("resolve card issues: %w", err)
+	}
+	if !found {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error) {
 	var pgCardID pgtype.UUID
 	if err := pgCardID.Scan(cardID.String()); err != nil {

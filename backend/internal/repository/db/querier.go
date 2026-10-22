@@ -38,6 +38,9 @@ type Querier interface {
 	GetFactsBySetID(ctx context.Context, setID pgtype.UUID) ([]GetFactsBySetIDRow, error)
 	GetFeedCardsForUser(ctx context.Context, userID int64) ([]GetFeedCardsForUserRow, error)
 	GetNextReviewDateForUser(ctx context.Context, userID int64) (pgtype.Timestamptz, error)
+	// Open complaints of the author's set: made after the card's last edit and
+	// not dismissed. Complaints about deleted cards are not listed.
+	GetOpenCardIssuesBySet(ctx context.Context, arg GetOpenCardIssuesBySetParams) ([]GetOpenCardIssuesBySetRow, error)
 	GetSetByID(ctx context.Context, arg GetSetByIDParams) (GetSetByIDRow, error)
 	GetSetByShareCode(ctx context.Context, arg GetSetByShareCodeParams) (GetSetByShareCodeRow, error)
 	// Aggregate only existing progress before joining participants. Missing facts
@@ -57,6 +60,9 @@ type Querier interface {
 	LeaveSet(ctx context.Context, arg LeaveSetParams) (int64, error)
 	LockSetForAuthor(ctx context.Context, arg LockSetForAuthorParams) (pgtype.UUID, error)
 	RecordAnswerResult(ctx context.Context, arg RecordAnswerResultParams) (AnswerResult, error)
+	// Dismisses the open complaints of a card; false when the user is not the
+	// author of its set or the card is gone.
+	ResolveCardIssues(ctx context.Context, arg ResolveCardIssuesParams) (bool, error)
 	SaveTelegramProfile(ctx context.Context, arg SaveTelegramProfileParams) (User, error)
 	TelegramProfileInput(ctx context.Context, arg TelegramProfileInputParams) (User, error)
 	UpdateCard(ctx context.Context, arg UpdateCardParams) (Card, error)
