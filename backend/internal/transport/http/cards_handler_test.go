@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/google/uuid"
@@ -16,6 +17,14 @@ type mockCardService struct {
 	deleteCardFunc     func(ctx context.Context, userID int64, cardID uuid.UUID) error
 	answerQuestionFunc func(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error)
 	checkAnswerFunc    func(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error)
+	reportIssueFunc    func(ctx context.Context, userID int64, cardID uuid.UUID, reason contracts.CardIssueReason) error
+}
+
+func (m *mockCardService) ReportCardIssue(ctx context.Context, userID int64, cardID uuid.UUID, reason contracts.CardIssueReason) error {
+	if m.reportIssueFunc != nil {
+		return m.reportIssueFunc(ctx, userID, cardID, reason)
+	}
+	return nil
 }
 
 func (m *mockCardService) UpdateCard(ctx context.Context, userID int64, cardID uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error) {
@@ -776,6 +785,47 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 
 			if tt.checkResFunc != nil {
 				tt.checkResFunc(t, res)
+			}
+		})
+	}
+}
+
+func TestCardsHandler_ReportCardIssue(t *testing.T) {
+	cardID := uuid.New()
+	tests := []struct {
+		name    string
+		req     *contracts.ReportCardIssueRequest
+		err     error
+		want    any
+		reached bool
+	}{
+		{"saved", &contracts.ReportCardIssueRequest{Reason: contracts.CardIssueReasonNotInNotes}, nil, (*contracts.ReportCardIssueNoContent)(nil), true},
+		{"no body", nil, nil, (*contracts.ReportCardIssueBadRequest)(nil), false},
+		{"unknown reason", &contracts.ReportCardIssueRequest{Reason: "bad"}, nil, (*contracts.ReportCardIssueBadRequest)(nil), false},
+		{"card not visible", &contracts.ReportCardIssueRequest{Reason: contracts.CardIssueReasonAnswer}, usecase.ErrNotFound, (*contracts.ReportCardIssueNotFound)(nil), true},
+		{"database down", &contracts.ReportCardIssueRequest{Reason: contracts.CardIssueReasonAnswer}, errors.New("connection reset"), (*contracts.ReportCardIssueInternalServerError)(nil), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reached := false
+			h := NewCardsHandler(&mockCardService{
+				reportIssueFunc: func(_ context.Context, userID int64, id uuid.UUID, reason contracts.CardIssueReason) error {
+					reached = true
+					if userID != 12345 || id != cardID || reason != tt.req.Reason {
+						t.Fatalf("got user %d, card %s, reason %q", userID, id, reason)
+					}
+					return tt.err
+				},
+			})
+			res, err := h.ReportCardIssue(WithUserID(context.Background(), 12345), tt.req, contracts.ReportCardIssueParams{CardId: cardID})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if reflect.TypeOf(res) != reflect.TypeOf(tt.want) {
+				t.Errorf("res = %T, want %T", res, tt.want)
+			}
+			if reached != tt.reached {
+				t.Errorf("service reached = %v, want %v", reached, tt.reached)
 			}
 		})
 	}

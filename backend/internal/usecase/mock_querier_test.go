@@ -46,6 +46,14 @@ type mockQuerier struct {
 	getSetLeaderboardFunc          func(ctx context.Context, setID pgtype.UUID) ([]db.GetSetLeaderboardRow, error)
 	getUserSetRatingFunc           func(ctx context.Context, arg db.GetUserSetRatingParams) (db.GetUserSetRatingRow, error)
 	getUsersWithDueFactsFunc       func(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]int64, error)
+	createCardIssueFunc            func(ctx context.Context, arg db.CreateCardIssueParams) (int64, error)
+}
+
+func (m *mockQuerier) CreateCardIssue(ctx context.Context, arg db.CreateCardIssueParams) (int64, error) {
+	if m.createCardIssueFunc != nil {
+		return m.createCardIssueFunc(ctx, arg)
+	}
+	return 0, nil
 }
 
 func (m *mockQuerier) GetUsersWithDueFacts(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]int64, error) {

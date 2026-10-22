@@ -79,6 +79,21 @@ func (s CardAnswer) Validate() error {
 	}
 }
 
+func (s CardIssueReason) Validate() error {
+	switch s {
+	case "answer":
+		return nil
+	case "wording":
+		return nil
+	case "not-in-notes":
+		return nil
+	case "other":
+		return nil
+	default:
+		return errors.Errorf("invalid value: %v", s)
+	}
+}
+
 func (s CardKind) Validate() error {
 	switch s {
 	case "choice":
@@ -431,6 +446,29 @@ func (s ProfileResponsePlatform) Validate() error {
 	default:
 		return errors.Errorf("invalid value: %v", s)
 	}
+}
+
+func (s *ReportCardIssueRequest) Validate() error {
+	if s == nil {
+		return validate.ErrNilPointer
+	}
+
+	var failures []validate.FieldError
+	if err := func() error {
+		if err := s.Reason.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "reason",
+			Error: err,
+		})
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+	return nil
 }
 
 func (s SendResultsRequest) Validate() error {

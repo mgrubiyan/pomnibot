@@ -3,6 +3,7 @@ import ManualCreate from './screens/ManualCreate';
 import AddNote from './screens/AddNote';
 import CreateSet from './screens/CreateSet';
 import CardEdit from './screens/CardEdit';
+import CardIssue from './screens/CardIssue';
 import Feed from './screens/Feed';
 import Home from './screens/Home';
 import JoinSet from './screens/JoinSet';
@@ -12,7 +13,7 @@ import Share from './screens/Share';
 import Leaderboard from './screens/Leaderboard';
 import WhyItWorks from './screens/WhyItWorks';
 import { api } from './api';
-import type { AnswerResult, Card, TodayData, User } from './types';
+import type { AnswerResult, Card, CardIssueReason, TodayData, User } from './types';
 import type { CardPatch } from './utils/cards';
 
 /** No router yet: browser history is not used. */
@@ -34,6 +35,15 @@ type Screen =
     | { name: 'create-method' }
     | { name: 'manual'; setId?: string; setTitle?: string }
     | { name: 'join' }
+    | {
+          name: 'card-issue';
+          card: Card;
+          setTitle?: string;
+          isOwner: boolean;
+          feedSetId?: string;
+          feedIndex: number;
+          feedResults: AnswerResult[];
+      }
     | {
           name: 'card-edit';
           card: Card;
@@ -179,6 +189,38 @@ function App() {
         }
     };
 
+    // Throws when the complaint was not saved, so the screen can say so
+    // instead of losing it.
+    const reportCardIssue = async (cardId: string, reason: CardIssueReason) => {
+        const { error } = await api.POST('/cards/{cardId}/issue', {
+            params: { path: { cardId } },
+            body: { reason },
+        });
+        if (error) {
+            throw new Error(error.message);
+        }
+    };
+
+    const openCardIssue = async (
+        card: Card,
+        feedSetId: string | undefined,
+        feedIndex: number,
+        feedResults: AnswerResult[],
+    ) => {
+        let isOwner = false;
+        let setTitle: string | undefined;
+        try {
+            const { data } = await api.GET('/sets/{setId}', {
+                params: { path: { setId: card.setId } },
+            });
+            setTitle = data?.title;
+            isOwner = !!data && !!currentUser && data.author.id === currentUser.id;
+        } catch {
+            // Without the set the reader can still report the card.
+        }
+        go({ name: 'card-issue', card, setTitle, isOwner, feedSetId, feedIndex, feedResults });
+    };
+
     const home = (
         <Home
             onStart={() => go({ name: 'feed' })}
@@ -207,6 +249,51 @@ function App() {
 
     if (screen.name === 'join') {
         return <JoinSet onBack={goHome} onOpenSet={openSet} />;
+    }
+
+    if (screen.name === 'card-issue') {
+        const { card, setTitle, isOwner, feedSetId, feedIndex, feedResults } = screen;
+        const feedTitle = feedSetId ? setTitle : undefined;
+        const backToFeed = () =>
+            go({
+                name: 'feed',
+                setId: feedSetId,
+                setTitle: feedTitle,
+                initialIndex: feedIndex,
+                initialResults: feedResults,
+            });
+        return (
+            <CardIssue
+                card={card}
+                setTitle={setTitle ?? 'Набор'}
+                isOwner={isOwner}
+                onBack={backToFeed}
+                onEdit={async (reason) => {
+                    await reportCardIssue(card.id, reason);
+                    go({
+                        name: 'card-edit',
+                        card,
+                        setTitle,
+                        isOwner: true,
+                        fromFeed: true,
+                        feedSetId,
+                        feedIndex,
+                        feedResults,
+                    });
+                }}
+                onRemove={async (reason) => {
+                    await reportCardIssue(card.id, reason);
+                    await removeCard(card.id, card.setId, true, feedSetId, feedTitle, feedIndex, feedResults);
+                }}
+                onReport={async (reason) => {
+                    await reportCardIssue(card.id, reason);
+                    setRemovedCardIds((current) =>
+                        current.includes(card.id) ? current : [...current, card.id],
+                    );
+                    backToFeed();
+                }}
+            />
+        );
     }
 
     if (screen.name === 'card-edit') {
@@ -292,6 +379,7 @@ function App() {
                 cardPatches={cardPatches}
                 onExit={setId ? () => openSet(setId) : goHome}
                 onBack={setId ? () => openSet(setId) : goHome}
+                onReportCard={(card, index, results) => openCardIssue(card, setId, index, results)}
                 onShare={setId ? () => go({ name: 'share', setId }) : undefined}
             />
         );

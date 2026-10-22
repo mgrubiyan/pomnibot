@@ -232,6 +232,23 @@ func (s *cardServiceImpl) DeleteCard(ctx context.Context, userID int64, cardID u
 	return nil
 }
 
+// ReportCardIssue saves a complaint about a card the user can see, together
+// with a copy of the card, so it outlives edits and deletion.
+func (s *cardServiceImpl) ReportCardIssue(ctx context.Context, userID int64, cardID uuid.UUID, reason contracts.CardIssueReason) error {
+	rows, err := s.querier.CreateCardIssue(ctx, db.CreateCardIssueParams{
+		UserID: userID,
+		Reason: db.CardIssueReason(reason),
+		CardID: pgtype.UUID{Bytes: cardID, Valid: true},
+	})
+	if err != nil {
+		return fmt.Errorf("create card issue: %w", err)
+	}
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error) {
 	var pgCardID pgtype.UUID
 	if err := pgCardID.Scan(cardID.String()); err != nil {

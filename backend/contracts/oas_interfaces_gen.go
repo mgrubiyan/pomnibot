@@ -69,6 +69,10 @@ type PutProfileRes interface {
 	putProfileRes()
 }
 
+type ReportCardIssueRes interface {
+	reportCardIssueRes()
+}
+
 type SendResultsRes interface {
 	sendResultsRes()
 }

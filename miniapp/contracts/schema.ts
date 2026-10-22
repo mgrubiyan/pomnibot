@@ -266,6 +266,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/cards/{cardId}/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report what is wrong with a card
+         * @description Saves the complaint with a copy of the card as it was reported, so it outlives later edits and the card's deletion.
+         */
+        post: operations["ReportCardIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -350,6 +370,14 @@ export interface components {
             sourceRef?: string;
             /** @description topic, used for stats */
             topic?: string;
+        };
+        /**
+         * @description What is wrong with a card, in the reader's opinion.
+         * @enum {string}
+         */
+        CardIssueReason: "answer" | "wording" | "not-in-notes" | "other";
+        ReportCardIssueRequest: {
+            reason: components["schemas"]["CardIssueReason"];
         };
         User: {
             /** Format: int64 */
@@ -976,6 +1004,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CheckAnswerResponse"];
                 };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    ReportCardIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ID of the card */
+                cardId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportCardIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description Card issue reported successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];

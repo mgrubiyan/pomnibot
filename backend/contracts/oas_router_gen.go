@@ -20,10 +20,13 @@ var (
 	rn5AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
+	rn19AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
+	}
 	rn13AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
 	}
-	rn19AllowedHeaders = map[string]string{
+	rn20AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
 	rn10AllowedHeaders = map[string]string{
@@ -205,6 +208,33 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							return
 						}
 
+					case 'i': // Prefix: "issue"
+
+						if l := len("issue"); len(elem) >= l && elem[0:l] == "issue" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch r.Method {
+							case "POST":
+								s.handleReportCardIssueRequest([1]string{
+									args[0],
+								}, elemIsEscaped, w, r)
+							default:
+								s.notAllowed(w, r, notAllowedParams{
+									allowedMethods: "POST",
+									allowedHeaders: rn19AllowedHeaders,
+									acceptPost:     "application/json",
+									acceptPatch:    "",
+								})
+							}
+
+							return
+						}
+
 					}
 
 				}
@@ -302,7 +332,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					default:
 						s.notAllowed(w, r, notAllowedParams{
 							allowedMethods: "POST",
-							allowedHeaders: rn19AllowedHeaders,
+							allowedHeaders: rn20AllowedHeaders,
 							acceptPost:     "application/json",
 							acceptPatch:    "",
 						})
@@ -743,6 +773,31 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								r.operationID = "CheckAnswer"
 								r.operationGroup = ""
 								r.pathPattern = "/cards/{cardId}/check"
+								r.args = args
+								r.count = 1
+								return r, true
+							default:
+								return
+							}
+						}
+
+					case 'i': // Prefix: "issue"
+
+						if l := len("issue"); len(elem) >= l && elem[0:l] == "issue" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch method {
+							case "POST":
+								r.name = ReportCardIssueOperation
+								r.summary = "Report what is wrong with a card"
+								r.operationID = "ReportCardIssue"
+								r.operationGroup = ""
+								r.pathPattern = "/cards/{cardId}/issue"
 								r.args = args
 								r.count = 1
 								return r, true

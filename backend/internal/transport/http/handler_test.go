@@ -205,6 +205,16 @@ func TestAPIHandler_CardsDelegation(t *testing.T) {
 			t.Fatalf("expected *contracts.AnswerQuestionResponse, got %T", res)
 		}
 	})
+
+	t.Run("ReportCardIssue delegates to cardsHandler", func(t *testing.T) {
+		res, err := h.ReportCardIssue(ctx, &contracts.ReportCardIssueRequest{Reason: contracts.CardIssueReasonOther}, contracts.ReportCardIssueParams{CardId: cardID})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if _, ok := res.(*contracts.ReportCardIssueNoContent); !ok {
+			t.Fatalf("expected *contracts.ReportCardIssueNoContent, got %T", res)
+		}
+	})
 }
 
 func TestAPIHandler_HomescreenDelegation(t *testing.T) {

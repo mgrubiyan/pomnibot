@@ -357,6 +357,63 @@ func NewTableLayoutCardAnswer(v TableLayout) CardAnswer {
 	return s
 }
 
+// What is wrong with a card, in the reader's opinion.
+// Ref: #/components/schemas/CardIssueReason
+type CardIssueReason string
+
+const (
+	CardIssueReasonAnswer     CardIssueReason = "answer"
+	CardIssueReasonWording    CardIssueReason = "wording"
+	CardIssueReasonNotInNotes CardIssueReason = "not-in-notes"
+	CardIssueReasonOther      CardIssueReason = "other"
+)
+
+// AllValues returns all CardIssueReason values.
+func (CardIssueReason) AllValues() []CardIssueReason {
+	return []CardIssueReason{
+		CardIssueReasonAnswer,
+		CardIssueReasonWording,
+		CardIssueReasonNotInNotes,
+		CardIssueReasonOther,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s CardIssueReason) MarshalText() ([]byte, error) {
+	switch s {
+	case CardIssueReasonAnswer:
+		return []byte(s), nil
+	case CardIssueReasonWording:
+		return []byte(s), nil
+	case CardIssueReasonNotInNotes:
+		return []byte(s), nil
+	case CardIssueReasonOther:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *CardIssueReason) UnmarshalText(data []byte) error {
+	switch CardIssueReason(data) {
+	case CardIssueReasonAnswer:
+		*s = CardIssueReasonAnswer
+		return nil
+	case CardIssueReasonWording:
+		*s = CardIssueReasonWording
+		return nil
+	case CardIssueReasonNotInNotes:
+		*s = CardIssueReasonNotInNotes
+		return nil
+	case CardIssueReasonOther:
+		*s = CardIssueReasonOther
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
 // Ref: #/components/schemas/CardKind
 type CardKind string
 
@@ -1464,6 +1521,42 @@ func (*PutProfileForbidden) putProfileRes() {}
 type PutProfileInternalServerError ErrorResponse
 
 func (*PutProfileInternalServerError) putProfileRes() {}
+
+type ReportCardIssueBadRequest ErrorResponse
+
+func (*ReportCardIssueBadRequest) reportCardIssueRes() {}
+
+type ReportCardIssueForbidden ErrorResponse
+
+func (*ReportCardIssueForbidden) reportCardIssueRes() {}
+
+type ReportCardIssueInternalServerError ErrorResponse
+
+func (*ReportCardIssueInternalServerError) reportCardIssueRes() {}
+
+// ReportCardIssueNoContent is response for ReportCardIssue operation.
+type ReportCardIssueNoContent struct{}
+
+func (*ReportCardIssueNoContent) reportCardIssueRes() {}
+
+type ReportCardIssueNotFound ErrorResponse
+
+func (*ReportCardIssueNotFound) reportCardIssueRes() {}
+
+// Ref: #/components/schemas/ReportCardIssueRequest
+type ReportCardIssueRequest struct {
+	Reason CardIssueReason `json:"reason"`
+}
+
+// GetReason returns the value of Reason.
+func (s *ReportCardIssueRequest) GetReason() CardIssueReason {
+	return s.Reason
+}
+
+// SetReason sets the value of Reason.
+func (s *ReportCardIssueRequest) SetReason(val CardIssueReason) {
+	s.Reason = val
+}
 
 type SendResultsBadRequest ErrorResponse
 

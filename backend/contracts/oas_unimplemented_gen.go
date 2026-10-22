@@ -168,6 +168,16 @@ func (UnimplementedHandler) PutProfile(ctx context.Context, req *ProfileRequest)
 	return r, ht.ErrNotImplemented
 }
 
+// ReportCardIssue implements ReportCardIssue operation.
+//
+// Saves the complaint with a copy of the card as it was reported, so it outlives later edits and the
+// card's deletion.
+//
+// POST /cards/{cardId}/issue
+func (UnimplementedHandler) ReportCardIssue(ctx context.Context, req *ReportCardIssueRequest, params ReportCardIssueParams) (r ReportCardIssueRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // SendResults implements SendResults operation.
 //
 // Send set/feed results.

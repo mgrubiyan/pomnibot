@@ -53,6 +53,21 @@ func (h *CardsHandler) DeleteCard(ctx context.Context, params contracts.DeleteCa
 	return &contracts.DeleteCardNoContent{}, nil
 }
 
+// ReportCardIssue implements contracts.Handler.ReportCardIssue.
+func (h *CardsHandler) ReportCardIssue(ctx context.Context, req *contracts.ReportCardIssueRequest, params contracts.ReportCardIssueParams) (contracts.ReportCardIssueRes, error) {
+	if req == nil || req.Reason.Validate() != nil {
+		return &contracts.ReportCardIssueBadRequest{Message: "reason is required"}, nil
+	}
+	userID, _ := UserIDFromContext(ctx)
+	if err := h.cardService.ReportCardIssue(ctx, userID, params.CardId, req.Reason); err != nil {
+		if errors.Is(err, usecase.ErrNotFound) {
+			return &contracts.ReportCardIssueNotFound{Message: err.Error()}, nil
+		}
+		return &contracts.ReportCardIssueInternalServerError{Message: internalError(ctx, "ReportCardIssue", err)}, nil
+	}
+	return &contracts.ReportCardIssueNoContent{}, nil
+}
+
 // AnswerQuestion implements contracts.Handler.AnswerQuestion.
 func (h *CardsHandler) AnswerQuestion(ctx context.Context, req *contracts.AnswerQuestionRequest, params contracts.AnswerQuestionParams) (contracts.AnswerQuestionRes, error) {
 	if req == nil || strings.TrimSpace(req.Answer) == "" {

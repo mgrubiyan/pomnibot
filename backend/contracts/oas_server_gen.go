@@ -112,6 +112,13 @@ type Handler interface {
 	//
 	// PUT /profile
 	PutProfile(ctx context.Context, req *ProfileRequest) (PutProfileRes, error)
+	// ReportCardIssue implements ReportCardIssue operation.
+	//
+	// Saves the complaint with a copy of the card as it was reported, so it outlives later edits and the
+	// card's deletion.
+	//
+	// POST /cards/{cardId}/issue
+	ReportCardIssue(ctx context.Context, req *ReportCardIssueRequest, params ReportCardIssueParams) (ReportCardIssueRes, error)
 	// SendResults implements SendResults operation.
 	//
 	// Send set/feed results.
