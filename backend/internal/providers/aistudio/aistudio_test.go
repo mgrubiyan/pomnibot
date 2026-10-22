@@ -287,7 +287,7 @@ func TestConfigFromEnv(t *testing.T) {
 		t.Fatalf("ConfigFromEnv() error = %v", err)
 	}
 	if cfg.Model != "qwen3.6-35b-a3b" || cfg.BaseURL != DefaultBaseURL || cfg.MaxTokens != 8000 {
-		t.Errorf("config = %+v, want Qwen, the default URL and 8000 tokens: a fragment's cards take that", cfg)
+		t.Errorf("config = %+v, want Qwen, the default URL and 8000 tokens", cfg)
 	}
 
 	t.Setenv("YC_LLM_MODEL", "gemma-3-27b-it")

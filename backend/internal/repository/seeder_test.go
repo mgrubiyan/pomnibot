@@ -253,7 +253,7 @@ func (q *testQuerier) SaveProcessingReport(_ context.Context, arg db.SaveProcess
 }
 func TestSaveGeneratedSetPreservesPrivateSourceArtifact(t *testing.T) {
 	q := newTestQuerier()
-	result := generator.Result{Artifact: &generator.Artifact{Version: generator.PipelineVersion, Files: []ingest.File{{Name: "private.txt", Data: []byte("source")}}}, Cards: []cards.Card{{FactID: "f", Evidence: []material.Evidence{{BlockID: "p1-b1", Kind: "text", Quote: "source"}}}}}
+	result := generator.Result{Artifact: &generator.Artifact{Version: generator.PipelineVersion, Files: []ingest.File{{Name: "private.txt", Data: []byte("source")}}}, Cards: []cards.Card{{FactID: "f", Evidence: []material.Evidence{{BlockID: "p1-b1", Quote: "source"}}}}}
 	_, _, err := repository.SaveGeneratedSet(context.Background(), q, 42, "notes", result)
 	if err != nil {
 		t.Fatal(err)

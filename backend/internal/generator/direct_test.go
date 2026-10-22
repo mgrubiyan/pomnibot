@@ -71,7 +71,7 @@ func TestDirectTransportErrorKeepsUsageAndTiming(t *testing.T) {
 		return providers.Response{Usage: providers.Usage{PromptTokens: 10, CostUSD: .001}}, errors.New("outage")
 	})
 	r, err := NewGenerator(p, Options{}).Generate(context.Background(), Document{Structure: &d})
-	if err == nil || r.Stats.PromptTokens != 10 || r.Stats.CostUSD != .001 || r.Stats.Total <= 0 || r.Stats.ChunksFailed != 1 {
+	if err == nil || r.Stats.PromptTokens != 10 || r.Stats.CostUSD != .001 || r.Stats.Total <= 0 || r.Stats.FailedCalls != 1 {
 		t.Fatalf("%+v %v", r, err)
 	}
 }

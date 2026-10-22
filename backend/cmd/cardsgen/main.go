@@ -1,30 +1,4 @@
-// Command cardsgen runs card generation on notes against a live model and
-// prints the cards, the stats and the timings. It is for measuring quality
-// and latency on real notes before there is storage.
-//
-// It takes text files, PDFs and photos of pages, told apart by content.
-// Several files are pages of one set of notes, in the order given. PDFs need
-// pdftotext and pdftoppm (poppler-utils). Photos and scanned pages are read
-// by GigaChat and checked by Yandex Vision OCR (YC_API_KEY, and YC_FOLDER_ID
-// unless the key is a service account's), which also turns them upright;
-// -ocr yandex reads them with Yandex alone.
-//
-// -provider yandexgpt or qwen writes the cards with a Yandex AI Studio model
-// instead, to compare it with GigaChat on the same notes (YC_API_KEY,
-// YC_FOLDER_ID, YC_YANDEXGPT_MODEL for YandexGPT, YC_LLM_MODEL for the app's
-// model, Qwen by default). -vision-provider qwen reads the photos with the
-// app's model instead of GigaChat, still checked by Yandex OCR.
-//
-//	task cardsgen -- notes.txt
-//	task cardsgen -- -provider openrouter -limit 30 -json lecture.pdf page2.pdf > run.json
-//	task cardsgen -- -provider yandexgpt -ocr yandex lecture.pdf
-//	task cardsgen -- -extract -vision-provider qwen page1.jpg page2.jpg
-//
-// -provider openrouter uses OPENROUTER_KEY and defaults to Haiku 5.5 with
-// thinking disabled. It also reads full PDF pages through OpenRouter.
-//
-// Credentials come from OPENROUTER_*, GIGACHAT_* and YC_* variables: task passes the ones
-// from .env in the repository root.
+// Command cardsgen generates cards from files using a live model.
 package main
 
 import (
@@ -75,7 +49,7 @@ func run() error {
 		extractOnly  = flag.Bool("extract", false, "only extract the text of the notes and print it, no cards")
 		asJSON       = flag.Bool("json", false, "print the result as JSON to stdout")
 		budgetUSD    = flag.Float64("budget-usd", .15, "document USD cap with conservative in-flight reservations; unknown-price fallback is blocked")
-		maxCalls     = flag.Int("max-calls", 96, "total provider attempts for reading, generation and review")
+		maxCalls     = flag.Int("max-calls", 96, "total provider attempts for reading and generation")
 		readingCache = flag.String("reading-cache", "", "private persistent reading snapshot; independent of generator version")
 		verbose      = flag.Bool("v", false, "debug logs")
 	)
@@ -427,29 +401,7 @@ func formatCards(facts []cards.Fact, list []cards.Card) string {
 			fmt.Fprintf(&w, "   Цитата: «%s»\n", c.SourceQuote)
 		}
 		fmt.Fprintf(&w, "  [%s] %s\n", c.Kind, c.Question)
-		if len(c.Options) > 0 {
-			opts := make([]string, len(c.Options))
-			for j, o := range c.Options {
-				opts[j] = o
-				if o == c.Answer {
-					opts[j] += " ✓"
-				}
-			}
-			fmt.Fprintf(&w, "     Варианты: %s\n", strings.Join(opts, " | "))
-		}
-		if c.Table != nil {
-			for _, col := range c.Table.Columns {
-				var terms []string
-				for _, item := range c.Table.Items {
-					if item.Column == col {
-						terms = append(terms, item.Text)
-					}
-				}
-				fmt.Fprintf(&w, "     %s: %s\n", col, strings.Join(terms, ", "))
-			}
-		} else {
-			fmt.Fprintf(&w, "     О: %s\n", c.Answer)
-		}
+		fmt.Fprintf(&w, "     О: %s\n", c.Answer)
 		fmt.Fprintf(&w, "     Объяснение: %s\n", c.Explanation)
 	}
 	return w.String()

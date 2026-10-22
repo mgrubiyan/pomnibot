@@ -54,3 +54,10 @@ func TestBudgetFailureDoesNotInviteRepeatingTheSamePaidDocument(t *testing.T) {
 		t.Fatalf("budget cause concealed: %q", got)
 	}
 }
+
+func TestRefusalFailureAsksForOtherNotes(t *testing.T) {
+	got := FailureText(fmt.Errorf("generate cards: %w", providers.ErrRefused))
+	if got != TextOtherText {
+		t.Fatalf("refusal cause concealed: %q", got)
+	}
+}

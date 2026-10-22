@@ -33,7 +33,7 @@ import (
 const (
 	DefaultModel     = "qwen3.6-35b-a3b"
 	DefaultBaseURL   = "https://ai.api.cloud.yandex.net"
-	DefaultMaxTokens = 8000 // a fragment's cards take up to this
+	DefaultMaxTokens = 8000
 )
 
 const (

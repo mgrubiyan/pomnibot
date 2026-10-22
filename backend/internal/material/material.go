@@ -4,7 +4,6 @@ package material
 import (
 	"crypto/sha256"
 	"fmt"
-	"strings"
 )
 
 // Version invalidates stored processing artifacts when reading semantics change.
@@ -50,16 +49,10 @@ type Block struct {
 	Issues       []string   `json:"issues,omitempty"`
 }
 
-// Evidence spans remain separate, even when a claim needs distant pages.
-// Row and Column are zero-based; cell coordinates apply to kind=cell.
+// Evidence cites one continuous quotation from a source block.
 type Evidence struct {
-	BlockID     string  `json:"blockId"`
-	Kind        string  `json:"kind"`
-	Quote       string  `json:"quote"`
-	Row         int     `json:"row"`
-	Column      int     `json:"column"`
-	Region      *Region `json:"region,omitempty"`
-	Observation string  `json:"observation,omitempty"` // image claim, never a quotation
+	BlockID string `json:"blockId"`
+	Quote   string `json:"quote"`
 }
 
 // Digest identifies content without exposing it.
@@ -73,52 +66,6 @@ func (d Document) Block(id string) (Block, bool) {
 		}
 	}
 	return Block{}, false
-}
-
-// ValidEvidence checks a text, table-cell or image-region anchor.
-func (d Document) ValidEvidence(e Evidence) bool {
-	if e.Kind != "" && e.Kind != "text" && e.Kind != "cell" && e.Kind != "image" {
-		return false
-	}
-	b, ok := d.Block(e.BlockID)
-	if !ok {
-		return false
-	}
-	if e.Kind == "image" {
-		if e.Quote != "" || e.Observation == "" || e.Region == nil || !ValidRegion(e.Region) {
-			return false
-		}
-		if b.Region != nil && (e.Region[0] < b.Region[0] || e.Region[1] < b.Region[1] || e.Region[2] > b.Region[2] || e.Region[3] > b.Region[3]) {
-			return false
-		}
-		for _, p := range d.Pages {
-			if p.Number == b.Page && len(p.Image) > 0 {
-				return true
-			}
-		}
-		return false
-	}
-	if strings.TrimSpace(e.Quote) == "" {
-		return false
-	}
-	if e.Kind == "cell" || len(b.Cells) > 0 && b.Text == "" {
-		return e.Row >= 0 && e.Row < len(b.Cells) && e.Column >= 0 && e.Column < len(b.Cells[e.Row]) && strings.Contains(b.Cells[e.Row][e.Column], e.Quote)
-	}
-	// Visual descriptions require subsequent image review; they are never quotes.
-
-	return strings.Contains(b.Text, e.Quote)
-}
-
-// Content includes explicit table coordinates without flattening column relations.
-func (b Block) Content() string {
-	var s strings.Builder
-	s.WriteString(b.Text)
-	for r, row := range b.Cells {
-		for c, v := range row {
-			fmt.Fprintf(&s, "\ncell[%d,%d]=%s", r, c, v)
-		}
-	}
-	return s.String()
 }
 
 // ValidRegion checks normalized image coordinates.

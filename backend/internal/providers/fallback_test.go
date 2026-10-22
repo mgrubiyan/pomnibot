@@ -273,7 +273,7 @@ func TestFallbackBackendTimeoutCountsAsUnavailable(t *testing.T) {
 }
 
 // When every backend fails, the caller sees each error: a refusal anywhere
-// still reads as ErrRefused, so the generator skips just that fragment.
+// still reads as ErrRefused.
 func TestFallbackReturnsEveryErrorWhenAllFail(t *testing.T) {
 	primary, secondary := fails(errDown), fails(errRefused)
 	f, _ := newTestFallback(Backend{Name: "gigachat", Provider: primary}, Backend{Name: "yandexgpt", Provider: secondary})

@@ -11,8 +11,6 @@ import (
 )
 
 // ErrRefused is returned when the model's content filter blocked the answer.
-// Retrying the same text does not help, and the rest of a document may still
-// pass, so the caller skips this part and goes on.
 var ErrRefused = errors.New("refused by the content filter")
 
 // Request is one model call. Schema is a JSON Schema the answer must follow;

@@ -12,7 +12,7 @@ import (
 // Document is the input: plain text of the notes and their title.
 //
 // ID identifies the stored document, such as its set id. Fact ids are
-// derived from it and the quote: the same notes uploaded twice must not share
+// derived from it and the question: the same notes uploaded twice must not share
 // fact ids, which the storage keeps unique across all sets. Without an ID
 // every Generate call picks a random one.
 //
@@ -35,17 +35,14 @@ type Artifact struct {
 }
 
 // Result includes cards, available source coverage and processing metrics.
-// Plan and Reviews are retained only for decoding historical private reports.
 type Result struct {
 	Budget providers.BudgetSnapshot `json:"budget"`
 
-	Artifact *Artifact      `json:"artifact,omitempty"`
-	Facts    []cards.Fact   `json:"facts"`
-	Cards    []cards.Card   `json:"cards"`
-	Stats    Stats          `json:"stats"`
-	Plan     Plan           `json:"plan,omitempty"`
-	Coverage Coverage       `json:"coverage"`
-	Reviews  []ReviewRecord `json:"reviews,omitempty"`
+	Artifact *Artifact    `json:"artifact,omitempty"`
+	Facts    []cards.Fact `json:"facts"`
+	Cards    []cards.Card `json:"cards"`
+	Stats    Stats        `json:"stats"`
+	Coverage Coverage     `json:"coverage"`
 }
 
 // Batch is what OnBatch receives: cards now final and the facts first met
@@ -56,58 +53,34 @@ type Batch struct {
 	Cards []cards.Card
 }
 
-// Stats describes one Generate run. Every dropped card and every chunk that
-// did not reach the model is counted. Historical fields are retained for saved
-// reports; zero counters do not establish semantic correctness.
-type Stats struct {
-	CacheHits       int                      `json:"cacheHits"`
-	CostUSD         float64                  `json:"costUsd"` // provider-reported charges only
-	StageTimes      map[string]time.Duration `json:"stageTimes,omitempty"`
-	ReviewRejected  int                      `json:"reviewRejected"`
-	ReviewFailures  int                      `json:"reviewFailures"`
-	CoverageRetries int                      `json:"coverageRetries"`
-	Chunks          int                      `json:"chunks"`         // fragments after splitting
-	ChunksFiltered  int                      `json:"chunksFiltered"` // junk, never sent to the model
-	FilteredBy      map[string]int           `json:"filteredBy"`     // junk reason → fragments
-	ChunksSkipped   int                      `json:"chunksSkipped"`  // not sent: MaxFactsPerDoc already used up
-	ChunksFailed    int                      `json:"chunksFailed"`   // provider error after its retries and fallback
-	ChunksInvalid   int                      `json:"chunksInvalid"`  // no valid JSON after the retry, fragment skipped
-	ChunksRefused   int                      `json:"chunksRefused"`  // the content filter of every model blocked it
+// Coverage records source blocks without surviving citations and validation issues.
+type Coverage struct {
+	Issues     []string `json:"issues,omitempty"`
+	Unassigned []string `json:"unassigned,omitempty"`
+}
 
-	ModelCalls       int            `json:"modelCalls"`       // including retries
-	InvalidResponses int            `json:"invalidResponses"` // responses that failed JSON/schema parsing
-	CallsByModel     map[string]int `json:"callsByModel"`     // model reported by the provider → calls
+// Stats describes one Generate run.
+type Stats struct {
+	CacheHits        int            `json:"cacheHits"`
+	CostUSD          float64        `json:"costUsd"`
+	ModelCalls       int            `json:"modelCalls"`
+	FailedCalls      int            `json:"failedCalls"`
+	InvalidResponses int            `json:"invalidResponses"`
+	CallsByModel     map[string]int `json:"callsByModel"`
 	PromptTokens     int            `json:"promptTokens"`
 	CompletionTokens int            `json:"completionTokens"`
 	ReasoningTokens  *int           `json:"reasoningTokens,omitempty"`
+	Facts            int            `json:"facts"`
 
-	FactsFromModel int `json:"factsFromModel"` // facts in parsed responses
-	Facts          int `json:"facts"`          // distinct facts among the cards returned
+	// CardsFromModel = DroppedInvalid + DroppedQuote + DroppedDuplicate + DroppedByLimit + Cards.
+	CardsFromModel   int `json:"cardsFromModel"`
+	DroppedInvalid   int `json:"droppedInvalid"`
+	DroppedQuote     int `json:"droppedQuote"`
+	DroppedDuplicate int `json:"droppedDuplicate"`
+	DroppedByLimit   int `json:"droppedByLimit"`
+	Cards            int `json:"cards"`
 
-	// Card counts. CardsFromModel = every Dropped* + Cards.
-	CardsFromModel          int `json:"cardsFromModel"`     // cards in parsed responses
-	DroppedInvalid          int `json:"droppedInvalid"`     // card breaks the schema: empty field, unknown kind
-	DroppedQuote            int `json:"droppedQuote"`       // its fact's quote not found in the fragment
-	DroppedPersonal         int `json:"droppedPersonal"`    // its fact's quote holds a password, a phone number or the like
-	DroppedUnsupported      int `json:"droppedUnsupported"` // choice or input answer not in the quote, or given in the question; a flip answer its question names; a flip answer or a true claim the quote does not back
-	DroppedTable            int `json:"droppedTable"`       // table whose terms the quote does not put in their columns
-	DroppedExample          int `json:"droppedExample"`     // asks about names an example invents: «От какого класса наследуется класс B?»
-	DroppedDuplicate        int `json:"droppedDuplicate"`   // same fact or same question as earlier
-	DroppedByLimit          int `json:"droppedByLimit"`     // its fact is over MaxFactsPerDoc
-	DroppedVariants         int `json:"droppedVariants"`    // could not keep its kind, other cards cover the fact
-	DowngradedToFlip        int `json:"downgradedToFlip"`   // choice without enough distractors, the fact's only card
-	DroppedDistractors      int `json:"droppedDistractors"` // wrong options the quote or the question names: likely right too
-	ExplanatoryChoiceToFlip int `json:"explanatoryChoiceToFlip"`
-	InputToFlip             int `json:"inputToFlip"` // input with an answer too long to type, the fact's only card
-	Cards                   int `json:"cards"`       // cards returned
-
-	// TrimmedExplanations lost a lead-in naming the notes or sentences
-	// about the notes or from outside them; the cards stay.
-	TrimmedExplanations int `json:"trimmedExplanations"`
-
-	ChunkTimeAvg   time.Duration `json:"chunkTimeAvg"` // model time per fragment, retries included
-	ChunkTimeMax   time.Duration `json:"chunkTimeMax"`
-	FirstCardAfter time.Duration `json:"firstCardAfter"` // from Generate start to the first OnBatch batch
+	FirstCardAfter time.Duration `json:"firstCardAfter"`
 	Total          time.Duration `json:"total"`
 }
 

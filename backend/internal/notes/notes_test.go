@@ -14,7 +14,9 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
+	"github.com/mgrubiyan/pomnibot/backend/internal/material"
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
 type fakeExtractor struct {
@@ -149,9 +151,8 @@ func TestMake_Failures(t *testing.T) {
 		{name: "unknown extract error", extractor: &fakeExtractor{err: errors.New("boom")}, want: TextTryLater},
 		{name: "no text", extractor: &fakeExtractor{result: ingest.Result{Text: " \n ", Warnings: []string{}}}, want: TextNoText},
 		{name: "model fails", gen: failing(errors.New("503"), generator.Stats{}), want: TextTryLater},
-		{name: "only junk", gen: failing(nil, generator.Stats{Chunks: 2, ChunksFiltered: 2}), want: TextOnlyJunk},
-		{name: "refused", gen: failing(nil, generator.Stats{Chunks: 3, ChunksFiltered: 1, ChunksRefused: 2}), want: TextOtherText},
-		{name: "no card kept", gen: failing(nil, generator.Stats{Chunks: 2, CardsFromModel: 6, DroppedQuote: 6}), want: TextNoCards},
+		{name: "refused", gen: failing(providers.ErrRefused, generator.Stats{}), want: TextOtherText},
+		{name: "no card kept", gen: failing(nil, generator.Stats{CardsFromModel: 6, DroppedQuote: 6}), want: TextNoCards},
 		{name: "saving fails", saveErr: errors.New("db down"), want: TextTryLater},
 	}
 	for _, tt := range tests {
@@ -316,27 +317,13 @@ func TestMakeWarnsWhenSourceBlocksRemainUnassigned(t *testing.T) {
 		r.Coverage.Unassigned = []string{"b"}
 		return r, nil
 	}}
-	m := New(&fakeExtractor{}, gen, &fakeSaver{}, 1)
+	extractor := &fakeExtractor{result: ingest.Result{Text: "Митоз.", Document: material.Document{Blocks: []material.Block{{ID: "b", Text: "Митоз."}}}}}
+	m := New(extractor, gen, &fakeSaver{}, 1)
 	res, err := m.Make(context.Background(), Request{UserID: 1, Files: file("lecture.pdf")}, Progress{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(res.Warnings) == 0 || !strings.Contains(res.Warnings[0], "Набор частичный") {
 		t.Fatalf("hidden partial result: %+v", res)
-	}
-}
-
-func TestMakeWarnsAboutSourceExcludedForInsufficientEvidence(t *testing.T) {
-	gen := &fakeGenerator{generate: func(context.Context, generator.Document, func(generator.Batch)) (generator.Result, error) {
-		r := oneCard("")
-		r.Plan.Excluded = []generator.Exclusion{{BlockID: "diagram", Kind: "insufficient", Reason: "A cropped condition"}}
-		return r, nil
-	}}
-	res, err := New(&fakeExtractor{}, gen, &fakeSaver{}, 1).Make(context.Background(), Request{UserID: 1, Files: file("lecture.pdf")}, Progress{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(res.Warnings) == 0 || !strings.Contains(res.Warnings[0], "Набор частичный") {
-		t.Fatal("insufficient source hidden")
 	}
 }

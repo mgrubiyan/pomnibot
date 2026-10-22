@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-// ErrBudget stops new paid attempts without invalidating already reviewed cards.
+// ErrBudget stops new paid attempts without invalidating already validated cards.
 var ErrBudget = errors.New("document provider budget exhausted")
 
 // BudgetLimits are shared by reading, generation, retries and fallback requests.

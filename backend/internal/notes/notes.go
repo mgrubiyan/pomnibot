@@ -154,14 +154,8 @@ var (
 	ErrNoFiles = errors.New("no files to read")
 	ErrGaveUp  = errors.New("gave up waiting for a turn")
 	ErrNoText  = errors.New("no text in the files")
+	ErrNoCards = errors.New("no cards made from the document")
 )
-
-// NoCardsError is returned when the document gave no cards; Stats tell why.
-type NoCardsError struct {
-	Stats generator.Stats
-}
-
-func (e *NoCardsError) Error() string { return "no cards made from the document" }
 
 // extractError is a failure to read the files, with their number: the
 // message names the file at fault only when there are several.
@@ -238,7 +232,7 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 	}
 	if len(genResult.Cards) == 0 {
 		log.Warn("no cards generated from document", "stats", genResult.Stats)
-		return Result{}, &NoCardsError{Stats: genResult.Stats}
+		return Result{}, ErrNoCards
 	}
 
 	if isGenericTitle(title) {
@@ -253,22 +247,10 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 		return Result{}, fmt.Errorf("save set: %w", err)
 	}
 	var warnings []string
-	insufficient := 0
-	for _, e := range genResult.Plan.Excluded {
-		if e.Kind == "insufficient" {
-			insufficient++
-		}
-	}
-	if doc.Structure != nil && len(genResult.Plan.Topics) == 0 {
+	if len(genResult.Coverage.Unassigned) > 0 {
+		warnings = append(warnings, fmt.Sprintf("Набор частичный: без цитат в карточках осталось блоков — %d. Сверь темы карточек с конспектом.", len(genResult.Coverage.Unassigned)))
+	} else if doc.Structure != nil {
 		warnings = append(warnings, "Полнота набора не проверена. Сверь темы карточек с конспектом.")
-	} else if len(genResult.Coverage.Missing) > 0 || len(genResult.Coverage.Unassigned) > 0 || insufficient > 0 {
-		warnings = append(warnings, fmt.Sprintf("Набор частичный: не покрыто учебных целей — %d, не учтено блоков — %d, недостаточно оснований — %d блоков. Подробности сохранены в отчёте обработки.", len(genResult.Coverage.Missing), len(genResult.Coverage.Unassigned), insufficient))
-	}
-	for _, issue := range genResult.Coverage.Issues {
-		if strings.Contains(issue, providers.ErrBudget.Error()) {
-			warnings = append(warnings, "Достигнут бюджет обработки; сохранены уже проверенные карточки.")
-			break
-		}
 	}
 	warnings = append(warnings, extracted.Warnings...)
 	return Result{Set: set, Warnings: warnings}, nil
