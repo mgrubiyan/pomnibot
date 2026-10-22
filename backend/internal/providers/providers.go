@@ -42,6 +42,7 @@ type Image struct {
 type Usage struct {
 	PromptTokens     int
 	CompletionTokens int
+	ReasoningTokens  *int    // part of CompletionTokens; nil means unreported, not zero
 	CostUSD          float64 // billed cost when reported by the provider; zero otherwise
 }
 

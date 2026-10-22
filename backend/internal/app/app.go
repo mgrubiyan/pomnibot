@@ -83,11 +83,11 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 		if err != nil {
 			return fmt.Errorf("initialize OCR: %w", err)
 		}
-		extractor, err := ingest.NewExtractor(&ingest.VisionOCR{Model: llm.vision, Checker: ocr, FullPage: true, Concurrency: llm.tasks}, ingest.Options{AssessPDF: true})
+		extractor, err := ingest.NewExtractor(&ingest.VisionOCR{Model: llm.vision, Checker: ocr, FullPage: true, Concurrency: llm.tasks, CallTimeout: generator.DefaultCallTimeout}, ingest.Options{AssessPDF: true})
 		if err != nil {
 			return fmt.Errorf("initialize extractor: %w", err)
 		}
-		cardGenerator := generator.NewGenerator(llm.text, generator.Options{Concurrency: llm.tasks, SourceBudget: llm.sourceBytes})
+		cardGenerator := generator.NewGenerator(llm.text, generator.Options{SourceBudget: llm.sourceBytes})
 		limits := providers.DefaultDocumentLimits()
 		if cfg.LLM.Primary == config.PrimaryOpenRouter {
 			limits.USD = .15
@@ -144,7 +144,7 @@ func newModels(cfg config.Config) (models, error) {
 		modelIDs = append(modelIDs, cfg.AIStudio.Model, cfg.AIStudio.BaseURL, cfg.AIStudio.MaxTokens)
 	}
 	if cfg.OpenRouter != nil {
-		modelIDs = append(modelIDs, cfg.OpenRouter.Model, cfg.OpenRouter.BaseURL, cfg.OpenRouter.MaxTokens)
+		modelIDs = append(modelIDs, cfg.OpenRouter.Model, cfg.OpenRouter.BaseURL, cfg.OpenRouter.MaxTokens, cfg.OpenRouter.Effort)
 	}
 	readingIdentity := processingcache.Key(modelIDs, ingest.ProcessingIdentity())
 	identity := processingcache.Key(modelIDs, generator.PipelineVersion)

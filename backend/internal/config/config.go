@@ -167,11 +167,15 @@ func llmFromEnv(withAIStudio, withOpenRouter bool) (LLMConfig, error) {
 	default:
 		errs = append(errs, fmt.Errorf("LLM_PRIMARY = %q, want openrouter, aistudio or gigachat", primary))
 	}
+	primaryTimeout := "1m"
+	if cfg.Primary == PrimaryOpenRouter {
+		primaryTimeout = "5m"
+	}
 	for _, d := range []struct {
 		name, fallback string
 		dst            *time.Duration
 	}{
-		{"LLM_PRIMARY_TIMEOUT", "1m", &cfg.PrimaryTimeout},
+		{"LLM_PRIMARY_TIMEOUT", primaryTimeout, &cfg.PrimaryTimeout},
 		{"LLM_COOLDOWN", "10m", &cfg.Cooldown},
 	} {
 		v, err := time.ParseDuration(value(d.name, d.fallback))

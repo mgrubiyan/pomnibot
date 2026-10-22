@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"os"
 	"sync"
 	"testing"
 
@@ -267,4 +268,40 @@ func TestSaveGeneratedSetPreservesPrivateSourceArtifact(t *testing.T) {
 	if string(restored.Artifact.Files[0].Data) != "source" || restored.Cards[0].Evidence[0].Quote != "source" {
 		t.Fatal("lost evidence or original")
 	}
+}
+
+// Offline verification of an actual generation artifact; never contacts a model.
+func TestSaveRecordedGeneration(t *testing.T) {
+	path := os.Getenv("POMNIBOT_SAVED_GENERATION")
+	if path == "" {
+		t.Skip("private saved generation required")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var r generator.Result
+	if err = json.Unmarshal(data, &r); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Cards) == 0 || len(r.Facts) == 0 {
+		t.Fatal("empty recording")
+	}
+	r.Artifact = &generator.Artifact{Version: generator.PipelineVersion}
+	q := newTestQuerier()
+	_, count, err := repository.SaveGeneratedSet(context.Background(), q, 42, "Recorded lecture", r)
+	if err != nil || count != len(r.Cards) || len(q.createdFacts) != len(r.Facts) || len(q.initProgressCalls) != 1 || len(q.reports) != 1 {
+		t.Fatalf("save lost cards, facts, progress or private report: count=%d err=%v", count, err)
+	}
+	for i, c := range r.Cards {
+		got := q.createdCards[i]
+		if got.Question != c.Question || got.AnswerText.String != c.Answer || got.SourceQuote != c.SourceQuote || got.SourceRef.String != c.SourceRef || got.Kind != string(c.Kind) {
+			t.Fatalf("card %d changed in storage adapter", i+1)
+		}
+	}
+	var restored generator.Result
+	if err = json.Unmarshal(q.reports[0].Report, &restored); err != nil || len(restored.Cards) != len(r.Cards) || restored.Budget != r.Budget {
+		t.Fatalf("private report round trip failed: %v", err)
+	}
+	t.Logf("saved %d recorded cards, %d facts and bulk progress initialization through repository adapter; database is mocked", count, len(r.Facts))
 }

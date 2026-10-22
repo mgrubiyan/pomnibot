@@ -20,14 +20,11 @@ import (
 // ingest.PageInfo.Start gives them: cards then cite pages. Without them, as
 // for plain text, cards cite the title only.
 type Document struct {
-	Images         []providers.Image
-	Structure      *material.Document
-	EvidenceSource *material.Document // source anchors for an individual topic task
-	Context        string             // topic, objectives, uncertainty and review feedback
-	Text           string
-	Title          string
-	ID             string
-	PageStarts     []int
+	Structure  *material.Document
+	Text       string
+	Title      string
+	ID         string
+	PageStarts []int
 }
 
 // Artifact retains private originals and the source representation for auditing.
@@ -37,7 +34,8 @@ type Artifact struct {
 	Files   []ingest.File     `json:"files"` // private originals for reproducible region references
 }
 
-// Result includes reviewed cards, the thematic plan, coverage and processing metrics.
+// Result includes cards, available source coverage and processing metrics.
+// Plan and Reviews are retained only for decoding historical private reports.
 type Result struct {
 	Budget providers.BudgetSnapshot `json:"budget"`
 
@@ -59,8 +57,8 @@ type Batch struct {
 }
 
 // Stats describes one Generate run. Every dropped card and every chunk that
-// did not reach the model is counted with its reason: these numbers are how we
-// show that the "no made-up facts" filter actually works.
+// did not reach the model is counted. Historical fields are retained for saved
+// reports; zero counters do not establish semantic correctness.
 type Stats struct {
 	CacheHits       int                      `json:"cacheHits"`
 	CostUSD         float64                  `json:"costUsd"` // provider-reported charges only
@@ -81,6 +79,7 @@ type Stats struct {
 	CallsByModel     map[string]int `json:"callsByModel"`     // model reported by the provider → calls
 	PromptTokens     int            `json:"promptTokens"`
 	CompletionTokens int            `json:"completionTokens"`
+	ReasoningTokens  *int           `json:"reasoningTokens,omitempty"`
 
 	FactsFromModel int `json:"factsFromModel"` // facts in parsed responses
 	Facts          int `json:"facts"`          // distinct facts among the cards returned
@@ -112,78 +111,25 @@ type Stats struct {
 	Total          time.Duration `json:"total"`
 }
 
-// Defaults for Options.
-const (
-	// DefaultConcurrency is 1 because the GigaChat freemium plan allows exactly
-	// one concurrent request; a second one gets 429.
-	DefaultConcurrency      = 1
-	DefaultChunkSize        = 2500
-	DefaultChunkOverlap     = 150
-	DefaultMaxFactsPerChunk = 5
-	DefaultCallTimeout      = 2 * time.Minute
-)
+// DefaultCallTimeout includes the primary and two fallback providers. The
+// fallback divides this deadline between them, leaving five minutes for thinking.
+const DefaultCallTimeout = 15 * time.Minute
 
-// Options configure a Generator. Zero values mean defaults.
+// Options contains only settings used by the single generation request.
 type Options struct {
-	Budget providers.BudgetLimits // document limits; shared context ledger takes precedence
-
-	MaxRepairTime      time.Duration // time allocated to targeted repairs; default 4 minutes
-	MaxCoverageRepairs int           // total repair generations per document; default 12, negative disables
-	PlanningBudget     int           // target UTF-8 bytes per planning batch, default 12000; whole blocks retained
-	SourceBudget       int           // maximum UTF-8 bytes per source/planning request, default 24000
-	ReviewBatch        int           // maximum cards reviewed per call, default 8
-	Concurrency        int           // parallel model calls, default 1
-	ChunkSize          int           // fragment size in characters, default 2500
-	ChunkOverlap       int           // characters shared with the previous fragment, default 150, negative for none
-	MaxFactsPerChunk   int           // facts per fragment, default 5; each fact gets up to 4 cards
-	MaxFactsPerDoc     int           // 0 means no limit
-	CallTimeout        time.Duration // per model call, retries of the provider included
-	// OnBatch receives cards as soon as they are final, with their new facts,
-	// so a long document shows progress in minutes rather than all at once at
-	// the end. It is called from a single goroutine, outside locks, only with
-	// non-empty batches; a panic in it is logged and does not stop generation.
-	OnBatch func(Batch)
+	Budget         providers.BudgetLimits
+	SourceBudget   int // complete source bytes; zero defaults to 80000
+	MaxFactsPerDoc int // zero means unlimited
+	CallTimeout    time.Duration
+	OnBatch        func(Batch)
 }
 
 func (o Options) withDefaults() Options {
 	if o.Budget == (providers.BudgetLimits{}) {
 		o.Budget = providers.DefaultDocumentLimits()
 	}
-	if o.MaxCoverageRepairs == 0 {
-		o.MaxCoverageRepairs = 12
-	}
-	if o.MaxRepairTime <= 0 {
-		o.MaxRepairTime = 4 * time.Minute
-	}
-	if o.PlanningBudget <= 0 {
-		o.PlanningBudget = 12000
-	}
 	if o.SourceBudget <= 0 {
-		o.SourceBudget = 24000
-	}
-	if o.ReviewBatch <= 0 {
-		o.ReviewBatch = 8
-	}
-	if o.Concurrency <= 0 {
-		o.Concurrency = DefaultConcurrency
-	}
-	if o.ChunkSize <= 0 {
-		o.ChunkSize = DefaultChunkSize
-	}
-	switch {
-	case o.ChunkOverlap == 0:
-		o.ChunkOverlap = DefaultChunkOverlap
-	case o.ChunkOverlap < 0:
-		o.ChunkOverlap = 0
-	}
-	// Overlap is context, not content: a large one means paying for the
-	// same text twice.
-	o.ChunkOverlap = min(o.ChunkOverlap, o.ChunkSize/4)
-	if o.MaxFactsPerChunk <= 0 {
-		o.MaxFactsPerChunk = DefaultMaxFactsPerChunk
-	}
-	if o.MaxFactsPerDoc < 0 {
-		o.MaxFactsPerDoc = 0
+		o.SourceBudget = 80000
 	}
 	if o.CallTimeout <= 0 {
 		o.CallTimeout = DefaultCallTimeout

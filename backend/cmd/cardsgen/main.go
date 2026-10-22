@@ -16,7 +16,7 @@
 // app's model instead of GigaChat, still checked by Yandex OCR.
 //
 //	task cardsgen -- notes.txt
-//	task cardsgen -- -model GigaChat-2-Max -chunk 2000 -limit 30 -json lecture.pdf page2.pdf > run.json
+//	task cardsgen -- -provider openrouter -limit 30 -json lecture.pdf page2.pdf > run.json
 //	task cardsgen -- -provider yandexgpt -ocr yandex lecture.pdf
 //	task cardsgen -- -extract -vision-provider qwen page1.jpg page2.jpg
 //
@@ -66,11 +66,8 @@ func run() error {
 		title        = flag.String("title", "", "document title for sourceRef (default: first file name)")
 		provider     = flag.String("provider", defaultProvider(), "who writes the cards: openrouter, gigachat, yandexgpt or qwen")
 		model        = flag.String("model", "", "override the selected provider's model")
-		chunk        = flag.Int("chunk", generator.DefaultChunkSize, "fragment size in characters")
-		overlap      = flag.Int("overlap", generator.DefaultChunkOverlap, "fragment overlap in characters, -1 for none")
 		limit        = flag.Int("limit", 0, "max facts per document, 0 for no limit")
-		perChunk     = flag.Int("per-chunk", generator.DefaultMaxFactsPerChunk, "max facts per fragment, each with up to 4 cards")
-		concurrency  = flag.Int("concurrency", 0, "parallel topic tasks; 0 chooses provider defaults")
+		concurrency  = flag.Int("concurrency", 0, "parallel page reading calls; generation always uses one request")
 		timeout      = flag.Duration("call-timeout", generator.DefaultCallTimeout, "timeout per model call")
 		ocrMode      = flag.String("ocr", "vision", "how photos and scans are read: vision (GigaChat, checked by Yandex OCR) or yandex (Yandex OCR alone)")
 		visionBy     = flag.String("vision-provider", "", "who reads pages: openrouter, gigachat or qwen; defaults to openrouter with -provider openrouter, otherwise gigachat")
@@ -80,8 +77,6 @@ func run() error {
 		budgetUSD    = flag.Float64("budget-usd", .15, "document USD cap with conservative in-flight reservations; unknown-price fallback is blocked")
 		maxCalls     = flag.Int("max-calls", 96, "total provider attempts for reading, generation and review")
 		readingCache = flag.String("reading-cache", "", "private persistent reading snapshot; independent of generator version")
-		repairs      = flag.Int("coverage-repairs", 3, "maximum targeted generations per document; -1 disables")
-		legacy       = flag.Bool("legacy", false, "use the original text/chunk pipeline for comparison")
 		verbose      = flag.Bool("v", false, "debug logs")
 	)
 	flag.Parse()
@@ -216,7 +211,7 @@ func run() error {
 	profile := modelProfile(*provider)
 	readerProfile := modelProfile(*visionBy)
 	if *concurrency <= 0 {
-		*concurrency = profile.Tasks
+		*concurrency = readerProfile.Tasks
 	}
 	// CLI reading and writing are sequential phases; task limits remain separate.
 	if writer != nil {
@@ -232,7 +227,7 @@ func run() error {
 	readingHit := false
 	cacheKey := ""
 	if *readingCache != "" {
-		readerIdentity := []any{*ocrMode, *ocrModel, *legacy, os.Getenv("YC_OCR_BASE_URL"), os.Getenv("YC_FOLDER_ID"), os.Getenv("YC_API_KEY") != ""}
+		readerIdentity := []any{*ocrMode, *ocrModel, false, os.Getenv("YC_OCR_BASE_URL"), os.Getenv("YC_FOLDER_ID"), os.Getenv("YC_API_KEY") != ""}
 		if *ocrMode == "vision" {
 			readerIdentity = append(readerIdentity, readerEnvironment(*visionBy))
 		}
@@ -249,7 +244,7 @@ func run() error {
 	}
 	if !readingHit {
 		var readErr error
-		notes, readErr = extract(ctx, paths, *ocrModel, vision, !*legacy, *ocrMode == "local", readerProfile.Tasks, *timeout)
+		notes, readErr = extract(ctx, paths, *ocrModel, vision, *ocrMode == "local", *concurrency, *timeout)
 		if readErr != nil {
 			return readErr
 		}
@@ -281,13 +276,9 @@ func run() error {
 	firstVerified := 0.0
 	delivered := 0
 	gen := generator.NewGenerator(writer, generator.Options{
-		Concurrency:        *concurrency,
-		MaxCoverageRepairs: *repairs,
-		ChunkSize:          *chunk,
-		ChunkOverlap:       *overlap,
-		MaxFactsPerChunk:   *perChunk,
-		MaxFactsPerDoc:     *limit,
-		CallTimeout:        *timeout,
+		SourceBudget:   profile.SourceBytes,
+		MaxFactsPerDoc: *limit,
+		CallTimeout:    *timeout,
 		OnBatch: func(b generator.Batch) {
 			if firstVerified == 0 {
 				firstVerified = time.Since(started).Seconds()
@@ -304,7 +295,7 @@ func run() error {
 
 	fmt.Fprintf(os.Stderr, "%s: %d символов, модель %s\n", strings.Join(paths, ", "), len([]rune(notes.Text)), modelName)
 	doc := generator.Document{Text: notes.Text, Title: *title}
-	if !*legacy {
+	if len(notes.Document.Blocks) > 0 {
 		doc.Structure = &notes.Document
 	}
 	for _, p := range notes.Pages {
@@ -353,7 +344,7 @@ func run() error {
 
 // extract reads the files and pulls the text out of them. pdftotext is
 // required only when one of them is a PDF.
-func extract(ctx context.Context, paths []string, ocrModel string, vision providers.Provider, structured, local bool, concurrency int, callTimeout time.Duration) (ingest.Result, error) {
+func extract(ctx context.Context, paths []string, ocrModel string, vision providers.Provider, local bool, concurrency int, callTimeout time.Duration) (ingest.Result, error) {
 	files := make([]ingest.File, 0, len(paths))
 	hasPDF := false
 	for _, path := range paths {
@@ -379,7 +370,7 @@ func extract(ctx context.Context, paths []string, ocrModel string, vision provid
 			checker = client
 		}
 		if vision != nil {
-			ocr = &ingest.VisionOCR{Model: vision, Checker: checker, FullPage: structured, Concurrency: concurrency, CallTimeout: callTimeout}
+			ocr = &ingest.VisionOCR{Model: vision, Checker: checker, FullPage: true, Concurrency: concurrency, CallTimeout: callTimeout}
 		} else {
 			if err != nil {
 				return ingest.Result{}, err
@@ -387,7 +378,7 @@ func extract(ctx context.Context, paths []string, ocrModel string, vision provid
 			ocr = checker
 		}
 	}
-	ext, err := ingest.NewExtractor(ocr, ingest.Options{DisablePDF: !hasPDF, OCRModel: ocrModel, AssessPDF: structured})
+	ext, err := ingest.NewExtractor(ocr, ingest.Options{DisablePDF: !hasPDF, OCRModel: ocrModel, AssessPDF: true})
 	if err != nil {
 		return ingest.Result{}, err
 	}
@@ -475,31 +466,15 @@ func formatStats(s generator.Stats) string {
 	sec := func(d time.Duration) string { return fmt.Sprintf("%.1fs", d.Seconds()) }
 
 	fmt.Fprintln(&w, "\n== Статистика")
-	fmt.Fprintf(&w, "Фрагментов:            %d\n", s.Chunks)
-	fmt.Fprintf(&w, "  отсеяно фильтром:    %d %s\n", s.ChunksFiltered, formatCounts(s.FilteredBy))
-	fmt.Fprintf(&w, "  пропущено по лимиту: %d\n", s.ChunksSkipped)
-	fmt.Fprintf(&w, "  ошибка провайдера:   %d\n", s.ChunksFailed)
-	fmt.Fprintf(&w, "  без валидного JSON:  %d\n", s.ChunksInvalid)
-	fmt.Fprintf(&w, "  отказ цензора:       %d\n", s.ChunksRefused)
 	fmt.Fprintf(&w, "Вызовов модели:        %d (невалидных ответов %d) %s\n", s.ModelCalls, s.InvalidResponses, formatCounts(s.CallsByModel))
 	fmt.Fprintf(&w, "Токены:                prompt %d, completion %d\n", s.PromptTokens, s.CompletionTokens)
-	fmt.Fprintf(&w, "Фактов:                %d от модели, %d в итоге\n", s.FactsFromModel, s.Facts)
+	fmt.Fprintf(&w, "Стоимость по API:      $%.7f\n", s.CostUSD)
 	fmt.Fprintf(&w, "Карточек от модели:    %d\n", s.CardsFromModel)
-	fmt.Fprintf(&w, "  цитата не найдена:   %d (%s)\n", s.DroppedQuote, pct(s.DroppedQuote))
-	fmt.Fprintf(&w, "  ответ не из цитаты или есть в вопросе: %d (%s)\n", s.DroppedUnsupported, pct(s.DroppedUnsupported))
-	fmt.Fprintf(&w, "  таблица не по цитате: %d (%s)\n", s.DroppedTable, pct(s.DroppedTable))
-	fmt.Fprintf(&w, "  о деталях примера:   %d (%s)\n", s.DroppedExample, pct(s.DroppedExample))
-	fmt.Fprintf(&w, "  дубликаты:           %d (%s)\n", s.DroppedDuplicate, pct(s.DroppedDuplicate))
-	fmt.Fprintf(&w, "  не по схеме:         %d (%s)\n", s.DroppedInvalid, pct(s.DroppedInvalid))
-	fmt.Fprintf(&w, "  сверх лимита:        %d (%s)\n", s.DroppedByLimit, pct(s.DroppedByLimit))
-	fmt.Fprintf(&w, "  вариант не удержал вид: %d (%s; факт покрыт другими)\n", s.DroppedVariants, pct(s.DroppedVariants))
-	fmt.Fprintf(&w, "  choice → flip:       %d (мало дистракторов)\n", s.DowngradedToFlip)
-	fmt.Fprintf(&w, "Отброшено вариантов:   %d (есть в цитате или вопросе)\n", s.DroppedDistractors)
-	fmt.Fprintf(&w, "  input → flip:        %d (длинный ответ)\n", s.InputToFlip)
-	fmt.Fprintf(&w, "Объяснений урезано:   %d (о конспекте или не из него)\n", s.TrimmedExplanations)
-	fmt.Fprintf(&w, "Личные данные:        %d карточек отброшено\n", s.DroppedPersonal)
+	fmt.Fprintf(&w, "Цитата не найдена:     %d (%s)\n", s.DroppedQuote, pct(s.DroppedQuote))
+	fmt.Fprintf(&w, "Неверная структура:    %d\n", s.DroppedInvalid)
+	fmt.Fprintf(&w, "Точные повторы:        %d\n", s.DroppedDuplicate)
+	fmt.Fprintf(&w, "Сверх лимита:          %d\n", s.DroppedByLimit)
 	fmt.Fprintf(&w, "Итого карточек:        %d\n", s.Cards)
-	fmt.Fprintf(&w, "Время на фрагмент:     среднее %s, максимум %s\n", sec(s.ChunkTimeAvg), sec(s.ChunkTimeMax))
 	fmt.Fprintf(&w, "Первая карточка через: %s\n", sec(s.FirstCardAfter))
 	fmt.Fprintf(&w, "Всего:                 %s\n", sec(s.Total))
 	return w.String()

@@ -259,7 +259,9 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 			insufficient++
 		}
 	}
-	if len(genResult.Coverage.Missing) > 0 || len(genResult.Coverage.Unassigned) > 0 || insufficient > 0 {
+	if doc.Structure != nil && len(genResult.Plan.Topics) == 0 {
+		warnings = append(warnings, "Полнота набора не проверена. Сверь темы карточек с конспектом.")
+	} else if len(genResult.Coverage.Missing) > 0 || len(genResult.Coverage.Unassigned) > 0 || insufficient > 0 {
 		warnings = append(warnings, fmt.Sprintf("Набор частичный: не покрыто учебных целей — %d, не учтено блоков — %d, недостаточно оснований — %d блоков. Подробности сохранены в отчёте обработки.", len(genResult.Coverage.Missing), len(genResult.Coverage.Unassigned), insufficient))
 	}
 	for _, issue := range genResult.Coverage.Issues {

@@ -61,7 +61,7 @@ func setProdEnv(t *testing.T) {
 	for key, value := range values {
 		t.Setenv(key, value)
 	}
-	for _, key := range []string{"OPENROUTER_KEY", "OPENROUTER_MODEL", "OPENROUTER_BASE_URL", "OPENROUTER_MAX_TOKENS", "YC_LLM_MODEL", "YC_LLM_BASE_URL", "YC_LLM_MAX_TOKENS", "LLM_PRIMARY", "LLM_PRIMARY_TIMEOUT", "LLM_COOLDOWN"} {
+	for _, key := range []string{"OPENROUTER_KEY", "OPENROUTER_MODEL", "OPENROUTER_BASE_URL", "OPENROUTER_MAX_TOKENS", "OPENROUTER_EFFORT", "YC_LLM_MODEL", "YC_LLM_BASE_URL", "YC_LLM_MAX_TOKENS", "LLM_PRIMARY", "LLM_PRIMARY_TIMEOUT", "LLM_COOLDOWN"} {
 		t.Setenv(key, "")
 	}
 }
@@ -75,6 +75,9 @@ func TestLoadOpenRouter(t *testing.T) {
 	}
 	if cfg.OpenRouter == nil || cfg.OpenRouter.APIKey != "router-key" || cfg.OpenRouter.Model != "anthropic/claude-haiku-5.5" || cfg.LLM.Primary != PrimaryOpenRouter {
 		t.Fatalf("OpenRouter not selected: primary=%s", cfg.LLM.Primary)
+	}
+	if cfg.LLM.PrimaryTimeout != 5*time.Minute {
+		t.Fatal("thinking primary would be interrupted before the measured 166-second response")
 	}
 	t.Setenv("LLM_PRIMARY", "gigachat")
 	cfg, err = Load()

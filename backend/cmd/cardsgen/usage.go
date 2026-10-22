@@ -22,6 +22,7 @@ type modelUsage struct {
 	Calls            int     `json:"calls"`
 	PromptTokens     int     `json:"promptTokens"`
 	CompletionTokens int     `json:"completionTokens"`
+	ReasoningTokens  *int    `json:"reasoningTokens,omitempty"`
 	CostUSD          float64 `json:"costUsd"` // reported cost only; legacy providers do not report it
 }
 
@@ -49,6 +50,12 @@ func (p trackedProvider) Complete(ctx context.Context, req providers.Request) (p
 	u.Calls++
 	u.PromptTokens += res.Usage.PromptTokens
 	u.CompletionTokens += res.Usage.CompletionTokens
+	if res.Usage.ReasoningTokens != nil {
+		if u.ReasoningTokens == nil {
+			u.ReasoningTokens = new(int)
+		}
+		*u.ReasoningTokens += *res.Usage.ReasoningTokens
+	}
 	u.CostUSD += res.Usage.CostUSD
 	p.usage.models[res.Model] = u
 	return res, nil

@@ -16,6 +16,7 @@ import (
 // are not explained; the student cannot fix them.
 const (
 	TextBudgetExceeded = "😕 Достигнут лимит обработки этого документа. Проверенных карточек пока нет. Пришли меньший фрагмент."
+	TextSourceLimit    = "😕 Не получилось обработать документ целиком. Пришли отдельную главу или меньший фрагмент."
 	TextTryLater       = "😕 Не получилось сделать карточки. Пришли конспект ещё раз через пару минут."
 	TextResend         = "😕 Не получилось получить файл. Пришли его ещё раз."
 	TextNoText         = "😕 Не нашёл в файле текста. Если это фото, сними страницу целиком, при хорошем свете и без размытия."
@@ -40,6 +41,8 @@ func FailureText(err error) string {
 		return ""
 	case errors.Is(err, providers.ErrBudget):
 		return TextBudgetExceeded
+	case errors.Is(err, providers.ErrCapability):
+		return TextSourceLimit
 	case errors.Is(err, ErrNoFiles):
 		return TextResend
 	case errors.Is(err, ErrNoText):

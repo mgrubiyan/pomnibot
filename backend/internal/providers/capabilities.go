@@ -32,5 +32,5 @@ func QwenProfile() Profile {
 
 // OpenRouterProfile keeps parallel topic work independent of GigaChat.
 func OpenRouterProfile() Profile {
-	return Profile{Requests: 5, Tasks: 3, SourceBytes: 24000, Capabilities: Capabilities{Images: true, Structured: true, MaxInputBytes: 160000}}
+	return Profile{Requests: 5, Tasks: 3, SourceBytes: 80000, Capabilities: Capabilities{Images: true, Structured: true, MaxInputBytes: 160000}}
 }

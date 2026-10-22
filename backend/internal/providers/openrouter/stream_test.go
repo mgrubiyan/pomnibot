@@ -31,7 +31,7 @@ func TestCompleteStreamsContentAndUsageWithoutWaitingForEOF(t *testing.T) {
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	budget := providers.NewBudget(providers.BudgetLimits{Calls: 1, USD: .02})
+	budget := providers.NewBudget(providers.BudgetLimits{Calls: 1, USD: .06})
 	res, err := c.Complete(providers.WithBudget(ctx, budget), providers.Request{User: "private document"})
 	if err != nil || string(res.Content) != "Привет" || res.Model != "actual/model" || !res.Truncated || res.Usage.CompletionTokens != 20 {
 		t.Fatalf("response=%+v error=%v", res, err)
@@ -53,7 +53,7 @@ func TestIncompleteStreamsNeverReturnPartialCards(t *testing.T) {
 				w.Header().Set("Content-Type", "text/event-stream")
 				_, _ = io.WriteString(w, tc.stream)
 			})
-			budget := providers.NewBudget(providers.BudgetLimits{Calls: 1, USD: .02})
+			budget := providers.NewBudget(providers.BudgetLimits{Calls: 1, USD: .06})
 			res, err := c.Complete(providers.WithBudget(context.Background(), budget), providers.Request{})
 			if err == nil || len(res.Content) != 0 || strings.Contains(err.Error(), "private") {
 				t.Fatalf("partial response accepted or leaked: %+v %v", res, err)
@@ -73,7 +73,7 @@ func TestStreamingProviderErrorRetriesAndDoesNotLeakContent(t *testing.T) {
 		_, _ = io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"private partial\"}}]}\n\n"+
 			"data: {\"error\":{\"code\":\"server_error\",\"message\":\"private provider error\"},\"choices\":[{\"delta\":{},\"finish_reason\":\"error\"}],\"usage\":{\"cost\":0.001}}\n\n")
 	})
-	budget := providers.NewBudget(providers.BudgetLimits{Calls: 3, USD: .02})
+	budget := providers.NewBudget(providers.BudgetLimits{Calls: 3, USD: .06})
 	res, err := c.Complete(providers.WithBudget(context.Background(), budget), providers.Request{})
 	if err == nil || !errors.Is(err, providers.ErrUnavailable) || calls != 3 || len(res.Content) != 0 || strings.Contains(err.Error(), "private") {
 		t.Fatalf("response=%+v calls=%d error=%v", res, calls, err)
@@ -99,7 +99,7 @@ func TestStreamingUsageWithoutCostRetainsTokensAndReservation(t *testing.T) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\ndata: {\"choices\":[],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":20}}\n\ndata: [DONE]\n\n")
 	})
-	b := providers.NewBudget(providers.BudgetLimits{Calls: 1, USD: .02})
+	b := providers.NewBudget(providers.BudgetLimits{Calls: 1, USD: .06})
 	res, err := c.Complete(providers.WithBudget(context.Background(), b), providers.Request{})
 	if err != nil || res.Usage.PromptTokens != 10 || res.Usage.CompletionTokens != 20 {
 		t.Fatalf("usage lost: %+v %v", res, err)

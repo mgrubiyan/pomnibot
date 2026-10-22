@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -202,7 +203,7 @@ func TestRetryRecoversAndCancellationStopsWait(t *testing.T) {
 }
 
 func TestConfigFromEnv(t *testing.T) {
-	for _, key := range []string{"OPENROUTER_KEY", "OPENROUTER_MODEL", "OPENROUTER_BASE_URL", "OPENROUTER_MAX_TOKENS"} {
+	for _, key := range []string{"OPENROUTER_KEY", "OPENROUTER_MODEL", "OPENROUTER_BASE_URL", "OPENROUTER_MAX_TOKENS", "OPENROUTER_EFFORT"} {
 		t.Setenv(key, "")
 	}
 	if _, err := ConfigFromEnv(); err == nil || !strings.Contains(err.Error(), "OPENROUTER_KEY") {
@@ -210,7 +211,7 @@ func TestConfigFromEnv(t *testing.T) {
 	}
 	t.Setenv("OPENROUTER_KEY", " secret ")
 	cfg, err := ConfigFromEnv()
-	if err != nil || cfg.APIKey != "secret" || cfg.Model != DefaultModel || cfg.BaseURL != DefaultBaseURL || cfg.MaxTokens != DefaultMaxTokens {
+	if err != nil || cfg.APIKey != "secret" || cfg.Model != DefaultModel || cfg.BaseURL != DefaultBaseURL || cfg.MaxTokens != 50000 || cfg.Effort != "high" {
 		t.Fatalf("cfg=%+v err=%v", cfg, err)
 	}
 	for _, tc := range []struct{ key, value string }{{"OPENROUTER_BASE_URL", "bad"}, {"OPENROUTER_BASE_URL", "ftp://host"}, {"OPENROUTER_MAX_TOKENS", "0"}, {"OPENROUTER_MAX_TOKENS", "many"}} {
@@ -267,7 +268,7 @@ func TestBudgetRetainsReservationWhenUsageCostIsMissing(t *testing.T) {
 	c := clientFor(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprint(w, `{"choices":[{"message":{"content":"{}"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":10}}`)
 	})
-	b := providers.NewBudget(providers.BudgetLimits{Calls: 2, USD: .02})
+	b := providers.NewBudget(providers.BudgetLimits{Calls: 2, USD: .06})
 	_, err := c.Complete(providers.WithBudget(context.Background(), b), providers.Request{User: "test"})
 	if err != nil {
 		t.Fatal(err)
@@ -285,5 +286,75 @@ func TestOversizedInputDoesNotClaimDocumentBudgetExhaustion(t *testing.T) {
 	_, err := c.Complete(providers.WithBudget(context.Background(), budget), providers.Request{User: strings.Repeat("x", 100001)})
 	if err == nil || errors.Is(err, providers.ErrBudget) || calls != 0 || budget.Snapshot().Calls != 0 {
 		t.Fatalf("context cap mistaken for exhausted money: err=%v calls=%d budget=%+v", err, calls, budget.Snapshot())
+	}
+}
+
+func TestGenerationPriceCeilingMatchesConservativeReservation(t *testing.T) {
+	c := clientFor(t, func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Provider struct {
+				MaxPrice map[string]float64 `json:"max_price"`
+			} `json:"provider"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Provider.MaxPrice["prompt"] != .1 || body.Provider.MaxPrice["completion"] != .5 {
+			t.Fatalf("wrong enforced price ceiling: %+v", body.Provider.MaxPrice)
+		}
+		_, _ = fmt.Fprint(w, `{"choices":[{"message":{"content":"{}"},"finish_reason":"stop"}],"usage":{"cost":0.001}}`)
+	})
+	req := providers.Request{User: "whole source"}
+	want := float64(c.inputBound(req))*.1/1e6 + 8000*.5/1e6
+	if math.Abs(c.costBound(req)-want) > 1e-12 {
+		t.Fatalf("reservation does not cover enforced prices: got=%g want=%g", c.costBound(req), want)
+	}
+	b := providers.NewBudget(providers.BudgetLimits{USD: .15, Calls: 1})
+	if _, err := c.Complete(providers.WithBudget(context.Background(), b), req); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestExplicitEffortEnablesThinkingAndKeepsUsageSeparate(t *testing.T) {
+	c := clientFor(t, func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Reasoning struct {
+				Enabled bool   `json:"enabled"`
+				Effort  string `json:"effort"`
+			} `json:"reasoning"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if !body.Reasoning.Enabled || body.Reasoning.Effort != "medium" {
+			t.Fatalf("thinking not enabled: %+v", body.Reasoning)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"{}\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":20,\"completion_tokens_details\":{\"reasoning_tokens\":7},\"cost\":0.001}}\n\ndata: [DONE]\n\n")
+	})
+	c.cfg.Effort = "medium"
+	b := providers.NewBudget(providers.BudgetLimits{USD: .15, Calls: 1})
+	r, err := c.Complete(providers.WithBudget(context.Background(), b), providers.Request{})
+	if err != nil || r.Usage.ReasoningTokens == nil || *r.Usage.ReasoningTokens != 7 || r.Usage.CompletionTokens != 20 || b.Snapshot().ReportedUSD != .001 {
+		t.Fatalf("lost/double-counted thinking: %+v %v", r, err)
+	}
+}
+
+func TestInvalidEffortFailsBeforeAnyRequest(t *testing.T) {
+	_, err := New(Config{APIKey: "test", Model: DefaultModel, BaseURL: DefaultBaseURL, MaxTokens: 8000, Effort: "typo"})
+	if err == nil {
+		t.Fatal("unsupported effort accepted")
+	}
+}
+
+func TestThinkingOnlyResponsePreservesTokensCostAndTruncation(t *testing.T) {
+	c := clientFor(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, `{"model":"haiku","choices":[{"message":{"content":""},"finish_reason":"length"}],"usage":{"prompt_tokens":10,"completion_tokens":8000,"completion_tokens_details":{"reasoning_tokens":8000},"cost":0.004001}}`)
+	})
+	c.cfg.Effort = "medium"
+	b := providers.NewBudget(providers.BudgetLimits{USD: .15, Calls: 1})
+	r, err := c.Complete(providers.WithBudget(context.Background(), b), providers.Request{})
+	if err == nil || !r.Truncated || r.Model != "haiku" || r.Usage.CompletionTokens != 8000 || r.Usage.ReasoningTokens == nil || *r.Usage.ReasoningTokens != 8000 || r.Usage.CostUSD != .004001 || len(r.Content) != 0 {
+		t.Fatalf("lost thinking-only accounting: %+v %v", r, err)
 	}
 }

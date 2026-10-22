@@ -48,3 +48,12 @@ func TestWriterModelEnvironmentDoesNotInvalidateAnotherReader(t *testing.T) {
 		t.Fatal("reader model change reused stale reading")
 	}
 }
+
+func TestReadingCacheSeparatesThinkingEffort(t *testing.T) {
+	t.Setenv("OPENROUTER_EFFORT", "medium")
+	first := processingcache.Key(readerEnvironment("openrouter"))
+	t.Setenv("OPENROUTER_EFFORT", "high")
+	if processingcache.Key(readerEnvironment("openrouter")) == first {
+		t.Fatal("changed thinking mode reused stale reading")
+	}
+}

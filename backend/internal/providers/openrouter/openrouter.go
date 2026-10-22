@@ -27,17 +27,21 @@ import (
 
 // Defaults can be overridden independently of the legacy providers.
 const (
-	DefaultModel     = "anthropic/claude-haiku-5.5"
-	DefaultBaseURL   = "https://openrouter.ai/api/v1"
-	DefaultMaxTokens = 8000
-	maxAttempts      = 3
-	maxBodyBytes     = 4 << 20
+	DefaultModel       = "anthropic/claude-haiku-5.5"
+	DefaultBaseURL     = "https://openrouter.ai/api/v1"
+	DefaultMaxTokens   = 50000
+	DefaultEffort      = "high"
+	maxAttempts        = 3
+	maxBodyBytes       = 4 << 20
+	maxPromptPrice     = .1 // USD per million; also used by the preflight reservation
+	maxCompletionPrice = .5
 )
 
 // Config holds credentials, the model and optional HTTP transport injection.
 type Config struct {
 	APIKey     string
 	Model      string
+	Effort     string // empty or none disables thinking; explicit levels enable it
 	BaseURL    string
 	MaxTokens  int
 	HTTPClient *http.Client
@@ -51,7 +55,7 @@ func ConfigFromEnv() (Config, error) {
 		}
 		return fallback
 	}
-	cfg := Config{APIKey: get("OPENROUTER_KEY", ""), Model: get("OPENROUTER_MODEL", DefaultModel), BaseURL: strings.TrimRight(get("OPENROUTER_BASE_URL", DefaultBaseURL), "/"), MaxTokens: DefaultMaxTokens}
+	cfg := Config{APIKey: get("OPENROUTER_KEY", ""), Model: get("OPENROUTER_MODEL", DefaultModel), BaseURL: strings.TrimRight(get("OPENROUTER_BASE_URL", DefaultBaseURL), "/"), MaxTokens: DefaultMaxTokens, Effort: get("OPENROUTER_EFFORT", DefaultEffort)}
 	n, err := strconv.Atoi(get("OPENROUTER_MAX_TOKENS", strconv.Itoa(DefaultMaxTokens)))
 	if err != nil || n <= 0 {
 		return Config{}, errors.New("OPENROUTER_MAX_TOKENS must be a positive integer")
@@ -85,10 +89,17 @@ func New(cfg Config) (*Client, error) {
 	if strings.TrimSpace(cfg.APIKey) == "" || cfg.Model == "" || cfg.MaxTokens <= 0 || !validURL(cfg.BaseURL) {
 		return nil, errors.New("openrouter: APIKey, Model, valid BaseURL and positive MaxTokens are required")
 	}
+	switch cfg.Effort {
+	case "none":
+		cfg.Effort = ""
+	case "", "low", "medium", "high", "xhigh", "max":
+	default:
+		return nil, errors.New("openrouter: unsupported effort")
+	}
 	cfg.BaseURL = strings.TrimRight(cfg.BaseURL, "/")
 	hc := cfg.HTTPClient
 	if hc == nil {
-		hc = &http.Client{Timeout: 3 * time.Minute, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+		hc = &http.Client{Timeout: 5 * time.Minute, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 		// Recovery must not close idle connections belonging to other services.
 		if transport, ok := http.DefaultTransport.(*http.Transport); ok {
 			hc.Transport = newRecoveryTransport(transport)
@@ -131,13 +142,13 @@ func (c *Client) Complete(ctx context.Context, req providers.Request) (providers
 			return res, nil
 		}
 		if ctx.Err() != nil {
-			return providers.Response{}, ctx.Err()
+			return res, ctx.Err()
 		}
 		if !retryable(err) || attempt == maxAttempts-1 {
 			if unavailable(err) {
 				err = fmt.Errorf("%w: %w", err, providers.ErrUnavailable)
 			}
-			return providers.Response{}, err
+			return res, err
 		}
 		wait := time.Duration(float64(c.backoff<<attempt) * (0.8 + 0.4*rand.Float64()))
 		var api *APIError
@@ -149,7 +160,7 @@ func (c *Client) Complete(ctx context.Context, req providers.Request) (providers
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return providers.Response{}, ctx.Err()
+			return res, ctx.Err()
 		case <-timer.C:
 		}
 	}
@@ -185,7 +196,8 @@ type chatRequest struct {
 	MaxTokens      int             `json:"max_tokens"`
 	ResponseFormat *responseFormat `json:"response_format,omitempty"`
 	Reasoning      struct {
-		Enabled bool `json:"enabled"`
+		Enabled bool   `json:"enabled"`
+		Effort  string `json:"effort,omitempty"`
 	} `json:"reasoning"`
 	Provider struct {
 		RequireParameters bool               `json:"require_parameters"`
@@ -213,9 +225,12 @@ type responseChoice struct {
 	Error        *responseError  `json:"error"`
 }
 type responseUsage struct {
-	PromptTokens     int      `json:"prompt_tokens"`
-	CompletionTokens int      `json:"completion_tokens"`
-	Cost             *float64 `json:"cost"`
+	PromptTokens      int      `json:"prompt_tokens"`
+	CompletionTokens  int      `json:"completion_tokens"`
+	Cost              *float64 `json:"cost"`
+	CompletionDetails struct {
+		ReasoningTokens *int `json:"reasoning_tokens"`
+	} `json:"completion_tokens_details"`
 }
 type responseError struct {
 	Code json.RawMessage `json:"code"`
@@ -261,33 +276,34 @@ func (c *Client) call(ctx context.Context, req providers.Request) (result provid
 	if baseModel != "anthropic/claude-haiku-5.5" && baseModel != "~anthropic/claude-haiku-latest" {
 		body.Temperature = &req.Temperature
 	}
-	body.Reasoning.Enabled = false
+	body.Reasoning.Enabled = c.cfg.Effort != ""
+	body.Reasoning.Effort = c.cfg.Effort
 	body.Provider.RequireParameters = true
 	if b := providers.BudgetFrom(ctx); b != nil && b.MonetaryLimited() {
-		body.Provider.MaxPrice = map[string]float64{"prompt": .1, "completion": .5}
+		body.Provider.MaxPrice = map[string]float64{"prompt": maxPromptPrice, "completion": maxCompletionPrice}
 	}
 	if len(req.Schema) > 0 {
 		body.ResponseFormat = &responseFormat{Type: "json_schema", JSONSchema: schema{Strict: true, Name: "answer", Schema: req.Schema}}
 	}
 	data, err := json.Marshal(body)
 	if err != nil {
-		return providers.Response{}, errors.New("openrouter: invalid request schema")
+		return result, errors.New("openrouter: invalid request schema")
 	}
 	r, err := http.NewRequestWithContext(ctx, http.MethodPost, c.cfg.BaseURL+"/chat/completions", bytes.NewReader(data))
 	if err != nil {
-		return providers.Response{}, errors.New("openrouter: invalid request URL")
+		return result, errors.New("openrouter: invalid request URL")
 	}
 	r.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set("Accept", "text/event-stream, application/json")
 	if b := providers.BudgetFrom(ctx); b != nil && b.MonetaryLimited() && c.inputBound(req) >= 100000 {
-		return providers.Response{}, errors.New("openrouter: request exceeds bounded input tier")
+		return result, errors.New("openrouter: request exceeds bounded input tier")
 	}
 	charge := providers.Usage{}
 	chargeKnown := false
 	finish, reserveErr := providers.ReserveCall(ctx, c.costBound(req))
 	if reserveErr != nil {
-		return providers.Response{}, reserveErr
+		return result, reserveErr
 	}
 	defer func() { finish(charge, chargeKnown) }()
 	traceCtx, trace := traceRequest(ctx)
@@ -297,13 +313,13 @@ func (c *Client) call(ctx context.Context, req providers.Request) (result provid
 	if err != nil {
 		c.http.CloseIdleConnections()
 		slog.With(trace.attributes()...).Warn("openrouter: request failed", "phase", trace.label(), "took", time.Since(began), "timeout", errors.Is(err, context.DeadlineExceeded))
-		return providers.Response{}, transportError{}
+		return result, transportError{}
 	}
 	defer func() { _ = resp.Body.Close() }()
 	log := slog.With(trace.attributes()...).With("status", resp.StatusCode, "protocol", resp.Proto,
 		"request_id", resp.Header.Get("X-Request-Id"), "generation_id", resp.Header.Get("X-Generation-Id"), "cf_ray", resp.Header.Get("Cf-Ray"))
 	if resp.StatusCode != http.StatusOK {
-		return providers.Response{}, &APIError{Status: resp.StatusCode, retryAfter: retryDelay(resp.Header.Get("Retry-After"))}
+		return result, &APIError{Status: resp.StatusCode, retryAfter: retryDelay(resp.Header.Get("Retry-After"))}
 	}
 	trace.phase.Store(traceReadingBody)
 	var cr chatResponse
@@ -324,7 +340,15 @@ func (c *Client) call(ctx context.Context, req providers.Request) (result provid
 	}
 	if cr.Usage.Cost != nil {
 		chargeKnown = true
-		charge = providers.Usage{PromptTokens: cr.Usage.PromptTokens, CompletionTokens: cr.Usage.CompletionTokens, CostUSD: *cr.Usage.Cost}
+		charge = providers.Usage{PromptTokens: cr.Usage.PromptTokens, CompletionTokens: cr.Usage.CompletionTokens, ReasoningTokens: cr.Usage.CompletionDetails.ReasoningTokens, CostUSD: *cr.Usage.Cost}
+	}
+	result.Model = cr.Model
+	if result.Model == "" {
+		result.Model = c.cfg.Model
+	}
+	result.Usage = providers.Usage{PromptTokens: cr.Usage.PromptTokens, CompletionTokens: cr.Usage.CompletionTokens, ReasoningTokens: cr.Usage.CompletionDetails.ReasoningTokens, CostUSD: charge.CostUSD}
+	if len(cr.Choices) > 0 {
+		result.Truncated = cr.Choices[0].FinishReason == "length"
 	}
 	if err != nil {
 		// Release this stream before discarding idle connections, so a sequential
@@ -334,40 +358,44 @@ func (c *Client) call(ctx context.Context, req providers.Request) (result provid
 		log.Warn("openrouter: response read failed", "phase", trace.label(), "took", time.Since(began), "timeout", errors.Is(err, context.DeadlineExceeded),
 			"response_bytes", progress.Bytes, "response_json_complete", progress.Complete, "streaming", streaming, "stream_events", progress.Events)
 		if errors.Is(err, errResponseSize) || errors.Is(err, errStreamProtocol) || errors.Is(err, errResponseJSON) {
-			return providers.Response{}, err
+			return result, err
 		}
 		var api *APIError
 		if errors.As(err, &api) {
-			return providers.Response{}, err
+			return result, err
 		}
-		return providers.Response{}, transportError{}
+		return result, transportError{}
 	}
 	if cr.Error != nil {
-		return providers.Response{}, &APIError{Status: cr.Error.status()}
+		return result, &APIError{Status: cr.Error.status()}
 	}
 	if len(cr.Choices) == 0 {
-		return providers.Response{}, errors.New("openrouter: response has no choices")
+		return result, errors.New("openrouter: response has no choices")
 	}
 	choice := cr.Choices[0]
 	if choice.Error != nil {
-		return providers.Response{}, &APIError{Status: choice.Error.status()}
+		return result, &APIError{Status: choice.Error.status()}
 	}
 	if choice.FinishReason == "error" {
-		return providers.Response{}, &APIError{Status: http.StatusBadGateway}
+		return result, &APIError{Status: http.StatusBadGateway}
 	}
 	if choice.FinishReason == "content_filter" || choice.Message.Refusal != nil {
-		return providers.Response{}, providers.ErrRefused
+		return result, providers.ErrRefused
 	}
 	if choice.Message.Content == nil || strings.TrimSpace(*choice.Message.Content) == "" {
-		return providers.Response{}, errors.New("openrouter: response has no content")
+		return result, errors.New("openrouter: response has no content")
 	}
 	model := cr.Model
 	if model == "" {
 		model = c.cfg.Model
 	}
-	log.Info("openrouter: completed", "response_generation_id", cr.ID, "provider", cr.Provider, "model", model, "prompt_tokens", cr.Usage.PromptTokens, "completion_tokens", cr.Usage.CompletionTokens, "cost_usd", charge.CostUSD,
+	reasoningTokens := any("unreported")
+	if cr.Usage.CompletionDetails.ReasoningTokens != nil {
+		reasoningTokens = *cr.Usage.CompletionDetails.ReasoningTokens
+	}
+	log.Info("openrouter: completed", "response_generation_id", cr.ID, "provider", cr.Provider, "model", model, "prompt_tokens", cr.Usage.PromptTokens, "completion_tokens", cr.Usage.CompletionTokens, "reasoning_tokens", reasoningTokens, "cost_usd", charge.CostUSD,
 		"response_bytes", progress.Bytes, "response_json_complete", true, "streaming", streaming, "stream_events", progress.Events, "first_token_after_ms", float64(progress.FirstToken)/float64(time.Millisecond), "took", time.Since(began))
-	return providers.Response{Content: []byte(*choice.Message.Content), Model: model, Usage: providers.Usage{PromptTokens: cr.Usage.PromptTokens, CompletionTokens: cr.Usage.CompletionTokens, CostUSD: charge.CostUSD}, Truncated: choice.FinishReason == "length"}, nil
+	return providers.Response{Content: []byte(*choice.Message.Content), Model: model, Usage: providers.Usage{PromptTokens: cr.Usage.PromptTokens, CompletionTokens: cr.Usage.CompletionTokens, ReasoningTokens: cr.Usage.CompletionDetails.ReasoningTokens, CostUSD: charge.CostUSD}, Truncated: choice.FinishReason == "length"}, nil
 }
 
 func retryDelay(s string) time.Duration {
@@ -384,7 +412,7 @@ func retryDelay(s string) time.Duration {
 // image allowance. Routing enforces the corresponding price ceiling. Unknown
 // image formats are charged by encoded size instead of assuming cheap vision.
 func (c *Client) costBound(r providers.Request) float64 {
-	return float64(c.inputBound(r))*.1/1e6 + float64(c.cfg.MaxTokens)*.5/1e6
+	return float64(c.inputBound(r))*maxPromptPrice/1e6 + float64(c.cfg.MaxTokens)*maxCompletionPrice/1e6
 }
 func (c *Client) inputBound(r providers.Request) int {
 	tokens := len(r.System) + len(r.User) + len(r.Schema) + 2048

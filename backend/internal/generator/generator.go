@@ -1,413 +1,80 @@
-// Package generator turns lecture notes into self-check cards.
-//
-// The pipeline never trusts the model with facts: every card must carry a
-// verbatim quote from the fragment it was generated from, and the quote is
-// checked in code. Wrong options for choice cards are taken from answers to
-// other fragments of the same document, never invented. See docs/concept.md,
-// section 6.
-//
-// The package is storage-agnostic: text in, cards (models/cards) and stats
-// out. The model is behind providers.Provider, so GigaChat, YandexGPT or any
-// OpenAI-compatible API plug in without changes here:
-//
-//	cfg, err := gigachat.ConfigFromEnv()
-//	llm, err := gigachat.New(cfg)
-//	gen := generator.NewGenerator(llm, generator.Options{OnBatch: save})
-//	res, err := gen.Generate(ctx, generator.Document{Text: text, Title: title, ID: setID})
+// Package generator makes cards with one whole-document request.
 package generator
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"hash/fnv"
 	"log/slog"
 	"slices"
-	"sync"
-	"time"
-	"unicode/utf8"
+	"strings"
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/material"
-	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
-const (
-	// answerAttempts is the first call plus one retry for an answer that is
-	// not valid JSON or breaks the schema.
-	answerAttempts = 2
-	// maxConsecutiveFailures stops the document when the provider fails on
-	// this many fragments in a row, after its own retries and fallback model:
-	// bad credentials or an outage, not a flaky fragment.
-	maxConsecutiveFailures = 3
-)
+// PipelineVersion identifies source input, prompt and code validation semantics.
+const PipelineVersion = "whole-source-direct-v2"
 
-// Generator makes cards from documents. It is safe for concurrent use.
+// Generator is safe for concurrent use. The provider owns transport retries.
 type Generator struct {
 	provider providers.Provider
 	opts     Options
-	system   string
-	schema   json.RawMessage
 }
 
-// NewGenerator returns a Generator. Zero Options fields take defaults.
+// NewGenerator returns the single document generator.
 func NewGenerator(p providers.Provider, opts Options) *Generator {
-	opts = opts.withDefaults()
-	return &Generator{
-		provider: p,
-		opts:     opts,
-		system:   buildSystemPrompt(opts.MaxFactsPerChunk),
-		schema:   cardSchema(opts.MaxFactsPerChunk),
-	}
+	return &Generator{provider: p, opts: opts.withDefaults()}
 }
 
-// WithOnBatch returns a shallow copy of Generator with a custom OnBatch callback.
-func (g *Generator) WithOnBatch(onBatch func(Batch)) *Generator {
+// WithOnBatch returns a copy with a caller-specific progress callback.
+func (g *Generator) WithOnBatch(cb func(Batch)) *Generator {
 	if g == nil {
 		return nil
 	}
 	cp := *g
-	cp.opts.OnBatch = onBatch
+	cp.opts.OnBatch = cb
 	return &cp
 }
 
-// Generate runs the pipeline on one document: normalize, split, drop junk,
-// one model call per fragment, check quotes, drop duplicates, add
-// distractors, trim to MaxFactsPerDoc. Cards reach OnBatch as they are ready;
-// the Result holds all of them in document order.
-//
-// A fragment that fails does not fail the document. An error is returned when
-// ctx is cancelled, when the provider fails on maxConsecutiveFailures
-// fragments in a row, or when it fails on every fragment; the Result then
-// holds what was made before.
-func (g *Generator) Generate(ctx context.Context, doc Document) (finalResult Result, finalErr error) {
+// Generate uses the same request and checks for structured readings and text.
+func (g *Generator) Generate(ctx context.Context, doc Document) (out Result, err error) {
 	if providers.BudgetFrom(ctx) == nil {
 		ctx = providers.WithBudget(ctx, providers.NewBudget(g.opts.Budget))
 	}
-	defer func() { finalResult.Budget = providers.BudgetFrom(ctx).Snapshot() }()
-	if doc.Structure != nil {
-		return g.generateSemantic(ctx, doc)
-	}
-	began := time.Now()
-	log := slog.Default()
-
-	if doc.ID == "" {
-		doc.ID = rand.Text()
-	}
-	text := normalizeText(doc.Text)
-	all := splitChunks(text, g.opts.ChunkSize, g.opts.ChunkOverlap)
-	stats := Stats{
-		Chunks:       len(all),
-		FilteredBy:   map[string]int{},
-		CallsByModel: map[string]int{},
-	}
-	var work []chunk
-	for _, c := range all {
-		if reason := junkReason(c.Text, len(all) == 1); reason != "" {
-			stats.ChunksFiltered++
-			stats.FilteredBy[reason]++
-			log.Debug("cards: fragment filtered", "fragment", c.Index+1, "reason", reason)
-			continue
+	defer func() { out.Budget = providers.BudgetFrom(ctx).Snapshot() }()
+	if doc.Structure == nil {
+		if strings.TrimSpace(doc.Text) == "" {
+			return out, fmt.Errorf("empty document")
 		}
-		work = append(work, c)
-	}
-	log.Info("cards: document split",
-		"title", doc.Title, "chars", utf8.RuneCountInString(text),
-		"fragments", len(all), "filtered", stats.ChunksFiltered)
-
-	examples := exampleNames(text, doc.Title)
-	asm := newAssembler(doc.Title, normalizedPageStarts(doc.Text, doc.PageStarts, text), len(work), g.opts.MaxFactsPerDoc, &stats)
-	runCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	slots := make(chan struct{}, g.opts.Concurrency)
-	results := make(chan chunkResult, len(work))
-	go g.dispatch(runCtx, doc, examples, len(all), work, asm, slots, results)
-
-	deliver := func(cs []cards.Card) {
-		if len(cs) == 0 {
-			return
-		}
-		if stats.FirstCardAfter == 0 {
-			stats.FirstCardAfter = time.Since(began)
-		}
-		g.notify(Batch{Facts: asm.newFacts(cs), Cards: cs})
-	}
-
-	var (
-		runErr   error
-		failures int
-		okChunks int
-		next     int
-		waiting  = map[int]chunkResult{}
-	)
-	// Workers finish in any order; results are assembled in fragment order.
-	for r := range results {
-		waiting[r.pos] = r
-		for {
-			r, ok := waiting[next]
-			if !ok {
-				break
-			}
-			delete(waiting, next)
-			next++
-
-			ready := asm.add(r)
-			switch {
-			case r.skipped || r.cancelled || r.refused:
-			case r.err != nil:
-				failures++
-				log.Warn("cards: fragment failed", "fragment", r.chunk.Index+1, "err", r.err)
-				if errors.Is(r.err, providers.ErrBudget) && runErr == nil {
-					runErr = r.err
-					cancel()
+		d := material.Document{}
+		starts := doc.PageStarts
+		if len(starts) == 0 {
+			d.Blocks = []material.Block{{ID: "text", Kind: "text", Text: doc.Text}}
+		} else {
+			previous := -1
+			for _, start := range starts {
+				if start < 0 || start > len(doc.Text) || start <= previous {
+					return out, fmt.Errorf("invalid page offsets")
 				}
-				if failures >= maxConsecutiveFailures && runErr == nil {
-					runErr = fmt.Errorf("provider failed on %d fragments in a row: %w", failures, r.err)
-					cancel()
+				previous = start
+			}
+			if starts[0] != 0 {
+				return out, fmt.Errorf("page offsets omit source prefix")
+			}
+			for i, start := range starts {
+				end := len(doc.Text)
+				if i+1 < len(starts) {
+					end = starts[i+1]
 				}
-			default:
-				failures = 0
-				okChunks++
+				d.Blocks = append(d.Blocks, material.Block{ID: fmt.Sprintf("p%d", i+1), Page: i + 1, Kind: "text", Text: doc.Text[start:end]})
 			}
-			if r.holdsSlot {
-				// Released after assembly and the failure check, so the next
-				// dispatch sees these cards and a stop, and before OnBatch,
-				// so a slow callback does not hold up the next model call.
-				<-slots
-			}
-			deliver(ready)
 		}
+		doc.Structure = &d
 	}
-	deliver(asm.finish())
-
-	if runErr == nil && ctx.Err() != nil {
-		runErr = fmt.Errorf("generate: %w", ctx.Err())
-	}
-	if runErr == nil && stats.ChunksFailed > 0 && okChunks == 0 {
-		runErr = errors.New("provider failed on every fragment")
-	}
-
-	result := Result{Cards: asm.cards(), Stats: stats}
-	result.Facts = asm.factsOf(result.Cards)
-	result.Stats.Cards = len(result.Cards)
-	result.Stats.Facts = len(result.Facts)
-	result.Stats.Total = time.Since(began)
-	log.Info("cards: document done",
-		"title", doc.Title, "cards", result.Stats.Cards,
-		"from_model", result.Stats.CardsFromModel, "dropped_quote", result.Stats.DroppedQuote,
-		"calls", result.Stats.ModelCalls, "took", result.Stats.Total.Round(time.Millisecond),
-		"err", runErr)
-	return result, runErr
+	return g.generateDirect(ctx, doc)
 }
 
-// dispatch starts fragments in document order, at most Concurrency at a time.
-// Every fragment gets exactly one result, so the ordered assembly never
-// waits for a gap. Slots are released by the assembler, not by the worker.
-func (g *Generator) dispatch(ctx context.Context, doc Document, examples nameSet, total int, work []chunk,
-	asm *assembler, slots chan struct{}, results chan<- chunkResult) {
-	var wg sync.WaitGroup
-	defer func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	for pos, c := range work {
-		r := chunkResult{pos: pos, chunk: c}
-		acquired := false
-		select {
-		case slots <- struct{}{}:
-			acquired = true
-		case <-ctx.Done():
-		}
-		// select picks at random when both are ready: check the stop again.
-		if ctx.Err() != nil || asm.budgetSpent(pos) {
-			if acquired {
-				<-slots
-			}
-			r.cancelled = ctx.Err() != nil
-			r.skipped = !r.cancelled
-			results <- r
-			continue
-		}
-		r.holdsSlot = true
-		wg.Go(func() {
-			results <- g.processChunk(ctx, doc, examples, total, r)
-		})
-	}
-}
-
-// processChunk makes the model call for one fragment, retries once on an
-// unparseable answer and checks every quote against the fragment. examples
-// are the names the document's examples invent, see aboutExample.
-func (g *Generator) processChunk(ctx context.Context, doc Document, examples nameSet, total int, r chunkResult) chunkResult {
-	began := time.Now()
-	log := slog.With("fragment", r.chunk.Index+1)
-	r.models = map[string]int{}
-
-	maxFacts := factCap(r.chunk.Text, g.opts.MaxFactsPerChunk)
-	req := providers.Request{
-		NoCache:     true,
-		System:      g.system,
-		Images:      doc.Images,
-		Schema:      g.schema,
-		Temperature: 0,
-	}
-	var parsed []modelFact
-	answered := false
-	for attempt := range answerAttempts {
-		req.User = doc.Context + "\n" + buildUserPrompt(doc.Title, r.chunk, total, attempt > 0)
-		if doc.EvidenceSource == nil && attempt == 0 && maxFacts != g.opts.MaxFactsPerChunk {
-			req.System, req.Schema = buildSystemPrompt(maxFacts), cardSchema(maxFacts)
-		}
-		callCtx, cancel := context.WithTimeout(ctx, g.opts.CallTimeout)
-		resp, err := g.provider.Complete(callCtx, req)
-		cancel()
-		r.calls++
-		if errors.Is(err, providers.ErrRefused) {
-			// About this text only: asking again gets the same, and the
-			// rest of the document may pass.
-			r.refused = true
-			log.Warn("cards: fragment refused by the content filter", "err", err)
-			break
-		}
-		if err != nil {
-			r.cancelled = ctx.Err() != nil
-			r.err = fmt.Errorf("fragment %d: %w", r.chunk.Index+1, err)
-			break
-		}
-
-		if resp.Cached {
-			r.cacheHits++
-		}
-		r.usage.CostUSD += resp.Usage.CostUSD
-		r.usage.PromptTokens += resp.Usage.PromptTokens
-		r.usage.CompletionTokens += resp.Usage.CompletionTokens
-		model := resp.Model
-		if model == "" {
-			model = "unknown"
-		}
-		r.models[model]++
-
-		facts, invalid, err := parseAnswer(resp.Content, maxFacts)
-		// A cut answer holds stray JSON at best: a model caught in a loop
-		// ran into the token limit. Facts it got out stand, an empty one is
-		// asked again.
-		if err == nil && resp.Truncated && len(facts) == 0 {
-			err = errCutAnswer
-		}
-		if err != nil {
-			r.invalidResponses++
-			log.Warn("cards: invalid model answer",
-				"attempt", attempt+1, "err", err)
-			continue
-		}
-		if log.Enabled(ctx, slog.LevelDebug) {
-			log.Debug("cards: model answer parsed", "bytes", len(resp.Content))
-		}
-		parsed, r.droppedInvalid, answered = facts, invalid, true
-		break
-	}
-	r.invalid = r.err == nil && !r.refused && !answered
-	r.factsFromModel = len(parsed)
-	r.cardsFromModel = r.droppedInvalid
-	for _, f := range parsed {
-		r.cardsFromModel += len(f.Cards)
-	}
-
-	vocab := vocabulary(nonEmptyLines(r.chunk.Text))
-	// One quote per fact: a fact that fails the check takes all its cards
-	// with it.
-	for _, f := range parsed {
-		start, end, ok := locateQuote(r.chunk.Text, f.Quote)
-		if !ok {
-			r.droppedQuote += len(f.Cards)
-			log.Info("cards: quote not found in fragment", "topic", f.Topic)
-			continue
-		}
-		f.Quote = r.chunk.Text[start:end]
-		support := f.Quote
-		if doc.EvidenceSource != nil {
-			var valid bool
-			f.Evidence, f.Quote, valid = groundFact(f, *doc.EvidenceSource)
-			if !valid {
-				r.droppedQuote += len(f.Cards)
-				continue
-			}
-			for _, e := range f.Evidence {
-				support += "\n" + e.Quote
-			}
-		}
-		if personalData(f.Quote) {
-			r.droppedPersonal += len(f.Cards)
-			log.Info("cards: fact with personal data dropped", "topic", f.Topic)
-			continue
-		}
-		f.Start, f.End = r.chunk.Start+start, r.chunk.Start+end
-		f.ID = factID(doc.ID, factKey(f))
-
-		visual := slices.ContainsFunc(f.Evidence, func(e material.Evidence) bool { return e.Kind == "image" })
-		kept := f.Cards[:0]
-		for _, c := range f.Cards {
-			if doc.EvidenceSource != nil && causalRestatement(c) {
-				r.droppedUnsupported++
-				log.Info("cards: causal answer repeats the question premise", "kind", c.Kind)
-				continue
-			}
-			if c.Kind == cards.KindTable {
-				if !tableGrounded(c.Table, f.Quote) {
-					r.droppedTable++
-					log.Info("cards: table not in the quote as laid out", "kind", c.Kind)
-					continue
-				}
-				c.Table = shuffleTable(labelPipeItems(c.Table, f.Quote), f.ID)
-			}
-			// Sentence answers test reasoning better as open answers. This keeps
-			// the existing claim-support gate and still requires semantic review.
-			if doc.EvidenceSource != nil && c.Kind == cards.KindChoice && (c.LearningMode == "distinguish" || c.LearningMode == "explain") && len(contentWords(c.Answer)) >= 8 && claimSupported(c.Answer, support) && !namedIn(c.Answer, c.Question) {
-				c.Kind = cards.KindFlip
-				c.Distractors = nil
-				r.explanatoryChoiceToFlip++
-			}
-			application := doc.EvidenceSource != nil && c.LearningMode == "apply" && hasApplicationContext(c.Question)
-			if !application && !visual && (answerChecked(c.Kind) && !answerSupported(c, support) ||
-				c.Kind == cards.KindFlip && (namedIn(c.Answer, c.Question) || !claimSupported(c.Answer, support)) ||
-				c.Kind == cards.KindBoolean && !claimSupported(trueClaim(c), support)) || !application && visual && namedIn(c.Answer, c.Question) {
-				r.droppedUnsupported++
-				log.Info("cards: answer not in the quote or given in the question",
-					"kind", c.Kind)
-				continue
-			}
-			if aboutExample(c, examples) || doc.EvidenceSource != nil && recallsExample(c) {
-				r.droppedExample++
-				log.Info("cards: card about the names of an example", "kind", c.Kind)
-				continue
-			}
-			if clean := cleanExplanation(c.Explanation, r.chunk.Text); clean != c.Explanation {
-				r.trimmedExplains++
-				log.Debug("cards: explanation trimmed to the fragment", "kind", c.Kind)
-				c.Explanation = clean
-			}
-			kept = append(kept, c)
-		}
-		if !vocab {
-			kept = dropFlipRepeats(kept, func(c modelCard) {
-				r.droppedVariants++
-				log.Info("cards: flip asks another card's question in other words", "kind", c.Kind)
-			})
-		}
-		if f.Cards = kept; len(f.Cards) > 0 {
-			r.facts = append(r.facts, f)
-		}
-	}
-	r.elapsed = time.Since(began)
-	return r
-}
-
-// notify hands a batch to OnBatch. A panic there is the caller's bug and
-// must not take the rest of the document down with it.
 func (g *Generator) notify(b Batch) {
 	if g.opts.OnBatch == nil {
 		return
@@ -417,16 +84,31 @@ func (g *Generator) notify(b Batch) {
 			slog.Error("cards: OnBatch panicked", "panic", p)
 		}
 	}()
-	g.opts.OnBatch(Batch{Facts: slices.Clone(b.Facts), Cards: slices.Clone(b.Cards)})
+	g.opts.OnBatch(Batch{Cards: slices.Clone(b.Cards), Facts: slices.Clone(b.Facts)})
 }
 
-// factID derives a fact's id from the document and the verified quote, so the
-// same fact met again in an overlapping fragment gets the same id, and the
-// same quote in another document does not.
-func factID(docID, quote string) string {
+func factID(docID, key string) string {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(docID))
 	_, _ = h.Write([]byte{0})
-	_, _ = h.Write([]byte(fold(quote).s))
+	_, _ = h.Write([]byte(key))
 	return fmt.Sprintf("%016x", h.Sum64())
+}
+
+func evidenceRef(title string, d material.Document, es []material.Evidence) string {
+	var pages []int
+	for _, e := range es {
+		if b, ok := d.Block(e.BlockID); ok && b.Page > 0 && !slices.Contains(pages, b.Page) {
+			pages = append(pages, b.Page)
+		}
+	}
+	if len(pages) == 0 {
+		return title
+	}
+	slices.Sort(pages)
+	refs := make([]string, len(pages))
+	for i, p := range pages {
+		refs[i] = fmt.Sprint(p)
+	}
+	return title + ", стр. " + strings.Join(refs, ", ")
 }
