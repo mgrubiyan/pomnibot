@@ -190,14 +190,15 @@ function App() {
     };
 
     // Throws when the complaint was not saved, so the screen can say so
-    // instead of losing it.
+    // instead of losing it. The status decides: an error with an empty
+    // body, such as a proxy's 502, comes back without an `error`.
     const reportCardIssue = async (cardId: string, reason: CardIssueReason) => {
-        const { error } = await api.POST('/cards/{cardId}/issue', {
+        const { response } = await api.POST('/cards/{cardId}/issue', {
             params: { path: { cardId } },
             body: { reason },
         });
-        if (error) {
-            throw new Error(error.message);
+        if (!response.ok) {
+            throw new Error(`Failed to report card issue: ${response.status}`);
         }
     };
 
