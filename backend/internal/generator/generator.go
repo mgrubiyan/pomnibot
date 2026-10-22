@@ -351,6 +351,11 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, examples nam
 		visual := slices.ContainsFunc(f.Evidence, func(e material.Evidence) bool { return e.Kind == "image" })
 		kept := f.Cards[:0]
 		for _, c := range f.Cards {
+			if doc.EvidenceSource != nil && causalRestatement(c) {
+				r.droppedUnsupported++
+				log.Info("cards: causal answer repeats the question premise", "kind", c.Kind)
+				continue
+			}
 			if c.Kind == cards.KindTable {
 				if !tableGrounded(c.Table, f.Quote) {
 					r.droppedTable++
@@ -375,7 +380,7 @@ func (g *Generator) processChunk(ctx context.Context, doc Document, examples nam
 					"kind", c.Kind)
 				continue
 			}
-			if doc.EvidenceSource == nil && aboutExample(c, examples) {
+			if aboutExample(c, examples) || doc.EvidenceSource != nil && recallsExample(c) {
 				r.droppedExample++
 				log.Info("cards: card about the names of an example", "kind", c.Kind)
 				continue

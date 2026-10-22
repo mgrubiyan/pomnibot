@@ -40,14 +40,17 @@ func TestCompleteTextAndImage(t *testing.T) {
 						Content json.RawMessage `json:"content"`
 					} `json:"messages"`
 					ResponseFormat struct {
-						Type string `json:"type"`
+						Type       string `json:"type"`
+						JSONSchema struct {
+							Strict bool `json:"strict"`
+						} `json:"json_schema"`
 					} `json:"response_format"`
 					Reasoning map[string]any `json:"reasoning"`
 				}
 				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 					t.Fatal(err)
 				}
-				if body.Model != DefaultModel || body.MaxTokens != 8000 || body.ResponseFormat.Type != "json_schema" || len(body.Messages) != 2 {
+				if body.Model != DefaultModel || body.MaxTokens != 8000 || body.ResponseFormat.Type != "json_schema" || !body.ResponseFormat.JSONSchema.Strict || len(body.Messages) != 2 {
 					t.Fatalf("body = %+v", body)
 				}
 				if enabled, ok := body.Reasoning["enabled"]; !ok || enabled != false || len(body.Reasoning) != 1 {
@@ -272,5 +275,15 @@ func TestBudgetRetainsReservationWhenUsageCostIsMissing(t *testing.T) {
 	s := b.Snapshot()
 	if s.CommittedUSD <= 0 || s.ReportedUSD != 0 || s.ReservedUSD != 0 {
 		t.Fatalf("unreported cost treated as free: %+v", s)
+	}
+}
+
+func TestOversizedInputDoesNotClaimDocumentBudgetExhaustion(t *testing.T) {
+	calls := 0
+	c := clientFor(t, func(http.ResponseWriter, *http.Request) { calls++ })
+	budget := providers.NewBudget(providers.BudgetLimits{USD: .5})
+	_, err := c.Complete(providers.WithBudget(context.Background(), budget), providers.Request{User: strings.Repeat("x", 100001)})
+	if err == nil || errors.Is(err, providers.ErrBudget) || calls != 0 || budget.Snapshot().Calls != 0 {
+		t.Fatalf("context cap mistaken for exhausted money: err=%v calls=%d budget=%+v", err, calls, budget.Snapshot())
 	}
 }

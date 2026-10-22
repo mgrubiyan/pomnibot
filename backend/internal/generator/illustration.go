@@ -304,3 +304,15 @@ func wordIn(name, text string) bool {
 func identRune(r rune) bool {
 	return r != utf8.RuneError && (unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_')
 }
+
+// Source-grounded generation still must not turn incidental example labels
+// into recall goals. Worked tasks carrying their data proceed to semantic audit.
+func recallsExample(c modelCard) bool {
+	if hasApplicationContext(c.Question) {
+		return false
+	}
+	q := strings.ToLower(c.Question)
+	example := strings.Contains(q, "в примере") || strings.Contains(q, "из примера") || strings.Contains(q, "в учебной бд")
+	recall := strings.Contains(q, "какой") || strings.Contains(q, "какие") || strings.Contains(q, "назовите") || strings.Contains(q, "как называется")
+	return example && recall
+}

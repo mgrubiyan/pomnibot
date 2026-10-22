@@ -46,10 +46,10 @@ func TestSemanticPipelineOnlyStreamsReviewedCardsAndTargetsMissingCoverage(t *te
 		case strings.Contains(r.System, "STAGE:PLAN"):
 			return plan, nil
 		case strings.Contains(r.System, "STAGE:REVIEW"):
-			reviews := reviewCount.Add(1)
+			reviewCount.Add(1)
 			covered := "integrity"
 			block, quote := "p32-b1", "Внешний ключ обеспечивает ссылочную целостность."
-			if reviews > 1 {
+			if strings.Contains(r.User, "Как включается проверка") {
 				covered, block, quote = "scope", "p33-b1", "В SQLite проверка внешних ключей включается отдельно."
 			}
 			b, _ := json.Marshal(map[string]any{"verdicts": []any{map[string]any{"index": 0, "accept": true, "problem": "", "evidence": []material.Evidence{{BlockID: block, Quote: quote}}, "covered": []string{covered}}}})
@@ -102,7 +102,12 @@ func TestReviewRejectsMissingVerdictsAndUnsupportedAcceptance(t *testing.T) {
 func TestHierarchicalMergeCannotLoseGoalsOrDistantSources(t *testing.T) {
 	a := Plan{Topics: []Topic{{ID: "early", Title: "Внешние ключи", BlockIDs: []string{"p22-b1"}, Objectives: []Objective{{ID: "declaration", Text: "Объявление", BlockIDs: []string{"p22-b1"}}}}}}
 	b := Plan{Topics: []Topic{{ID: "late", Title: "Действия внешнего ключа", BlockIDs: []string{"p32-b1", "p33-b1"}, Objectives: []Objective{{ID: "actions", Text: "Действия", BlockIDs: []string{"p32-b1", "p33-b1"}}}}}}
-	p := &fakeProvider{answer: func(int, string, providers.Request) (string, error) { return `{"groups":[["early","late"]]}`, nil }}
+	p := &fakeProvider{answer: func(_ int, _ string, r providers.Request) (string, error) {
+		if strings.Contains(r.System, "STAGE:PLAN-MERGE-CHECK") {
+			return `{"groups":[{"topicIds":["early","late"],"reason":"One topic and its rules"}]}`, nil
+		}
+		return `{"groups":[["early","late"]]}`, nil
+	}}
 	merged, err := NewGenerator(p, Options{}).mergePlans(context.Background(), []Plan{a, b}, nil)
 	if err != nil || len(merged.Topics) != 1 || len(merged.Topics[0].Objectives) != 2 || len(merged.Topics[0].BlockIDs) != 3 {
 		t.Fatalf("lost goals/sources: %v %+v", err, merged)

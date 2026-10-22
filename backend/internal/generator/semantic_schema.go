@@ -19,7 +19,7 @@ func schemaBytes(v any) json.RawMessage   { b, _ := json.Marshal(v); return b }
 func evidenceSchema() map[string]any {
 	s := map[string]any{"type": "string"}
 	n := map[string]any{"type": "integer", "minimum": 0}
-	return schemaObject(map[string]any{"blockId": s, "kind": map[string]any{"type": "string", "enum": []string{"text", "cell", "image"}}, "quote": s, "row": n, "column": n, "observation": s, "region": schemaArray(map[string]any{"type": "number"})})
+	return schemaObject(map[string]any{"blockId": s, "kind": map[string]any{"type": "string", "enum": []string{"text", "cell", "image"}}, "quote": s, "row": n, "column": n, "observation": s, "region": schemaArray(map[string]any{"type": "number", "minimum": 0, "maximum": 1})})
 }
 func planSchema() json.RawMessage {
 	s := map[string]any{"type": "string", "minLength": 1}
@@ -29,12 +29,17 @@ func planSchema() json.RawMessage {
 	goals := schemaArray(objective)
 	goals["minItems"] = 1
 	topic := schemaObject(map[string]any{"id": s, "title": s, "section": s, "blockIds": refs, "objectives": goals})
-	return schemaBytes(schemaObject(map[string]any{"topics": schemaArray(topic)}))
+	return schemaBytes(schemaObject(map[string]any{"topics": schemaArray(topic), "excluded": schemaArray(schemaObject(map[string]any{"blockId": s, "kind": map[string]any{"type": "string", "enum": []string{"service", "duplicate", "insufficient"}}, "reason": s}))}))
 }
-func reviewSchema() json.RawMessage {
+func reviewSchema(count ...int) json.RawMessage {
 	s := map[string]any{"type": "string"}
-	v := schemaObject(map[string]any{"index": map[string]any{"type": "integer", "minimum": 0}, "accept": map[string]any{"type": "boolean"}, "problem": s, "evidence": schemaArray(evidenceSchema()), "covered": schemaArray(s)})
-	return schemaBytes(schemaObject(map[string]any{"verdicts": schemaArray(v)}))
+	v := schemaObject(map[string]any{"index": map[string]any{"type": "integer", "minimum": 0}, "accept": map[string]any{"type": "boolean"}, "defect": map[string]any{"type": "string", "enum": []string{"none", "unsupported_answer", "missing_condition", "ambiguous_question", "answer_leak", "invalid_options", "duplicate", "invalid_evidence", "example_recall"}}, "defectQuote": s, "problem": s, "evidence": schemaArray(evidenceSchema()), "covered": schemaArray(s)})
+	verdicts := schemaArray(v)
+	if len(count) > 0 {
+		verdicts["minItems"] = count[0]
+		verdicts["maxItems"] = count[0]
+	}
+	return schemaBytes(schemaObject(map[string]any{"verdicts": verdicts}))
 }
 func topicSchema(maxFacts int) json.RawMessage {
 	var schema map[string]any

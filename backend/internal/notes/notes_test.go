@@ -309,3 +309,34 @@ func TestWithWarnings(t *testing.T) {
 		t.Errorf("WithWarnings without warnings = %q", got)
 	}
 }
+
+func TestMakeWarnsWhenSourceBlocksRemainUnassigned(t *testing.T) {
+	gen := &fakeGenerator{generate: func(context.Context, generator.Document, func(generator.Batch)) (generator.Result, error) {
+		r := oneCard("")
+		r.Coverage.Unassigned = []string{"b"}
+		return r, nil
+	}}
+	m := New(&fakeExtractor{}, gen, &fakeSaver{}, 1)
+	res, err := m.Make(context.Background(), Request{UserID: 1, Files: file("lecture.pdf")}, Progress{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Warnings) == 0 || !strings.Contains(res.Warnings[0], "Набор частичный") {
+		t.Fatalf("hidden partial result: %+v", res)
+	}
+}
+
+func TestMakeWarnsAboutSourceExcludedForInsufficientEvidence(t *testing.T) {
+	gen := &fakeGenerator{generate: func(context.Context, generator.Document, func(generator.Batch)) (generator.Result, error) {
+		r := oneCard("")
+		r.Plan.Excluded = []generator.Exclusion{{BlockID: "diagram", Kind: "insufficient", Reason: "A cropped condition"}}
+		return r, nil
+	}}
+	res, err := New(&fakeExtractor{}, gen, &fakeSaver{}, 1).Make(context.Background(), Request{UserID: 1, Files: file("lecture.pdf")}, Progress{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Warnings) == 0 || !strings.Contains(res.Warnings[0], "Набор частичный") {
+		t.Fatal("insufficient source hidden")
+	}
+}

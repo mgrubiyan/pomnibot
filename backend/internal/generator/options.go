@@ -127,7 +127,8 @@ const (
 type Options struct {
 	Budget providers.BudgetLimits // document limits; shared context ledger takes precedence
 
-	MaxCoverageRepairs int           // total repair generations per document; default 3, negative disables
+	MaxRepairTime      time.Duration // time allocated to targeted repairs; default 4 minutes
+	MaxCoverageRepairs int           // total repair generations per document; default 12, negative disables
 	PlanningBudget     int           // target UTF-8 bytes per planning batch, default 12000; whole blocks retained
 	SourceBudget       int           // maximum UTF-8 bytes per source/planning request, default 24000
 	ReviewBatch        int           // maximum cards reviewed per call, default 8
@@ -149,7 +150,10 @@ func (o Options) withDefaults() Options {
 		o.Budget = providers.DefaultDocumentLimits()
 	}
 	if o.MaxCoverageRepairs == 0 {
-		o.MaxCoverageRepairs = 3
+		o.MaxCoverageRepairs = 12
+	}
+	if o.MaxRepairTime <= 0 {
+		o.MaxRepairTime = 4 * time.Minute
 	}
 	if o.PlanningBudget <= 0 {
 		o.PlanningBudget = 12000

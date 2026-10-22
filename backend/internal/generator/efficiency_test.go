@@ -125,6 +125,9 @@ func TestSemanticExplanatoryChoiceUsesOpenAnswerBeforeReview(t *testing.T) {
 func TestPlanningHasIndependentBudgetAndPreservesWholeTopicContext(t *testing.T) {
 	d := material.Document{Blocks: []material.Block{{ID: "a", Text: strings.Repeat("A", 7000)}, {ID: "b", Text: strings.Repeat("B", 7000)}}}
 	p := &fakeProvider{answer: func(_ int, _ string, r providers.Request) (string, error) {
+		if strings.Contains(r.System, "STAGE:PLAN-MERGE-CHECK") {
+			return `{"groups":[{"topicIds":["section1-t","section2-t"],"reason":"Same learning topic"}]}`, nil
+		}
 		if strings.Contains(r.System, "STAGE:PLAN-MERGE") {
 			return `{"groups":[["section1-t","section2-t"]]}`, nil
 		}
@@ -138,7 +141,7 @@ func TestPlanningHasIndependentBudgetAndPreservesWholeTopicContext(t *testing.T)
 		return `{"topics":[{"id":"t","title":"Topic","blockIds":["` + bs[0].ID + `"],"objectives":[{"id":"o","text":"Goal","blockIds":["` + bs[0].ID + `"]}]}]}`, nil
 	}}
 	plan, err := NewGenerator(p, Options{SourceBudget: 20000, PlanningBudget: 8000}).plan(context.Background(), d, nil)
-	if err != nil || len(plan.Topics) != 1 || len(p.requests) != 3 {
+	if err != nil || len(plan.Topics) != 1 || len(p.requests) != 4 {
 		t.Fatalf("planning: %+v %v calls=%d", plan, err, len(p.requests))
 	}
 	source, err := topicSource(plan.Topics[0], d, 20000)
@@ -232,14 +235,14 @@ func TestBudgetExhaustionRetainsStreamedCardsAndHonestGaps(t *testing.T) {
 	base := &fakeProvider{answer: func(_ int, _ string, r providers.Request) (string, error) {
 		switch {
 		case strings.HasPrefix(r.System, "STAGE:PLAN"):
-			return `{"topics":[{"id":"a","title":"Назначение ключа","blockIds":["p32-b1"],"objectives":[{"id":"integrity","text":"Назначение","blockIds":["p32-b1"]}]},{"id":"b","title":"Условия","blockIds":["p33-b1"],"objectives":[{"id":"scope","text":"Область","blockIds":["p33-b1"]}]}]}`, nil
+			return `{"topics":[{"id":"a","title":"Назначение ключа","blockIds":["p22-b1","p32-b1"],"objectives":[{"id":"integrity","text":"Назначение","blockIds":["p32-b1"]}]},{"id":"b","title":"Условия","blockIds":["p33-b1"],"objectives":[{"id":"scope","text":"Область","blockIds":["p33-b1"]}]}]}`, nil
 		case strings.HasPrefix(r.System, "STAGE:REVIEW"):
 			return `{"verdicts":[{"index":0,"accept":true,"problem":"","evidence":[{"blockId":"p32-b1","kind":"text","quote":"Внешний ключ обеспечивает ссылочную целостность."}],"covered":["integrity"]}]}`, nil
 		default:
 			return answerJSON(mc{kind: "flip", q: "Для чего нужен внешний ключ?", a: "Обеспечивает ссылочную целостность.", quote: "Внешний ключ обеспечивает ссылочную целостность."}), nil
 		}
 	}}
-	ledger := providers.NewBudget(providers.BudgetLimits{Calls: 4})
+	ledger := providers.NewBudget(providers.BudgetLimits{Calls: 5})
 	ctx := providers.WithBudget(context.Background(), ledger)
 	finish, err := providers.ReserveCall(ctx, .01)
 	if err != nil {
@@ -248,7 +251,7 @@ func TestBudgetExhaustionRetainsStreamedCardsAndHonestGaps(t *testing.T) {
 	finish(providers.Usage{}, true) // reading used the same document ledger
 	streamed := 0
 	result, err := NewGenerator(reservingProvider{base}, Options{OnBatch: func(b Batch) { streamed += len(b.Cards) }}).Generate(ctx, d)
-	if err != nil || streamed != 1 || len(result.Cards) != 1 || len(result.Coverage.Missing) != 1 || result.Coverage.Missing[0] != "scope" || ledger.Snapshot().Calls != 4 || len(base.requests) != 3 {
+	if err != nil || streamed != 1 || len(result.Cards) != 1 || len(result.Coverage.Missing) != 1 || result.Coverage.Missing[0] != "scope" || ledger.Snapshot().Calls != 5 || len(base.requests) != 4 {
 		t.Fatalf("budget discarded progress or started extra calls: %+v err=%v calls=%d", result, err, len(base.requests))
 	}
 	if !slices.ContainsFunc(result.Coverage.Issues, func(s string) bool { return strings.Contains(s, providers.ErrBudget.Error()) }) {

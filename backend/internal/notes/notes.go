@@ -253,8 +253,14 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 		return Result{}, fmt.Errorf("save set: %w", err)
 	}
 	var warnings []string
-	if len(genResult.Coverage.Missing) > 0 {
-		warnings = append(warnings, fmt.Sprintf("Не покрыто учебных целей: %d. Подробности сохранены в отчёте обработки.", len(genResult.Coverage.Missing)))
+	insufficient := 0
+	for _, e := range genResult.Plan.Excluded {
+		if e.Kind == "insufficient" {
+			insufficient++
+		}
+	}
+	if len(genResult.Coverage.Missing) > 0 || len(genResult.Coverage.Unassigned) > 0 || insufficient > 0 {
+		warnings = append(warnings, fmt.Sprintf("Набор частичный: не покрыто учебных целей — %d, не учтено блоков — %d, недостаточно оснований — %d блоков. Подробности сохранены в отчёте обработки.", len(genResult.Coverage.Missing), len(genResult.Coverage.Unassigned), insufficient))
 	}
 	for _, issue := range genResult.Coverage.Issues {
 		if strings.Contains(issue, providers.ErrBudget.Error()) {

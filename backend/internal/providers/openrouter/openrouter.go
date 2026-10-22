@@ -89,6 +89,10 @@ func New(cfg Config) (*Client, error) {
 	hc := cfg.HTTPClient
 	if hc == nil {
 		hc = &http.Client{Timeout: 3 * time.Minute, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+		// Recovery must not close idle connections belonging to other services.
+		if transport, ok := http.DefaultTransport.(*http.Transport); ok {
+			hc.Transport = newRecoveryTransport(transport)
+		}
 	}
 	return &Client{cfg: cfg, http: hc, backoff: time.Second}, nil
 }
@@ -165,6 +169,7 @@ type part struct {
 	ImageURL *imageURL `json:"image_url,omitempty"`
 }
 type schema struct {
+	Strict bool            `json:"strict"`
 	Name   string          `json:"name"`
 	Schema json.RawMessage `json:"schema"`
 }
@@ -173,6 +178,7 @@ type responseFormat struct {
 	JSONSchema schema `json:"json_schema"`
 }
 type chatRequest struct {
+	Stream         bool            `json:"stream"`
 	Model          string          `json:"model"`
 	Messages       []message       `json:"messages"`
 	Temperature    *float64        `json:"temperature,omitempty"`
@@ -187,22 +193,55 @@ type chatRequest struct {
 	} `json:"provider"`
 }
 type chatResponse struct {
-	Model string `json:"model"`
-	Error *struct {
-		Code int `json:"code"`
-	} `json:"error"`
-	Choices []struct {
-		Message struct {
-			Content *string `json:"content"`
-			Refusal *string `json:"refusal"`
-		} `json:"message"`
-		FinishReason string `json:"finish_reason"`
-	} `json:"choices"`
-	Usage struct {
-		PromptTokens     int      `json:"prompt_tokens"`
-		CompletionTokens int      `json:"completion_tokens"`
-		Cost             *float64 `json:"cost"`
-	} `json:"usage"`
+	ID       string           `json:"id"`
+	Provider string           `json:"provider"`
+	Model    string           `json:"model"`
+	Error    *responseError   `json:"error"`
+	Choices  []responseChoice `json:"choices"`
+	Usage    responseUsage    `json:"usage"`
+}
+
+type responseMessage struct {
+	Content *string `json:"content"`
+	Refusal *string `json:"refusal"`
+}
+type responseChoice struct {
+	Index        int             `json:"index"`
+	Message      responseMessage `json:"message"`
+	Delta        responseMessage `json:"delta"`
+	FinishReason string          `json:"finish_reason"`
+	Error        *responseError  `json:"error"`
+}
+type responseUsage struct {
+	PromptTokens     int      `json:"prompt_tokens"`
+	CompletionTokens int      `json:"completion_tokens"`
+	Cost             *float64 `json:"cost"`
+}
+type responseError struct {
+	Code json.RawMessage `json:"code"`
+}
+
+func (e *responseError) status() int {
+	var code int
+	if json.Unmarshal(e.Code, &code) == nil && code >= 400 && code <= 599 {
+		return code
+	}
+	var name string
+	_ = json.Unmarshal(e.Code, &name)
+	switch name {
+	case "rate_limit_exceeded":
+		return 429
+	case "authentication":
+		return 401
+	case "permission_denied":
+		return 403
+	case "payment_required":
+		return 402
+	case "invalid_request", "context_length_exceeded":
+		return 400
+	default:
+		return 502
+	}
 }
 
 func (c *Client) call(ctx context.Context, req providers.Request) (result providers.Response, callErr error) {
@@ -215,7 +254,7 @@ func (c *Client) call(ctx context.Context, req providers.Request) (result provid
 		user = parts
 	}
 
-	body := chatRequest{Model: c.cfg.Model, Messages: []message{{Role: "system", Content: req.System}, {Role: "user", Content: user}}, MaxTokens: c.cfg.MaxTokens}
+	body := chatRequest{Stream: true, Model: c.cfg.Model, Messages: []message{{Role: "system", Content: req.System}, {Role: "user", Content: user}}, MaxTokens: c.cfg.MaxTokens}
 	// Haiku 5.5 removed sampling parameters. With require_parameters enabled,
 	// even temperature=0 excludes every endpoint and OpenRouter returns 404.
 	baseModel, _, _ := strings.Cut(c.cfg.Model, ":")
@@ -228,7 +267,7 @@ func (c *Client) call(ctx context.Context, req providers.Request) (result provid
 		body.Provider.MaxPrice = map[string]float64{"prompt": .1, "completion": .5}
 	}
 	if len(req.Schema) > 0 {
-		body.ResponseFormat = &responseFormat{Type: "json_schema", JSONSchema: schema{Name: "answer", Schema: req.Schema}}
+		body.ResponseFormat = &responseFormat{Type: "json_schema", JSONSchema: schema{Strict: true, Name: "answer", Schema: req.Schema}}
 	}
 	data, err := json.Marshal(body)
 	if err != nil {
@@ -240,9 +279,9 @@ func (c *Client) call(ctx context.Context, req providers.Request) (result provid
 	}
 	r.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
 	r.Header.Set("Content-Type", "application/json")
-	r.Header.Set("Accept", "application/json")
+	r.Header.Set("Accept", "text/event-stream, application/json")
 	if b := providers.BudgetFrom(ctx); b != nil && b.MonetaryLimited() && c.inputBound(req) >= 100000 {
-		return providers.Response{}, providers.ErrBudget
+		return providers.Response{}, errors.New("openrouter: request exceeds bounded input tier")
 	}
 	charge := providers.Usage{}
 	chargeKnown := false
@@ -256,37 +295,66 @@ func (c *Client) call(ctx context.Context, req providers.Request) (result provid
 	began := time.Now()
 	resp, err := c.http.Do(r)
 	if err != nil {
-		slog.Warn("openrouter: request failed", "phase", trace.label(), "took", time.Since(began), "timeout", errors.Is(err, context.DeadlineExceeded))
+		c.http.CloseIdleConnections()
+		slog.With(trace.attributes()...).Warn("openrouter: request failed", "phase", trace.label(), "took", time.Since(began), "timeout", errors.Is(err, context.DeadlineExceeded))
 		return providers.Response{}, transportError{}
 	}
 	defer func() { _ = resp.Body.Close() }()
+	log := slog.With(trace.attributes()...).With("status", resp.StatusCode, "protocol", resp.Proto,
+		"request_id", resp.Header.Get("X-Request-Id"), "generation_id", resp.Header.Get("X-Generation-Id"), "cf_ray", resp.Header.Get("Cf-Ray"))
 	if resp.StatusCode != http.StatusOK {
 		return providers.Response{}, &APIError{Status: resp.StatusCode, retryAfter: retryDelay(resp.Header.Get("Retry-After"))}
 	}
 	trace.phase.Store(traceReadingBody)
-	data, err = io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes+1))
-	if err != nil {
-		slog.Warn("openrouter: response read failed", "phase", trace.label(), "took", time.Since(began), "timeout", errors.Is(err, context.DeadlineExceeded))
-		return providers.Response{}, transportError{}
-	}
-	if len(data) > maxBodyBytes {
-		return providers.Response{}, errors.New("openrouter: response exceeds size limit")
-	}
 	var cr chatResponse
-	if json.Unmarshal(data, &cr) != nil {
-		return providers.Response{}, errors.New("openrouter: invalid response JSON")
+	var progress streamProgress
+	streaming := strings.HasPrefix(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream")
+	if streaming {
+		cr, progress, err = readStream(resp.Body, began, log)
+	} else {
+		data, err = io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes+1))
+		progress.Bytes = int64(len(data))
+		progress.Complete = json.Valid(data)
+		if err == nil && len(data) > maxBodyBytes {
+			err = errResponseSize
+		}
+		if err == nil && json.Unmarshal(data, &cr) != nil {
+			err = errResponseJSON
+		}
 	}
 	if cr.Usage.Cost != nil {
 		chargeKnown = true
 		charge = providers.Usage{PromptTokens: cr.Usage.PromptTokens, CompletionTokens: cr.Usage.CompletionTokens, CostUSD: *cr.Usage.Cost}
 	}
+	if err != nil {
+		// Release this stream before discarding idle connections, so a sequential
+		// retry cannot silently reuse the connection on which the reply stalled.
+		_ = resp.Body.Close()
+		c.http.CloseIdleConnections()
+		log.Warn("openrouter: response read failed", "phase", trace.label(), "took", time.Since(began), "timeout", errors.Is(err, context.DeadlineExceeded),
+			"response_bytes", progress.Bytes, "response_json_complete", progress.Complete, "streaming", streaming, "stream_events", progress.Events)
+		if errors.Is(err, errResponseSize) || errors.Is(err, errStreamProtocol) || errors.Is(err, errResponseJSON) {
+			return providers.Response{}, err
+		}
+		var api *APIError
+		if errors.As(err, &api) {
+			return providers.Response{}, err
+		}
+		return providers.Response{}, transportError{}
+	}
 	if cr.Error != nil {
-		return providers.Response{}, &APIError{Status: cr.Error.Code}
+		return providers.Response{}, &APIError{Status: cr.Error.status()}
 	}
 	if len(cr.Choices) == 0 {
 		return providers.Response{}, errors.New("openrouter: response has no choices")
 	}
 	choice := cr.Choices[0]
+	if choice.Error != nil {
+		return providers.Response{}, &APIError{Status: choice.Error.status()}
+	}
+	if choice.FinishReason == "error" {
+		return providers.Response{}, &APIError{Status: http.StatusBadGateway}
+	}
 	if choice.FinishReason == "content_filter" || choice.Message.Refusal != nil {
 		return providers.Response{}, providers.ErrRefused
 	}
@@ -297,7 +365,8 @@ func (c *Client) call(ctx context.Context, req providers.Request) (result provid
 	if model == "" {
 		model = c.cfg.Model
 	}
-	slog.Info("openrouter: completed", "model", model, "prompt_tokens", cr.Usage.PromptTokens, "completion_tokens", cr.Usage.CompletionTokens, "cost_usd", charge.CostUSD)
+	log.Info("openrouter: completed", "response_generation_id", cr.ID, "provider", cr.Provider, "model", model, "prompt_tokens", cr.Usage.PromptTokens, "completion_tokens", cr.Usage.CompletionTokens, "cost_usd", charge.CostUSD,
+		"response_bytes", progress.Bytes, "response_json_complete", true, "streaming", streaming, "stream_events", progress.Events, "first_token_after_ms", float64(progress.FirstToken)/float64(time.Millisecond), "took", time.Since(began))
 	return providers.Response{Content: []byte(*choice.Message.Content), Model: model, Usage: providers.Usage{PromptTokens: cr.Usage.PromptTokens, CompletionTokens: cr.Usage.CompletionTokens, CostUSD: charge.CostUSD}, Truncated: choice.FinishReason == "length"}, nil
 }
 
