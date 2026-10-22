@@ -192,11 +192,6 @@ func generateUniqueShareCode(ctx context.Context, q db.Querier) (string, error) 
 		}
 		code := fmt.Sprintf("%06d", 100000+n.Int64())
 
-		// Avoid reserved default course code
-		if code == "101101" {
-			continue
-		}
-
 		_, err = q.GetSetByShareCode(ctx, db.GetSetByShareCodeParams{
 			ShareCode: code,
 			UserID:    0,

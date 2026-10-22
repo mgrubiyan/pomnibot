@@ -2,7 +2,6 @@ package repository_test
 
 import (
 	"context"
-	_ "embed"
 	"encoding/json"
 	"os"
 	"sync"
@@ -22,46 +21,24 @@ import (
 type testQuerier struct {
 	reports []db.SaveProcessingReportParams
 	db.Querier
-	mu                    sync.Mutex
-	setsByShareCode       map[string]db.GetSetByShareCodeRow
-	createdSets           []db.CreateSetParams
-	joinedSets            []db.JoinSetParams
-	createdFacts          []db.CreateFactParams
-	createdCards          []db.CreateCardParams
-	createdOptions        []db.CreateCardOptionParams
-	createdColumns        []db.CreateCardTableColumnParams
-	createdItems          []db.CreateCardTableItemParams
-	initProgressCalls     []db.InitUserFactProgressParams
-	upsertTopicCalls      []string
-	getSetByShareCodeFunc func(ctx context.Context, arg db.GetSetByShareCodeParams) (db.GetSetByShareCodeRow, error)
-	createSetFunc         func(ctx context.Context, arg db.CreateSetParams) (db.Set, error)
+	mu                sync.Mutex
+	createdFacts      []db.CreateFactParams
+	createdCards      []db.CreateCardParams
+	createdOptions    []db.CreateCardOptionParams
+	createdColumns    []db.CreateCardTableColumnParams
+	createdItems      []db.CreateCardTableItemParams
+	initProgressCalls []db.InitUserFactProgressParams
 }
 
 func newTestQuerier() *testQuerier {
-	return &testQuerier{
-		setsByShareCode: make(map[string]db.GetSetByShareCodeRow),
-	}
+	return &testQuerier{}
 }
 
-func (q *testQuerier) GetSetByShareCode(ctx context.Context, arg db.GetSetByShareCodeParams) (db.GetSetByShareCodeRow, error) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	if q.getSetByShareCodeFunc != nil {
-		return q.getSetByShareCodeFunc(ctx, arg)
-	}
-	if row, ok := q.setsByShareCode[arg.ShareCode]; ok {
-		return row, nil
-	}
+func (q *testQuerier) GetSetByShareCode(context.Context, db.GetSetByShareCodeParams) (db.GetSetByShareCodeRow, error) {
 	return db.GetSetByShareCodeRow{}, pgx.ErrNoRows
 }
 
-func (q *testQuerier) CreateSet(ctx context.Context, arg db.CreateSetParams) (db.Set, error) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	if q.createSetFunc != nil {
-		return q.createSetFunc(ctx, arg)
-	}
-	q.createdSets = append(q.createdSets, arg)
+func (q *testQuerier) CreateSet(_ context.Context, arg db.CreateSetParams) (db.Set, error) {
 	var setUUID pgtype.UUID
 	_ = setUUID.Scan(uuid.New().String())
 	return db.Set{
@@ -73,9 +50,6 @@ func (q *testQuerier) CreateSet(ctx context.Context, arg db.CreateSetParams) (db
 }
 
 func (q *testQuerier) JoinSet(_ context.Context, arg db.JoinSetParams) (db.UserSet, error) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	q.joinedSets = append(q.joinedSets, arg)
 	return db.UserSet{
 		UserID: arg.UserID,
 		SetID:  arg.SetID,
@@ -83,9 +57,6 @@ func (q *testQuerier) JoinSet(_ context.Context, arg db.JoinSetParams) (db.UserS
 }
 
 func (q *testQuerier) UpsertTopic(_ context.Context, name string) (db.Topic, error) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	q.upsertTopicCalls = append(q.upsertTopicCalls, name)
 	var topicUUID pgtype.UUID
 	_ = topicUUID.Scan(uuid.New().String())
 	return db.Topic{

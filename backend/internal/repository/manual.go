@@ -38,9 +38,6 @@ func (s *ManualStore) CreateSet(ctx context.Context, userID int64, title string,
 			return uuid.Nil, err
 		}
 		code := fmt.Sprintf("%06d", 100000+n.Int64())
-		if code == "101101" {
-			continue
-		}
 		var setID uuid.UUID
 		err = s.transaction(ctx, func(q *db.Queries) error {
 			set, err := q.CreateSet(ctx, db.CreateSetParams{Title: title, AuthorID: userID, ShareCode: code})
