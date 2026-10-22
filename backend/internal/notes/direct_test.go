@@ -48,7 +48,7 @@ func TestMakeWithDirectGeneratorPreservesProgressAndSavePayload(t *testing.T) {
 				if failure {
 					return providers.Response{}, errors.New("unavailable")
 				}
-				return providers.Response{Usage: usage, Content: []byte(`{"cards":[{"name":"Назначение","topic":"Индекс","question":"Для чего нужен индекс?","answer":"Для ускорения поиска по ключу.","evidence":[{"blockId":"s","quote":"` + text + `"}]}]}`)}, nil
+				return providers.Response{Usage: usage, Content: []byte(`{"response":{"facts":[{"name":"Назначение","cards":[{"kind":"flip","question":"Для чего нужен индекс?","answer":"Для ускорения поиска по ключу."},{"kind":"input","question":"Для чего нужен индекс?","answer":"Для ускорения поиска по ключу."}]}]},"grounding":[{"factIndex":0,"kind":"flip","question":"Для чего нужен индекс?","topic":"Индекс","evidence":[{"blockId":"s","quote":"` + text + `"}]},{"factIndex":0,"kind":"input","question":"Для чего нужен индекс?","topic":"Индекс","evidence":[{"blockId":"s","quote":"` + text + `"}]}]}`)}, nil
 			})
 			saver := &captureDirectSaver{}
 			maker := New(ex, FromGenerator(generator.NewGenerator(model, generator.Options{})), saver, 1).WithBudget(providers.BudgetLimits{USD: .05, Calls: 3})
@@ -65,7 +65,7 @@ func TestMakeWithDirectGeneratorPreservesProgressAndSavePayload(t *testing.T) {
 				t.Fatal("missing honest coverage warning")
 			}
 			r := saver.result
-			if err != nil || calls != 1 || saver.calls != 1 || !generating || progress != 1 || len(r.Facts) != 1 || len(r.Cards) != 1 || r.Cards[0].FactID != r.Facts[0].ID || r.Budget.Calls != 1 || r.Budget.ReportedUSD != .001 {
+			if err != nil || calls != 1 || saver.calls != 1 || !generating || progress != 2 || len(r.Facts) != 1 || len(r.Cards) != 2 || r.Cards[0].FactID != r.Facts[0].ID || r.Budget.Calls != 1 || r.Budget.ReportedUSD != .001 {
 				t.Fatalf("lost save/progress/ledger: %+v err=%v", r, err)
 			}
 			if r.Artifact == nil || r.Artifact.Version != generator.PipelineVersion || len(r.Artifact.Files) != 1 || r.Artifact.Reading.Blocks[0].Text != text {

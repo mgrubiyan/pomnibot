@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/mgrubiyan/pomnibot/backend/contracts"
+	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 )
 
@@ -56,4 +58,17 @@ func (d *loadedCardDetails) GetCardTableColumns(_ context.Context, id pgtype.UUI
 }
 func (d *loadedCardDetails) GetCardTableItems(_ context.Context, id pgtype.UUID) ([]db.CardTableItem, error) {
 	return d.items[id], nil
+}
+
+func choiceAnswer(options []db.CardOption, stored string) contracts.CardAnswer {
+	var right []string
+	for _, o := range options {
+		if o.IsCorrect {
+			right = append(right, o.Text)
+		}
+	}
+	if len(right) == 0 {
+		right = cards.ChoiceAnswers(stored)
+	}
+	return contracts.NewStringArrayCardAnswer(right)
 }

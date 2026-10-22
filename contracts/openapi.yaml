@@ -624,13 +624,18 @@ components:
 
     CardAnswer:
       description: "
-      choice - integer
+      choice - string[] (all correct option texts); legacy string/integer supported
       input - string
       boolean - boolean
       table - #/components/schemas/TableLayout
       "
       oneOf:
-        - type: integer                            # kind choice: index in options
+        - type: array                              # kind choice: all correct option texts
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+        - type: integer                            # legacy choice: index in options
         - type: string                             # kind input
         - type: boolean                            # kind boolean
         - $ref: '#/components/schemas/TableLayout' # kind table
@@ -897,6 +902,7 @@ components:
       properties:
         answer:
           type: string
+          description: Typed answer, or a JSON-encoded array of selected option texts for choice
 
     CheckAnswerRequest:
       type: object
@@ -905,6 +911,7 @@ components:
       properties:
         answer:
           type: string
+          description: Typed answer, or a JSON-encoded array of selected option texts for choice
 
     CheckAnswerResponse:
       type: object

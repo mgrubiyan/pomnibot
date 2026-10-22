@@ -27,24 +27,26 @@ import (
 
 // Defaults can be overridden independently of the legacy providers.
 const (
-	DefaultModel       = "anthropic/claude-haiku-5.5"
-	DefaultBaseURL     = "https://openrouter.ai/api/v1"
-	DefaultMaxTokens   = 50000
-	DefaultEffort      = "high"
-	maxAttempts        = 3
-	maxBodyBytes       = 4 << 20
-	maxPromptPrice     = .1 // USD per million; also used by the preflight reservation
-	maxCompletionPrice = .5
+	DefaultModel            = "anthropic/claude-haiku-5.5"
+	DefaultBaseURL          = "https://openrouter.ai/api/v1"
+	DefaultMaxTokens        = 50000
+	DefaultEffort           = "high"
+	DefaultEndpointProvider = "Anthropic"
+	maxAttempts             = 3
+	maxBodyBytes            = 4 << 20
+	maxPromptPrice          = .1 // USD per million; also used by the preflight reservation
+	maxCompletionPrice      = .5
 )
 
 // Config holds credentials, the model and optional HTTP transport injection.
 type Config struct {
-	APIKey     string
-	Model      string
-	Effort     string // empty or none disables thinking; explicit levels enable it
-	BaseURL    string
-	MaxTokens  int
-	HTTPClient *http.Client
+	APIKey           string
+	Model            string
+	Effort           string // empty or none disables thinking; explicit levels enable it
+	EndpointProvider string // empty uses automatic routing; otherwise pins one provider without fallback
+	BaseURL          string
+	MaxTokens        int
+	HTTPClient       *http.Client
 }
 
 // ConfigFromEnv reads OPENROUTER_KEY and the optional OPENROUTER_* settings.
@@ -56,6 +58,18 @@ func ConfigFromEnv() (Config, error) {
 		return fallback
 	}
 	cfg := Config{APIKey: get("OPENROUTER_KEY", ""), Model: get("OPENROUTER_MODEL", DefaultModel), BaseURL: strings.TrimRight(get("OPENROUTER_BASE_URL", DefaultBaseURL), "/"), MaxTokens: DefaultMaxTokens, Effort: get("OPENROUTER_EFFORT", DefaultEffort)}
+	// Automatic routing returned unusable structured content in the recorded
+	// Haiku comparison. Pin the verified endpoint for this model; other models
+	// retain their own routing, and operators can explicitly choose "auto".
+	baseModel, _, _ := strings.Cut(cfg.Model, ":")
+	defaultEndpoint := ""
+	if baseModel == DefaultModel {
+		defaultEndpoint = DefaultEndpointProvider
+	}
+	cfg.EndpointProvider = get("OPENROUTER_PROVIDER", defaultEndpoint)
+	if strings.EqualFold(cfg.EndpointProvider, "auto") {
+		cfg.EndpointProvider = ""
+	}
 	n, err := strconv.Atoi(get("OPENROUTER_MAX_TOKENS", strconv.Itoa(DefaultMaxTokens)))
 	if err != nil || n <= 0 {
 		return Config{}, errors.New("OPENROUTER_MAX_TOKENS must be a positive integer")
@@ -202,6 +216,8 @@ type chatRequest struct {
 	Provider struct {
 		RequireParameters bool               `json:"require_parameters"`
 		MaxPrice          map[string]float64 `json:"max_price,omitempty"`
+		Only              []string           `json:"only,omitempty"`
+		AllowFallbacks    *bool              `json:"allow_fallbacks,omitempty"`
 	} `json:"provider"`
 }
 type chatResponse struct {
@@ -279,6 +295,11 @@ func (c *Client) call(ctx context.Context, req providers.Request) (result provid
 	body.Reasoning.Enabled = c.cfg.Effort != ""
 	body.Reasoning.Effort = c.cfg.Effort
 	body.Provider.RequireParameters = true
+	if c.cfg.EndpointProvider != "" {
+		body.Provider.Only = []string{c.cfg.EndpointProvider}
+		allowFallbacks := false
+		body.Provider.AllowFallbacks = &allowFallbacks
+	}
 	if b := providers.BudgetFrom(ctx); b != nil && b.MonetaryLimited() {
 		body.Provider.MaxPrice = map[string]float64{"prompt": maxPromptPrice, "completion": maxCompletionPrice}
 	}

@@ -69,8 +69,8 @@ func readerEnvironment(name string) []any {
 	var defaults []any
 	switch name {
 	case "openrouter":
-		keys = []string{"OPENROUTER_MODEL", "OPENROUTER_BASE_URL", "OPENROUTER_MAX_TOKENS", "OPENROUTER_EFFORT"}
-		defaults = []any{openrouter.DefaultModel, openrouter.DefaultBaseURL, openrouter.DefaultMaxTokens, openrouter.DefaultEffort}
+		keys = []string{"OPENROUTER_MODEL", "OPENROUTER_BASE_URL", "OPENROUTER_MAX_TOKENS", "OPENROUTER_EFFORT", "OPENROUTER_PROVIDER"}
+		defaults = []any{openrouter.DefaultModel, openrouter.DefaultBaseURL, openrouter.DefaultMaxTokens, openrouter.DefaultEffort, openrouter.DefaultEndpointProvider}
 	case "qwen":
 		keys = []string{"YC_LLM_MODEL", "YC_LLM_BASE_URL", "YC_LLM_MAX_TOKENS"}
 		defaults = []any{aistudio.DefaultModel, aistudio.DefaultBaseURL, aistudio.DefaultMaxTokens}

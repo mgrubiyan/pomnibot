@@ -28,6 +28,7 @@ type Card struct {
 	SourceRef   pgtype.Text        `json:"source_ref"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	Position    int32              `json:"position"`
 }
 
 type CardKind struct {

@@ -92,7 +92,7 @@ function shuffle<T>(items: readonly T[]): T[] {
 /** What the card asks of the reader, said above the question. */
 const TASKS: Record<Card['kind'], string> = {
     flip: 'Вспомните ответ',
-    choice: 'Выберите ответ',
+    choice: 'Выберите все верные ответы',
     boolean: 'Верно или нет?',
     input: 'Впишите ответ',
     table: 'Разложите по колонкам',
@@ -111,6 +111,7 @@ function optionsOf(card: Card): Option[] {
 }
 
 function answerTextOf(card: Card): string {
+    if (Array.isArray(card.answer)) return card.answer.join('; ');
     if (typeof card.answer === 'boolean') {
         return card.answer ? 'true' : 'false';
     }
@@ -176,6 +177,7 @@ export function Feed({
     const [results, setResults] = useState<AnswerResult[]>(initialResults);
 
     const [given, setGiven] = useState<string | null>(null);
+    const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
     const [verdict, setVerdict] = useState<Verdict | null>(null);
     // A typed answer being checked by meaning, and why it counts or not.
     const [check, setCheck] = useState<{ stage: CheckStage; answer: string } | null>(null);
@@ -215,7 +217,9 @@ export function Feed({
                 if (cancelled) {
                     return;
                 }
-                setCards(visibleCards(next, setId, removedCardIds, cardPatches));
+                setCards(visibleCards(next, setId, removedCardIds, cardPatches).map((item) =>
+                    item.table ? { ...item, table: { ...item.table, items: shuffle(item.table.items) } } : item,
+                ));
                 setStatus('ready');
             })
             .catch(() => {
@@ -307,7 +311,10 @@ export function Feed({
             if (!card) {
                 return;
             }
-            const exact = norm(value) === norm(answerTextOf(card));
+            const expected = Array.isArray(card.answer) ? card.answer : [answerTextOf(card)];
+            const exact = card.kind === 'choice'
+                ? selectedOptions.length === expected.length && expected.every((answer) => selectedOptions.includes(answer))
+                : norm(value) === norm(answerTextOf(card));
             if (card.kind !== 'input' || exact) {
                 setGiven(value);
                 setVerdict(exact ? 'correct' : 'wrong');
@@ -319,7 +326,7 @@ export function Feed({
             // Other words: the card turns once the backend has judged them.
             askCheck(card.id, value);
         },
-        [card, askCheck, startFlip],
+        [card, askCheck, startFlip, selectedOptions],
     );
 
     const reset = useCallback(() => {
@@ -330,6 +337,7 @@ export function Feed({
         setVerdict(null);
         setRevealed(false);
         setDraft('');
+        setSelectedOptions([]);
         setPicked(null);
         setFlipping(false);
     }, []);
@@ -812,11 +820,22 @@ export function Feed({
                             key={option.value}
                             type="button"
                             className={s.option}
-                            onClick={() => submit(option.value)}
+                            aria-pressed={card.kind === 'choice' ? selectedOptions.includes(option.value) : undefined}
+                            onClick={() => card.kind === 'choice'
+                                ? setSelectedOptions((current) => current.includes(option.value)
+                                    ? current.filter((value) => value !== option.value) : [...current, option.value])
+                                : submit(option.value)}
                         >
-                            <Typography.Text variant="body">{option.label}</Typography.Text>
+                            <Typography.Text variant="body">{card.kind === 'choice' ? `${selectedOptions.includes(option.value) ? '☑' : '☐'} ` : ''}{option.label}</Typography.Text>
                         </button>
                     ))}
+
+                    {card.kind === 'choice' ? (
+                        <Button size="medium" variant="secondary" stretched disabled={selectedOptions.length === 0}
+                            onClick={() => submit(selectedOptions.join('; '))}>
+                            Проверить
+                        </Button>
+                    ) : null}
 
                     {card.kind === 'input' && !check ? (
                         <>

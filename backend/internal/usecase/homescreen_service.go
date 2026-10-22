@@ -212,10 +212,8 @@ func (s *homescreenServiceImpl) buildFeedCard(ctx context.Context, r db.GetFeedC
 		for _, o := range opts {
 			card.Options = append(card.Options, o.Text)
 		}
-		card.Answer = contracts.CardAnswer{
-			Type:   contracts.StringCardAnswer,
-			String: ansStr,
-		}
+		card.Answer = choiceAnswer(opts, ansStr)
+
 	case contracts.CardKindBoolean:
 		b, _ := strconv.ParseBool(ansStr)
 		card.Answer = contracts.CardAnswer{

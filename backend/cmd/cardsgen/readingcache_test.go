@@ -57,3 +57,16 @@ func TestReadingCacheSeparatesThinkingEffort(t *testing.T) {
 		t.Fatal("changed thinking mode reused stale reading")
 	}
 }
+
+func TestReadingCacheSeparatesEndpointProvider(t *testing.T) {
+	t.Setenv("OPENROUTER_PROVIDER", "auto")
+	first := processingcache.Key(readerEnvironment("openrouter"))
+	otherReader := processingcache.Key(readerEnvironment("qwen"))
+	t.Setenv("OPENROUTER_PROVIDER", "Anthropic")
+	if processingcache.Key(readerEnvironment("openrouter")) == first {
+		t.Fatal("changed endpoint reused stale reading")
+	}
+	if processingcache.Key(readerEnvironment("qwen")) != otherReader {
+		t.Fatal("writer endpoint invalidated another reader")
+	}
+}

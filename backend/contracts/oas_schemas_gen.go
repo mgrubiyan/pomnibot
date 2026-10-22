@@ -27,6 +27,7 @@ func (*AnswerQuestionNotFound) answerQuestionRes() {}
 
 // Ref: #/components/schemas/AnswerQuestionRequest
 type AnswerQuestionRequest struct {
+	// Typed answer, or a JSON-encoded array of selected option texts for choice.
 	Answer string `json:"answer"`
 }
 
@@ -238,12 +239,14 @@ func (s *Card) SetTopic(val string) {
 func (*Card) createCardRes() {}
 func (*Card) updateCardRes() {}
 
-// Choice - integer input - string boolean - boolean table - #/components/schemas/TableLayout.
+// Choice - string[] (all correct option texts); legacy string/integer supported input - string boolean
+// - boolean table - #/components/schemas/TableLayout.
 // Ref: #/components/schemas/CardAnswer
 // CardAnswer represents sum type.
 type CardAnswer struct {
 	// Type selects the active sum variant, switch on this field.
 	Type        CardAnswerType
+	StringArray []string
 	Int         int
 	String      string
 	Bool        bool
@@ -255,11 +258,15 @@ type CardAnswerType string
 
 // Possible values for CardAnswerType.
 const (
+	StringArrayCardAnswer CardAnswerType = "[]string"
 	IntCardAnswer         CardAnswerType = "int"
 	StringCardAnswer      CardAnswerType = "string"
 	BoolCardAnswer        CardAnswerType = "bool"
 	TableLayoutCardAnswer CardAnswerType = "TableLayout"
 )
+
+// IsStringArray reports whether CardAnswer is []string.
+func (s CardAnswer) IsStringArray() bool { return s.Type == StringArrayCardAnswer }
 
 // IsInt reports whether CardAnswer is int.
 func (s CardAnswer) IsInt() bool { return s.Type == IntCardAnswer }
@@ -272,6 +279,27 @@ func (s CardAnswer) IsBool() bool { return s.Type == BoolCardAnswer }
 
 // IsTableLayout reports whether CardAnswer is TableLayout.
 func (s CardAnswer) IsTableLayout() bool { return s.Type == TableLayoutCardAnswer }
+
+// SetStringArray sets CardAnswer to []string.
+func (s *CardAnswer) SetStringArray(v []string) {
+	s.Type = StringArrayCardAnswer
+	s.StringArray = v
+}
+
+// GetStringArray returns []string and true boolean if CardAnswer is []string.
+func (s CardAnswer) GetStringArray() (v []string, ok bool) {
+	if !s.IsStringArray() {
+		return v, false
+	}
+	return s.StringArray, true
+}
+
+// NewStringArrayCardAnswer returns new CardAnswer from []string.
+func NewStringArrayCardAnswer(v []string) CardAnswer {
+	var s CardAnswer
+	s.SetStringArray(v)
+	return s
+}
 
 // SetInt sets CardAnswer to int.
 func (s *CardAnswer) SetInt(v int) {
@@ -539,6 +567,7 @@ func (*CheckAnswerNotFound) checkAnswerRes() {}
 
 // Ref: #/components/schemas/CheckAnswerRequest
 type CheckAnswerRequest struct {
+	// Typed answer, or a JSON-encoded array of selected option texts for choice.
 	Answer string `json:"answer"`
 }
 

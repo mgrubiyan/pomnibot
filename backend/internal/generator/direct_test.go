@@ -12,12 +12,13 @@ import (
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/material"
+	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
 func TestDirectDocumentGroundsEachCardAndDeliversOneBatch(t *testing.T) {
 	d := material.Document{Blocks: []material.Block{{ID: "a", Page: 1, Text: "Индекс ускоряет\nпоиск записей."}, {ID: "b", Page: 2, Text: "Ключ определяет поиск."}}}
-	payload := `{"cards":[{"name":"Назначение","topic":"Индекс","question":"Для чего служит индекс?","answer":"Ускоряет поиск записей.","evidence":[{"blockId":"a","quote":"Индекс ускоряет поиск записей."}]},{"name":"Ключ","topic":"Индекс","question":"Что определяет поиск?","answer":"Ключ.","evidence":[{"blockId":"missing","quote":"Ключ определяет поиск."}]}]}`
+	payload := `{"response":{"facts":[{"name":"Назначение","cards":[{"kind":"flip","question":"Для чего служит индекс?","answer":"Ускоряет поиск записей."},{"kind":"input","question":"Для чего служит индекс?","answer":"Ускоряет поиск записей."}]},{"name":"Ключ","cards":[{"kind":"flip","question":"Что определяет поиск?","answer":"Ключ."},{"kind":"input","question":"Что определяет поиск?","answer":"Ключ."}]}]},"grounding":[{"factIndex":0,"question":"Для чего служит индекс?","topic":"Индекс","evidence":[{"blockId":"a","quote":"Индекс ускоряет поиск записей."}],"kind":"flip"},{"factIndex":1,"question":"Что определяет поиск?","topic":"Индекс","evidence":[{"blockId":"missing","quote":"Ключ определяет поиск."}],"kind":"flip"},{"factIndex":0,"question":"Для чего служит индекс?","topic":"Индекс","evidence":[{"blockId":"a","quote":"Индекс ускоряет поиск записей."}],"kind":"input"},{"factIndex":1,"question":"Что определяет поиск?","topic":"Индекс","evidence":[{"blockId":"missing","quote":"Ключ определяет поиск."}],"kind":"input"}]}`
 	calls, delivered := 0, 0
 	p := &fakeProvider{answer: func(_ int, _ string, r providers.Request) (string, error) {
 		calls++
@@ -27,7 +28,7 @@ func TestDirectDocumentGroundsEachCardAndDeliversOneBatch(t *testing.T) {
 		return payload, nil
 	}}
 	r, err := NewGenerator(p, Options{OnBatch: func(b Batch) { delivered += len(b.Cards) }}).Generate(context.Background(), Document{ID: "d", Title: "Лекция", Structure: &d})
-	if err != nil || calls != 1 || delivered != 1 || len(r.Cards) != 1 || r.Stats.DroppedQuote != 1 || r.Stats.CardsFromModel != 2 {
+	if err != nil || calls != 1 || delivered != 2 || len(r.Cards) != 2 || r.Stats.DroppedQuote != 2 || r.Stats.CardsFromModel != 4 {
 		t.Fatalf("result=%+v err=%v", r, err)
 	}
 	if !strings.HasPrefix(d.Blocks[0].Text, r.Cards[0].SourceQuote) || r.Cards[0].Explanation != r.Cards[0].SourceQuote || r.Cards[0].SourceRef != "Лекция, стр. 1" || len(r.Facts) != 1 {
@@ -39,7 +40,11 @@ func TestDirectDocumentGroundsEachCardAndDeliversOneBatch(t *testing.T) {
 }
 
 func TestDirectFailureNeverRetriesOrPublishes(t *testing.T) {
-	for _, payload := range []string{`{`, `{"cards":null}`, `{"facts":[]}`} {
+	for _, payload := range []string{
+		`{`, `{"cards":null}`, `{"facts":[]}`,
+		// Real malformed output from the coverage prompt audit (attempt 4).
+		`{"response":{"facts":[{"name":"x","cards":[{"kind":"choice","question":"x","rightAnswers":["x"],"wrongAnswers":["x"]}]}]},"grounding":[]}`,
+	} {
 		calls := 0
 		p := &fakeProvider{answer: func(int, string, providers.Request) (string, error) { calls++; return payload, nil }}
 		d := sourceFixture()
@@ -52,15 +57,15 @@ func TestDirectFailureNeverRetriesOrPublishes(t *testing.T) {
 
 func TestDirectRejectsInvalidAndDuplicateCardsWithoutLosingGoodOnes(t *testing.T) {
 	d := sourceFixture()
-	card := directCard{Name: "Удаление", Topic: "Индекс", Question: "Когда индекс не перестраивается при удалении записи?", Answer: "Если занято не более 900 байт.", Evidence: []directEvidence{{BlockID: "s", Quote: d.Blocks[1].Text}}}
+	card := legacyFixtureCard{Name: "Удаление", Topic: "Индекс", Question: "Когда индекс не перестраивается при удалении записи?", Answer: "Если занято не более 900 байт.", Evidence: []directEvidence{{BlockID: "s", Quote: d.Blocks[1].Text}}}
 	invalid := card
 	invalid.Answer = ""
 	p := &fakeProvider{answer: func(int, string, providers.Request) (string, error) {
-		b, _ := json.Marshal(directResponse{Cards: []directCard{card, invalid, card}})
+		b, _ := json.Marshal(legacyFixtureResponse{Cards: []legacyFixtureCard{card, invalid, card}})
 		return string(b), nil
 	}}
 	r, err := NewGenerator(p, Options{}).Generate(context.Background(), Document{Structure: &d})
-	if err != nil || len(r.Cards) != 1 || r.Stats.DroppedInvalid != 1 || r.Stats.DroppedDuplicate != 1 {
+	if err != nil || len(r.Cards) != 2 || r.Stats.DroppedInvalid != 2 || r.Stats.DroppedDuplicate != 2 {
 		t.Fatalf("%+v %v", r, err)
 	}
 }
@@ -84,7 +89,7 @@ func TestDirectWholeSourceLimitBeforeBilling(t *testing.T) {
 		if !strings.Contains(r.User, d.Blocks[0].Text) {
 			t.Fatal("source cut")
 		}
-		return `{"cards":[]}`, nil
+		return `{"response":{"facts":[]},"grounding":[]}`, nil
 	}}
 	_, err := NewGenerator(p, Options{SourceBudget: providers.OpenRouterProfile().SourceBytes}).Generate(context.Background(), Document{Structure: &d})
 	if err != nil || calls != 1 {
@@ -103,7 +108,7 @@ func TestPlainTextUsesTheSameSingleDocumentRequest(t *testing.T) {
 		if r.System != directPrompt || !strings.Contains(r.User, "Индекс ускоряет поиск.") {
 			t.Fatal("plain text took a different pipeline")
 		}
-		return `{"cards":[]}`, nil
+		return `{"response":{"facts":[]},"grounding":[]}`, nil
 	}}
 	_, err := NewGenerator(p, Options{}).Generate(context.Background(), Document{Text: "Индекс ускоряет поиск."})
 	if err != nil || calls != 1 {
@@ -113,20 +118,20 @@ func TestPlainTextUsesTheSameSingleDocumentRequest(t *testing.T) {
 
 func TestQuotesCannotSkipSourceConditions(t *testing.T) {
 	source := "Полный индекс хранит записи в отсортированном порядке. Только при положительном значении параметра. Неполный индекс хранит номера блоков основного файла."
-	c := directCard{Name: "Индекс", Topic: "Хранение", Question: "Какие индексы существуют?", Answer: "Полный и неполный.", Evidence: []directEvidence{{BlockID: "s", Quote: "Полный индекс хранит записи в отсортированном порядке. ... Неполный индекс хранит номера блоков основного файла."}}}
+	c := legacyFixtureCard{Name: "Индекс", Topic: "Хранение", Question: "Какие индексы существуют?", Answer: "Полный и неполный.", Evidence: []directEvidence{{BlockID: "s", Quote: "Полный индекс хранит записи в отсортированном порядке. ... Неполный индекс хранит номера блоков основного файла."}}}
 	p := &fakeProvider{answer: func(int, string, providers.Request) (string, error) {
-		data, _ := json.Marshal(directResponse{Cards: []directCard{c}})
+		data, _ := json.Marshal(legacyFixtureResponse{Cards: []legacyFixtureCard{c}})
 		return string(data), nil
 	}}
 	d := material.Document{Blocks: []material.Block{{ID: "s", Text: source}}}
 	r, err := NewGenerator(p, Options{}).Generate(context.Background(), Document{Structure: &d})
-	if err != nil || len(r.Cards) != 0 || r.Stats.DroppedQuote != 1 {
+	if err != nil || len(r.Cards) != 0 || r.Stats.DroppedQuote != 2 {
 		t.Fatalf("accepted discontinuous quote: %+v %v", r, err)
 	}
 }
 
-// Opt-in, offline validation of a paid recording. Source and schema must match;
-// the old output is deliberately rechecked under the new quote validator.
+// Opt-in, offline validation of a paid recording. Replay the unchanged source
+// and response against today's validators; historical flip-only facts now fail.
 func TestRecordedResponseValidation(t *testing.T) {
 	dir := os.Getenv("POMNIBOT_DIRECT_RECORDING")
 	if dir == "" {
@@ -157,30 +162,22 @@ func TestRecordedResponseValidation(t *testing.T) {
 	if err = json.Unmarshal([]byte(trace.Request.User), &title); err != nil {
 		t.Fatal(err)
 	}
+	calls := 0
 	p := providerFunc(func(_ context.Context, r providers.Request) (providers.Response, error) {
-		if r.User != trace.Request.User || !bytes.Equal(r.Schema, trace.Request.Schema) {
-			t.Fatal("source or schema changed")
+		calls++
+		if r.User != trace.Request.User {
+			t.Fatal("recorded source changed")
 		}
 		response := trace.Response
 		response.Cached = true
 		response.Usage = providers.Usage{}
 		return response, nil
 	})
-	r, err := NewGenerator(p, Options{}).Generate(context.Background(), Document{Title: title.Title, Structure: &input.Ingest.Document})
-	if err != nil {
-		t.Fatal(err)
+	r, err := NewGenerator(p, Options{OnBatch: func(Batch) { t.Fatal("published historical flip-only facts") }}).Generate(context.Background(), Document{Title: title.Title, Structure: &input.Ingest.Document})
+	if err == nil || calls != 1 || r.Stats.InvalidResponses != 1 || len(r.Cards) != 0 || len(r.Facts) != 0 {
+		t.Fatalf("accepted historical response: %+v, %v, calls=%d", r, err, calls)
 	}
-	if len(r.Cards) != 23 || r.Stats.DroppedQuote != 1 {
-		t.Fatalf("unexpected filtering: %d cards, %d quotes", len(r.Cards), r.Stats.DroppedQuote)
-	}
-	// The only removed card must be the independently audited bad classification;
-	// all 18 independently usable cards, including the bulleted update rule, stay.
-	for _, c := range r.Cards {
-		if strings.HasPrefix(c.Question, "Какие два метода организации") {
-			t.Fatal("bad classification retained")
-		}
-	}
-	t.Log("old recording: one bad card rejected, zero good cards lost, 23 retained")
+	t.Log("historical flip-only response rejected without repair")
 }
 
 func TestSourceQuotePreservesMeaningAndOriginalFormatting(t *testing.T) {
@@ -208,10 +205,31 @@ func TestSourceQuotePreservesMeaningAndOriginalFormatting(t *testing.T) {
 func TestPlainTextRetainsPageReferences(t *testing.T) {
 	text := "Первая страница.\nВторая страница."
 	p := &fakeProvider{answer: func(_ int, _ string, _ providers.Request) (string, error) {
-		return `{"cards":[{"name":"Страница","topic":"Текст","question":"Какая страница?","answer":"Вторая.","evidence":[{"blockId":"p2","quote":"Вторая страница."}]}]}`, nil
+		return `{"response":{"facts":[{"name":"Страница","cards":[{"kind":"flip","question":"Какая страница?","answer":"Вторая."},{"kind":"input","question":"Какая страница?","answer":"Вторая."}]}]},"grounding":[{"factIndex":0,"question":"Какая страница?","topic":"Текст","evidence":[{"blockId":"p2","quote":"Вторая страница."}],"kind":"flip"},{"factIndex":0,"question":"Какая страница?","topic":"Текст","evidence":[{"blockId":"p2","quote":"Вторая страница."}],"kind":"input"}]}`, nil
 	}}
 	r, err := NewGenerator(p, Options{}).Generate(context.Background(), Document{Title: "Файл", Text: text, PageStarts: []int{0, len("Первая страница.\n")}})
-	if err != nil || len(r.Cards) != 1 || r.Cards[0].SourceRef != "Файл, стр. 2" {
+	if err != nil || len(r.Cards) != 2 || r.Cards[0].SourceRef != "Файл, стр. 2" {
 		t.Fatalf("lost pages: %+v %v", r, err)
 	}
+}
+
+// legacyFixtureResponse keeps the original source-validator fixtures readable.
+type legacyFixtureCard struct {
+	Name, Topic, Question, Answer string
+	Evidence                      []directEvidence
+}
+type legacyFixtureResponse struct{ Cards []legacyFixtureCard }
+
+func (r legacyFixtureResponse) MarshalJSON() ([]byte, error) {
+	response := directResponse{Response: AIResponse{Facts: []Fact{}}, Grounding: []grounding{}}
+	for i, c := range r.Cards {
+		response.Response.Facts = append(response.Response.Facts, Fact{Name: c.Name, Cards: []Card{
+			FlipCard{CardBase: CardBase{Question: c.Question}, Answer: c.Answer},
+			InputCard{CardBase: CardBase{Question: c.Question}, Answer: c.Answer},
+		}})
+		for _, kind := range []cards.Kind{cards.KindFlip, cards.KindInput} {
+			response.Grounding = append(response.Grounding, grounding{Kind: kind, FactIndex: i, Question: c.Question, Topic: c.Topic, Evidence: c.Evidence})
+		}
+	}
+	return json.Marshal(response)
 }

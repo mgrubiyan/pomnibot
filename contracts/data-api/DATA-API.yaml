@@ -198,9 +198,14 @@ checks:
                     column:
                       type: string
           answer:
-            description: ' choice - integer input - string boolean - boolean table
-              - #/components/schemas/TableLayout '
+            description: ' choice - string[] (all correct option texts); legacy string/integer
+              supported input - string boolean - boolean table - #/components/schemas/TableLayout '
             oneOf:
+            - type: array
+              minItems: 1
+              uniqueItems: true
+              items:
+                type: string
             - type: integer
             - type: string
             - type: boolean
@@ -558,9 +563,14 @@ checks:
                   column:
                     type: string
         answer:
-          description: ' choice - integer input - string boolean - boolean table -
-            #/components/schemas/TableLayout '
+          description: ' choice - string[] (all correct option texts); legacy string/integer
+            supported input - string boolean - boolean table - #/components/schemas/TableLayout '
           oneOf:
+          - type: array
+            minItems: 1
+            uniqueItems: true
+            items:
+              type: string
           - type: integer
           - type: string
           - type: boolean
@@ -810,9 +820,14 @@ checks:
                     column:
                       type: string
           answer:
-            description: ' choice - integer input - string boolean - boolean table
-              - #/components/schemas/TableLayout '
+            description: ' choice - string[] (all correct option texts); legacy string/integer
+              supported input - string boolean - boolean table - #/components/schemas/TableLayout '
             oneOf:
+            - type: array
+              minItems: 1
+              uniqueItems: true
+              items:
+                type: string
             - type: integer
             - type: string
             - type: boolean
@@ -934,9 +949,14 @@ checks:
                   column:
                     type: string
         answer:
-          description: ' choice - integer input - string boolean - boolean table -
-            #/components/schemas/TableLayout '
+          description: ' choice - string[] (all correct option texts); legacy string/integer
+            supported input - string boolean - boolean table - #/components/schemas/TableLayout '
           oneOf:
+          - type: array
+            minItems: 1
+            uniqueItems: true
+            items:
+              type: string
           - type: integer
           - type: string
           - type: boolean

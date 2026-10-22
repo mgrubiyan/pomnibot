@@ -14,7 +14,7 @@ import (
 )
 
 // PipelineVersion identifies source input, prompt and code validation semantics.
-const PipelineVersion = "whole-source-direct-v2"
+const PipelineVersion = "whole-source-learning-goals-v5"
 
 // Generator is safe for concurrent use. The provider owns transport retries.
 type Generator struct {

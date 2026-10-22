@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -100,19 +101,25 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title str
 		}
 	}
 
-	for _, c := range genResult.Cards {
+	for position, c := range genResult.Cards {
 		cardUUID := uuid.New()
 		var cardID pgtype.UUID
 		_ = cardID.Scan(cardUUID.String())
 
+		answer := c.Answer
+		if c.Kind == cards.KindChoice && len(c.RightAnswers) > 0 {
+			data, _ := json.Marshal(c.RightAnswers)
+			answer = string(data)
+		}
 		createdCard, err := q.CreateCard(ctx, db.CreateCardParams{
 			ID:       cardID,
+			Position: int32(position),
 			FactID:   c.FactID,
 			Kind:     string(c.Kind),
 			Question: c.Question,
 			AnswerText: pgtype.Text{
-				String: c.Answer,
-				Valid:  c.Answer != "",
+				String: answer,
+				Valid:  answer != "",
 			},
 			Explanation: c.Explanation,
 			SourceQuote: c.SourceQuote,
@@ -129,7 +136,7 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title str
 
 		if c.Kind == cards.KindChoice && len(c.Options) > 0 {
 			for idx, opt := range c.Options {
-				isCorrect := strings.TrimSpace(opt) == strings.TrimSpace(c.Answer)
+				isCorrect := slices.Contains(c.RightAnswers, opt) || (len(c.RightAnswers) == 0 && strings.TrimSpace(opt) == strings.TrimSpace(c.Answer))
 				_, err := q.CreateCardOption(ctx, db.CreateCardOptionParams{
 					CardID:    createdCard.ID,
 					Position:  int32(idx),
@@ -157,7 +164,7 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title str
 					CardID:     createdCard.ID,
 					ItemText:   item.Text,
 					ColumnName: item.Column,
-					Position:   int32(idx), // the generator's order, mixed so as not to give the columns away
+					Position:   int32(idx), // retain source order; the frontend shuffles before display
 				}); err != nil {
 					slog.ErrorContext(ctx, "failed to create card table item", "error", err)
 				}

@@ -1,0 +1,22 @@
+{
+  "response": {
+    "facts": [
+      {
+        "cards": [
+          {
+            "kind": "choice",
+            "question": "x",
+            "rightAnswers": [
+              "x"
+            ],
+            "wrongAnswers": [
+              "x"
+            ]
+          }
+        ],
+        "name": "x"
+      }
+    ]
+  },
+  "grounding": []
+}

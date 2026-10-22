@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
@@ -33,7 +34,7 @@ func (q *detailBatchQuerier) GetCardOptionsBatch(_ context.Context, ids []pgtype
 	q.batches++
 	rows := []db.CardOption{}
 	for _, id := range ids {
-		rows = append(rows, db.CardOption{CardID: id, Text: "Answer"})
+		rows = append(rows, db.CardOption{CardID: id, Text: "Answer", IsCorrect: true}, db.CardOption{CardID: id, Text: "Another", IsCorrect: true}, db.CardOption{CardID: id, Text: "Wrong"})
 	}
 	return rows, nil
 }
@@ -87,7 +88,7 @@ func TestCardListsBatchDetails(t *testing.T) {
 				}
 				count = len(cards)
 				for i, c := range cards {
-					if i%2 == 0 && (len(c.Options) != 1 || c.Options[0] != "Answer") {
+					if i%2 == 0 && (len(c.Options) != 3 || c.Options[0] != "Answer" || c.Answer.Type != contracts.StringArrayCardAnswer || len(c.Answer.StringArray) != 2) {
 						t.Fatalf("lost choice details: %+v", c)
 					}
 					if i%2 == 1 && (len(c.Table.Value.Columns) != 1 || len(c.Table.Value.Items) != 1) {
@@ -101,7 +102,7 @@ func TestCardListsBatchDetails(t *testing.T) {
 				}
 				count = len(cards)
 				for i, c := range cards {
-					if i%2 == 0 && (len(c.Options) != 1 || c.Options[0] != "Answer") {
+					if i%2 == 0 && (len(c.Options) != 3 || c.Options[0] != "Answer" || c.Answer.Type != contracts.StringArrayCardAnswer || len(c.Answer.StringArray) != 2) {
 						t.Fatalf("lost choice details: %+v", c)
 					}
 					if i%2 == 1 && (len(c.Table.Value.Columns) != 1 || len(c.Table.Value.Items) != 1) {

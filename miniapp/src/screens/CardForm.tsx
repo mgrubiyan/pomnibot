@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Flex, IconButton, Input, Radio, Typography } from '@maxhub/max-ui';
+import { Button, Flex, IconButton, Input, Typography } from '@maxhub/max-ui';
 import type { Card, CardKind, TableItem, TableLayout } from '../types';
 import { AutoTextarea } from '../components/AutoTextarea';
 import { Screen } from '../components/Screen';
@@ -46,13 +46,13 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
         return ans ? [ans, ''] : ['', ''];
     });
 
-    const [correctOptionIndex, setCorrectOptionIndex] = useState<number>(() => {
-        if (typeof card.answer === 'number' && card.options && card.answer >= 0 && card.answer < card.options.length) {
-            return card.answer;
+    const [correctOptionIndices, setCorrectOptionIndices] = useState<number[]>(() => {
+        if (Array.isArray(card.answer)) {
+            return (card.options ?? []).flatMap((option, i) => card.answer && Array.isArray(card.answer) && card.answer.includes(option) ? [i] : []);
         }
-        const ansStr = String(card.answer ?? '').trim().toLowerCase();
-        const found = (card.options ?? []).findIndex((opt) => opt.trim().toLowerCase() === ansStr);
-        return found >= 0 ? found : 0;
+        if (typeof card.answer === 'number') return [card.answer];
+        const found = (card.options ?? []).findIndex((option) => option === card.answer);
+        return [found >= 0 ? found : 0];
     });
 
     // --- Boolean kind state ---
@@ -100,15 +100,7 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
 
     const handleOptionRemove = (index: number) => {
         setOptions((current) => current.filter((_, i) => i !== index));
-        setCorrectOptionIndex((prev) => {
-            if (prev === index) {
-                return 0;
-            }
-            if (prev > index) {
-                return prev - 1;
-            }
-            return prev;
-        });
+        setCorrectOptionIndices((prev) => prev.filter((i) => i !== index).map((i) => i > index ? i - 1 : i));
     };
 
     // --- Table handlers ---
@@ -157,8 +149,8 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                 trimmedOptions.length >= 2 &&
                 allNonEmpty &&
                 new Set(trimmedOptions).size === trimmedOptions.length &&
-                correctOptionIndex >= 0 &&
-                correctOptionIndex < trimmedOptions.length
+                correctOptionIndices.length > 0 &&
+                correctOptionIndices.every((i) => i >= 0 && i < trimmedOptions.length)
             );
         }
         if (kind === 'boolean') {
@@ -182,7 +174,7 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
 
     const canSave = isQuestionValid && isAnswerValid;
 
-    const snapshot = JSON.stringify([kind, question, explanation, options, correctOptionIndex, booleanAnswer, textAnswer, tableColumns, tableItems]);
+    const snapshot = JSON.stringify([kind, question, explanation, options, correctOptionIndices, booleanAnswer, textAnswer, tableColumns, tableItems]);
     const [initialSnapshot] = useState(snapshot);
     const dirty = snapshot !== initialSnapshot;
     useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
@@ -206,7 +198,7 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
         if (kind === 'choice') {
             const cleanedOptions = options.map((opt) => opt.trim());
             patch.options = cleanedOptions;
-            patch.answer = cleanedOptions[correctOptionIndex];
+            patch.answer = correctOptionIndices.map((i) => cleanedOptions[i]);
         } else if (kind === 'boolean') {
             patch.answer = booleanAnswer;
         } else if (kind === 'table') {
@@ -301,17 +293,17 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                     {kind === 'choice' && (
                         <Flex direction="column" align="stretch" gap={8}>
                             <Typography.Text variant="label" color="tertiary">
-                                Варианты ответа (отметьте верный)
+                                Варианты ответа (отметьте все верные)
                             </Typography.Text>
 
                             {options.map((option, index) => (
                                 <Flex key={index} align="center" gap={8} className={s.optionRow}>
-                                    <Radio
-                                        name="correct-choice"
+                                    <input
+                                        type="checkbox"
                                         value={String(index)}
-                                        checked={correctOptionIndex === index}
+                                        checked={correctOptionIndices.includes(index)}
                                         aria-label={`Отметить вариант ${index + 1} как верный`}
-                                        onChange={() => setCorrectOptionIndex(index)}
+                                        onChange={() => setCorrectOptionIndices((current) => current.includes(index) ? current.filter((i) => i !== index) : [...current, index])}
                                     />
                                     {/* MAX UI wraps the field in a div of its own; this one is
                                         the flex item that takes the free width. */}

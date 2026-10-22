@@ -3,9 +3,11 @@ package repository
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"strconv"
 
 	"github.com/google/uuid"
@@ -98,6 +100,10 @@ func insertManualCard(ctx context.Context, q db.Querier, setID pgtype.UUID, req 
 	id := uuid.New()
 	pgID := pgtype.UUID{Bytes: id, Valid: true}
 	answer := req.Answer.String
+	if req.Answer.Type == contracts.StringArrayCardAnswer {
+		data, _ := json.Marshal(req.Answer.StringArray)
+		answer = string(data)
+	}
 	if req.Kind == contracts.CardKindBoolean {
 		answer = strconv.FormatBool(req.Answer.Bool)
 	}
@@ -106,7 +112,7 @@ func insertManualCard(ctx context.Context, q db.Querier, setID pgtype.UUID, req 
 	}
 	if req.Kind == contracts.CardKindChoice {
 		for i, v := range req.Options {
-			if _, err := q.CreateCardOption(ctx, db.CreateCardOptionParams{CardID: pgID, Position: int32(i), Text: v, IsCorrect: v == answer}); err != nil {
+			if _, err := q.CreateCardOption(ctx, db.CreateCardOptionParams{CardID: pgID, Position: int32(i), Text: v, IsCorrect: v == answer || slices.Contains(req.Answer.StringArray, v)}); err != nil {
 				return uuid.Nil, err
 			}
 		}

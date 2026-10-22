@@ -276,3 +276,25 @@ func TestSaveRecordedGeneration(t *testing.T) {
 	}
 	t.Logf("saved %d recorded cards, %d facts and bulk progress initialization through repository adapter; database is mocked", count, len(r.Facts))
 }
+
+func TestSaveGeneratedSetKeepsAllCorrectOptionsAndSharedFact(t *testing.T) {
+	q := newTestQuerier()
+	_, count, err := repository.SaveGeneratedSet(context.Background(), q, 1, "T", generator.Result{
+		Facts: []cards.Fact{{ID: "f", Name: "F", Topic: "Topic"}},
+		Cards: []cards.Card{
+			{FactID: "f", Kind: cards.KindFlip, Question: "Recall", Answer: "A and B"},
+			{FactID: "f", Kind: cards.KindChoice, Question: "Choose", Answer: `["A","B"]`, RightAnswers: []string{"A", "B"}, Options: []string{"A", "B", "C"}},
+		},
+	})
+	if err != nil || count != 2 || len(q.createdFacts) != 1 {
+		t.Fatalf("count=%d err=%v", count, err)
+	}
+	for _, c := range q.createdCards {
+		if c.FactID != "f" {
+			t.Fatal("different fact")
+		}
+	}
+	if len(q.createdOptions) != 3 || !q.createdOptions[0].IsCorrect || !q.createdOptions[1].IsCorrect || q.createdOptions[2].IsCorrect {
+		t.Fatalf("lost multiple answers: %+v", q.createdOptions)
+	}
+}

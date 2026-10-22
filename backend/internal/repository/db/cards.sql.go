@@ -12,9 +12,9 @@ import (
 )
 
 const createCard = `-- name: CreateCard :one
-INSERT INTO cards (id, fact_id, kind, question, answer_text, explanation, source_quote, source_ref)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, fact_id, kind, question, answer_text, explanation, source_quote, source_ref, created_at, updated_at
+INSERT INTO cards (id, fact_id, kind, question, answer_text, explanation, source_quote, source_ref, position)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, fact_id, kind, question, answer_text, explanation, source_quote, source_ref, created_at, updated_at, position
 `
 
 type CreateCardParams struct {
@@ -26,6 +26,7 @@ type CreateCardParams struct {
 	Explanation string      `json:"explanation"`
 	SourceQuote string      `json:"source_quote"`
 	SourceRef   pgtype.Text `json:"source_ref"`
+	Position    int32       `json:"position"`
 }
 
 func (q *Queries) CreateCard(ctx context.Context, arg CreateCardParams) (Card, error) {
@@ -38,6 +39,7 @@ func (q *Queries) CreateCard(ctx context.Context, arg CreateCardParams) (Card, e
 		arg.Explanation,
 		arg.SourceQuote,
 		arg.SourceRef,
+		arg.Position,
 	)
 	var i Card
 	err := row.Scan(
@@ -51,6 +53,7 @@ func (q *Queries) CreateCard(ctx context.Context, arg CreateCardParams) (Card, e
 		&i.SourceRef,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Position,
 	)
 	return i, err
 }
@@ -546,7 +549,7 @@ WHERE f.set_id = $1
       WHERE s.id = $1
         AND (s.author_id = $2 OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = $2))
   )
-ORDER BY c.created_at ASC
+ORDER BY c.created_at ASC, c.position ASC, c.id ASC
 `
 
 type GetCardsBySetIDParams struct {
@@ -642,7 +645,7 @@ ranked_cards AS (
         c.updated_at,
         ROW_NUMBER() OVER (
             PARTITION BY c.fact_id
-            ORDER BY ABS(ck.difficulty_level - udf.target_difficulty) ASC, c.created_at ASC
+            ORDER BY ABS(ck.difficulty_level - udf.target_difficulty) ASC, c.position ASC, c.created_at ASC, c.id ASC
         ) AS rank
     FROM cards c
     JOIN user_due_facts udf ON c.fact_id = udf.fact_id
@@ -731,7 +734,7 @@ JOIN sets s ON f.set_id = s.id
 WHERE cards.id = $1
   AND cards.fact_id = f.id
   AND s.author_id = $8
-RETURNING cards.id, cards.fact_id, cards.kind, cards.question, cards.answer_text, cards.explanation, cards.source_quote, cards.source_ref, cards.created_at, cards.updated_at
+RETURNING cards.id, cards.fact_id, cards.kind, cards.question, cards.answer_text, cards.explanation, cards.source_quote, cards.source_ref, cards.created_at, cards.updated_at, cards.position
 `
 
 type UpdateCardParams struct {
@@ -768,6 +771,7 @@ func (q *Queries) UpdateCard(ctx context.Context, arg UpdateCardParams) (Card, e
 		&i.SourceRef,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Position,
 	)
 	return i, err
 }

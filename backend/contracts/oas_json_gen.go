@@ -783,6 +783,12 @@ func (s *Card) UnmarshalJSON(data []byte) error {
 // Encode encodes CardAnswer as json.
 func (s CardAnswer) Encode(e *jx.Encoder) {
 	switch s.Type {
+	case StringArrayCardAnswer:
+		e.ArrStart()
+		for _, elem := range s.StringArray {
+			e.Str(elem)
+		}
+		e.ArrEnd()
 	case IntCardAnswer:
 		e.Int(s.Int)
 	case StringCardAnswer:
@@ -801,6 +807,21 @@ func (s *CardAnswer) Decode(d *jx.Decoder) error {
 	}
 	// Sum type type_discriminator.
 	switch t := d.Next(); t {
+	case jx.Array:
+		s.StringArray = make([]string, 0)
+		if err := d.Arr(func(d *jx.Decoder) error {
+			var elem string
+			v, err := d.Str()
+			elem = string(v)
+			if err != nil {
+				return err
+			}
+			s.StringArray = append(s.StringArray, elem)
+			return nil
+		}); err != nil {
+			return err
+		}
+		s.Type = StringArrayCardAnswer
 	case jx.Bool:
 		v, err := d.Bool()
 		s.Bool = bool(v)

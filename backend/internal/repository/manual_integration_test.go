@@ -88,7 +88,7 @@ func TestManualCardsPostgres(t *testing.T) {
 		{Kind: contracts.CardKindFlip, Question: "Flip", Answer: contracts.NewStringCardAnswer("Answer")},
 		{Kind: contracts.CardKindInput, Question: "Input", Answer: contracts.NewStringCardAnswer("Answer")},
 		{Kind: contracts.CardKindBoolean, Question: "Boolean", Answer: contracts.NewBoolCardAnswer(false)},
-		{Kind: contracts.CardKindChoice, Question: "Choice", Options: []string{"B", "A", "C"}, Answer: contracts.NewStringCardAnswer("A")},
+		{Kind: contracts.CardKindChoice, Question: "Choice", Options: []string{"B", "A", "C"}, Answer: contracts.NewStringArrayCardAnswer([]string{"A", "C"})},
 		{Kind: contracts.CardKindTable, Question: "Table", Table: contracts.NewOptTableLayout(table), Answer: contracts.NewTableLayoutCardAnswer(table)},
 	}
 	if _, err := sets.CreateSet(ctx, 11, &contracts.CreateSetRequest{Title: " ", Card: requests[0]}); !errors.Is(err, usecase.ErrValidation) {
@@ -284,5 +284,67 @@ func TestManualRollbackPostgres(t *testing.T) {
 	}
 	if !reflect.DeepEqual(before, count()) {
 		t.Fatal("collision left partial data")
+	}
+}
+
+func TestGeneratedFactOrderAndKnowledgeSelectionPostgres(t *testing.T) {
+	pool := manualTestPool(t)
+	ctx := t.Context()
+	q := db.New(pool)
+	users := usecase.NewUserService(q)
+	if err := users.EnsureUser(ctx, 77); err != nil {
+		t.Fatal(err)
+	}
+	result := generator.Result{Facts: []cards.Fact{{ID: "shared", Name: "Fact", Topic: "Topic"}}, Cards: []cards.Card{
+		{FactID: "shared", Kind: cards.KindFlip, Question: "Easy flip", Answer: "A"},
+		{FactID: "shared", Kind: cards.KindFlip, Question: "Hard flip", Answer: "A and B"},
+		{FactID: "shared", Kind: cards.KindBoolean, Question: "True?", Answer: "true"},
+		{FactID: "shared", Kind: cards.KindChoice, Question: "Select", RightAnswers: []string{"A", "B"}, Options: []string{"A", "B", "C"}},
+		{FactID: "shared", Kind: cards.KindTable, Question: "Sort", Table: &cards.Table{Columns: []string{"X", "Y"}, Items: []cards.TableItem{{Text: "A", Column: "X"}, {Text: "B", Column: "Y"}}}},
+		{FactID: "shared", Kind: cards.KindInput, Question: "Recall", Answer: "A and B"},
+	}}
+	var set *db.Set
+	err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+		var saveErr error
+		set, _, saveErr = repository.SaveGeneratedSet(ctx, q.WithTx(tx), 77, "Set", result)
+		return saveErr
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := q.GetCardsBySetID(ctx, db.GetCardsBySetIDParams{SetID: set.ID, UserID: 77})
+	if err != nil || len(rows) != 6 {
+		t.Fatalf("%+v %v", rows, err)
+	}
+	for i, row := range rows {
+		if row.Question != result.Cards[i].Question || row.FactID != "shared" {
+			t.Fatalf("lost order: %+v", rows)
+		}
+	}
+	feed := usecase.NewHomescreenService(q, users)
+	for i, elo := range []int{700, 900, 1100, 1300, 1500} {
+		if _, err := pool.Exec(ctx, "UPDATE user_fact_progress SET elo=$1, next_review_at=NOW() - INTERVAL '1 minute' WHERE user_id=77", elo); err != nil {
+			t.Fatal(err)
+		}
+		got, err := feed.GetFeedQuestions(ctx, 77)
+		if err != nil || len(got) != 1 {
+			t.Fatalf("%+v %v", got, err)
+		}
+		want := []string{"Easy flip", "True?", "Select", "Sort", "Recall"}[i]
+		if got[0].Question != want {
+			t.Fatalf("elo %d: got %s want %s", elo, got[0].Question, want)
+		}
+		if i == 2 && !reflect.DeepEqual(got[0].Answer.StringArray, []string{"A", "B"}) {
+			t.Fatalf("lost multiple answers: %+v", got[0])
+		}
+	}
+	svc := usecase.NewCardService(q, users)
+	verdict, err := svc.CheckAnswer(ctx, 77, uuid.UUID(rows[3].ID.Bytes), `["B","A"]`)
+	if err != nil || !verdict.IsCorrect {
+		t.Fatalf("%+v %v", verdict, err)
+	}
+	wrong, err := svc.CheckAnswer(ctx, 77, uuid.UUID(rows[3].ID.Bytes), `["A"]`)
+	if err != nil || wrong.IsCorrect {
+		t.Fatalf("%+v %v", wrong, err)
 	}
 }
