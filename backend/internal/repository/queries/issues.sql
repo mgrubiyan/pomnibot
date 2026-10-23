@@ -1,15 +1,35 @@
--- name: CreateCardIssue :execrows
--- Inserts nothing when the card is gone or the user can't see its set.
-INSERT INTO card_issues (card_id, set_id, user_id, reason, kind, question, answer_text, explanation, source_quote)
-SELECT c.id, f.set_id, @user_id, @reason, c.kind, c.question, c.answer_text, c.explanation, c.source_quote
-FROM cards c
-JOIN facts f ON c.fact_id = f.id
-WHERE c.id = @card_id
-  AND EXISTS (
-      SELECT 1 FROM sets s
-      WHERE s.id = f.set_id
-        AND (s.author_id = @user_id OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = @user_id))
-  );
+-- name: CreateCardIssue :one
+-- Saves the complaint with a copy of the card; no row when the card is gone
+-- or the user can't see its set. notify_author is true when no other reader
+-- has an open complaint about the card: the author hears about it once, until
+-- they edit the card or keep it. The main query does not see the new row.
+WITH card AS (
+    SELECT c.id, c.kind, c.question, c.answer_text, c.explanation, c.source_quote, c.updated_at,
+        s.id AS set_id, s.title, s.author_id
+    FROM cards c
+    JOIN facts f ON c.fact_id = f.id
+    JOIN sets s ON s.id = f.set_id
+    WHERE c.id = @card_id
+      AND (s.author_id = @user_id OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = @user_id))
+), saved AS (
+    INSERT INTO card_issues (card_id, set_id, user_id, reason, kind, question, answer_text, explanation, source_quote)
+    SELECT id, set_id, @user_id, @reason, kind, question, answer_text, explanation, source_quote
+    FROM card
+    RETURNING card_id
+)
+SELECT
+    card.author_id,
+    card.title AS set_title,
+    card.question,
+    (card.author_id <> @user_id::bigint AND NOT EXISTS (
+        SELECT 1 FROM card_issues i
+        WHERE i.card_id = card.id
+          AND i.user_id <> card.author_id
+          AND i.resolved_at IS NULL
+          AND i.created_at > card.updated_at
+    ))::boolean AS notify_author
+FROM card
+JOIN saved ON saved.card_id = card.id;
 
 -- name: GetOpenCardIssuesBySet :many
 -- Open complaints of the author's set: made after the card's last edit and

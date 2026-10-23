@@ -11,32 +11,63 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createCardIssue = `-- name: CreateCardIssue :execrows
-INSERT INTO card_issues (card_id, set_id, user_id, reason, kind, question, answer_text, explanation, source_quote)
-SELECT c.id, f.set_id, $1, $2, c.kind, c.question, c.answer_text, c.explanation, c.source_quote
-FROM cards c
-JOIN facts f ON c.fact_id = f.id
-WHERE c.id = $3
-  AND EXISTS (
-      SELECT 1 FROM sets s
-      WHERE s.id = f.set_id
-        AND (s.author_id = $1 OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = $1))
-  )
+const createCardIssue = `-- name: CreateCardIssue :one
+WITH card AS (
+    SELECT c.id, c.kind, c.question, c.answer_text, c.explanation, c.source_quote, c.updated_at,
+        s.id AS set_id, s.title, s.author_id
+    FROM cards c
+    JOIN facts f ON c.fact_id = f.id
+    JOIN sets s ON s.id = f.set_id
+    WHERE c.id = $2
+      AND (s.author_id = $1 OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = $1))
+), saved AS (
+    INSERT INTO card_issues (card_id, set_id, user_id, reason, kind, question, answer_text, explanation, source_quote)
+    SELECT id, set_id, $1, $3, kind, question, answer_text, explanation, source_quote
+    FROM card
+    RETURNING card_id
+)
+SELECT
+    card.author_id,
+    card.title AS set_title,
+    card.question,
+    (card.author_id <> $1::bigint AND NOT EXISTS (
+        SELECT 1 FROM card_issues i
+        WHERE i.card_id = card.id
+          AND i.user_id <> card.author_id
+          AND i.resolved_at IS NULL
+          AND i.created_at > card.updated_at
+    ))::boolean AS notify_author
+FROM card
+JOIN saved ON saved.card_id = card.id
 `
 
 type CreateCardIssueParams struct {
 	UserID int64           `json:"user_id"`
-	Reason CardIssueReason `json:"reason"`
 	CardID pgtype.UUID     `json:"card_id"`
+	Reason CardIssueReason `json:"reason"`
 }
 
-// Inserts nothing when the card is gone or the user can't see its set.
-func (q *Queries) CreateCardIssue(ctx context.Context, arg CreateCardIssueParams) (int64, error) {
-	result, err := q.db.Exec(ctx, createCardIssue, arg.UserID, arg.Reason, arg.CardID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+type CreateCardIssueRow struct {
+	AuthorID     int64  `json:"author_id"`
+	SetTitle     string `json:"set_title"`
+	Question     string `json:"question"`
+	NotifyAuthor bool   `json:"notify_author"`
+}
+
+// Saves the complaint with a copy of the card; no row when the card is gone
+// or the user can't see its set. notify_author is true when no other reader
+// has an open complaint about the card: the author hears about it once, until
+// they edit the card or keep it. The main query does not see the new row.
+func (q *Queries) CreateCardIssue(ctx context.Context, arg CreateCardIssueParams) (CreateCardIssueRow, error) {
+	row := q.db.QueryRow(ctx, createCardIssue, arg.UserID, arg.CardID, arg.Reason)
+	var i CreateCardIssueRow
+	err := row.Scan(
+		&i.AuthorID,
+		&i.SetTitle,
+		&i.Question,
+		&i.NotifyAuthor,
+	)
+	return i, err
 }
 
 const getOpenCardIssuesBySet = `-- name: GetOpenCardIssuesBySet :many

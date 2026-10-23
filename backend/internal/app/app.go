@@ -57,7 +57,13 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 	store := repository.NewManualStore(pool)
 	users := usecase.NewUserService(queries)
 	sets := usecase.NewSetService(queries, users, store)
-	cardOptions = append(cardOptions, usecase.WithManualCards(store))
+	issues, err := newIssueNotifier(cfg, users)
+	if err != nil {
+		return err
+	}
+	// Before the pool closes: the messages look up the author's accounts.
+	defer issues.Wait()
+	cardOptions = append(cardOptions, usecase.WithManualCards(store), usecase.WithIssueNotifier(issues))
 	cards := usecase.NewCardService(queries, users, cardOptions...)
 	home := usecase.NewHomescreenService(queries, users)
 	router, err := httptransport.NewRouter(httptransport.NewAPIHandler(sets, cards, home, users), assets, cfg.MaxBotToken, cfg.TelegramBotToken, users)

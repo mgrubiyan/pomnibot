@@ -3,10 +3,12 @@ package usecase_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
@@ -18,22 +20,26 @@ func TestCardService_ReportCardIssue(t *testing.T) {
 	errDB := errors.New("connection reset")
 	tests := []struct {
 		name    string
-		rows    int64
+		row     db.CreateCardIssueRow
 		err     error
+		want    []usecase.CardIssueReport
 		wantErr error
 	}{
-		{"saved", 1, nil, nil},
-		{"card gone or not visible", 0, nil, usecase.ErrNotFound},
-		{"database down", 0, errDB, errDB},
+		{"first complaint", db.CreateCardIssueRow{AuthorID: 11, SetTitle: "Биология", Question: "Q", NotifyAuthor: true}, nil,
+			[]usecase.CardIssueReport{{AuthorID: 11, SetTitle: "Биология", Question: "Q", Reason: contracts.CardIssueReasonWording}}, nil},
+		{"author already told", db.CreateCardIssueRow{AuthorID: 11, SetTitle: "Биология", Question: "Q"}, nil, nil, nil},
+		{"card gone or not visible", db.CreateCardIssueRow{}, pgx.ErrNoRows, nil, usecase.ErrNotFound},
+		{"database down", db.CreateCardIssueRow{}, errDB, nil, errDB},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var got db.CreateCardIssueParams
-			m := &mockQuerier{createCardIssueFunc: func(_ context.Context, arg db.CreateCardIssueParams) (int64, error) {
+			m := &mockQuerier{createCardIssueFunc: func(_ context.Context, arg db.CreateCardIssueParams) (db.CreateCardIssueRow, error) {
 				got = arg
-				return tt.rows, tt.err
+				return tt.row, tt.err
 			}}
-			svc := usecase.NewCardService(m, usecase.NewUserService(m))
+			notifier := &issueNotifierSpy{}
+			svc := usecase.NewCardService(m, usecase.NewUserService(m), usecase.WithIssueNotifier(notifier))
 			err := svc.ReportCardIssue(context.Background(), 7, cardID, contracts.CardIssueReasonWording)
 			if !errors.Is(err, tt.wantErr) || (tt.wantErr == nil && err != nil) {
 				t.Fatalf("err = %v, want %v", err, tt.wantErr)
@@ -41,8 +47,28 @@ func TestCardService_ReportCardIssue(t *testing.T) {
 			if got.UserID != 7 || uuid.UUID(got.CardID.Bytes) != cardID || !got.CardID.Valid || got.Reason != db.CardIssueReasonWording {
 				t.Errorf("params = %+v", got)
 			}
+			if !reflect.DeepEqual(notifier.reports, tt.want) {
+				t.Errorf("reports = %+v, want %+v", notifier.reports, tt.want)
+			}
 		})
 	}
+}
+
+// Without a notifier, as locally, the complaint is still saved.
+func TestCardService_ReportCardIssue_NoNotifier(t *testing.T) {
+	m := &mockQuerier{createCardIssueFunc: func(context.Context, db.CreateCardIssueParams) (db.CreateCardIssueRow, error) {
+		return db.CreateCardIssueRow{AuthorID: 11, NotifyAuthor: true}, nil
+	}}
+	svc := usecase.NewCardService(m, usecase.NewUserService(m))
+	if err := svc.ReportCardIssue(context.Background(), 7, uuid.New(), contracts.CardIssueReasonOther); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type issueNotifierSpy struct{ reports []usecase.CardIssueReport }
+
+func (s *issueNotifierSpy) CardIssueReported(_ context.Context, r usecase.CardIssueReport) {
+	s.reports = append(s.reports, r)
 }
 
 func TestCardService_GetSetIssues(t *testing.T) {

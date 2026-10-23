@@ -21,6 +21,7 @@ type cardServiceImpl struct {
 	querier     db.Querier
 	userService UserService
 	grader      AnswerGrader
+	issues      IssueNotifier
 }
 
 // CardServiceOption configures NewCardService.
@@ -233,18 +234,27 @@ func (s *cardServiceImpl) DeleteCard(ctx context.Context, userID int64, cardID u
 }
 
 // ReportCardIssue saves a complaint about a card the user can see, together
-// with a copy of the card, so it outlives edits and deletion.
+// with a copy of the card, so it outlives edits and deletion. The author
+// hears about the first reader's complaint until they answer it.
 func (s *cardServiceImpl) ReportCardIssue(ctx context.Context, userID int64, cardID uuid.UUID, reason contracts.CardIssueReason) error {
-	rows, err := s.querier.CreateCardIssue(ctx, db.CreateCardIssueParams{
+	saved, err := s.querier.CreateCardIssue(ctx, db.CreateCardIssueParams{
 		UserID: userID,
 		Reason: db.CardIssueReason(reason),
 		CardID: pgtype.UUID{Bytes: cardID, Valid: true},
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
 	if err != nil {
 		return fmt.Errorf("create card issue: %w", err)
 	}
-	if rows == 0 {
-		return ErrNotFound
+	if saved.NotifyAuthor && s.issues != nil {
+		s.issues.CardIssueReported(ctx, CardIssueReport{
+			AuthorID: saved.AuthorID,
+			SetTitle: saved.SetTitle,
+			Question: saved.Question,
+			Reason:   reason,
+		})
 	}
 	return nil
 }

@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
@@ -298,4 +300,73 @@ func TestFeedSkipsReportedCardPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	sameFeed("answered", 22, "Flip", "Only")
+}
+
+// The author hears about a card once: the first reader's complaint asks to
+// tell them, the next ones wait until the author edits the card or keeps it.
+// The author's own complaint neither asks nor silences the readers'.
+func TestCardIssueNotifiesAuthorOncePostgres(t *testing.T) {
+	pool := manualTestPool(t)
+	ctx := context.Background()
+	q := db.New(pool)
+	users := usecase.NewUserService(q)
+	writer := repository.NewManualStore(pool)
+	sets := usecase.NewSetService(q, users, writer)
+	svc := usecase.NewCardService(q, users, usecase.WithManualCards(writer))
+	for _, id := range []int64{11, 22, 33} {
+		if err := users.EnsureUser(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	generated, _, err := repository.SaveGeneratedSet(ctx, q, 11, "Биология", generator.Result{
+		Facts: []cards.Fact{{ID: "f1", Name: "F1"}},
+		Cards: []cards.Card{{FactID: "f1", Kind: cards.KindFlip, Question: "Q1", Answer: "A1"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []int64{22, 33} {
+		if _, err = sets.JoinSetByShareCode(ctx, id, generated.ShareCode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	all, err := sets.GetCardsBySetID(ctx, 11, uuid.UUID(generated.ID.Bytes))
+	if err != nil || len(all) != 1 {
+		t.Fatalf("cards: %d %v", len(all), err)
+	}
+	card := all[0].ID
+	report := func(step string, user int64, want bool) {
+		t.Helper()
+		row, err := q.CreateCardIssue(ctx, db.CreateCardIssueParams{
+			UserID: user,
+			Reason: db.CardIssueReasonAnswer,
+			CardID: pgtype.UUID{Bytes: card, Valid: true},
+		})
+		if err != nil {
+			t.Fatalf("%s: %v", step, err)
+		}
+		if row.AuthorID != 11 || row.SetTitle != "Биология" || row.Question != "Q1" {
+			t.Fatalf("%s: row = %+v", step, row)
+		}
+		if row.NotifyAuthor != want {
+			t.Fatalf("%s: notify = %v, want %v", step, row.NotifyAuthor, want)
+		}
+	}
+
+	report("author first", 11, false)
+	report("first reader", 22, true)
+	report("second reader", 33, false)
+	report("first reader again", 22, false)
+	if _, err = svc.UpdateCard(ctx, 11, card, &contracts.UpdateCardRequest{Explanation: contracts.NewOptString("Fixed")}); err != nil {
+		t.Fatal(err)
+	}
+	report("after the edit", 33, true)
+	if err = svc.ResolveCardIssues(ctx, 11, card); err != nil {
+		t.Fatal(err)
+	}
+	report("after «Всё верно»", 22, true)
+
+	if _, err = q.CreateCardIssue(ctx, db.CreateCardIssueParams{UserID: 99, Reason: db.CardIssueReasonAnswer, CardID: pgtype.UUID{Bytes: card, Valid: true}}); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("outsider: %v", err)
+	}
 }

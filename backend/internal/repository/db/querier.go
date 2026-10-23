@@ -13,8 +13,11 @@ import (
 type Querier interface {
 	CountTotalDueCardsForUser(ctx context.Context, userID int64) (int32, error)
 	CreateCard(ctx context.Context, arg CreateCardParams) (Card, error)
-	// Inserts nothing when the card is gone or the user can't see its set.
-	CreateCardIssue(ctx context.Context, arg CreateCardIssueParams) (int64, error)
+	// Saves the complaint with a copy of the card; no row when the card is gone
+	// or the user can't see its set. notify_author is true when no other reader
+	// has an open complaint about the card: the author hears about it once, until
+	// they edit the card or keep it. The main query does not see the new row.
+	CreateCardIssue(ctx context.Context, arg CreateCardIssueParams) (CreateCardIssueRow, error)
 	CreateCardOption(ctx context.Context, arg CreateCardOptionParams) (CardOption, error)
 	CreateCardTableColumn(ctx context.Context, arg CreateCardTableColumnParams) (CardTableColumn, error)
 	CreateCardTableItem(ctx context.Context, arg CreateCardTableItemParams) (CardTableItem, error)
