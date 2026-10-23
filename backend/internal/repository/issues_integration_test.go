@@ -345,7 +345,7 @@ func TestCardIssueNotifiesAuthorOncePostgres(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", step, err)
 		}
-		if row.AuthorID != 11 || row.SetTitle != "Биология" || row.Question != "Q1" {
+		if row.AuthorID != 11 || row.SetTitle != "Биология" {
 			t.Fatalf("%s: row = %+v", step, row)
 		}
 		if row.NotifyAuthor != want {

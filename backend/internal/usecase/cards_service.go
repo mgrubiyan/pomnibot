@@ -249,12 +249,7 @@ func (s *cardServiceImpl) ReportCardIssue(ctx context.Context, userID int64, car
 		return fmt.Errorf("create card issue: %w", err)
 	}
 	if saved.NotifyAuthor && s.issues != nil {
-		s.issues.CardIssueReported(ctx, CardIssueReport{
-			AuthorID: saved.AuthorID,
-			SetTitle: saved.SetTitle,
-			Question: saved.Question,
-			Reason:   reason,
-		})
+		s.issues.CardIssueReported(ctx, CardIssueReport{AuthorID: saved.AuthorID, SetTitle: saved.SetTitle})
 	}
 	return nil
 }

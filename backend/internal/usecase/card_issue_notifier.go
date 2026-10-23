@@ -6,17 +6,14 @@ import (
 	"log/slog"
 	"sync"
 	"time"
-
-	"github.com/mgrubiyan/pomnibot/backend/contracts"
 )
 
 // CardIssueReport tells the author of a set that a reader complained about
-// one of its cards. The reader stays anonymous.
+// one of its cards. The details are in the mini app; the reader stays
+// anonymous.
 type CardIssueReport struct {
 	AuthorID int64
 	SetTitle string
-	Question string
-	Reason   contracts.CardIssueReason
 }
 
 // IssueNotifier passes a complaint on to the author of the set.
@@ -43,25 +40,9 @@ func WithIssueNotifier(n IssueNotifier) CardServiceOption {
 // issueSendTimeout bounds one notification across all chat apps.
 const issueSendTimeout = 30 * time.Second
 
-// questionLimit is how much of the question the message quotes.
-const questionLimit = 200
-
-// issueReasonText is the reason as the author reads it.
-var issueReasonText = map[contracts.CardIssueReason]string{
-	contracts.CardIssueReasonAnswer:     "ответ не совпадает с конспектом",
-	contracts.CardIssueReasonWording:    "вопрос непонятно сформулирован",
-	contracts.CardIssueReasonNotInNotes: "этого нет в конспекте",
-	contracts.CardIssueReasonOther:      "другое",
-}
-
 // Text is the message to the author.
 func (r CardIssueReport) Text() string {
-	question := []rune(r.Question)
-	if len(question) > questionLimit {
-		question = append(question[:questionLimit-1], '…')
-	}
-	return fmt.Sprintf("⚠️ Жалоба на карточку в наборе «%s»\n\n%s\nПричина: %s\n\nОткройте набор и нажмите «Жалобы», чтобы исправить карточку или оставить как есть.",
-		r.SetTitle, string(question), issueReasonText[r.Reason])
+	return fmt.Sprintf("⚠️ На карточку в наборе «%s» пожаловались. Откройте набор и нажмите «Жалобы».", r.SetTitle)
 }
 
 // ChatIssueNotifier sends complaints to the author in every chat app they

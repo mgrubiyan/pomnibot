@@ -20,7 +20,6 @@ WITH card AS (
 SELECT
     card.author_id,
     card.title AS set_title,
-    card.question,
     (card.author_id <> @user_id::bigint AND NOT EXISTS (
         SELECT 1 FROM card_issues i
         WHERE i.card_id = card.id

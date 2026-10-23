@@ -29,7 +29,6 @@ WITH card AS (
 SELECT
     card.author_id,
     card.title AS set_title,
-    card.question,
     (card.author_id <> $1::bigint AND NOT EXISTS (
         SELECT 1 FROM card_issues i
         WHERE i.card_id = card.id
@@ -50,7 +49,6 @@ type CreateCardIssueParams struct {
 type CreateCardIssueRow struct {
 	AuthorID     int64  `json:"author_id"`
 	SetTitle     string `json:"set_title"`
-	Question     string `json:"question"`
 	NotifyAuthor bool   `json:"notify_author"`
 }
 
@@ -61,12 +59,7 @@ type CreateCardIssueRow struct {
 func (q *Queries) CreateCardIssue(ctx context.Context, arg CreateCardIssueParams) (CreateCardIssueRow, error) {
 	row := q.db.QueryRow(ctx, createCardIssue, arg.UserID, arg.CardID, arg.Reason)
 	var i CreateCardIssueRow
-	err := row.Scan(
-		&i.AuthorID,
-		&i.SetTitle,
-		&i.Question,
-		&i.NotifyAuthor,
-	)
+	err := row.Scan(&i.AuthorID, &i.SetTitle, &i.NotifyAuthor)
 	return i, err
 }
 

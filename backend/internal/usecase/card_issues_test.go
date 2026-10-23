@@ -25,9 +25,9 @@ func TestCardService_ReportCardIssue(t *testing.T) {
 		want    []usecase.CardIssueReport
 		wantErr error
 	}{
-		{"first complaint", db.CreateCardIssueRow{AuthorID: 11, SetTitle: "Биология", Question: "Q", NotifyAuthor: true}, nil,
-			[]usecase.CardIssueReport{{AuthorID: 11, SetTitle: "Биология", Question: "Q", Reason: contracts.CardIssueReasonWording}}, nil},
-		{"author already told", db.CreateCardIssueRow{AuthorID: 11, SetTitle: "Биология", Question: "Q"}, nil, nil, nil},
+		{"first complaint", db.CreateCardIssueRow{AuthorID: 11, SetTitle: "Биология", NotifyAuthor: true}, nil,
+			[]usecase.CardIssueReport{{AuthorID: 11, SetTitle: "Биология"}}, nil},
+		{"author already told", db.CreateCardIssueRow{AuthorID: 11, SetTitle: "Биология"}, nil, nil, nil},
 		{"card gone or not visible", db.CreateCardIssueRow{}, pgx.ErrNoRows, nil, usecase.ErrNotFound},
 		{"database down", db.CreateCardIssueRow{}, errDB, nil, errDB},
 	}

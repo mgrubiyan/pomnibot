@@ -22,9 +22,7 @@ func TestChatIssueNotifier(t *testing.T) {
 	failing, working := &messengerSpy{err: errors.New("blocked")}, &messengerSpy{}
 	n := usecase.NewChatIssueNotifier(accounts, failing, working)
 	ctx, cancel := context.WithCancel(context.Background())
-	n.CardIssueReported(ctx, usecase.CardIssueReport{
-		AuthorID: 11, SetTitle: "Биология", Question: "Что такое митоз?", Reason: contracts.CardIssueReasonNotInNotes,
-	})
+	n.CardIssueReported(ctx, usecase.CardIssueReport{AuthorID: 11, SetTitle: "Биология"})
 	// The request is over by the time the message goes out.
 	cancel()
 	n.Wait()
@@ -37,11 +35,8 @@ func TestChatIssueNotifier(t *testing.T) {
 			t.Errorf("sent with a cancelled context: %v", m.ctxErr)
 		}
 	}
-	text := working.sent[0].text
-	for _, want := range []string{"«Биология»", "Что такое митоз?", "этого нет в конспекте", "«Жалобы»"} {
-		if !strings.Contains(text, want) {
-			t.Errorf("text %q lacks %q", text, want)
-		}
+	if text := working.sent[0].text; !strings.Contains(text, "«Биология»") || !strings.Contains(text, "«Жалобы»") {
+		t.Errorf("text = %q", text)
 	}
 }
 
@@ -54,13 +49,6 @@ func TestChatIssueNotifier_NoAccount(t *testing.T) {
 	n.Wait()
 	if len(m.sent) != 0 {
 		t.Fatalf("sent = %+v", m.sent)
-	}
-}
-
-func TestCardIssueReport_TextCutsLongQuestion(t *testing.T) {
-	text := usecase.CardIssueReport{SetTitle: "S", Question: strings.Repeat("я", 500), Reason: contracts.CardIssueReasonOther}.Text()
-	if strings.Count(text, "я") > 200 || !strings.Contains(text, "…") {
-		t.Fatalf("text = %q", text)
 	}
 }
 
