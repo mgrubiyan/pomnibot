@@ -15,7 +15,7 @@ import Share from './screens/Share';
 import Leaderboard from './screens/Leaderboard';
 import WhyItWorks from './screens/WhyItWorks';
 import { api } from './api';
-import type { AnswerResult, Card, CardIssueReason, TodayData, User } from './types';
+import type { Answer, Card, CardIssueReason, TodayData, User } from './types';
 import type { CardPatch } from './utils/cards';
 
 /** No router yet: browser history is not used. */
@@ -30,7 +30,7 @@ type Screen =
           setId?: string;
           setTitle?: string;
           initialIndex?: number;
-          initialResults?: AnswerResult[];
+          initialResults?: Answer[];
       }
     | { name: 'share'; setId: string; setTitle?: string }
     | { name: 'leaderboard'; setId: string; setTitle?: string }
@@ -46,7 +46,7 @@ type Screen =
           isOwner: boolean;
           feedSetId?: string;
           feedIndex: number;
-          feedResults: AnswerResult[];
+          feedResults: Answer[];
       }
     | {
           name: 'card-edit';
@@ -56,7 +56,7 @@ type Screen =
           fromFeed?: boolean;
           feedSetId?: string;
           feedIndex?: number;
-          feedResults?: AnswerResult[];
+          feedResults?: Answer[];
           /** Where to go after the edit when it did not start in the feed. */
           returnTo?: Screen;
       };
@@ -121,7 +121,7 @@ function App() {
         feedSetId?: string,
         feedSetTitle?: string,
         feedIndex?: number,
-        feedResults?: AnswerResult[],
+        feedResults?: Answer[],
         returnTo?: Screen,
     ) => {
         try {
@@ -160,7 +160,7 @@ function App() {
         feedSetId?: string,
         feedSetTitle?: string,
         feedIndex?: number,
-        feedResults?: AnswerResult[],
+        feedResults?: Answer[],
         returnTo?: Screen,
     ) => {
         try {
@@ -173,7 +173,6 @@ function App() {
                     options: patch.options,
                     table: patch.table,
                     explanation: patch.explanation,
-                    topic: patch.topic,
                     sourceQuote: patch.sourceQuote,
                     sourceRef: patch.sourceRef,
                 },
@@ -220,7 +219,7 @@ function App() {
         card: Card,
         feedSetId: string | undefined,
         feedIndex: number,
-        feedResults: AnswerResult[],
+        feedResults: Answer[],
     ): Promise<boolean> => {
         try {
             const [{ data: set }, user] = await Promise.all([

@@ -27,8 +27,7 @@ type testQuerier struct {
 	createdColumns        []db.CreateCardTableColumnParams
 	createdItems          []db.CreateCardTableItemParams
 	initProgressCalls     []db.InitUserFactProgressParams
-	upsertTopicCalls      []string
-	getSetByShareCodeFunc func(ctx context.Context, arg db.GetSetByShareCodeParams) (db.GetSetByShareCodeRow, error)
+	getSetByShareCodeFunc func(ctx context.Context, shareCode string) (db.GetSetByShareCodeRow, error)
 	createSetFunc         func(ctx context.Context, arg db.CreateSetParams) (db.Set, error)
 }
 
@@ -38,13 +37,13 @@ func newTestQuerier() *testQuerier {
 	}
 }
 
-func (q *testQuerier) GetSetByShareCode(ctx context.Context, arg db.GetSetByShareCodeParams) (db.GetSetByShareCodeRow, error) {
+func (q *testQuerier) GetSetByShareCode(ctx context.Context, shareCode string) (db.GetSetByShareCodeRow, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if q.getSetByShareCodeFunc != nil {
-		return q.getSetByShareCodeFunc(ctx, arg)
+		return q.getSetByShareCodeFunc(ctx, shareCode)
 	}
-	if row, ok := q.setsByShareCode[arg.ShareCode]; ok {
+	if row, ok := q.setsByShareCode[shareCode]; ok {
 		return row, nil
 	}
 	return db.GetSetByShareCodeRow{}, pgx.ErrNoRows
@@ -77,27 +76,14 @@ func (q *testQuerier) JoinSet(_ context.Context, arg db.JoinSetParams) (db.UserS
 	}, nil
 }
 
-func (q *testQuerier) UpsertTopic(_ context.Context, name string) (db.Topic, error) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	q.upsertTopicCalls = append(q.upsertTopicCalls, name)
-	var topicUUID pgtype.UUID
-	_ = topicUUID.Scan(uuid.New().String())
-	return db.Topic{
-		ID:   topicUUID,
-		Name: name,
-	}, nil
-}
-
 func (q *testQuerier) CreateFact(_ context.Context, arg db.CreateFactParams) (db.Fact, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.createdFacts = append(q.createdFacts, arg)
 	return db.Fact{
-		ID:      arg.ID,
-		SetID:   arg.SetID,
-		TopicID: arg.TopicID,
-		Name:    arg.Name,
+		ID:    arg.ID,
+		SetID: arg.SetID,
+		Name:  arg.Name,
 	}, nil
 }
 
@@ -148,7 +134,7 @@ func (q *testQuerier) InitUserFactProgress(_ context.Context, arg db.InitUserFac
 func TestSaveGeneratedSet_Success(t *testing.T) {
 	ctx := context.Background()
 	tq := newTestQuerier()
-	const userID int64 = 999
+	var userID = uuid.MustParse("00000000-0000-0000-0000-000000000999")
 	const title = "Generated Set"
 
 	genResult := generator.Result{
@@ -187,8 +173,8 @@ func TestSaveGeneratedSet_Success(t *testing.T) {
 	if set.Title != title {
 		t.Errorf("expected title %q, got %q", title, set.Title)
 	}
-	if set.AuthorID != userID {
-		t.Errorf("expected authorID %d, got %d", userID, set.AuthorID)
+	if set.AuthorID.Bytes != userID {
+		t.Errorf("expected authorID %s, got %s", userID, uuid.UUID(set.AuthorID.Bytes))
 	}
 	if cardCount != 2 {
 		t.Errorf("expected 2 cards, got %d", cardCount)
@@ -223,7 +209,7 @@ func TestSaveGeneratedSet_TableCard(t *testing.T) {
 		}},
 	}
 
-	if _, n, err := repository.SaveGeneratedSet(context.Background(), tq, 1, "Клетка", genResult); err != nil || n != 1 {
+	if _, n, err := repository.SaveGeneratedSet(context.Background(), tq, uuid.MustParse("00000000-0000-0000-0000-000000000001"), "Клетка", genResult); err != nil || n != 1 {
 		t.Fatalf("SaveGeneratedSet = %d cards, err %v", n, err)
 	}
 	if len(tq.createdColumns) != 2 || tq.createdColumns[1].Name != "Эукариоты" || tq.createdColumns[1].Position != 1 {

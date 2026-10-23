@@ -31,7 +31,7 @@ SELECT EXISTS (SELECT 1 FROM card) AS found
 
 type CloseCardIssuesParams struct {
 	CardID pgtype.UUID `json:"card_id"`
-	UserID int64       `json:"user_id"`
+	UserID pgtype.UUID `json:"user_id"`
 }
 
 // Dismisses the open complaints of a card; false when the user is not the
@@ -62,7 +62,7 @@ WITH card AS (
 SELECT
     card.author_id,
     card.title AS set_title,
-    (card.author_id <> $1::bigint AND NOT EXISTS (
+    (card.author_id <> $1::uuid AND NOT EXISTS (
         SELECT 1 FROM card_issues i
         WHERE i.card_id = card.id
           AND i.user_id <> card.author_id
@@ -74,15 +74,15 @@ JOIN saved ON saved.card_id = card.id
 `
 
 type CreateCardIssueParams struct {
-	UserID int64           `json:"user_id"`
+	UserID pgtype.UUID     `json:"user_id"`
 	CardID pgtype.UUID     `json:"card_id"`
 	Reason CardIssueReason `json:"reason"`
 }
 
 type CreateCardIssueRow struct {
-	AuthorID     int64  `json:"author_id"`
-	SetTitle     string `json:"set_title"`
-	NotifyAuthor bool   `json:"notify_author"`
+	AuthorID     pgtype.UUID `json:"author_id"`
+	SetTitle     string      `json:"set_title"`
+	NotifyAuthor bool        `json:"notify_author"`
 }
 
 // Saves the complaint with a copy of the card; no row when the card is gone
@@ -117,7 +117,7 @@ ORDER BY last_reported_at DESC, i.card_id, i.reason
 
 type GetSetIssuesParams struct {
 	SetID  pgtype.UUID `json:"set_id"`
-	UserID int64       `json:"user_id"`
+	UserID pgtype.UUID `json:"user_id"`
 }
 
 type GetSetIssuesRow struct {
@@ -186,14 +186,14 @@ LIMIT 1000
 type ListCardIssuesRow struct {
 	ID                pgtype.UUID        `json:"id"`
 	Reason            CardIssueReason    `json:"reason"`
-	Kind              string             `json:"kind"`
+	Kind              CardKind           `json:"kind"`
 	Question          string             `json:"question"`
 	AnswerText        pgtype.Text        `json:"answer_text"`
 	Explanation       string             `json:"explanation"`
 	SourceQuote       string             `json:"source_quote"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	SetTitle          pgtype.Text        `json:"set_title"`
-	ReporterID        int64              `json:"reporter_id"`
+	ReporterID        pgtype.UUID        `json:"reporter_id"`
 	ReporterFirstName string             `json:"reporter_first_name"`
 	ReporterLastName  pgtype.Text        `json:"reporter_last_name"`
 	ReporterUsername  pgtype.Text        `json:"reporter_username"`
@@ -238,4 +238,30 @@ func (q *Queries) ListCardIssues(ctx context.Context) ([]ListCardIssuesRow, erro
 		return nil, err
 	}
 	return items, nil
+}
+
+const rollbackFactStepOnCardIssue = `-- name: RollbackFactStepOnCardIssue :exec
+UPDATE user_fact_progress ufp
+SET step = LEAST(ufp.step, GREATEST(0, (
+    SELECT COUNT(*)::int - 1 FROM cards c2 WHERE c2.fact_id = c.fact_id AND c2.id < c.id
+)))
+FROM cards c
+JOIN facts f ON f.id = c.fact_id
+JOIN sets s ON s.id = f.set_id
+WHERE c.id = $1
+  AND ufp.user_id = $2
+  AND ufp.fact_id = c.fact_id
+  AND s.author_id <> $2
+`
+
+type RollbackFactStepOnCardIssueParams struct {
+	CardID pgtype.UUID `json:"card_id"`
+	UserID pgtype.UUID `json:"user_id"`
+}
+
+// Sets the reader's progress back to the previous card of the fact when they
+// report a problem, so they don't skip ahead to harder cards.
+func (q *Queries) RollbackFactStepOnCardIssue(ctx context.Context, arg RollbackFactStepOnCardIssueParams) error {
+	_, err := q.db.Exec(ctx, rollbackFactStepOnCardIssue, arg.CardID, arg.UserID)
+	return err
 }

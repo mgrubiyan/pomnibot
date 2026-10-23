@@ -272,6 +272,119 @@ func (s *AdminCardIssue) UnmarshalJSON(data []byte) error {
 	return s.Decode(d)
 }
 
+// Encode implements json.Marshaler.
+func (s *Answer) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s *Answer) encodeFields(e *jx.Encoder) {
+	{
+		e.FieldStart("cardId")
+		json.EncodeUUID(e, s.CardId)
+	}
+	{
+		e.FieldStart("correct")
+		e.Bool(s.Correct)
+	}
+}
+
+var jsonFieldsNameOfAnswer = [2]string{
+	0: "cardId",
+	1: "correct",
+}
+
+// Decode decodes Answer from json.
+func (s *Answer) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode Answer to nil")
+	}
+	var requiredBitSet [1]uint8
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "cardId":
+			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				v, err := json.DecodeUUID(d)
+				s.CardId = v
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"cardId\"")
+			}
+		case "correct":
+			requiredBitSet[0] |= 1 << 1
+			if err := func() error {
+				v, err := d.Bool()
+				s.Correct = bool(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"correct\"")
+			}
+		default:
+			return d.Skip()
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode Answer")
+	}
+	// Validate required fields.
+	var failures []validate.FieldError
+	for i, mask := range [1]uint8{
+		0b00000011,
+	} {
+		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
+			// Mask only required fields and check equality to mask using XOR.
+			//
+			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
+			// Bits of fields which would be set are actually bits of missed fields.
+			missed := bits.OnesCount8(result)
+			for bitN := 0; bitN < missed; bitN++ {
+				bitIdx := bits.TrailingZeros8(result)
+				fieldIdx := i*8 + bitIdx
+				var name string
+				if fieldIdx < len(jsonFieldsNameOfAnswer) {
+					name = jsonFieldsNameOfAnswer[fieldIdx]
+				} else {
+					name = strconv.Itoa(fieldIdx)
+				}
+				failures = append(failures, validate.FieldError{
+					Name:  name,
+					Error: validate.ErrFieldRequired,
+				})
+				// Reset bit.
+				result &^= 1 << bitIdx
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *Answer) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *Answer) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
 // Encode encodes AnswerQuestionBadRequest as json.
 func (s *AnswerQuestionBadRequest) Encode(e *jx.Encoder) {
 	unwrapped := (*ErrorResponse)(s)
@@ -634,136 +747,6 @@ func (s *AnswerQuestionResponse) UnmarshalJSON(data []byte) error {
 }
 
 // Encode implements json.Marshaler.
-func (s *AnswerResult) Encode(e *jx.Encoder) {
-	e.ObjStart()
-	s.encodeFields(e)
-	e.ObjEnd()
-}
-
-// encodeFields encodes fields.
-func (s *AnswerResult) encodeFields(e *jx.Encoder) {
-	{
-		e.FieldStart("cardId")
-		json.EncodeUUID(e, s.CardId)
-	}
-	{
-		e.FieldStart("correct")
-		e.Bool(s.Correct)
-	}
-	{
-		e.FieldStart("answeredAt")
-		json.EncodeDateTime(e, s.AnsweredAt)
-	}
-}
-
-var jsonFieldsNameOfAnswerResult = [3]string{
-	0: "cardId",
-	1: "correct",
-	2: "answeredAt",
-}
-
-// Decode decodes AnswerResult from json.
-func (s *AnswerResult) Decode(d *jx.Decoder) error {
-	if s == nil {
-		return errors.New("invalid: unable to decode AnswerResult to nil")
-	}
-	var requiredBitSet [1]uint8
-
-	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
-		switch string(k) {
-		case "cardId":
-			requiredBitSet[0] |= 1 << 0
-			if err := func() error {
-				v, err := json.DecodeUUID(d)
-				s.CardId = v
-				if err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"cardId\"")
-			}
-		case "correct":
-			requiredBitSet[0] |= 1 << 1
-			if err := func() error {
-				v, err := d.Bool()
-				s.Correct = bool(v)
-				if err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"correct\"")
-			}
-		case "answeredAt":
-			requiredBitSet[0] |= 1 << 2
-			if err := func() error {
-				v, err := json.DecodeDateTime(d)
-				s.AnsweredAt = v
-				if err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"answeredAt\"")
-			}
-		default:
-			return d.Skip()
-		}
-		return nil
-	}); err != nil {
-		return errors.Wrap(err, "decode AnswerResult")
-	}
-	// Validate required fields.
-	var failures []validate.FieldError
-	for i, mask := range [1]uint8{
-		0b00000111,
-	} {
-		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
-			// Mask only required fields and check equality to mask using XOR.
-			//
-			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
-			// Bits of fields which would be set are actually bits of missed fields.
-			missed := bits.OnesCount8(result)
-			for bitN := 0; bitN < missed; bitN++ {
-				bitIdx := bits.TrailingZeros8(result)
-				fieldIdx := i*8 + bitIdx
-				var name string
-				if fieldIdx < len(jsonFieldsNameOfAnswerResult) {
-					name = jsonFieldsNameOfAnswerResult[fieldIdx]
-				} else {
-					name = strconv.Itoa(fieldIdx)
-				}
-				failures = append(failures, validate.FieldError{
-					Name:  name,
-					Error: validate.ErrFieldRequired,
-				})
-				// Reset bit.
-				result &^= 1 << bitIdx
-			}
-		}
-	}
-	if len(failures) > 0 {
-		return &validate.Error{Fields: failures}
-	}
-
-	return nil
-}
-
-// MarshalJSON implements stdjson.Marshaler.
-func (s *AnswerResult) MarshalJSON() ([]byte, error) {
-	e := jx.Encoder{}
-	s.Encode(&e)
-	return e.Bytes(), nil
-}
-
-// UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *AnswerResult) UnmarshalJSON(data []byte) error {
-	d := jx.DecodeBytes(data)
-	return s.Decode(d)
-}
-
-// Encode implements json.Marshaler.
 func (s *Card) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
@@ -779,6 +762,14 @@ func (s *Card) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("setId")
 		json.EncodeUUID(e, s.SetId)
+	}
+	{
+		e.FieldStart("factId")
+		json.EncodeUUID(e, s.FactId)
+	}
+	{
+		e.FieldStart("factName")
+		e.Str(s.FactName)
 	}
 	{
 		e.FieldStart("kind")
@@ -822,24 +813,21 @@ func (s *Card) encodeFields(e *jx.Encoder) {
 			s.SourceRef.Encode(e)
 		}
 	}
-	{
-		e.FieldStart("topic")
-		e.Str(s.Topic)
-	}
 }
 
-var jsonFieldsNameOfCard = [11]string{
+var jsonFieldsNameOfCard = [12]string{
 	0:  "id",
 	1:  "setId",
-	2:  "kind",
-	3:  "question",
-	4:  "options",
-	5:  "table",
-	6:  "answer",
-	7:  "explanation",
-	8:  "sourceQuote",
-	9:  "sourceRef",
-	10: "topic",
+	2:  "factId",
+	3:  "factName",
+	4:  "kind",
+	5:  "question",
+	6:  "options",
+	7:  "table",
+	8:  "answer",
+	9:  "explanation",
+	10: "sourceQuote",
+	11: "sourceRef",
 }
 
 // Decode decodes Card from json.
@@ -875,8 +863,32 @@ func (s *Card) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"setId\"")
 			}
-		case "kind":
+		case "factId":
 			requiredBitSet[0] |= 1 << 2
+			if err := func() error {
+				v, err := json.DecodeUUID(d)
+				s.FactId = v
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"factId\"")
+			}
+		case "factName":
+			requiredBitSet[0] |= 1 << 3
+			if err := func() error {
+				v, err := d.Str()
+				s.FactName = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"factName\"")
+			}
+		case "kind":
+			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
 				if err := s.Kind.Decode(d); err != nil {
 					return err
@@ -886,7 +898,7 @@ func (s *Card) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"kind\"")
 			}
 		case "question":
-			requiredBitSet[0] |= 1 << 3
+			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
 				v, err := d.Str()
 				s.Question = string(v)
@@ -927,7 +939,7 @@ func (s *Card) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"table\"")
 			}
 		case "answer":
-			requiredBitSet[0] |= 1 << 6
+			requiredBitSet[1] |= 1 << 0
 			if err := func() error {
 				if err := s.Answer.Decode(d); err != nil {
 					return err
@@ -937,7 +949,7 @@ func (s *Card) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"answer\"")
 			}
 		case "explanation":
-			requiredBitSet[0] |= 1 << 7
+			requiredBitSet[1] |= 1 << 1
 			if err := func() error {
 				v, err := d.Str()
 				s.Explanation = string(v)
@@ -949,7 +961,7 @@ func (s *Card) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"explanation\"")
 			}
 		case "sourceQuote":
-			requiredBitSet[1] |= 1 << 0
+			requiredBitSet[1] |= 1 << 2
 			if err := func() error {
 				v, err := d.Str()
 				s.SourceQuote = string(v)
@@ -970,18 +982,6 @@ func (s *Card) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"sourceRef\"")
 			}
-		case "topic":
-			requiredBitSet[1] |= 1 << 2
-			if err := func() error {
-				v, err := d.Str()
-				s.Topic = string(v)
-				if err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"topic\"")
-			}
 		default:
 			return d.Skip()
 		}
@@ -992,8 +992,8 @@ func (s *Card) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [2]uint8{
-		0b11001111,
-		0b00000101,
+		0b00111111,
+		0b00000111,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -5521,7 +5521,7 @@ func (s *SendResultsInternalServerError) UnmarshalJSON(data []byte) error {
 
 // Encode encodes SendResultsRequest as json.
 func (s SendResultsRequest) Encode(e *jx.Encoder) {
-	unwrapped := []AnswerResult(s)
+	unwrapped := []Answer(s)
 
 	e.ArrStart()
 	for _, elem := range unwrapped {
@@ -5535,11 +5535,11 @@ func (s *SendResultsRequest) Decode(d *jx.Decoder) error {
 	if s == nil {
 		return errors.New("invalid: unable to decode SendResultsRequest to nil")
 	}
-	var unwrapped []AnswerResult
+	var unwrapped []Answer
 	if err := func() error {
-		unwrapped = make([]AnswerResult, 0)
+		unwrapped = make([]Answer, 0)
 		if err := d.Arr(func(d *jx.Decoder) error {
-			var elem AnswerResult
+			var elem Answer
 			if err := elem.Decode(d); err != nil {
 				return err
 			}
@@ -6650,15 +6650,9 @@ func (s *UpdateCardRequest) encodeFields(e *jx.Encoder) {
 			s.SourceRef.Encode(e)
 		}
 	}
-	{
-		if s.Topic.Set {
-			e.FieldStart("topic")
-			s.Topic.Encode(e)
-		}
-	}
 }
 
-var jsonFieldsNameOfUpdateCardRequest = [9]string{
+var jsonFieldsNameOfUpdateCardRequest = [8]string{
 	0: "kind",
 	1: "question",
 	2: "options",
@@ -6667,7 +6661,6 @@ var jsonFieldsNameOfUpdateCardRequest = [9]string{
 	5: "explanation",
 	6: "sourceQuote",
 	7: "sourceRef",
-	8: "topic",
 }
 
 // Decode decodes UpdateCardRequest from json.
@@ -6767,16 +6760,6 @@ func (s *UpdateCardRequest) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"sourceRef\"")
 			}
-		case "topic":
-			if err := func() error {
-				s.Topic.Reset()
-				if err := s.Topic.Decode(d); err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"topic\"")
-			}
 		default:
 			return d.Skip()
 		}
@@ -6812,7 +6795,7 @@ func (s *User) Encode(e *jx.Encoder) {
 func (s *User) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("id")
-		e.Int64(s.ID)
+		json.EncodeUUID(e, s.ID)
 	}
 	{
 		e.FieldStart("firstName")
@@ -6851,8 +6834,8 @@ func (s *User) Decode(d *jx.Decoder) error {
 		case "id":
 			requiredBitSet[0] |= 1 << 0
 			if err := func() error {
-				v, err := d.Int64()
-				s.ID = int64(v)
+				v, err := json.DecodeUUID(d)
+				s.ID = v
 				if err != nil {
 					return err
 				}

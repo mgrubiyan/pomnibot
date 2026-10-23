@@ -20,7 +20,7 @@ type manualSetService struct {
 	calls int
 }
 
-func (s *manualSetService) CreateSet(_ context.Context, _ int64, req *contracts.CreateSetRequest) (*contracts.CardSet, error) {
+func (s *manualSetService) CreateSet(_ context.Context, _ uuid.UUID, req *contracts.CreateSetRequest) (*contracts.CardSet, error) {
 	s.calls++
 	if s.err != nil {
 		return nil, s.err
@@ -34,7 +34,7 @@ type manualCardService struct {
 	calls int
 }
 
-func (s *manualCardService) CreateCard(_ context.Context, _ int64, setID uuid.UUID, req *contracts.CreateCardRequest) (*contracts.Card, error) {
+func (s *manualCardService) CreateCard(_ context.Context, _ uuid.UUID, setID uuid.UUID, req *contracts.CreateCardRequest) (*contracts.Card, error) {
 	s.calls++
 	if s.err != nil {
 		return nil, s.err

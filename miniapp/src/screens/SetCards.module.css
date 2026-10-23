@@ -18,6 +18,19 @@
     padding-right: 0;
 }
 
+.factSection {
+    margin-top: 8px;
+}
+
+.factSection:first-of-type {
+    margin-top: 0;
+}
+
+.factHeader {
+    padding: 0 16px;
+    text-wrap: pretty;
+}
+
 .cardTitle {
     /* Two lines tell one question from another; a longer one is cut. */
     display: -webkit-box;

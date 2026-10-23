@@ -4,12 +4,12 @@
 CREATE TYPE card_issue_reason AS ENUM ('answer', 'wording', 'not-in-notes', 'other');
 
 CREATE TABLE card_issues (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuidv7(),
     card_id UUID REFERENCES cards(id) ON DELETE SET NULL,
     set_id UUID REFERENCES sets(id) ON DELETE SET NULL,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     reason card_issue_reason NOT NULL,
-    kind TEXT NOT NULL,
+    kind card_kind NOT NULL,
     question TEXT NOT NULL,
     answer_text TEXT,
     explanation TEXT NOT NULL,

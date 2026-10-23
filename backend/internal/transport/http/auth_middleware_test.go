@@ -15,25 +15,31 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
+var (
+	testAuthMaxID = uuid.MustParse("00000000-0000-0000-0000-000000000900")
+	testAuthTgID  = uuid.MustParse("00000000-0000-0000-0000-000000000901")
+)
+
 type mockUserService struct {
 	usecase.UserService
-	ensureUserFunc func(context.Context, int64) error
+	ensureUserFunc func(context.Context, uuid.UUID) error
 	upsertCalls    []usecase.MAXUserParams
 	maxFunc        func(context.Context, usecase.MAXUserParams) (usecase.Account, error)
 	telegramFunc   func(context.Context, usecase.TelegramUserParams) (usecase.Account, error)
 }
 
-func (m *mockUserService) EnsureUser(ctx context.Context, id int64) error {
+func (m *mockUserService) EnsureUser(ctx context.Context, id uuid.UUID) error {
 	if m.ensureUserFunc != nil {
 		return m.ensureUserFunc(ctx, id)
 	}
 	return nil
 }
-func (m *mockUserService) GetUsersWithDueFacts(context.Context, time.Time, string) ([]int64, error) {
+func (m *mockUserService) GetUsersWithDueFacts(context.Context, time.Time, string) ([]uuid.UUID, error) {
 	return nil, nil
 }
 func (m *mockUserService) UpsertMAXUser(ctx context.Context, p usecase.MAXUserParams) (usecase.Account, error) {
@@ -41,7 +47,7 @@ func (m *mockUserService) UpsertMAXUser(ctx context.Context, p usecase.MAXUserPa
 		return m.maxFunc(ctx, p)
 	}
 	m.upsertCalls = append(m.upsertCalls, p)
-	return usecase.Account{User: contracts.User{ID: p.MaxID + 100000, FirstName: p.FirstName}, MaxID: p.MaxID, ProfileComplete: true}, nil
+	return usecase.Account{User: contracts.User{ID: uuid.New(), FirstName: p.FirstName}, MaxID: p.MaxID, ProfileComplete: true}, nil
 }
 func (m *mockUserService) UpsertTelegramUser(ctx context.Context, p usecase.TelegramUserParams) (usecase.Account, error) {
 	return m.telegramFunc(ctx, p)
@@ -84,10 +90,10 @@ func TestAuthMiddleware(t *testing.T) {
 		name, scheme                   string
 		invalid, dbFailure, incomplete bool
 		status                         int
-		wantID                         int64
+		wantID                         uuid.UUID
 	}{
-		{name: "max", scheme: "max", status: 200, wantID: 900},
-		{name: "telegram", scheme: "tma", status: 200, wantID: 901},
+		{name: "max", scheme: "max", status: 200, wantID: testAuthMaxID},
+		{name: "telegram", scheme: "tma", status: 200, wantID: testAuthTgID},
 		{name: "missing", status: 200}, {name: "unknown", scheme: "Bearer", status: 200},
 		{name: "invalid", scheme: "tma", invalid: true, status: 200},
 		{name: "database failure", scheme: "max", dbFailure: true, status: 500},
@@ -95,7 +101,7 @@ func TestAuthMiddleware(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			calls := 0
-			account := func(platform string, id int64) (usecase.Account, error) {
+			account := func(platform string, id uuid.UUID) (usecase.Account, error) {
 				calls++
 				if tc.dbFailure {
 					return usecase.Account{}, errors.New("database unavailable")
@@ -113,13 +119,13 @@ func TestAuthMiddleware(t *testing.T) {
 					if p.MaxID != 42 {
 						t.Fatalf("MAX external ID: %d", p.MaxID)
 					}
-					return account("max", 900)
+					return account("max", testAuthMaxID)
 				},
 				telegramFunc: func(_ context.Context, p usecase.TelegramUserParams) (usecase.Account, error) {
 					if p.TgID != 42 {
 						t.Fatalf("Telegram external ID: %d", p.TgID)
 					}
-					return account("telegram", 901)
+					return account("telegram", testAuthTgID)
 				},
 			}
 			called := false
@@ -127,10 +133,10 @@ func TestAuthMiddleware(t *testing.T) {
 				called = true
 				id, _ := UserIDFromContext(r.Context())
 				if id != tc.wantID {
-					t.Fatalf("internal id=%d, want %d", id, tc.wantID)
+					t.Fatalf("internal id=%s, want %s", id, tc.wantID)
 				}
 				name, _ := UserNameFromContext(r.Context())
-				if id != 0 && name != "Saved" {
+				if id != uuid.Nil && name != "Saved" {
 					t.Fatalf("name=%s", name)
 				}
 			})

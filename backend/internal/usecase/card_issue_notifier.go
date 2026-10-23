@@ -6,13 +6,15 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // CardIssueReport tells the author of a set that a reader complained about
 // one of its cards. The details are in the mini app; the reader stays
 // anonymous.
 type CardIssueReport struct {
-	AuthorID int64
+	AuthorID uuid.UUID
 	SetTitle string
 }
 
@@ -29,7 +31,7 @@ type Messenger interface {
 
 // AccountGetter finds a user's chat accounts.
 type AccountGetter interface {
-	GetAccount(ctx context.Context, userID int64) (Account, error)
+	GetAccount(ctx context.Context, userID uuid.UUID) (Account, error)
 }
 
 // WithIssueNotifier tells the author about complaints on their cards.

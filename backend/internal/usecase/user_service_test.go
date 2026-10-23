@@ -6,15 +6,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
+)
+
+var (
+	testUserUUID1 = uuid.MustParse("00000000-0000-0000-0000-000000000123")
+	testUserUUID2 = uuid.MustParse("00000000-0000-0000-0000-000000000456")
+	testUserUUID3 = uuid.MustParse("00000000-0000-0000-0000-000000000789")
 )
 
 type mockUserQuerier struct {
 	db.Querier
 	upsertMAXUserFunc        func(ctx context.Context, arg db.UpsertMAXUserParams) (db.User, error)
-	ensureUserFunc           func(ctx context.Context, id int64) (db.User, error)
-	getUsersWithDueFactsFunc func(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]int64, error)
+	ensureUserFunc           func(ctx context.Context, id pgtype.UUID) (db.User, error)
+	getUsersWithDueFactsFunc func(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]pgtype.UUID, error)
 }
 
 func (m *mockUserQuerier) UpsertMAXUser(ctx context.Context, arg db.UpsertMAXUserParams) (db.User, error) {
@@ -24,14 +32,14 @@ func (m *mockUserQuerier) UpsertMAXUser(ctx context.Context, arg db.UpsertMAXUse
 	return db.User{}, nil
 }
 
-func (m *mockUserQuerier) EnsureUser(ctx context.Context, id int64) (db.User, error) {
+func (m *mockUserQuerier) EnsureUser(ctx context.Context, id pgtype.UUID) (db.User, error) {
 	if m.ensureUserFunc != nil {
 		return m.ensureUserFunc(ctx, id)
 	}
 	return db.User{}, nil
 }
 
-func (m *mockUserQuerier) GetUsersWithDueFacts(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]int64, error) {
+func (m *mockUserQuerier) GetUsersWithDueFacts(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]pgtype.UUID, error) {
 	if m.getUsersWithDueFactsFunc != nil {
 		return m.getUsersWithDueFactsFunc(ctx, arg)
 	}
@@ -49,7 +57,7 @@ func TestUserService_UpsertMAXUser(t *testing.T) {
 			upsertMAXUserFunc: func(_ context.Context, arg db.UpsertMAXUserParams) (db.User, error) {
 				capturedArg = arg
 				return db.User{
-					ID:        900,
+					ID:        pgtype.UUID{Bytes: testUserUUID1, Valid: true},
 					MaxID:     arg.MaxID,
 					FirstName: arg.FirstName,
 					LastName:  arg.LastName,
@@ -94,7 +102,7 @@ func TestUserService_UpsertMAXUser(t *testing.T) {
 			upsertMAXUserFunc: func(_ context.Context, arg db.UpsertMAXUserParams) (db.User, error) {
 				capturedArg = arg
 				return db.User{
-					ID:        900,
+					ID:        pgtype.UUID{Bytes: testUserUUID1, Valid: true},
 					MaxID:     arg.MaxID,
 					FirstName: arg.FirstName,
 				}, nil
@@ -151,34 +159,34 @@ func TestUserService_EnsureUser(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("successful ensure user", func(t *testing.T) {
-		var capturedID int64
+		var capturedID pgtype.UUID
 		mock := &mockUserQuerier{
-			ensureUserFunc: func(_ context.Context, id int64) (db.User, error) {
+			ensureUserFunc: func(_ context.Context, id pgtype.UUID) (db.User, error) {
 				capturedID = id
 				return db.User{ID: id}, nil
 			},
 		}
 
 		svc := usecase.NewUserService(mock)
-		err := svc.EnsureUser(ctx, 42)
+		err := svc.EnsureUser(ctx, testUserUUID1)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if capturedID != 42 {
-			t.Errorf("expected ID 42, got %d", capturedID)
+		if capturedID.Bytes != testUserUUID1 {
+			t.Errorf("expected ID %s, got %s", testUserUUID1, capturedID.Bytes)
 		}
 	})
 
 	t.Run("database error returns wrapped error", func(t *testing.T) {
 		mockErr := errors.New("db error")
 		mock := &mockUserQuerier{
-			ensureUserFunc: func(_ context.Context, _ int64) (db.User, error) {
+			ensureUserFunc: func(_ context.Context, _ pgtype.UUID) (db.User, error) {
 				return db.User{}, mockErr
 			},
 		}
 
 		svc := usecase.NewUserService(mock)
-		err := svc.EnsureUser(ctx, 42)
+		err := svc.EnsureUser(ctx, testUserUUID1)
 		if err == nil {
 			t.Fatalf("expected error, got nil")
 		}
@@ -195,9 +203,9 @@ func TestUserService_GetUsersWithDueFacts(t *testing.T) {
 	t.Run("successful retrieval with default timezone", func(t *testing.T) {
 		var capturedArg db.GetUsersWithDueFactsParams
 		mock := &mockUserQuerier{
-			getUsersWithDueFactsFunc: func(_ context.Context, arg db.GetUsersWithDueFactsParams) ([]int64, error) {
+			getUsersWithDueFactsFunc: func(_ context.Context, arg db.GetUsersWithDueFactsParams) ([]pgtype.UUID, error) {
 				capturedArg = arg
-				return []int64{123, 456}, nil
+				return []pgtype.UUID{{Bytes: testUserUUID1, Valid: true}, {Bytes: testUserUUID2, Valid: true}}, nil
 			},
 		}
 
@@ -213,15 +221,19 @@ func TestUserService_GetUsersWithDueFacts(t *testing.T) {
 		if !capturedArg.Now.Valid || capturedArg.Now.Time != fixedTime {
 			t.Errorf("expected Now timestamp %+v, got %+v", fixedTime, capturedArg.Now.Time)
 		}
-		if len(users) != 2 || users[0] != 123 || users[1] != 456 {
-			t.Errorf("expected [123, 456], got %v", users)
+		if len(users) != 2 || users[0] != testUserUUID1 || users[1] != testUserUUID2 {
+			t.Errorf("expected [%s, %s], got %v", testUserUUID1, testUserUUID2, users)
 		}
 	})
 
-	t.Run("filters out bypass IDs 0 and 100001", func(t *testing.T) {
+	t.Run("filters out bypass nil UUID", func(t *testing.T) {
 		mock := &mockUserQuerier{
-			getUsersWithDueFactsFunc: func(_ context.Context, _ db.GetUsersWithDueFactsParams) ([]int64, error) {
-				return []int64{0, 100001, 789}, nil
+			getUsersWithDueFactsFunc: func(_ context.Context, _ db.GetUsersWithDueFactsParams) ([]pgtype.UUID, error) {
+				return []pgtype.UUID{
+					{Bytes: uuid.Nil, Valid: true},
+					{Valid: false},
+					{Bytes: testUserUUID3, Valid: true},
+				}, nil
 			},
 		}
 
@@ -231,15 +243,15 @@ func TestUserService_GetUsersWithDueFacts(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if len(users) != 1 || users[0] != 789 {
-			t.Errorf("expected only [789], got %v", users)
+		if len(users) != 1 || users[0] != testUserUUID3 {
+			t.Errorf("expected only [%s], got %v", testUserUUID3, users)
 		}
 	})
 
 	t.Run("database error returns wrapped error", func(t *testing.T) {
 		mockErr := errors.New("query failed")
 		mock := &mockUserQuerier{
-			getUsersWithDueFactsFunc: func(_ context.Context, _ db.GetUsersWithDueFactsParams) ([]int64, error) {
+			getUsersWithDueFactsFunc: func(_ context.Context, _ db.GetUsersWithDueFactsParams) ([]pgtype.UUID, error) {
 				return nil, mockErr
 			},
 		}

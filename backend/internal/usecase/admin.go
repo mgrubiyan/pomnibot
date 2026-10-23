@@ -32,10 +32,10 @@ func (a Admins) Is(account Account) bool {
 
 // AdminService shows admins what readers complained about across all sets.
 type AdminService interface {
-	IsAdmin(ctx context.Context, userID int64) (bool, error)
+	IsAdmin(ctx context.Context, userID uuid.UUID) (bool, error)
 	// ListCardIssues lists every complaint for an admin, newest first; for
 	// anyone else the list is empty.
-	ListCardIssues(ctx context.Context, userID int64) ([]contracts.AdminCardIssue, error)
+	ListCardIssues(ctx context.Context, userID uuid.UUID) ([]contracts.AdminCardIssue, error)
 }
 
 type adminServiceImpl struct {
@@ -49,7 +49,7 @@ func NewAdminService(querier db.Querier, accounts AccountGetter, admins Admins) 
 	return &adminServiceImpl{querier: querier, accounts: accounts, admins: admins}
 }
 
-func (s *adminServiceImpl) IsAdmin(ctx context.Context, userID int64) (bool, error) {
+func (s *adminServiceImpl) IsAdmin(ctx context.Context, userID uuid.UUID) (bool, error) {
 	account, err := s.accounts.GetAccount(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
@@ -60,7 +60,7 @@ func (s *adminServiceImpl) IsAdmin(ctx context.Context, userID int64) (bool, err
 	return s.admins.Is(account), nil
 }
 
-func (s *adminServiceImpl) ListCardIssues(ctx context.Context, userID int64) ([]contracts.AdminCardIssue, error) {
+func (s *adminServiceImpl) ListCardIssues(ctx context.Context, userID uuid.UUID) ([]contracts.AdminCardIssue, error) {
 	admin, err := s.IsAdmin(ctx, userID)
 	if err != nil || !admin {
 		return []contracts.AdminCardIssue{}, err

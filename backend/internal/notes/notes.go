@@ -21,6 +21,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
@@ -38,7 +39,7 @@ type Generator interface {
 
 // Saver saves the cards as a new set of the user.
 type Saver interface {
-	SaveGeneratedSet(ctx context.Context, userID int64, title string, genResult generator.Result) (*contracts.CardSet, error)
+	SaveGeneratedSet(ctx context.Context, userID uuid.UUID, title string, genResult generator.Result) (*contracts.CardSet, error)
 }
 
 type fromGenerator struct {
@@ -82,7 +83,7 @@ func New(extractor Extractor, gen Generator, sets Saver, slots int) *Maker {
 // Request is one document: the files a student sent at once, already
 // downloaded, and the caption under them.
 type Request struct {
-	UserID  int64
+	UserID  uuid.UUID
 	Caption string
 	Files   []ingest.File
 }

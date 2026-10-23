@@ -50,7 +50,7 @@ func (h *HomescreenHandler) SendResults(ctx context.Context, req contracts.SendR
 		return &contracts.SendResultsBadRequest{Message: "results are required"}, nil
 	}
 	userID, _ := UserIDFromContext(ctx)
-	err := h.homescreenService.SendResults(ctx, userID, []contracts.AnswerResult(req))
+	err := h.homescreenService.SendResults(ctx, userID, []contracts.Answer(req))
 	if err != nil {
 		if errors.Is(err, usecase.ErrValidation) || errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
 			return &contracts.SendResultsBadRequest{Message: err.Error()}, nil

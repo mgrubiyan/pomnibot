@@ -60,7 +60,7 @@ type fakeSaver struct {
 	err    error
 }
 
-func (f *fakeSaver) SaveGeneratedSet(_ context.Context, _ int64, title string, _ generator.Result) (*contracts.CardSet, error) {
+func (f *fakeSaver) SaveGeneratedSet(_ context.Context, _ uuid.UUID, title string, _ generator.Result) (*contracts.CardSet, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -80,7 +80,7 @@ func TestMake_SavesSetNamedAfterFile(t *testing.T) {
 	m := New(extractor, &fakeGenerator{}, saver, 1)
 
 	var cardsSeen []int
-	res, err := m.Make(context.Background(), Request{UserID: 1, Files: file("Лекция_4_митоз.pdf")},
+	res, err := m.Make(context.Background(), Request{UserID: uuid.New(), Files: file("Лекция_4_митоз.pdf")},
 		Progress{Cards: func(total int) { cardsSeen = append(cardsSeen, total) }})
 	if err != nil {
 		t.Fatalf("Make: %v", err)

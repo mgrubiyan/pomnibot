@@ -8,7 +8,6 @@ import { ConfirmDiscardDialog } from '../components/ConfirmDiscardDialog';
 import { CARD_KINDS } from '../utils/kinds';
 import { IconCross, IconDoc, IconPlus, IconTrash } from '../components/Icons';
 import type { CardPatch } from '../utils/cards';
-import { cx } from '../utils/cx';
 import s from './CardEdit.module.css';
 
 const KIND_OPTIONS = CARD_KINDS.map(({ kind, label }) => ({ value: kind, label }));
@@ -200,7 +199,6 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
             kind,
             question: question.trim(),
             explanation: explanation.trim(),
-            topic: card.topic,
         };
 
         if (kind === 'choice') {
@@ -267,20 +265,6 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                             </select>
                         </div>
                     </Flex>
-
-                    {/* Topic field (read-only / disabled) */}
-                    {!creationKind && <Flex direction="column" align="stretch" gap={4}>
-                        <Typography.Text variant="label" color="tertiary" asChild>
-                            <label htmlFor="card-topic">Тема</label>
-                        </Typography.Text>
-                        <Input
-                            id="card-topic"
-                            value={card.topic ?? ''}
-                            className={cx(s.field, s.disabledField)}
-                            disabled
-                            aria-readonly="true"
-                        />
-                    </Flex>}
 
                     {/* Question field */}
                     <Flex direction="column" align="stretch" gap={4}>
