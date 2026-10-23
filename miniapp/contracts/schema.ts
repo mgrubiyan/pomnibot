@@ -266,6 +266,83 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/cards/{cardId}/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report what is wrong with a card
+         * @description Saves the complaint with a copy of the card as it was reported, so it outlives later edits and the card's deletion.
+         */
+        post: operations["ReportCardIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sets/{setId}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Open complaints about the cards of the author's set
+         * @description Grouped by card and reason. A complaint is open until the card is edited after it or the author keeps the card as it is.
+         */
+        get: operations["GetSetIssues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cards/{cardId}/issue/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Keep a card as it is and close its complaints */
+        post: operations["ResolveCardIssues"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every complaint about cards, for admins
+         * @description All complaints across all sets, newest first, each with the copy of the card as it was reported and who reported it. Anyone but an admin gets an empty list.
+         */
+        get: operations["GetAdminIssues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -351,6 +428,45 @@ export interface components {
             /** @description topic, used for stats */
             topic?: string;
         };
+        /**
+         * @description What is wrong with a card, in the reader's opinion.
+         * @enum {string}
+         */
+        CardIssueReason: "answer" | "wording" | "not-in-notes" | "other";
+        ReportCardIssueRequest: {
+            reason: components["schemas"]["CardIssueReason"];
+        };
+        /**
+         * @description open until the author answers; fixed when the card was edited after the complaint; kept when the author left the card as it is; deleted when the card is gone.
+         * @enum {string}
+         */
+        CardIssueStatus: "open" | "fixed" | "kept" | "deleted";
+        AdminCardIssue: {
+            /** Format: uuid */
+            id: string;
+            reason: components["schemas"]["CardIssueReason"];
+            status: components["schemas"]["CardIssueStatus"];
+            /** @description Absent when the set is deleted */
+            setTitle?: string;
+            kind: components["schemas"]["CardKind"];
+            question: string;
+            /** @description The answer as stored with the card; absent for tables */
+            answer?: string;
+            explanation: string;
+            sourceQuote: string;
+            reporter: components["schemas"]["User"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SetIssue: {
+            /** Format: uuid */
+            cardId: string;
+            reason: components["schemas"]["CardIssueReason"];
+            /** @description How many complaints with this reason */
+            count: number;
+            /** Format: date-time */
+            lastReportedAt: string;
+        };
         User: {
             /** Format: int64 */
             id: number;
@@ -415,6 +531,8 @@ export interface components {
              */
             nextReviewAt?: string | null;
             sets: components["schemas"]["CardSet"][];
+            /** @description The user sees every complaint, at GET /admin/issues */
+            isAdmin?: boolean;
         };
         AnswerResult: {
             /** Format: uuid */
@@ -980,6 +1098,106 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    ReportCardIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ID of the card */
+                cardId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportCardIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description Card issue reported successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    GetSetIssues: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                setId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetIssue"][];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    ResolveCardIssues: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ID of the card */
+                cardId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Complaints closed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    GetAdminIssues: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminCardIssue"][];
+                };
+            };
+            403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalServerError"];
         };
     };

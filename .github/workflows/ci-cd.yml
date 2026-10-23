@@ -212,6 +212,8 @@ jobs:
           NOTIFICATIONS_ENABLED: ${{ vars.NOTIFICATIONS_ENABLED || secrets.NOTIFICATIONS_ENABLED }}
           NOTIFICATION_TIME: ${{ vars.NOTIFICATION_TIME || secrets.NOTIFICATION_TIME }}
           NOTIFICATION_TZ: ${{ vars.NOTIFICATION_TZ || secrets.NOTIFICATION_TZ }}
+          ADMIN_MAX_IDS: ${{ vars.ADMIN_MAX_IDS }}
+          ADMIN_TG_IDS: ${{ vars.ADMIN_TG_IDS }}
 
           # Sensitive credentials (GitHub Actions Secrets)
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
@@ -261,6 +263,8 @@ jobs:
             NOTIFICATIONS_ENABLED
             NOTIFICATION_TIME
             NOTIFICATION_TZ
+            ADMIN_MAX_IDS
+            ADMIN_TG_IDS
           )
 
           SECRET_VARS=(

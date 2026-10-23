@@ -3,16 +3,19 @@ import ManualCreate from './screens/ManualCreate';
 import AddNote from './screens/AddNote';
 import CreateSet from './screens/CreateSet';
 import CardEdit from './screens/CardEdit';
+import AdminIssues from './screens/AdminIssues';
+import CardIssue from './screens/CardIssue';
 import Feed from './screens/Feed';
 import Home from './screens/Home';
 import JoinSet from './screens/JoinSet';
 import SetScreen from './screens/SetScreen';
 import SetCards from './screens/SetCards';
+import SetIssues from './screens/SetIssues';
 import Share from './screens/Share';
 import Leaderboard from './screens/Leaderboard';
 import WhyItWorks from './screens/WhyItWorks';
 import { api } from './api';
-import type { AnswerResult, Card, TodayData, User } from './types';
+import type { AnswerResult, Card, CardIssueReason, TodayData, User } from './types';
 import type { CardPatch } from './utils/cards';
 
 /** No router yet: browser history is not used. */
@@ -20,6 +23,8 @@ type Screen =
     | { name: 'home' }
     | { name: 'set'; setId: string }
     | { name: 'set-cards'; setId: string }
+    | { name: 'set-issues'; setId: string }
+    | { name: 'admin-issues' }
     | {
           name: 'feed';
           setId?: string;
@@ -35,6 +40,15 @@ type Screen =
     | { name: 'manual'; setId?: string; setTitle?: string }
     | { name: 'join' }
     | {
+          name: 'card-issue';
+          card: Card;
+          setTitle?: string;
+          isOwner: boolean;
+          feedSetId?: string;
+          feedIndex: number;
+          feedResults: AnswerResult[];
+      }
+    | {
           name: 'card-edit';
           card: Card;
           setTitle?: string;
@@ -43,6 +57,8 @@ type Screen =
           feedSetId?: string;
           feedIndex?: number;
           feedResults?: AnswerResult[];
+          /** Where to go after the edit when it did not start in the feed. */
+          returnTo?: Screen;
       };
 
 /** What to report on the cards screen after an action on a card. */
@@ -106,6 +122,7 @@ function App() {
         feedSetTitle?: string,
         feedIndex?: number,
         feedResults?: AnswerResult[],
+        returnTo?: Screen,
     ) => {
         try {
             await api.DELETE('/cards/{cardId}', {
@@ -127,6 +144,8 @@ function App() {
                 initialIndex: feedIndex,
                 initialResults: feedResults,
             });
+        } else if (returnTo) {
+            setScreen(returnTo);
         } else {
             setScreen({ name: 'set-cards', setId });
             setToast({ kind: 'removed', cardId });
@@ -142,6 +161,7 @@ function App() {
         feedSetTitle?: string,
         feedIndex?: number,
         feedResults?: AnswerResult[],
+        returnTo?: Screen,
     ) => {
         try {
             const { error } = await api.PUT('/cards/{cardId}', {
@@ -173,9 +193,56 @@ function App() {
                 initialIndex: feedIndex,
                 initialResults: feedResults,
             });
+        } else if (returnTo) {
+            setScreen(returnTo);
         } else {
             setScreen({ name: 'set-cards', setId });
             setToast({ kind: 'edited' });
+        }
+    };
+
+    // Throws when the complaint was not saved, so the screen can say so
+    // instead of losing it. The status decides: an error with an empty
+    // body, such as a proxy's 502, comes back without an `error`.
+    const reportCardIssue = async (cardId: string, reason: CardIssueReason) => {
+        const { response } = await api.POST('/cards/{cardId}/issue', {
+            params: { path: { cardId } },
+            body: { reason },
+        });
+        if (!response.ok) {
+            throw new Error(`Failed to report card issue: ${response.status}`);
+        }
+    };
+
+    // The author gets other actions than a reader, so without the set or
+    // the user the screen is not opened: a guess would treat the author as a reader.
+    const openCardIssue = async (
+        card: Card,
+        feedSetId: string | undefined,
+        feedIndex: number,
+        feedResults: AnswerResult[],
+    ): Promise<boolean> => {
+        try {
+            const [{ data: set }, user] = await Promise.all([
+                api.GET('/sets/{setId}', { params: { path: { setId: card.setId } } }),
+                currentUser ?? api.GET('/').then(({ data }) => data?.user ?? null),
+            ]);
+            if (!set || !user) {
+                return false;
+            }
+            setCurrentUser(user);
+            go({
+                name: 'card-issue',
+                card,
+                setTitle: set.title,
+                isOwner: set.author.id === user.id,
+                feedSetId,
+                feedIndex,
+                feedResults,
+            });
+            return true;
+        } catch {
+            return false;
         }
     };
 
@@ -186,6 +253,7 @@ function App() {
             onAddNote={() => go({ name: 'create-method' })}
             onJoinSet={() => go({ name: 'join' })}
             onOpenWhy={() => go({ name: 'why' })}
+            onOpenAdminIssues={() => go({ name: 'admin-issues' })}
             removedSetIds={removedSetIds}
             onTodayLoaded={handleTodayLoaded}
         />
@@ -209,6 +277,51 @@ function App() {
         return <JoinSet onBack={goHome} onOpenSet={openSet} />;
     }
 
+    if (screen.name === 'card-issue') {
+        const { card, setTitle, isOwner, feedSetId, feedIndex, feedResults } = screen;
+        const feedTitle = feedSetId ? setTitle : undefined;
+        const backToFeed = () =>
+            go({
+                name: 'feed',
+                setId: feedSetId,
+                setTitle: feedTitle,
+                initialIndex: feedIndex,
+                initialResults: feedResults,
+            });
+        return (
+            <CardIssue
+                card={card}
+                setTitle={setTitle ?? 'Набор'}
+                isOwner={isOwner}
+                onBack={backToFeed}
+                onEdit={async (reason) => {
+                    await reportCardIssue(card.id, reason);
+                    go({
+                        name: 'card-edit',
+                        card,
+                        setTitle,
+                        isOwner: true,
+                        fromFeed: true,
+                        feedSetId,
+                        feedIndex,
+                        feedResults,
+                    });
+                }}
+                onRemove={async (reason) => {
+                    await reportCardIssue(card.id, reason);
+                    await removeCard(card.id, card.setId, true, feedSetId, feedTitle, feedIndex, feedResults);
+                }}
+                onReport={async (reason) => {
+                    await reportCardIssue(card.id, reason);
+                    setRemovedCardIds((current) =>
+                        current.includes(card.id) ? current : [...current, card.id],
+                    );
+                    backToFeed();
+                }}
+            />
+        );
+    }
+
     if (screen.name === 'card-edit') {
         const {
             card,
@@ -218,6 +331,7 @@ function App() {
             feedSetId,
             feedIndex,
             feedResults,
+            returnTo,
         } = screen;
 
         if (!isOwner) {
@@ -249,7 +363,7 @@ function App() {
                             initialResults: feedResults,
                         });
                     } else {
-                        go({ name: 'set-cards', setId: card.setId });
+                        go(returnTo ?? { name: 'set-cards', setId: card.setId });
                     }
                 }}
                 onSave={(patch) =>
@@ -262,6 +376,7 @@ function App() {
                         setTitle,
                         feedIndex,
                         feedResults,
+                        returnTo,
                     )
                 }
                 onRemove={() =>
@@ -273,6 +388,7 @@ function App() {
                         setTitle,
                         feedIndex,
                         feedResults,
+                        returnTo,
                     )
                 }
             />
@@ -292,6 +408,7 @@ function App() {
                 cardPatches={cardPatches}
                 onExit={setId ? () => openSet(setId) : goHome}
                 onBack={setId ? () => openSet(setId) : goHome}
+                onReportCard={(card, index, results) => openCardIssue(card, setId, index, results)}
                 onShare={setId ? () => go({ name: 'share', setId }) : undefined}
             />
         );
@@ -319,6 +436,24 @@ function App() {
 
     if (screen.name === 'why') {
         return <WhyItWorks onBack={goHome} />;
+    }
+
+    if (screen.name === 'admin-issues') {
+        return <AdminIssues onBack={goHome} />;
+    }
+
+    if (screen.name === 'set-issues') {
+        const issues: Screen = { name: 'set-issues', setId: screen.setId };
+        return (
+            <SetIssues
+                key={screen.setId}
+                setId={screen.setId}
+                onBack={() => openSet(screen.setId)}
+                onEditCard={(card, setTitle) =>
+                    go({ name: 'card-edit', card, setTitle, isOwner: true, returnTo: issues })
+                }
+            />
+        );
     }
 
     if (screen.name === 'set-cards') {
@@ -353,6 +488,7 @@ function App() {
                 onStart={(setId, setTitle) => go({ name: 'feed', setId, setTitle })}
                 onRemove={removeSet}
                 onOpenCards={(setId) => go({ name: 'set-cards', setId })}
+                onOpenIssues={(setId) => go({ name: 'set-issues', setId })}
                 onShare={(setId, setTitle) => go({ name: 'share', setId, setTitle })}
                 onOpenLeaderboard={(setId, setTitle) =>
                     go({

@@ -11,8 +11,17 @@ import (
 )
 
 type Querier interface {
+	// Dismisses the open complaints of a card; false when the user is not the
+	// author of its set or the card is gone. Complaints an edit already answered
+	// stay as they are, so the admin still sees them fixed.
+	CloseCardIssues(ctx context.Context, arg CloseCardIssuesParams) (bool, error)
 	CountTotalDueCardsForUser(ctx context.Context, userID int64) (int32, error)
 	CreateCard(ctx context.Context, arg CreateCardParams) (Card, error)
+	// Saves the complaint with a copy of the card; no row when the card is gone
+	// or the user can't see its set. notify_author is true when no other reader
+	// has an open complaint about the card: the author hears about it once, until
+	// they edit the card or keep it. The main query does not see the new row.
+	CreateCardIssue(ctx context.Context, arg CreateCardIssueParams) (CreateCardIssueRow, error)
 	CreateCardOption(ctx context.Context, arg CreateCardOptionParams) (CardOption, error)
 	CreateCardTableColumn(ctx context.Context, arg CreateCardTableColumnParams) (CardTableColumn, error)
 	CreateCardTableItem(ctx context.Context, arg CreateCardTableItemParams) (CardTableItem, error)
@@ -34,10 +43,15 @@ type Querier interface {
 	GetCardTableItemsBatch(ctx context.Context, cardIds []pgtype.UUID) ([]CardTableItem, error)
 	GetCardsBySetID(ctx context.Context, arg GetCardsBySetIDParams) ([]GetCardsBySetIDRow, error)
 	GetFactsBySetID(ctx context.Context, setID pgtype.UUID) ([]GetFactsBySetIDRow, error)
+	// A steady order: the feed comes back at the same index after a complaint
+	// or an edit, and a reported card's fact keeps its place.
 	GetFeedCardsForUser(ctx context.Context, userID int64) ([]GetFeedCardsForUserRow, error)
 	GetNextReviewDateForUser(ctx context.Context, userID int64) (pgtype.Timestamptz, error)
 	GetSetByID(ctx context.Context, arg GetSetByIDParams) (GetSetByIDRow, error)
 	GetSetByShareCode(ctx context.Context, arg GetSetByShareCodeParams) (GetSetByShareCodeRow, error)
+	// Open complaints of the author's set: made after the card's last edit and
+	// not dismissed. Complaints about deleted cards are not listed.
+	GetSetIssues(ctx context.Context, arg GetSetIssuesParams) ([]GetSetIssuesRow, error)
 	// Aggregate only existing progress before joining participants. Missing facts
 	// contribute the default 700 without expanding every participant into every fact.
 	GetSetLeaderboard(ctx context.Context, setID pgtype.UUID) ([]GetSetLeaderboardRow, error)
@@ -53,6 +67,12 @@ type Querier interface {
 	IsSetAuthor(ctx context.Context, arg IsSetAuthorParams) (bool, error)
 	JoinSet(ctx context.Context, arg JoinSetParams) (UserSet, error)
 	LeaveSet(ctx context.Context, arg LeaveSetParams) (int64, error)
+	// Every complaint, for admins, newest first. The status: deleted when the
+	// card is gone; fixed when the card was edited after the complaint and before
+	// any «Всё верно» (which also closes complaints the edit answered); kept when
+	// the author left the card as it is; open otherwise.
+	// The mini app says the list is cut off at this number: ADMIN_ISSUES_LIMIT.
+	ListCardIssues(ctx context.Context) ([]ListCardIssuesRow, error)
 	LockSetForAuthor(ctx context.Context, arg LockSetForAuthorParams) (pgtype.UUID, error)
 	RecordAnswerResult(ctx context.Context, arg RecordAnswerResultParams) (AnswerResult, error)
 	SaveTelegramProfile(ctx context.Context, arg SaveTelegramProfileParams) (User, error)

@@ -193,6 +193,18 @@ ranked_cards AS (
     FROM cards c
     JOIN user_due_facts udf ON c.fact_id = udf.fact_id
     JOIN card_kinds ck ON c.kind = ck.kind
+    -- A card the user complained about waits for the author to edit it or
+    -- keep it; the fact goes on with its other cards. The author's own
+    -- complaints wait in «Жалобы», their cards stay in their feed.
+    WHERE NOT EXISTS (
+        SELECT 1 FROM card_issues i
+        JOIN sets s ON s.id = udf.set_id
+        WHERE i.card_id = c.id
+          AND i.user_id = $1
+          AND s.author_id <> $1
+          AND i.resolved_at IS NULL
+          AND i.created_at > c.updated_at
+    )
 )
 SELECT
     id,
@@ -209,7 +221,10 @@ SELECT
     created_at,
     updated_at
 FROM ranked_cards
-WHERE rank = 1;
+WHERE rank = 1
+-- A steady order: the feed comes back at the same index after a complaint
+-- or an edit, and a reported card's fact keeps its place.
+ORDER BY fact_id;
 
 -- name: GetCardOptionsBatch :many
 SELECT * FROM card_options

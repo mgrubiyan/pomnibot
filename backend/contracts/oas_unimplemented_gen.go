@@ -69,6 +69,16 @@ func (UnimplementedHandler) DeleteSet(ctx context.Context, params DeleteSetParam
 	return r, ht.ErrNotImplemented
 }
 
+// GetAdminIssues implements GetAdminIssues operation.
+//
+// All complaints across all sets, newest first, each with the copy of the card as it was reported and
+// who reported it. Anyone but an admin gets an empty list.
+//
+// GET /admin/issues
+func (UnimplementedHandler) GetAdminIssues(ctx context.Context) (r GetAdminIssuesRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // GetCardsBySetID implements GetCardsBySetID operation.
 //
 // Get cards.
@@ -111,6 +121,16 @@ func (UnimplementedHandler) GetProfile(ctx context.Context) (r GetProfileRes, _ 
 //
 // GET /sets/{setId}
 func (UnimplementedHandler) GetSet(ctx context.Context, params GetSetParams) (r GetSetRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// GetSetIssues implements GetSetIssues operation.
+//
+// Grouped by card and reason. A complaint is open until the card is edited after it or the author
+// keeps the card as it is.
+//
+// GET /sets/{setId}/issues
+func (UnimplementedHandler) GetSetIssues(ctx context.Context, params GetSetIssuesParams) (r GetSetIssuesRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
@@ -165,6 +185,25 @@ func (UnimplementedHandler) JoinSetByShareCode(ctx context.Context, req *JoinSet
 //
 // PUT /profile
 func (UnimplementedHandler) PutProfile(ctx context.Context, req *ProfileRequest) (r PutProfileRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// ReportCardIssue implements ReportCardIssue operation.
+//
+// Saves the complaint with a copy of the card as it was reported, so it outlives later edits and the
+// card's deletion.
+//
+// POST /cards/{cardId}/issue
+func (UnimplementedHandler) ReportCardIssue(ctx context.Context, req *ReportCardIssueRequest, params ReportCardIssueParams) (r ReportCardIssueRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// ResolveCardIssues implements ResolveCardIssues operation.
+//
+// Keep a card as it is and close its complaints.
+//
+// POST /cards/{cardId}/issue/resolve
+func (UnimplementedHandler) ResolveCardIssues(ctx context.Context, params ResolveCardIssuesParams) (r ResolveCardIssuesRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 

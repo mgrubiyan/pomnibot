@@ -14,6 +14,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/openrouter"
 	maxtransport "github.com/mgrubiyan/pomnibot/backend/internal/transport/max"
+	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
 // Environment selects the local or production runtime.
@@ -44,6 +45,9 @@ type Config struct {
 	AIStudio *aistudio.Config
 	LLM      LLMConfig
 	OCR      yandex.Config
+	// Admins see every complaint: ADMIN_MAX_IDS and ADMIN_TG_IDS, and
+	// locally the browser test user.
+	Admins usecase.Admins
 }
 
 // Models that can go first, see LLMConfig.Primary.
@@ -95,6 +99,10 @@ func Load() (Config, error) {
 	if cfg.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")
 	}
+	cfg.Admins, err = adminsFromEnv(cfg.Environment == Local)
+	if err != nil {
+		return Config{}, err
+	}
 	if cfg.Environment == Local {
 		return cfg, nil
 	}
@@ -133,6 +141,23 @@ func Load() (Config, error) {
 	cfg.Notifications, err = notificationsFromEnv()
 	errs = append(errs, err)
 	return cfg, errors.Join(errs...)
+}
+
+func adminsFromEnv(local bool) (usecase.Admins, error) {
+	admins := usecase.Admins{BrowserTestUser: local}
+	for _, list := range []struct {
+		name string
+		dst  *[]int64
+	}{{"ADMIN_MAX_IDS", &admins.MaxIDs}, {"ADMIN_TG_IDS", &admins.TgIDs}} {
+		for _, field := range strings.FieldsFunc(value(list.name, ""), func(r rune) bool { return r == ',' || r == ' ' }) {
+			id, err := strconv.ParseInt(field, 10, 64)
+			if err != nil || id <= 0 {
+				return usecase.Admins{}, fmt.Errorf("%s: %q is not an ID", list.name, field)
+			}
+			*list.dst = append(*list.dst, id)
+		}
+	}
+	return admins, nil
 }
 
 func notificationsFromEnv() (maxtransport.NotificationConfig, error) {

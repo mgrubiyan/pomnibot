@@ -1,0 +1,31 @@
+/* Complaints about the cards of the author's set, one block per card. */
+
+.body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.hint {
+    padding: 0 16px;
+    text-wrap: pretty;
+}
+
+.card {
+    box-sizing: border-box;
+    padding: 16px 20px;
+    border-radius: 16px;
+    background: var(--background-card);
+}
+
+.text {
+    overflow-wrap: anywhere;
+}
+
+.reasons {
+    margin: 0;
+    padding: 12px 0 0;
+    list-style: none;
+    border-top: 1px solid var(--divider-primary);
+}

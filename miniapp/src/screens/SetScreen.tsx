@@ -6,7 +6,7 @@ import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusScreen } from '../components/StatusScreen';
 import { IconCheck, IconOffline, IconShare, IconTrash } from '../components/Icons';
-import { loadCards, loadSet } from '../utils/sets';
+import { loadCards, loadSet, loadSetIssues } from '../utils/sets';
 import { cardsLabel } from '../utils/plural';
 import { formatAuthorName } from '../utils/user';
 import { cx } from '../utils/cx';
@@ -33,6 +33,8 @@ export interface SetScreenProps {
     /** The list of cards lives on its own screen, managed from there. */
     onOpenCards: (setId: string) => void;
     onShare: (setId: string, setTitle: string) => void;
+    /** Complaints about the cards; only the author gets there. */
+    onOpenIssues?: (setId: string) => void;
     onOpenLeaderboard?: (setId: string, setTitle: string) => void;
 }
 
@@ -44,6 +46,7 @@ export function SetScreen({
     onRemove,
     onOpenCards,
     onShare,
+    onOpenIssues,
     onOpenLeaderboard,
 }: SetScreenProps) {
     const [status, setStatus] = useState<Status>('loading');
@@ -52,6 +55,9 @@ export function SetScreen({
     const [feedCards, setFeedCards] = useState<Card[]>([]);
     const [attempt, setAttempt] = useState(0);
     const [confirmingRemove, setConfirmingRemove] = useState(false);
+    // Cards with open complaints. Only the author can see them, and the set
+    // opens without them: a failed request leaves the row out.
+    const [issueCards, setIssueCards] = useState(0);
     const [bodyRef, moreBelow] = useMoreBelow<HTMLDivElement>(status === 'ready');
 
     useEffect(() => {
@@ -77,6 +83,28 @@ export function SetScreen({
             cancelled = true;
         };
     }, [attempt, setId]);
+
+    // Only the author can manage the set and its cards; members have shared access.
+    const isOwner = Boolean(currentUser && set?.author && set.author.id === currentUser.id);
+
+    useEffect(() => {
+        if (!isOwner) {
+            return;
+        }
+        let cancelled = false;
+        loadSetIssues(setId)
+            .then((issues) => {
+                if (!cancelled) {
+                    setIssueCards(new Set(issues.map((issue) => issue.cardId)).size);
+                }
+            })
+            .catch(() => {
+                // The set screen works without the complaints.
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [isOwner, setId]);
 
     const retry = () => {
         setStatus('loading');
@@ -115,10 +143,9 @@ export function SetScreen({
 
     const dueCount = feedCards.length;
     const hasDue = dueCount > 0;
-    // Only the author can manage the set and its cards; members have shared access.
-    const isOwner = Boolean(currentUser && set.author && set.author.id === currentUser.id);
     const shared = !isOwner;
     const showLeaderboard = isOwner && Boolean(onOpenLeaderboard);
+    const showIssues = isOwner && issueCards > 0 && Boolean(onOpenIssues);
 
     return (
         <Screen>
@@ -159,10 +186,20 @@ export function SetScreen({
                 </Flex>
 
                 <CellList mode="island" filled className={s.factsList}>
+                    {showIssues ? (
+                        <CellSimple
+                            as="button"
+                            showChevron
+                            onClick={() => onOpenIssues?.(set.id)}
+                            title={`Жалобы · ${issueCards}`}
+                            subtitle="Ошибки, которые нашли в карточках"
+                        />
+                    ) : null}
                     {showLeaderboard ? (
                         <CellSimple
                             as="button"
                             showChevron
+                            separator={showIssues}
                             onClick={() => onOpenLeaderboard?.(set.id, set.title)}
                             title="Таблица лидеров"
                             subtitle="Рейтинг участников"
@@ -171,7 +208,7 @@ export function SetScreen({
                     <CellSimple
                         as="button"
                         showChevron
-                        separator={showLeaderboard}
+                        separator={showIssues || showLeaderboard}
                         onClick={() => onOpenCards(set.id)}
                         title={`Карточки · ${cards.length}`}
                         subtitle={isOwner ? 'Просмотр и правка' : 'Просмотр'}

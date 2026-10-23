@@ -29,6 +29,9 @@ type CardService interface {
 	DeleteCard(ctx context.Context, userID int64, cardID uuid.UUID) error
 	AnswerQuestion(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error)
 	CheckAnswer(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error)
+	ReportCardIssue(ctx context.Context, userID int64, cardID uuid.UUID, reason contracts.CardIssueReason) error
+	GetSetIssues(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.SetIssue, error)
+	ResolveCardIssues(ctx context.Context, userID int64, cardID uuid.UUID) error
 }
 
 // HomescreenService defines domain operations for today overview, feed, and submitting review results.

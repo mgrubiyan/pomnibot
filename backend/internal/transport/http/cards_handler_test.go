@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/google/uuid"
@@ -16,6 +17,30 @@ type mockCardService struct {
 	deleteCardFunc     func(ctx context.Context, userID int64, cardID uuid.UUID) error
 	answerQuestionFunc func(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error)
 	checkAnswerFunc    func(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error)
+	reportIssueFunc    func(ctx context.Context, userID int64, cardID uuid.UUID, reason contracts.CardIssueReason) error
+	setIssuesFunc      func(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.SetIssue, error)
+	resolveIssuesFunc  func(ctx context.Context, userID int64, cardID uuid.UUID) error
+}
+
+func (m *mockCardService) GetSetIssues(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.SetIssue, error) {
+	if m.setIssuesFunc != nil {
+		return m.setIssuesFunc(ctx, userID, setID)
+	}
+	return nil, nil
+}
+
+func (m *mockCardService) ResolveCardIssues(ctx context.Context, userID int64, cardID uuid.UUID) error {
+	if m.resolveIssuesFunc != nil {
+		return m.resolveIssuesFunc(ctx, userID, cardID)
+	}
+	return nil
+}
+
+func (m *mockCardService) ReportCardIssue(ctx context.Context, userID int64, cardID uuid.UUID, reason contracts.CardIssueReason) error {
+	if m.reportIssueFunc != nil {
+		return m.reportIssueFunc(ctx, userID, cardID, reason)
+	}
+	return nil
 }
 
 func (m *mockCardService) UpdateCard(ctx context.Context, userID int64, cardID uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error) {
@@ -776,6 +801,118 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 
 			if tt.checkResFunc != nil {
 				tt.checkResFunc(t, res)
+			}
+		})
+	}
+}
+
+func TestCardsHandler_ReportCardIssue(t *testing.T) {
+	cardID := uuid.New()
+	tests := []struct {
+		name    string
+		req     *contracts.ReportCardIssueRequest
+		err     error
+		want    any
+		reached bool
+	}{
+		{"saved", &contracts.ReportCardIssueRequest{Reason: contracts.CardIssueReasonNotInNotes}, nil, (*contracts.ReportCardIssueNoContent)(nil), true},
+		{"no body", nil, nil, (*contracts.ReportCardIssueBadRequest)(nil), false},
+		{"unknown reason", &contracts.ReportCardIssueRequest{Reason: "bad"}, nil, (*contracts.ReportCardIssueBadRequest)(nil), false},
+		{"card not visible", &contracts.ReportCardIssueRequest{Reason: contracts.CardIssueReasonAnswer}, usecase.ErrNotFound, (*contracts.ReportCardIssueNotFound)(nil), true},
+		{"database down", &contracts.ReportCardIssueRequest{Reason: contracts.CardIssueReasonAnswer}, errors.New("connection reset"), (*contracts.ReportCardIssueInternalServerError)(nil), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reached := false
+			h := NewCardsHandler(&mockCardService{
+				reportIssueFunc: func(_ context.Context, userID int64, id uuid.UUID, reason contracts.CardIssueReason) error {
+					reached = true
+					if userID != 12345 || id != cardID || reason != tt.req.Reason {
+						t.Fatalf("got user %d, card %s, reason %q", userID, id, reason)
+					}
+					return tt.err
+				},
+			})
+			res, err := h.ReportCardIssue(WithUserID(context.Background(), 12345), tt.req, contracts.ReportCardIssueParams{CardId: cardID})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if reflect.TypeOf(res) != reflect.TypeOf(tt.want) {
+				t.Errorf("res = %T, want %T", res, tt.want)
+			}
+			if reached != tt.reached {
+				t.Errorf("service reached = %v, want %v", reached, tt.reached)
+			}
+		})
+	}
+}
+
+func TestCardsHandler_GetSetIssues(t *testing.T) {
+	setID := uuid.New()
+	issues := []contracts.SetIssue{{CardId: uuid.New(), Reason: contracts.CardIssueReasonAnswer, Count: 2}}
+	tests := []struct {
+		name   string
+		issues []contracts.SetIssue
+		err    error
+		want   any
+	}{
+		{"author", issues, nil, (*contracts.GetSetIssuesOKApplicationJSON)(nil)},
+		{"no open complaints", nil, nil, (*contracts.GetSetIssuesOKApplicationJSON)(nil)},
+		{"not the author", nil, usecase.ErrNotFound, (*contracts.GetSetIssuesNotFound)(nil)},
+		{"database down", nil, errors.New("connection reset"), (*contracts.GetSetIssuesInternalServerError)(nil)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := NewCardsHandler(&mockCardService{
+				setIssuesFunc: func(_ context.Context, userID int64, id uuid.UUID) ([]contracts.SetIssue, error) {
+					if userID != 12345 || id != setID {
+						t.Fatalf("got user %d, set %s", userID, id)
+					}
+					return tt.issues, tt.err
+				},
+			})
+			res, err := h.GetSetIssues(WithUserID(context.Background(), 12345), contracts.GetSetIssuesParams{SetId: setID})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if reflect.TypeOf(res) != reflect.TypeOf(tt.want) {
+				t.Fatalf("res = %T, want %T", res, tt.want)
+			}
+			// An empty list must go out as [], not null.
+			if list, ok := res.(*contracts.GetSetIssuesOKApplicationJSON); ok && (*list == nil || len(*list) != len(tt.issues)) {
+				t.Errorf("list = %#v, want %d complaints", *list, len(tt.issues))
+			}
+		})
+	}
+}
+
+func TestCardsHandler_ResolveCardIssues(t *testing.T) {
+	cardID := uuid.New()
+	tests := []struct {
+		name string
+		err  error
+		want any
+	}{
+		{"author", nil, (*contracts.ResolveCardIssuesNoContent)(nil)},
+		{"not the author", usecase.ErrNotFound, (*contracts.ResolveCardIssuesNotFound)(nil)},
+		{"database down", errors.New("connection reset"), (*contracts.ResolveCardIssuesInternalServerError)(nil)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := NewCardsHandler(&mockCardService{
+				resolveIssuesFunc: func(_ context.Context, userID int64, id uuid.UUID) error {
+					if userID != 12345 || id != cardID {
+						t.Fatalf("got user %d, card %s", userID, id)
+					}
+					return tt.err
+				},
+			})
+			res, err := h.ResolveCardIssues(WithUserID(context.Background(), 12345), contracts.ResolveCardIssuesParams{CardId: cardID})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if reflect.TypeOf(res) != reflect.TypeOf(tt.want) {
+				t.Errorf("res = %T, want %T", res, tt.want)
 			}
 		})
 	}
