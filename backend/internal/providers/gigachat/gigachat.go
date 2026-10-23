@@ -258,7 +258,7 @@ func (c *Client) Complete(ctx context.Context, req providers.Request) (providers
 	if req.Source != "" {
 		req.User = req.Source + "\n" + req.User
 	}
-	if len(req.PDFs) > 0 || req.ReasoningEffort != "" {
+	if len(req.PDFs) > 0 || (req.ReasoningEffort != "" && req.ReasoningEffort != "none") {
 		return providers.Response{}, providers.ErrCapability
 	}
 	resp, err := c.complete(ctx, req)
@@ -439,6 +439,13 @@ func (c *Client) call(ctx context.Context, model string, req providers.Request, 
 	if len(fileIDs) > 0 {
 		user.Attachments = fileIDs
 	}
+	maxTokens := c.cfg.MaxTokens
+	if req.MaxTokens > 0 {
+		maxTokens = req.MaxTokens
+		if c.cfg.MaxTokens > 0 {
+			maxTokens = min(c.cfg.MaxTokens, req.MaxTokens)
+		}
+	}
 
 	body, err := json.Marshal(chatRequest{
 		Model:    model,
@@ -446,7 +453,7 @@ func (c *Client) call(ctx context.Context, model string, req providers.Request, 
 		// The API wants temperature > 0; values up to 0.001 switch it to the
 		// most deterministic mode, which is what temperature 0 means.
 		Temperature:    max(req.Temperature, minTemperature),
-		MaxTokens:      c.cfg.MaxTokens,
+		MaxTokens:      maxTokens,
 		ResponseFormat: format,
 	})
 	if err != nil {

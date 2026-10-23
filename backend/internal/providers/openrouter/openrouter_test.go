@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mgrubiyan/pomnibot/backend/internal/grader"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
@@ -337,6 +338,35 @@ func TestExplicitEffortEnablesThinkingAndKeepsUsageSeparate(t *testing.T) {
 	r, err := c.Complete(providers.WithBudget(context.Background(), b), providers.Request{})
 	if err != nil || r.Usage.ReasoningTokens == nil || *r.Usage.ReasoningTokens != 7 || r.Usage.CompletionTokens != 20 || b.Snapshot().ReportedUSD != .001 {
 		t.Fatalf("lost/double-counted thinking: %+v %v", r, err)
+	}
+}
+
+func TestGradingDisablesDefaultThinking(t *testing.T) {
+	c := clientFor(t, func(w http.ResponseWriter, r *http.Request) {
+		var body chatRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Reasoning.Enabled || body.Reasoning.Effort != "" || body.MaxTokens != 256 {
+			t.Errorf("grading inherited generation settings: %+v", body)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		content, _ := json.Marshal(`{"named":"упорядоченный массив","correct":true,"reason":"Верно."}`)
+		_, _ = fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"content\":%s},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n", content)
+	})
+	c.cfg.Effort = "high"
+	c.cfg.MaxTokens = 50000
+	g := grader.Grader{Model: c}
+	v := g.Check(context.Background(), grader.Input{
+		Question: "На каком массиве применим бинарный поиск?",
+		Expected: "на отсортированном массиве",
+		Given:    "массив должен быть упорядочен",
+	})
+	if !v.Correct || v.Method != grader.MethodModel {
+		t.Fatalf("grading failed: %+v", v)
+	}
+	if c.cfg.Effort != "high" || c.cfg.MaxTokens != 50000 {
+		t.Fatal("grading changed shared provider defaults")
 	}
 }
 

@@ -170,7 +170,7 @@ func (c *Client) Complete(ctx context.Context, req providers.Request) (providers
 	if req.Source != "" {
 		req.User = req.Source + "\n" + req.User
 	}
-	if len(req.PDFs) > 0 || req.ReasoningEffort != "" {
+	if len(req.PDFs) > 0 || (req.ReasoningEffort != "" && req.ReasoningEffort != "none") {
 		return providers.Response{}, providers.ErrCapability
 	}
 	if req.Image != nil {
@@ -291,12 +291,16 @@ func (c *Client) call(ctx context.Context, req providers.Request, withSchema boo
 	case len(req.Schema) > 0:
 		system += prompts.SchemaNote + string(req.Schema)
 	}
+	maxTokens := c.cfg.MaxTokens
+	if req.MaxTokens > 0 {
+		maxTokens = min(maxTokens, req.MaxTokens)
+	}
 
 	body, err := json.Marshal(completionRequest{
 		ModelURI: c.modelURI(),
 		CompletionOptions: completionOptions{
 			Temperature: min(max(req.Temperature, 0), 1),
-			MaxTokens:   strconv.Itoa(c.cfg.MaxTokens),
+			MaxTokens:   strconv.Itoa(maxTokens),
 		},
 		Messages:   []message{{Role: "system", Text: system}, {Role: "user", Text: req.User}},
 		JSONSchema: schema,

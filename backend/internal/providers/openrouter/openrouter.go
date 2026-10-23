@@ -352,6 +352,8 @@ func (c *Client) call(ctx context.Context, req providers.Request) (result provid
 		effort = req.ReasoningEffort
 	}
 	switch effort {
+	case "none":
+		effort = ""
 	case "", "low", "medium", "high", "xhigh", "max":
 	default:
 		return result, errors.New("openrouter: unsupported request effort")

@@ -81,6 +81,9 @@ func (g *Grader) Check(ctx context.Context, in Input) Verdict {
 		System: prompts.GraderSystem,
 		User:   userPrompt(in, leftOut(in.Question, in.Expected, in.Given)),
 		Schema: schema,
+		// A short verdict must not inherit document generation's thinking budget.
+		ReasoningEffort: "none",
+		MaxTokens:       256,
 	})
 	if err != nil {
 		slog.Warn("grader: model failed, local verdict stands", "err", err)

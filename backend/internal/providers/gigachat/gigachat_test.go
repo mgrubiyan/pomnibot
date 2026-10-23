@@ -171,6 +171,22 @@ func request() providers.Request {
 	return providers.Request{System: "Правила.", User: "Фрагмент.", Schema: schema}
 }
 
+func TestCompleteAcceptsDisabledReasoning(t *testing.T) {
+	api := &fakeAPI{chat: func(_ int, req chatRequest) chatReply {
+		if req.MaxTokens != 256 {
+			t.Errorf("max_tokens = %d, want 256", req.MaxTokens)
+		}
+		return ok(`{"correct":true}`)
+	}}
+	c := newTestClient(t, api)
+	req := request()
+	req.ReasoningEffort = "none"
+	req.MaxTokens = 256
+	if _, err := c.Complete(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestCompleteSendsStructuredOutput(t *testing.T) {
 	api := &fakeAPI{chat: func(int, chatRequest) chatReply { return ok(`{"cards":[]}`) }}
 	c := newTestClient(t, api)

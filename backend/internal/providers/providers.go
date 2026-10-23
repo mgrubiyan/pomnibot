@@ -18,6 +18,7 @@ var ErrRefused = errors.New("refused by the content filter")
 // return the raw text either way: the caller validates the answer itself.
 //
 // MaxTokens and ReasoningEffort can override provider defaults for staged tasks.
+// Empty ReasoningEffort inherits the default; "none" explicitly disables thinking.
 type Request struct {
 	Source          string
 	NoFallback      bool
