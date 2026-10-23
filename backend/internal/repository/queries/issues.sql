@@ -100,4 +100,5 @@ JOIN users u ON u.id = i.user_id
 LEFT JOIN sets s ON s.id = i.set_id
 LEFT JOIN cards c ON c.id = i.card_id
 ORDER BY i.created_at DESC, i.id
+-- The mini app says the list is cut off at this number: ADMIN_ISSUES_LIMIT.
 LIMIT 1000;

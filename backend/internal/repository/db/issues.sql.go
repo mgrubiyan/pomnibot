@@ -204,6 +204,7 @@ type ListCardIssuesRow struct {
 // card is gone; fixed when the card was edited after the complaint and before
 // any «Всё верно» (which also closes complaints the edit answered); kept when
 // the author left the card as it is; open otherwise.
+// The mini app says the list is cut off at this number: ADMIN_ISSUES_LIMIT.
 func (q *Queries) ListCardIssues(ctx context.Context) ([]ListCardIssuesRow, error) {
 	rows, err := q.db.Query(ctx, listCardIssues)
 	if err != nil {

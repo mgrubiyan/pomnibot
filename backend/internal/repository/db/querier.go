@@ -71,6 +71,7 @@ type Querier interface {
 	// card is gone; fixed when the card was edited after the complaint and before
 	// any «Всё верно» (which also closes complaints the edit answered); kept when
 	// the author left the card as it is; open otherwise.
+	// The mini app says the list is cut off at this number: ADMIN_ISSUES_LIMIT.
 	ListCardIssues(ctx context.Context) ([]ListCardIssuesRow, error)
 	LockSetForAuthor(ctx context.Context, arg LockSetForAuthorParams) (pgtype.UUID, error)
 	RecordAnswerResult(ctx context.Context, arg RecordAnswerResultParams) (AnswerResult, error)

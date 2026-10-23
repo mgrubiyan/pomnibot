@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { AdminCardIssue } from '../types';
-import { adminAnswer, reasonCounts } from './adminIssues';
+import { ADMIN_ISSUES_LIMIT, adminAnswer, issuesTotal, reasonCounts } from './adminIssues';
 
 const issue = (reason: AdminCardIssue['reason'], kind: AdminCardIssue['kind'] = 'flip', answer?: string): AdminCardIssue => ({
     id: crypto.randomUUID(),
@@ -31,5 +31,12 @@ describe('adminAnswer', () => {
         expect(adminAnswer(issue('answer', 'table'))).toBe('Таблица');
         expect(adminAnswer(issue('answer', 'input', 'Митоз'))).toBe('Митоз');
         expect(adminAnswer(issue('answer', 'flip'))).toBe('');
+    });
+});
+
+describe('issuesTotal', () => {
+    it('says the list is cut off once it reaches the server limit', () => {
+        expect(issuesTotal(3)).toBe('Всего 3');
+        expect(issuesTotal(ADMIN_ISSUES_LIMIT)).toBe(`Последние ${ADMIN_ISSUES_LIMIT}`);
     });
 });

@@ -8,6 +8,14 @@ export const STATUS_LABELS: Record<CardIssueStatus, string> = {
     deleted: 'Карточка удалена',
 };
 
+/** How many complaints the server sends at most: LIMIT in ListCardIssues. */
+export const ADMIN_ISSUES_LIMIT = 1000;
+
+/** The header line; at the limit older complaints are cut off, so it says so. */
+export function issuesTotal(count: number): string {
+    return count >= ADMIN_ISSUES_LIMIT ? `Последние ${ADMIN_ISSUES_LIMIT}` : `Всего ${count}`;
+}
+
 /** Reasons short enough for a row of filters. */
 export const REASON_FILTERS: Record<CardIssueReason, string> = {
     answer: 'Ответ',

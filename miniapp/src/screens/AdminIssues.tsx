@@ -6,7 +6,7 @@ import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusScreen } from '../components/StatusScreen';
 import { IconCheck, IconOffline } from '../components/Icons';
-import { REASON_FILTERS, STATUS_LABELS, adminAnswer, reasonCounts } from '../utils/adminIssues';
+import { REASON_FILTERS, STATUS_LABELS, adminAnswer, issuesTotal, reasonCounts } from '../utils/adminIssues';
 import { issueReasonLabel } from '../utils/issues';
 import { formatAuthorName } from '../utils/user';
 import s from './AdminIssues.module.css';
@@ -106,7 +106,7 @@ export function AdminIssues({ onBack }: AdminIssuesProps) {
 
     return (
         <Screen>
-            <ScreenHeader title="Все жалобы" subtitle={`Всего ${issues.length}`} onBack={onBack} />
+            <ScreenHeader title="Все жалобы" subtitle={issuesTotal(issues.length)} onBack={onBack} />
 
             <Flex direction="column" align="stretch" gap={12} className={s.body}>
                 <Flex gap={8} wrap="wrap" className={s.filters}>
@@ -145,7 +145,7 @@ export function AdminIssues({ onBack }: AdminIssuesProps) {
                                     <blockquote className={s.quote}>{issue.sourceQuote}</blockquote>
                                 </Typography.Text>
                             ) : null}
-                            <Flex direction="column" gap={2} className={s.footer}>
+                            <Flex direction="column" gap={4} className={s.footer}>
                                 <Typography.Text variant="description">{issueReasonLabel(issue.reason)}</Typography.Text>
                                 <Typography.Text variant="label" color="tertiary" className={s.text}>
                                     {formatAuthorName(issue.reporter)} · {reportedAt(issue.createdAt)}

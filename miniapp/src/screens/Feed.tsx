@@ -156,8 +156,11 @@ export interface FeedProps {
     initialResults?: AnswerResult[];
     onExit: () => void;
     onBack?: () => void;
-    /** Opens the complaint about the card; the feed comes back at the same card. */
-    onReportCard: (card: Card, currentIndex: number, currentResults: AnswerResult[]) => void;
+    /**
+     * Opens the complaint about the card; the feed comes back at the same card.
+     * Resolves to false when the complaint screen could not be opened.
+     */
+    onReportCard: (card: Card, currentIndex: number, currentResults: AnswerResult[]) => Promise<boolean>;
     /** Opens sharing from the result screen; absent for the daily mix. */
     onShare?: () => void;
 }
@@ -198,6 +201,8 @@ export function Feed({
     // While the card is turning the buttons stay disabled: the answer
     // must not run ahead of the animation.
     const [flipping, setFlipping] = useState(false);
+    // Keyed by card id like the layout, so the next card starts clean.
+    const [report, setReport] = useState<{ cardId: string; stage: 'opening' | 'failed' } | null>(null);
     // The card on its way out is still the current one, so the index
     // only moves on once it has left.
     const [leaving, setLeaving] = useState(false);
@@ -793,14 +798,24 @@ export function Feed({
                         size="small"
                         variant="ghost"
                         stretched
-                        disabled={busy}
+                        disabled={busy || (report?.cardId === card.id && report.stage === 'opening')}
                         iconBefore={<IconFlag size={16} tone="muted" />}
-                        onClick={() => onReportCard(card, index, results)}
+                        onClick={async () => {
+                            setReport({ cardId: card.id, stage: 'opening' });
+                            if (!(await onReportCard(card, index, results))) {
+                                setReport({ cardId: card.id, stage: 'failed' });
+                            }
+                        }}
                     >
                         <Typography.Text variant="description" color="tertiary">
                             Ошибка в карточке
                         </Typography.Text>
                     </Button>
+                    {report?.cardId === card.id && report.stage === 'failed' ? (
+                        <Typography.Text variant="description" color="secondary" className={s.reportError}>
+                            Не удалось открыть. Попробуйте ещё раз
+                        </Typography.Text>
+                    ) : null}
                 </Flex>
             ) : layout ? (
                 <Flex direction="column" align="stretch" gap={8}>

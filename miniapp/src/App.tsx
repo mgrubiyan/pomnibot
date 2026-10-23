@@ -214,24 +214,36 @@ function App() {
         }
     };
 
+    // The author gets other actions than a reader, so without the set or
+    // the user the screen is not opened: a guess would treat the author as a reader.
     const openCardIssue = async (
         card: Card,
         feedSetId: string | undefined,
         feedIndex: number,
         feedResults: AnswerResult[],
-    ) => {
-        let isOwner = false;
-        let setTitle: string | undefined;
+    ): Promise<boolean> => {
         try {
-            const { data } = await api.GET('/sets/{setId}', {
-                params: { path: { setId: card.setId } },
+            const [{ data: set }, user] = await Promise.all([
+                api.GET('/sets/{setId}', { params: { path: { setId: card.setId } } }),
+                currentUser ?? api.GET('/').then(({ data }) => data?.user ?? null),
+            ]);
+            if (!set || !user) {
+                return false;
+            }
+            setCurrentUser(user);
+            go({
+                name: 'card-issue',
+                card,
+                setTitle: set.title,
+                isOwner: set.author.id === user.id,
+                feedSetId,
+                feedIndex,
+                feedResults,
             });
-            setTitle = data?.title;
-            isOwner = !!data && !!currentUser && data.author.id === currentUser.id;
+            return true;
         } catch {
-            // Without the set the reader can still report the card.
+            return false;
         }
-        go({ name: 'card-issue', card, setTitle, isOwner, feedSetId, feedIndex, feedResults });
     };
 
     const home = (
