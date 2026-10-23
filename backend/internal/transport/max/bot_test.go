@@ -16,7 +16,6 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
-	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/notes"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
@@ -83,8 +82,8 @@ func (m *mockSetService) SaveGeneratedSet(ctx context.Context, userID int64, tit
 	res := &contracts.CardSet{
 		ID:         uuid.New(),
 		Title:      title,
-		CardsTotal: len(genResult.Cards),
-		CardsDue:   len(genResult.Cards),
+		CardsTotal: generator.CardCount(genResult.Facts),
+		CardsDue:   generator.CardCount(genResult.Facts),
 	}
 	res.ShareCode.SetTo("654321")
 	return res, nil
@@ -119,24 +118,9 @@ func (m *mockCardGenerator) Generate(ctx context.Context, doc generator.Document
 	if m.generateFunc != nil {
 		return m.generateFunc(ctx, doc, onBatch)
 	}
-	res := generator.Result{
-		Facts: []cards.Fact{
-			{ID: "fact-1", Name: "Fact One", Topic: "Biology"},
-		},
-		Cards: []cards.Card{
-			{
-				FactID:      "fact-1",
-				Kind:        cards.KindChoice,
-				Question:    "Test question",
-				Options:     []string{"A", "B"},
-				Answer:      "A",
-				Explanation: "Test explanation",
-				SourceQuote: "Sample quote",
-			},
-		},
-	}
+	res := generator.Result{Facts: []generator.Fact{{Name: "Fact One", Pages: []int{1}, Cards: []generator.Card{generator.ChoiceCard{CardBase: generator.CardBase{Question: "Test question", Source: "Test explanation", SourceQuote: "Sample quote"}, RightAnswers: []string{"A"}, WrongAnswers: []string{"B"}}}}}}
 	if onBatch != nil {
-		onBatch(generator.Batch{Facts: res.Facts, Cards: res.Cards})
+		onBatch(generator.Batch{Facts: res.Facts})
 	}
 	return res, nil
 }

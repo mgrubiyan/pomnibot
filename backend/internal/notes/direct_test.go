@@ -48,9 +48,7 @@ func TestMakeWithDirectGeneratorPreservesProgressAndSavePayload(t *testing.T) {
 				if failure {
 					return providers.Response{}, errors.New("unavailable")
 				}
-				goal := `{"goalId":"g1","name":"Назначение","topic":"Индекс","pages":[1],"source":"` + text + `"}`
-				group := `{"goalId":"g1","content":{"name":"Назначение","question":"Для чего нужен индекс?","answer":"Для ускорения поиска по ключу.","cards":[]}}`
-				content := `{"issues":[],"goals":[` + goal + `],"cards":[` + group + `]}`
+				content := `{"issues":[],"facts":[{"name":"Назначение","pages":[1],"cards":[{"kind":"flip","question":"Для чего нужен индекс?","answer":"Для ускорения поиска по ключу.","source":"` + text + `","sourceQuote":""},{"kind":"input","question":"Для чего нужен индекс?","answer":"Для ускорения поиска по ключу.","source":"Поддержка поиска","sourceQuote":""}]}]}`
 				return providers.Response{Usage: usage, Content: []byte(content)}, nil
 			})
 			saver := &captureDirectSaver{}
@@ -68,10 +66,10 @@ func TestMakeWithDirectGeneratorPreservesProgressAndSavePayload(t *testing.T) {
 				t.Fatalf("obsolete coverage warning: %v", result.Warnings)
 			}
 			r := saver.result
-			if err != nil || calls != 1 || saver.calls != 1 || !generating || progress != 2 || len(r.Facts) != 1 || len(r.Cards) != 2 || r.Cards[0].FactID != r.Facts[0].ID || r.Budget.Calls != 1 || r.Budget.ReportedUSD != .001 {
+			if err != nil || calls != 1 || saver.calls != 1 || !generating || progress != 2 || len(r.Facts) != 1 || generator.CardCount(r.Facts) != 2 || r.Budget.Calls != 1 || r.Budget.ReportedUSD != .001 {
 				t.Fatalf("lost save/progress/ledger: %+v err=%v", r, err)
 			}
-			if r.Artifact == nil || r.Artifact.Version != generator.PipelineVersion || len(r.Artifact.Files) != 1 || r.Artifact.Reading.Blocks[0].Text != text {
+			if r.Artifact == nil || r.Artifact.Version != generator.PipelineVersion || len(r.Artifact.Files) != 1 || r.Artifact.Reading.Blocks[0].Text != text || len(r.Artifact.Facts) != 1 || r.Artifact.Request == nil {
 				t.Fatal("lost private original")
 			}
 		})

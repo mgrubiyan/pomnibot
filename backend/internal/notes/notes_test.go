@@ -15,7 +15,6 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/material"
-	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
@@ -39,10 +38,11 @@ type fakeGenerator struct {
 }
 
 func oneCard(topic string) generator.Result {
-	return generator.Result{
-		Facts: []cards.Fact{{ID: "f1", Name: "Митоз", Topic: topic}},
-		Cards: []cards.Card{{FactID: "f1", Kind: cards.KindFlip, Question: "Сколько фаз у митоза?", Answer: "Четыре"}},
+	name := topic
+	if name == "" {
+		name = "Митоз"
 	}
+	return generator.Result{Facts: []generator.Fact{{Name: name, Pages: []int{1}, Cards: []generator.Card{generator.FlipCard{CardBase: generator.CardBase{Question: "Сколько фаз у митоза?", Source: "Митоз"}, Answer: "Четыре"}}}}}
 }
 
 func (f *fakeGenerator) Generate(ctx context.Context, doc generator.Document, onBatch func(generator.Batch)) (generator.Result, error) {
@@ -51,7 +51,7 @@ func (f *fakeGenerator) Generate(ctx context.Context, doc generator.Document, on
 	}
 	res := oneCard("")
 	if onBatch != nil {
-		onBatch(generator.Batch{Facts: res.Facts, Cards: res.Cards})
+		onBatch(generator.Batch{Facts: res.Facts})
 	}
 	return res, nil
 }

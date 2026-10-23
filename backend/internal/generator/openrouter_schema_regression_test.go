@@ -46,13 +46,13 @@ func TestStageSchemaCompatibleWithOpenRouterClaudeStructuredOutputs(t *testing.T
 	check(schema, "$")
 }
 
-func TestStoredCardEnforcesConstraintsOmittedFromProviderSchema(t *testing.T) {
-	q := CardBase{Question: "Q"}
+func TestCardValidationEnforcesConstraintsOmittedFromProviderSchema(t *testing.T) {
+	q := cardBase("Q")
 	for _, tc := range []struct {
 		name string
 		card Card
 	}{
-		{"blank question", FlipCard{CardBase: CardBase{Question: " "}, Answer: "A"}},
+		{"blank question", FlipCard{CardBase: CardBase{Question: " ", Source: "source"}, Answer: "A"}},
 		{"blank answer", InputCard{CardBase: q, Answer: " "}},
 		{"no correct choice", ChoiceCard{CardBase: q, WrongAnswers: []string{"B"}}},
 		{"no incorrect choice", ChoiceCard{CardBase: q, RightAnswers: []string{"A"}}},
@@ -63,7 +63,7 @@ func TestStoredCardEnforcesConstraintsOmittedFromProviderSchema(t *testing.T) {
 		{"duplicate table category", TableCard{CardBase: q, Columns: []Column{{Name: "X", Rows: []string{"A"}}, {Name: "X", Rows: []string{"B"}}}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, ok := storedCard(tc.card); ok {
+			if validateCard(tc.card) == nil {
 				t.Fatal("accepted invalid learning content")
 			}
 		})

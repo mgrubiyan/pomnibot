@@ -220,7 +220,7 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 	)
 	onBatch := func(b generator.Batch) {
 		mu.Lock()
-		total += len(b.Cards)
+		total += generator.CardCount(b.Facts)
 		n := total
 		mu.Unlock()
 		call(p.Cards, n)
@@ -230,13 +230,13 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 		log.Error("failed to generate cards from document", "error", err)
 		return Result{}, fmt.Errorf("generate cards: %w", err)
 	}
-	if len(genResult.Cards) == 0 {
+	if generator.CardCount(genResult.Facts) == 0 {
 		log.Warn("no cards generated from document", "stats", genResult.Stats)
 		return Result{}, ErrNoCards
 	}
 
 	if isGenericTitle(title) {
-		if t := titleFromTopics(genResult.Facts); t != "" {
+		if t := titleFromFacts(genResult.Facts); t != "" {
 			title = t
 		}
 	}
@@ -254,7 +254,7 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 	var warnings []string
 	if len(genResult.Coverage.Unassigned) > 0 {
 		warnings = append(warnings, fmt.Sprintf("Набор частичный: без цитат в карточках осталось блоков — %d. Сверь темы карточек с конспектом.", len(genResult.Coverage.Unassigned)))
-	} else if doc.Structure != nil && len(genResult.Artifact.Goals) == 0 {
+	} else if doc.Structure != nil && len(genResult.Artifact.Facts) == 0 {
 		warnings = append(warnings, "Полнота набора не проверена. Сверь темы карточек с конспектом.")
 	}
 	warnings = append(warnings, genResult.Coverage.Issues...)

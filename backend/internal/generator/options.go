@@ -9,26 +9,17 @@ import (
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/material"
-	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
 // Document is the input: plain text of the notes and their title.
 //
-// ID identifies the stored document, such as its set id. Fact ids are
-// derived from it and the server-assigned goal ID: the same notes uploaded twice must not share
-// fact ids, which the storage keeps unique across all sets. Without an ID
-// every Generate call picks a random one.
-//
-// PageStarts are byte offsets in Text where pages 1, 2, … start, as
-// ingest.PageInfo.Start gives them: cards then cite pages. Without them, as
-// for plain text, cards cite the title only.
+// PageStarts are byte offsets in Text where pages 1, 2, … start.
 type Document struct {
 	PDFs       []providers.PDF
 	Structure  *material.Document
 	Text       string
 	Title      string
-	ID         string
 	PageStarts []int
 }
 
@@ -37,7 +28,7 @@ type Artifact struct {
 	Request  *providers.Request         `json:"request,omitempty"`  // private reproducible input, no provider credentials
 	Response string                     `json:"response,omitempty"` // full model content, including malformed or truncated responses
 	Stages   map[string]json.RawMessage `json:"stages,omitempty"`
-	Goals    []KnowledgeGoal            `json:"goals,omitempty"`
+	Facts    []Fact                     `json:"facts,omitempty"`
 	Version  string                     `json:"version"`
 	Reading  material.Document          `json:"reading"`
 	Files    []ingest.File              `json:"files"` // private originals for reproducible region references
@@ -47,20 +38,14 @@ type Artifact struct {
 type Result struct {
 	Budget providers.BudgetSnapshot `json:"budget"`
 
-	Artifact *Artifact    `json:"artifact,omitempty"`
-	Facts    []cards.Fact `json:"facts"`
-	Cards    []cards.Card `json:"cards"`
-	Stats    Stats        `json:"stats"`
-	Coverage Coverage     `json:"coverage"`
+	Artifact *Artifact `json:"artifact,omitempty"`
+	Facts    []Fact    `json:"facts"`
+	Stats    Stats     `json:"stats"`
+	Coverage Coverage  `json:"coverage"`
 }
 
-// Batch is what OnBatch receives: cards now final and the facts first met
-// among them. A fact comes once, in the batch with its first card, so the
-// storage can insert it before its cards.
-type Batch struct {
-	Facts []cards.Fact
-	Cards []cards.Card
-}
+// Batch is the complete nested result, published once after validation.
+type Batch struct{ Facts []Fact }
 
 // Coverage records source blocks without surviving citations and validation issues.
 type Coverage struct {

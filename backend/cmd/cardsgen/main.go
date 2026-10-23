@@ -19,7 +19,6 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest/yandex"
-	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/aistudio"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
@@ -262,13 +261,14 @@ func run() error {
 			if firstValidated == 0 {
 				firstValidated = time.Since(started).Seconds()
 			}
-			delivered += len(b.Cards)
+			count := generator.CardCount(b.Facts)
+			delivered += count
 			refs := map[string]bool{}
-			for _, c := range b.Cards {
-				refs[c.SourceRef] = true
+			for _, f := range b.Facts {
+				refs[fmt.Sprint(f.Pages)] = true
 			}
 			fmt.Fprintf(os.Stderr, "[%7.1fs] +%d (всего %d) %s\n",
-				time.Since(began).Seconds(), len(b.Cards), delivered, strings.Join(sortedKeys(refs), "; "))
+				time.Since(began).Seconds(), count, delivered, strings.Join(sortedKeys(refs), "; "))
 		},
 	})
 
@@ -308,7 +308,7 @@ func run() error {
 			return fmt.Errorf("encode result: %w", err)
 		}
 	} else {
-		fmt.Print(formatCards(res.Facts, res.Cards) + formatStats(res.Stats))
+		fmt.Print(formatCards(res.Facts) + formatStats(res.Stats))
 	}
 	totals := usage.snapshot()
 	for _, name := range sortedKeys(totals) {
@@ -389,26 +389,33 @@ func extract(ctx context.Context, paths []string, ocrModel string, vision provid
 	return res, nil
 }
 
-// formatCards prints cards grouped by fact: the quote once, then every card
-// that tests it.
-func formatCards(facts []cards.Fact, list []cards.Card) string {
-	byID := make(map[string]cards.Fact, len(facts))
-	for _, f := range facts {
-		byID[f.ID] = f
-	}
+// formatCards prints each fact and the individual sources of its cards.
+func formatCards(facts []generator.Fact) string {
 	var w strings.Builder
-	fact, lastID := 0, ""
-	for _, c := range list {
-		if c.FactID != lastID {
-			fact++
-			lastID = c.FactID
-			f := byID[c.FactID]
-			fmt.Fprintf(&w, "\n== Факт %d: %s (%s) — %s\n", fact, f.Name, f.Topic, c.SourceRef)
-			fmt.Fprintf(&w, "   Цитата: «%s»\n", c.SourceQuote)
+	for i, f := range facts {
+		fmt.Fprintf(&w, "\n== Факт %d: %s — стр. %v\n", i+1, f.Name, f.Pages)
+		for _, c := range f.Cards {
+			base := c.Base()
+			kind, answer := "", ""
+			switch v := c.(type) {
+			case generator.FlipCard:
+				kind, answer = "flip", v.Answer
+			case generator.BooleanCard:
+				kind, answer = "boolean", fmt.Sprint(v.Answer)
+			case generator.InputCard:
+				kind, answer = "input", v.Answer
+			case generator.ChoiceCard:
+				kind = "choice"
+				a, _ := json.Marshal(v.RightAnswers)
+				answer = string(a)
+				fmt.Fprintf(&w, "     Варианты: %v\n", append(append([]string{}, v.RightAnswers...), v.WrongAnswers...))
+			case generator.TableCard:
+				kind = "table"
+				a, _ := json.Marshal(v.Columns)
+				answer = string(a)
+			}
+			fmt.Fprintf(&w, "  [%s] %s\n     О: %s\n     Объяснение: %s\n     Цитата: «%s»\n", kind, base.Question, answer, base.Source, base.SourceQuote)
 		}
-		fmt.Fprintf(&w, "  [%s] %s\n", c.Kind, c.Question)
-		fmt.Fprintf(&w, "     О: %s\n", c.Answer)
-		fmt.Fprintf(&w, "     Объяснение: %s\n", c.Explanation)
 	}
 	return w.String()
 }

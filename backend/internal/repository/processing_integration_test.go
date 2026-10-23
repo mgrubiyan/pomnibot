@@ -25,7 +25,7 @@ func TestProcessingReportPostgres(t *testing.T) {
 		}
 	}
 	generated := generator.Result{Artifact: &generator.Artifact{Version: generator.PipelineVersion, Files: []ingest.File{{Name: "private.txt", Data: []byte("private source")}}}}
-	set, _, err := repository.SaveGeneratedSet(ctx, q, 11, "private", generated)
+	set, _, err := repository.SaveGeneratedSet(ctx, q, 11, "private", repository.GeneratedSet{Report: generated})
 	if err != nil {
 		t.Fatal(err)
 	}

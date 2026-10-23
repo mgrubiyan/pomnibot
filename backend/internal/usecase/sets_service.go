@@ -303,7 +303,11 @@ func (s *setServiceImpl) SaveGeneratedSet(ctx context.Context, userID int64, tit
 		return nil, err
 	}
 
-	set, cardsCount, err := repository.SaveGeneratedSet(ctx, s.querier, userID, title, genResult)
+	prepared, err := prepareGeneratedSet(title, genResult)
+	if err != nil {
+		return nil, fmt.Errorf("prepare generated set: %w", err)
+	}
+	set, cardsCount, err := repository.SaveGeneratedSet(ctx, s.querier, userID, title, prepared)
 	if err != nil {
 		return nil, fmt.Errorf("save generated set for user: %w", err)
 	}

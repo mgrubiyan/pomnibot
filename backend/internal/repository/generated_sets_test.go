@@ -12,10 +12,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
-	"github.com/mgrubiyan/pomnibot/backend/internal/material"
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
+	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
 type testQuerier struct {
@@ -127,7 +127,7 @@ func TestSaveGeneratedSet_Success(t *testing.T) {
 	const userID int64 = 999
 	const title = "Generated Set"
 
-	genResult := generator.Result{
+	genResult := repository.GeneratedSet{
 		Facts: []cards.Fact{
 			{ID: "fact-1", Name: "Fact One", Topic: "Biology"},
 			{ID: "fact-2", Name: "Fact Two", Topic: "Biology"},
@@ -182,7 +182,7 @@ func TestSaveGeneratedSet_Success(t *testing.T) {
 
 func TestSaveGeneratedSet_TableCard(t *testing.T) {
 	tq := newTestQuerier()
-	genResult := generator.Result{
+	genResult := repository.GeneratedSet{
 		Facts: []cards.Fact{{ID: "fact-1", Name: "Прокариоты и эукариоты", Topic: "Клетка"}},
 		Cards: []cards.Card{{
 			FactID:   "fact-1",
@@ -224,7 +224,7 @@ func (q *testQuerier) SaveProcessingReport(_ context.Context, arg db.SaveProcess
 }
 func TestSaveGeneratedSetPreservesPrivateSourceArtifact(t *testing.T) {
 	q := newTestQuerier()
-	result := generator.Result{Artifact: &generator.Artifact{Version: generator.PipelineVersion, Files: []ingest.File{{Name: "private.txt", Data: []byte("source")}}}, Cards: []cards.Card{{FactID: "f", Evidence: []material.Evidence{{BlockID: "p1-b1", Quote: "source"}}}}}
+	result := repository.GeneratedSet{Report: generator.Result{Artifact: &generator.Artifact{Version: generator.PipelineVersion, Files: []ingest.File{{Name: "private.txt", Data: []byte("source")}}}, Facts: []generator.Fact{{Name: "Fact", Pages: []int{1}, Cards: []generator.Card{generator.FlipCard{CardBase: generator.CardBase{Question: "Q", Source: "S", SourceQuote: "source"}, Answer: "A"}, generator.InputCard{CardBase: generator.CardBase{Question: "Q", Source: "S", SourceQuote: ""}, Answer: "A"}}}}}}
 	_, _, err := repository.SaveGeneratedSet(context.Background(), q, 42, "notes", result)
 	if err != nil {
 		t.Fatal(err)
@@ -236,7 +236,7 @@ func TestSaveGeneratedSetPreservesPrivateSourceArtifact(t *testing.T) {
 	if err := json.Unmarshal(q.reports[0].Report, &restored); err != nil {
 		t.Fatal(err)
 	}
-	if string(restored.Artifact.Files[0].Data) != "source" || restored.Cards[0].Evidence[0].Quote != "source" {
+	if string(restored.Artifact.Files[0].Data) != "source" || restored.Facts[0].Cards[0].(generator.FlipCard).SourceQuote != "source" {
 		t.Fatal("lost evidence or original")
 	}
 }
@@ -255,23 +255,22 @@ func TestSaveRecordedGeneration(t *testing.T) {
 	if err = json.Unmarshal(data, &r); err != nil {
 		t.Fatal(err)
 	}
-	if len(r.Cards) == 0 || len(r.Facts) == 0 {
+	if generator.CardCount(r.Facts) == 0 || len(r.Facts) == 0 {
 		t.Fatal("empty recording")
 	}
 	r.Artifact = &generator.Artifact{Version: generator.PipelineVersion}
 	q := newTestQuerier()
-	_, count, err := repository.SaveGeneratedSet(context.Background(), q, 42, "Recorded lecture", r)
-	if err != nil || count != len(r.Cards) || len(q.createdFacts) != len(r.Facts) || len(q.initProgressCalls) != 1 || len(q.reports) != 1 {
-		t.Fatalf("save lost cards, facts, progress or private report: count=%d err=%v", count, err)
+	svc := usecase.NewSetService(q, usecase.NewUserService(q))
+	set, err := svc.SaveGeneratedSet(context.Background(), 42, "Recorded lecture", r)
+	count := 0
+	if set != nil {
+		count = set.CardsTotal
 	}
-	for i, c := range r.Cards {
-		got := q.createdCards[i]
-		if got.Question != c.Question || got.AnswerText.String != c.Answer || got.SourceQuote != c.SourceQuote || got.SourceRef.String != c.SourceRef || got.Kind != string(c.Kind) {
-			t.Fatalf("card %d changed in storage adapter", i+1)
-		}
+	if err != nil || count != generator.CardCount(r.Facts) || len(q.createdFacts) != len(r.Facts) || len(q.initProgressCalls) != 1 || len(q.reports) != 1 {
+		t.Fatalf("save lost cards, facts, progress or report: count=%d err=%v", count, err)
 	}
 	var restored generator.Result
-	if err = json.Unmarshal(q.reports[0].Report, &restored); err != nil || len(restored.Cards) != len(r.Cards) || restored.Budget != r.Budget {
+	if err = json.Unmarshal(q.reports[0].Report, &restored); err != nil || generator.CardCount(restored.Facts) != generator.CardCount(r.Facts) || restored.Budget != r.Budget {
 		t.Fatalf("private report round trip failed: %v", err)
 	}
 	t.Logf("saved %d recorded cards, %d facts and bulk progress initialization through repository adapter; database is mocked", count, len(r.Facts))
@@ -279,7 +278,7 @@ func TestSaveRecordedGeneration(t *testing.T) {
 
 func TestSaveGeneratedSetKeepsAllCorrectOptionsAndSharedFact(t *testing.T) {
 	q := newTestQuerier()
-	_, count, err := repository.SaveGeneratedSet(context.Background(), q, 1, "T", generator.Result{
+	_, count, err := repository.SaveGeneratedSet(context.Background(), q, 1, "T", repository.GeneratedSet{
 		Facts: []cards.Fact{{ID: "f", Name: "F", Topic: "Topic"}},
 		Cards: []cards.Card{
 			{FactID: "f", Kind: cards.KindFlip, Question: "Recall", Answer: "A and B"},
@@ -297,4 +296,8 @@ func TestSaveGeneratedSetKeepsAllCorrectOptionsAndSharedFact(t *testing.T) {
 	if len(q.createdOptions) != 3 || !q.createdOptions[0].IsCorrect || !q.createdOptions[1].IsCorrect || q.createdOptions[2].IsCorrect {
 		t.Fatalf("lost multiple answers: %+v", q.createdOptions)
 	}
+}
+
+func (q *testQuerier) EnsureUser(_ context.Context, id int64) (db.User, error) {
+	return db.User{ID: id}, nil
 }

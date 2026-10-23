@@ -11,13 +11,13 @@ type providerFunc func(context.Context, providers.Request) (providers.Response, 
 func (p providerFunc) Complete(ctx context.Context, r providers.Request) (providers.Response, error) {
 	return p(ctx, r)
 }
-func stageFixture(goals []KnowledgeGoal, groups []goalCards) providers.Provider {
+func stageFixture(facts ...Fact) providers.Provider {
 	return providerFunc(func(context.Context, providers.Request) (providers.Response, error) {
-		r := map[string]any{"issues": []string{}, "goals": goals, "cards": groups}
-		b, e := json.Marshal(r)
+		b, e := json.Marshal(AIResponse{Facts: facts, Issues: []string{}})
 		return providers.Response{Content: b, Model: "fixture"}, e
 	})
 }
-func learningGoal(id, name string) KnowledgeGoal {
-	return KnowledgeGoal{GoalID: id, Name: name, Topic: "T", Pages: []int{1}, Source: "A and B"}
+func cardBase(q string) CardBase { return CardBase{Question: q, Source: "Source for " + q} }
+func learningFact(name string) Fact {
+	return Fact{Name: name, Pages: []int{1}, Cards: []Card{FlipCard{cardBase(name + "?"), "answer"}, InputCard{cardBase(name + "?"), "answer"}}}
 }

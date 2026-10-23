@@ -12,7 +12,6 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/grader"
-	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
@@ -839,14 +838,7 @@ func TestSetService_SaveGeneratedSet(t *testing.T) {
 	}
 
 	svc := usecase.NewSetService(mock, usecase.NewUserService(mock))
-	genResult := generator.Result{
-		Facts: []cards.Fact{
-			{ID: "f1", Name: "Fact 1", Topic: "Bio"},
-		},
-		Cards: []cards.Card{
-			{FactID: "f1", Kind: cards.KindFlip, Question: "Q1", Answer: "A1"},
-		},
-	}
+	genResult := generator.Result{Facts: []generator.Fact{{Name: "Fact 1", Pages: []int{1}, Cards: []generator.Card{generator.FlipCard{CardBase: generator.CardBase{Question: "Q1", Source: "Source"}, Answer: "A1"}}}}}
 
 	t.Run("success saves generated set", func(t *testing.T) {
 		res, err := svc.SaveGeneratedSet(ctx, userID, title, genResult)

@@ -5,29 +5,34 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"slices"
-	"strconv"
 	"strings"
 )
 
-// AIResponse is the model's learning content. Source metadata lives separately.
+// AIResponse is the complete model response, before storage identifiers exist.
 type AIResponse struct {
-	Facts []Fact `json:"facts"`
+	Facts  []Fact   `json:"facts"`
+	Issues []string `json:"issues"`
 }
 
 // Fact groups cards in ascending difficulty, preserving model order within a kind.
 type Fact struct {
 	Name  string `json:"name"`
+	Pages []int  `json:"pages"`
 	Cards []Card `json:"cards"`
 }
 
 // Card is one of the five supported question formats.
-type Card interface{ isCard() }
+type Card interface {
+	isCard()
+	Base() CardBase
+}
 
-// CardBase holds the question shared by all formats.
+// CardBase holds the question and source specific to one card.
 type CardBase struct {
-	Question string `json:"question"`
+	Question    string `json:"question"`
+	Source      string `json:"source"`
+	SourceQuote string `json:"sourceQuote"`
 }
 
 // FlipCard presents an answer for self assessment.
@@ -73,6 +78,18 @@ func (ChoiceCard) isCard()  {}
 func (TableCard) isCard()   {}
 func (InputCard) isCard()   {}
 
+// Base returns the metadata shared by all card formats.
+func (b CardBase) Base() CardBase { return b }
+
+// CardCount counts cards across nested facts.
+func CardCount(facts []Fact) int {
+	total := 0
+	for _, f := range facts {
+		total += len(f.Cards)
+	}
+	return total
+}
+
 func strictJSON(b []byte, v any) error {
 	d := json.NewDecoder(bytes.NewReader(b))
 	d.DisallowUnknownFields()
@@ -83,12 +100,16 @@ func strictJSON(b []byte, v any) error {
 func (f *Fact) UnmarshalJSON(b []byte) error {
 	var wire struct {
 		Name  string            `json:"name"`
+		Pages []int             `json:"pages"`
 		Cards []json.RawMessage `json:"cards"`
+	}
+	if err := requiredFields(b, "name", "pages", "cards"); err != nil {
+		return err
 	}
 	if err := strictJSON(b, &wire); err != nil {
 		return err
 	}
-	*f = Fact{Name: wire.Name}
+	*f = Fact{Name: wire.Name, Pages: wire.Pages}
 	flip, input := false, false
 	for _, raw := range wire.Cards {
 		var fields map[string]json.RawMessage
@@ -139,8 +160,10 @@ func (f *Fact) UnmarshalJSON(b []byte) error {
 		if err != nil {
 			return err
 		}
-		if _, ok := fields["question"]; !ok {
-			return fmt.Errorf("missing question")
+		for _, key := range []string{"question", "source", "sourceQuote"} {
+			if _, ok := fields[key]; !ok {
+				return fmt.Errorf("missing card field %s", key)
+			}
 		}
 		if kind == "flip" || kind == "boolean" || kind == "input" {
 			if _, ok := fields["answer"]; !ok {
@@ -192,251 +215,133 @@ func (f Fact) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(struct {
 		Name  string           `json:"name"`
+		Pages []int            `json:"pages"`
 		Cards []map[string]any `json:"cards"`
-	}{f.Name, raw})
+	}{f.Name, f.Pages, raw})
 }
 
-// KnowledgeGoal preserves sufficient source information, not a page transcript.
-type KnowledgeGoal struct {
-	GoalID      string `json:"goalId"`
-	Name        string `json:"name"`
-	Topic       string `json:"topic"`
-	Pages       []int  `json:"pages"`
-	Source      string `json:"source"`
-	SourceQuote string `json:"sourceQuote"`
+// UnmarshalJSON rejects missing, null and legacy response fields.
+func (r *AIResponse) UnmarshalJSON(b []byte) error {
+	if err := requiredFields(b, "facts", "issues"); err != nil {
+		return err
+	}
+	type wire AIResponse
+	return strictJSON(b, (*wire)(r))
 }
-type goalCards struct {
-	GoalID  string `json:"goalId"`
-	Content Fact   `json:"content"`
-}
-type stageResponse struct {
-	Issues []string        `json:"issues"`
-	Goals  []KnowledgeGoal `json:"goals"`
-	Cards  []goalCards     `json:"cards"`
+
+func requiredFields(b []byte, keys ...string) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(b, &fields); err != nil {
+		return err
+	}
+	for _, key := range keys {
+		value, ok := fields[key]
+		if !ok || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			return fmt.Errorf("missing field %s", key)
+		}
+	}
+	return nil
 }
 
 func normalized(s string) string { return strings.ToLower(strings.Join(strings.Fields(s), " ")) }
-func validateGoals(goals []KnowledgeGoal, pages int) error {
-	if len(goals) == 0 {
-		return errors.New("empty goals")
+
+func validateFacts(facts []Fact, pages int) error {
+	if len(facts) == 0 {
+		return errors.New("empty facts")
 	}
-	ids, names := map[string]bool{}, map[string]bool{}
-	for _, g := range goals {
-		if g.GoalID == "" || ids[g.GoalID] || names[normalized(g.Name)] || normalized(g.Name) == "" || normalized(g.Topic) == "" || normalized(g.Source) == "" || len(g.Pages) == 0 {
-			return errors.New("invalid or duplicate goal")
+	names, questions := map[string]bool{}, map[string]bool{}
+	for _, f := range facts {
+		name := normalized(f.Name)
+		if name == "" || names[name] {
+			return errors.New("invalid or duplicate fact name")
 		}
-		ids[g.GoalID], names[normalized(g.Name)] = true, true
+		names[name] = true
+		if len(f.Pages) == 0 {
+			return errors.New("empty fact pages")
+		}
 		seen := map[int]bool{}
-		for _, p := range g.Pages {
+		for _, p := range f.Pages {
 			if p < 1 || p > pages || seen[p] {
-				return errors.New("invalid goal pages")
+				return errors.New("invalid fact pages")
 			}
 			seen[p] = true
 		}
-	}
-	return nil
-}
-func validateGoalCards(goals []KnowledgeGoal, groups []goalCards) error {
-	if len(groups) != len(goals) {
-		return errors.New("incomplete goal coverage")
-	}
-	ids := map[string]string{}
-	seen := map[string]bool{}
-	questions := map[string]bool{}
-	for _, g := range goals {
-		ids[g.GoalID] = g.Name
-	}
-	for _, g := range groups {
-		if ids[g.GoalID] == "" || seen[g.GoalID] || g.Content.Name != ids[g.GoalID] {
-			return errors.New("unknown or duplicate card goalId, or mismatched goal name")
-		}
-		seen[g.GoalID] = true
 		flip, input := false, false
-		for _, v := range g.Content.Cards {
-			c, ok := storedCard(v)
-			if !ok {
-				return errors.New("invalid card")
+		for _, c := range f.Cards {
+			if err := validateCard(c); err != nil {
+				return err
 			}
-			key := string(c.Kind) + ":" + normalized(c.Question)
+			key := fmt.Sprintf("%T:%s", c, normalized(c.Base().Question))
 			if questions[key] {
-				return errors.New("duplicate card")
+				return errors.New("duplicate card question of the same kind")
 			}
 			questions[key] = true
-			flip = flip || c.Kind == cards.KindFlip
-			input = input || c.Kind == cards.KindInput
+			switch c.(type) {
+			case FlipCard:
+				flip = true
+			case InputCard:
+				input = true
+			}
 		}
 		if !flip || !input {
-			return errors.New("goal requires flip and input")
+			return errors.New("fact requires flip and input")
 		}
 	}
 	return nil
 }
 
-// storedCard validates format-specific content and converts learning DTOs.
-func storedCard(c Card) (cards.Card, bool) {
-	var out cards.Card
+// validateCard checks content without creating storage models.
+func validateCard(c Card) error {
+	if c == nil {
+		return errors.New("invalid card")
+	}
+	base := c.Base()
+	if normalized(base.Question) == "" || normalized(base.Source) == "" {
+		return errors.New("empty card question or source")
+	}
 	switch v := c.(type) {
 	case FlipCard:
-		out.Kind = cards.KindFlip
-		out.Question = v.Question
-		out.Answer = v.Answer
+		if normalized(v.Answer) == "" {
+			return errors.New("empty flip answer")
+		}
 	case BooleanCard:
-		out.Kind = cards.KindBoolean
-		out.Question = v.Question
-		out.Answer = strconv.FormatBool(v.Answer)
 	case InputCard:
-		out.Kind = cards.KindInput
-		out.Question = v.Question
-		out.Answer = v.Answer
+		if normalized(v.Answer) == "" {
+			return errors.New("empty input answer")
+		}
 	case ChoiceCard:
-		out.Kind = cards.KindChoice
-		out.Question = v.Question
 		if len(v.RightAnswers) == 0 || len(v.WrongAnswers) == 0 {
-			return out, false
+			return errors.New("choice requires right and wrong answers")
 		}
 		seen := map[string]bool{}
 		for _, a := range append(slices.Clone(v.RightAnswers), v.WrongAnswers...) {
-			key := strings.ToLower(strings.TrimSpace(a))
+			key := normalized(a)
 			if key == "" || seen[key] {
-				return out, false
+				return errors.New("empty or duplicate choice answer")
 			}
 			seen[key] = true
 		}
-		out.RightAnswers = slices.Clone(v.RightAnswers)
-		out.Options = append(slices.Clone(v.RightAnswers), v.WrongAnswers...)
-		b, _ := json.Marshal(v.RightAnswers)
-		out.Answer = string(b)
 	case TableCard:
-		out.Kind = cards.KindTable
-		out.Question = v.Question
-		out.Table = &cards.Table{}
 		if len(v.Columns) < 2 {
-			return out, false
+			return errors.New("table requires two categories")
 		}
 		names, rows := map[string]bool{}, map[string]bool{}
 		for _, col := range v.Columns {
 			name := strings.TrimSpace(col.Name)
 			if name == "" || names[name] || len(col.Rows) == 0 {
-				return out, false
+				return errors.New("empty or duplicate table category")
 			}
 			names[name] = true
-			out.Table.Columns = append(out.Table.Columns, name)
 			for _, row := range col.Rows {
 				row = strings.TrimSpace(row)
 				if row == "" || rows[row] {
-					return out, false
+					return errors.New("empty or duplicate table row")
 				}
 				rows[row] = true
-				out.Table.Items = append(out.Table.Items, cards.TableItem{Text: row, Column: name})
 			}
 		}
 	default:
-		return out, false
+		return errors.New("unknown card kind")
 	}
-	return out, strings.TrimSpace(out.Question) != "" && (out.Kind == cards.KindTable || strings.TrimSpace(out.Answer) != "")
-}
-
-// UnmarshalJSON checks required source fields before the server assigns goal IDs.
-func (g *KnowledgeGoal) UnmarshalJSON(b []byte) error {
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(b, &fields); err != nil {
-		return err
-	}
-	for _, key := range []string{"goalId", "name", "topic", "pages", "source"} {
-		v, ok := fields[key]
-		if !ok || bytes.Equal(bytes.TrimSpace(v), []byte("null")) {
-			return fmt.Errorf("missing goal field %s", key)
-		}
-	}
-	type wire KnowledgeGoal
-	return strictJSON(b, (*wire)(g))
-}
-
-// MarshalJSON represents the mandatory pair with one question and answer.
-// The provider cannot generate different requirements for flip and input.
-func (g goalCards) MarshalJSON() ([]byte, error) {
-	var flip *FlipCard
-	var input *InputCard
-	extra := []Card{}
-	for _, c := range g.Content.Cards {
-		switch v := c.(type) {
-		case FlipCard:
-			if flip != nil {
-				return nil, errors.New("duplicate mandatory flip")
-			}
-			flip = &v
-		case InputCard:
-			if input != nil {
-				return nil, errors.New("duplicate mandatory input")
-			}
-			input = &v
-		default:
-			extra = append(extra, c)
-		}
-	}
-	if flip == nil || input == nil || flip.Question != input.Question || flip.Answer != input.Answer {
-		return nil, errors.New("mandatory pair requires one common question and answer")
-	}
-	// Reuse card serialization for the optional formats.
-	b, err := json.Marshal(Fact{Name: g.Content.Name, Cards: extra})
-	if err != nil {
-		return nil, err
-	}
-	var optional struct {
-		Cards []json.RawMessage `json:"cards"`
-	}
-	if err = json.Unmarshal(b, &optional); err != nil {
-		return nil, err
-	}
-	return json.Marshal(struct {
-		GoalID  string `json:"goalId"`
-		Content any    `json:"content"`
-	}{g.GoalID, struct {
-		Name     string            `json:"name"`
-		Question string            `json:"question"`
-		Answer   string            `json:"answer"`
-		Cards    []json.RawMessage `json:"cards"`
-	}{g.Content.Name, flip.Question, flip.Answer, optional.Cards}})
-}
-
-func (g *goalCards) UnmarshalJSON(b []byte) error {
-	var wire struct {
-		GoalID  string `json:"goalId"`
-		Content struct {
-			Name     string            `json:"name"`
-			Question *string           `json:"question"`
-			Answer   *string           `json:"answer"`
-			Cards    []json.RawMessage `json:"cards"`
-		} `json:"content"`
-	}
-	if err := strictJSON(b, &wire); err != nil {
-		return err
-	}
-	if wire.Content.Question == nil || wire.Content.Answer == nil || wire.Content.Cards == nil {
-		return errors.New("missing common question, answer or additional cards")
-	}
-	for _, raw := range wire.Content.Cards {
-		var v struct {
-			Kind string `json:"kind"`
-		}
-		if err := json.Unmarshal(raw, &v); err != nil {
-			return err
-		}
-		if v.Kind == "flip" || v.Kind == "input" {
-			return errors.New("mandatory pair must use common question and answer")
-		}
-	}
-	q, a := *wire.Content.Question, *wire.Content.Answer
-	flip, _ := json.Marshal(map[string]any{"kind": "flip", "question": q, "answer": a})
-	input, _ := json.Marshal(map[string]any{"kind": "input", "question": q, "answer": a})
-	rawCards := append([]json.RawMessage{flip, input}, wire.Content.Cards...)
-	f, err := json.Marshal(struct {
-		Name  string            `json:"name"`
-		Cards []json.RawMessage `json:"cards"`
-	}{wire.Content.Name, rawCards})
-	if err != nil {
-		return err
-	}
-	g.GoalID = wire.GoalID
-	return json.Unmarshal(f, &g.Content)
+	return nil
 }

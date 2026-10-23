@@ -2,7 +2,6 @@ package generator
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -10,15 +9,12 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
-const testGoal = `{"goalId":"local-a","name":"Удаление","topic":"Индекс","pages":[1],"source":"Сначала удалить запись индекса, затем записать блок индекса, затем пометить запись данных."}`
-const testContent = `{"name":"Удаление","question":"Как удалить запись?","answer":"Удалить запись индекса; записать блок; пометить данные.","cards":[]}`
+const testFact = `{"name":"Удаление","pages":[1],"cards":[{"kind":"flip","question":"Как удалить запись?","answer":"Удалить запись индекса; записать блок; пометить данные.","source":"Удаление индекса","sourceQuote":""},{"kind":"input","question":"Назовите этапы удаления","answer":"Удалить индекс, записать блок, пометить данные","source":"Этапы удаления","sourceQuote":""}]}`
 
 func pdfDocument() Document {
-	return Document{ID: "doc", PDFs: []providers.PDF{{Name: "lecture.pdf", Data: []byte("%PDF-test"), Pages: 1}}}
+	return Document{PDFs: []providers.PDF{{Name: "lecture.pdf", Data: []byte("%PDF-test"), Pages: 1}}}
 }
-func directReply() string {
-	return `{"issues":[],"goals":[` + testGoal + `],"cards":[{"goalId":"local-a","content":` + testContent + `}]}`
-}
+func directReply() string { return `{"issues":[],"facts":[` + testFact + `]}` }
 func TestDirectGenerationPublishesOnceAfterValidation(t *testing.T) {
 	for _, doc := range []Document{pdfDocument(), {Text: "Индекс ускоряет поиск"}} {
 		calls, published := 0, 0
@@ -37,55 +33,62 @@ func TestDirectGenerationPublishesOnceAfterValidation(t *testing.T) {
 		})
 		r, err := NewGenerator(p, Options{OnBatch: func(b Batch) {
 			published++
-			if len(b.Cards) != 2 || len(b.Facts) != 1 {
+			if CardCount(b.Facts) != 2 || len(b.Facts) != 1 {
 				t.Fatal("partial batch")
 			}
 		}}).Generate(context.Background(), doc)
 		if err != nil || calls != 1 || published != 1 || len(r.Stats.Stages) != 1 || r.Stats.CostUSD != .01 || r.Stats.PromptTokens != 20 || r.Stats.CompletionTokens != 10 {
 			t.Fatalf("%+v %v calls=%d published=%d", r, err, calls, published)
 		}
-		if r.Artifact.Goals[0].GoalID != "g1" || r.Cards[0].FactID != r.Facts[0].ID || r.Cards[1].FactID != r.Facts[0].ID {
-			t.Fatal("lost server IDs or relationships")
+		if r.Artifact.Facts[0].Name != r.Facts[0].Name || CardCount(r.Facts) != 2 || r.Artifact.Request == nil || r.Artifact.Response != directReply() {
+			t.Fatal("lost nested facts or private request/response")
 		}
 	}
 }
 func TestDirectGenerationRejectsInvalidResponse(t *testing.T) {
-	for _, defect := range []string{"truncated flag", "broken JSON", "missing goals", "missing issues", "unknown goal", "duplicate goal", "missing group", "bad page", "blank answer", "missing question", "missing answer", "duplicate group", "mismatched name"} {
+	for defect, mutate := range map[string]func(string) string{
+		"truncated flag": func(s string) string { return s },
+		"broken JSON":    func(s string) string { return s[:len(s)-5] },
+		"missing facts":  func(s string) string { return strings.Replace(s, `"facts":`, `"other":`, 1) },
+		"empty facts":    func(string) string { return `{"issues":[],"facts":[]}` },
+		"missing issues": func(s string) string { return strings.Replace(s, `"issues":[],`, "", 1) },
+		"null issues":    func(s string) string { return strings.Replace(s, `"issues":[]`, `"issues":null`, 1) },
+		"duplicate fact": func(string) string { return `{"issues":[],"facts":[` + testFact + `,` + testFact + `]}` },
+		"missing name":   func(s string) string { return strings.Replace(s, `"name":"Удаление",`, "", 1) },
+		"missing pages":  func(s string) string { return strings.Replace(s, `"pages":[1],`, "", 1) },
+		"missing kind":   func(s string) string { return strings.Replace(s, `"kind":"flip",`, "", 1) },
+		"blank question": func(s string) string {
+			return strings.Replace(s, `"question":"Как удалить запись?"`, `"question":" "`, 1)
+		},
+		"blank name":      func(s string) string { return strings.Replace(s, `"name":"Удаление"`, `"name":" "`, 1) },
+		"bad page":        func(s string) string { return strings.Replace(s, `"pages":[1]`, `"pages":[2]`, 1) },
+		"zero page":       func(s string) string { return strings.Replace(s, `"pages":[1]`, `"pages":[0]`, 1) },
+		"duplicate pages": func(s string) string { return strings.Replace(s, `"pages":[1]`, `"pages":[1,1]`, 1) },
+		"empty pages":     func(s string) string { return strings.Replace(s, `"pages":[1]`, `"pages":[]`, 1) },
+		"blank answer": func(s string) string {
+			return strings.Replace(s, `"answer":"Удалить запись индекса; записать блок; пометить данные."`, `"answer":" "`, 1)
+		},
+		"missing question": func(s string) string { return strings.Replace(s, `"question":`, `"other":`, 1) },
+		"missing answer":   func(s string) string { return strings.Replace(s, `"answer":`, `"other":`, 1) },
+		"missing source":   func(s string) string { return strings.Replace(s, `"source":"Удаление индекса",`, "", 1) },
+		"blank source": func(s string) string {
+			return strings.Replace(s, `"source":"Удаление индекса"`, `"source":" "`, 1)
+		},
+		"missing quote": func(s string) string { return strings.Replace(s, `,"sourceQuote":""`, "", 1) },
+		"null quote":    func(s string) string { return strings.Replace(s, `"sourceQuote":""`, `"sourceQuote":null`, 1) },
+		"old format":    func(string) string { return `{"issues":[],"goals":[],"cards":[]}` },
+		"unknown kind":  func(s string) string { return strings.Replace(s, `"kind":"flip"`, `"kind":"other"`, 1) },
+		"null card":     func(s string) string { return strings.Replace(s, `"cards":[`, `"cards":[null,`, 1) },
+	} {
 		t.Run(defect, func(t *testing.T) {
-			b := directReply()
-			switch defect {
-			case "broken JSON":
-				b = b[:len(b)-5]
-			case "missing goals":
-				b = strings.Replace(b, `"goals":`, `"other":`, 1)
-			case "missing issues":
-				b = strings.Replace(b, `"issues":[],`, "", 1)
-			case "unknown goal":
-				b = strings.Replace(b, `"cards":[{"goalId":"local-a"`, `"cards":[{"goalId":"unknown"`, 1)
-			case "duplicate goal":
-				b = strings.Replace(b, `"goals":[`+testGoal+`]`, `"goals":[`+testGoal+`,`+testGoal+`]`, 1)
-			case "missing group":
-				b = `{"issues":[],"goals":[` + testGoal + `],"cards":[]}`
-			case "bad page":
-				b = strings.Replace(b, `"pages":[1]`, `"pages":[2]`, 1)
-			case "blank answer":
-				b = strings.ReplaceAll(b, `"answer":"Удалить запись индекса; записать блок; пометить данные."`, `"answer":" "`)
-			case "missing question":
-				b = strings.Replace(b, `"question":`, `"other":`, 1)
-			case "missing answer":
-				b = strings.Replace(b, `"answer":`, `"other":`, 1)
-			case "duplicate group":
-				b = strings.Replace(b, `"cards":[{"goalId":"local-a","content":`+testContent+`}]`, `"cards":[{"goalId":"local-a","content":`+testContent+`},{"goalId":"local-a","content":`+testContent+`}]`, 1)
-			case "mismatched name":
-				b = strings.Replace(b, `"content":{"name":"Удаление"`, `"content":{"name":"Другое"`, 1)
-			}
+			b := mutate(directReply())
 			calls := 0
 			p := providerFunc(func(context.Context, providers.Request) (providers.Response, error) {
 				calls++
 				return providers.Response{Content: []byte(b), Truncated: defect == "truncated flag"}, nil
 			})
 			r, err := NewGenerator(p, Options{OnBatch: func(Batch) { t.Fatal("published invalid response") }}).Generate(context.Background(), pdfDocument())
-			if err == nil || calls != 1 || len(r.Cards) != 0 || len(r.Facts) != 0 || r.Stats.InvalidResponses != 1 {
+			if err == nil || calls != 1 || len(r.Facts) != 0 || r.Stats.InvalidResponses != 1 {
 				t.Fatalf("%+v %v calls=%d", r, err, calls)
 			}
 		})
@@ -96,7 +99,7 @@ func TestDirectGenerationKeepsIssuesAndFailureMetrics(t *testing.T) {
 		return providers.Response{Content: []byte(strings.Replace(directReply(), `"issues":[]`, `"issues":["Page 1 contains an unreadable fragment"]`, 1))}, nil
 	})
 	r, err := NewGenerator(p, Options{}).Generate(context.Background(), pdfDocument())
-	if err != nil || len(r.Cards) != 2 || len(r.Coverage.Issues) != 1 {
+	if err != nil || CardCount(r.Facts) != 2 || len(r.Coverage.Issues) != 1 {
 		t.Fatalf("%+v %v", r, err)
 	}
 	p = providerFunc(func(context.Context, providers.Request) (providers.Response, error) {
@@ -134,27 +137,31 @@ func TestDirectGenerationSharesExistingBudget(t *testing.T) {
 			if e != nil || calls != 1 || r.Budget.CommittedUSD != .04 {
 				t.Fatalf("%+v %v", r, e)
 			}
-		} else if !errors.Is(e, providers.ErrBudget) || calls != 0 || len(r.Cards) != 0 || r.Budget.CommittedUSD != .03 {
+		} else if !errors.Is(e, providers.ErrBudget) || calls != 0 || CardCount(r.Facts) != 0 || r.Budget.CommittedUSD != .03 {
 			t.Fatalf("%+v %v", r, e)
 		}
 	}
 }
 func TestDirectGenerationRejectsFactLimitWithoutPartialPublication(t *testing.T) {
-	goals := []KnowledgeGoal{learningGoal("a", "A"), learningGoal("b", "B")}
-	groups := []goalCards{}
-	for _, g := range goals {
-		f := Fact{Name: g.Name, Cards: []Card{FlipCard{CardBase{g.Name + "?"}, "answer"}, InputCard{CardBase{g.Name + "?"}, "answer"}}}
-		groups = append(groups, goalCards{GoalID: g.GoalID, Content: f})
-	}
-	b, err := json.Marshal(map[string]any{"issues": []string{}, "goals": goals, "cards": groups})
-	if err != nil {
-		t.Fatal(err)
-	}
-	p := providerFunc(func(context.Context, providers.Request) (providers.Response, error) {
-		return providers.Response{Content: b}, nil
-	})
-	r, e := NewGenerator(p, Options{MaxFactsPerDoc: 1, OnBatch: func(Batch) { t.Fatal("published over limit") }}).Generate(context.Background(), pdfDocument())
-	if e == nil || len(r.Cards) != 0 {
+	r, e := NewGenerator(stageFixture(learningFact("A"), learningFact("B")), Options{MaxFactsPerDoc: 1, OnBatch: func(Batch) { t.Fatal("published over limit") }}).Generate(context.Background(), pdfDocument())
+	if e == nil || len(r.Facts) != 0 {
 		t.Fatalf("%+v %v", r, e)
+	}
+}
+
+func TestInvalidLastFactRejectsWholeResponse(t *testing.T) {
+	for _, defect := range []string{"quote", "duplicate question"} {
+		t.Run(defect, func(t *testing.T) {
+			a, b := learningFact("A"), learningFact("B")
+			if defect == "quote" {
+				b.Cards[1] = InputCard{CardBase{Question: "B?", Source: "source", SourceQuote: "invented"}, "answer"}
+			} else {
+				b.Cards[0] = FlipCard{cardBase("  a?  "), "answer"}
+			}
+			r, err := NewGenerator(stageFixture(a, b), Options{OnBatch: func(Batch) { t.Fatal("published before validating all facts") }}).Generate(t.Context(), Document{Text: "A and B"})
+			if err == nil || len(r.Facts) != 0 || r.Stats.InvalidResponses != 1 {
+				t.Fatalf("%+v %v", r, err)
+			}
+		})
 	}
 }

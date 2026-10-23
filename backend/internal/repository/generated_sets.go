@@ -18,8 +18,15 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 )
 
-// SaveGeneratedSet saves a generator.Result into the database as a new card set for the given user.
-func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title string, genResult generator.Result) (*db.Set, int, error) {
+// GeneratedSet contains storage models prepared by the usecase and the private report.
+type GeneratedSet struct {
+	Facts  []cards.Fact
+	Cards  []cards.Card
+	Report generator.Result
+}
+
+// SaveGeneratedSet persists the prepared models and their assigned fact identifiers.
+func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title string, genResult GeneratedSet) (*db.Set, int, error) {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		title = "Новый конспект"
@@ -39,12 +46,12 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title str
 		return nil, 0, fmt.Errorf("create user set: %w", err)
 	}
 
-	if genResult.Artifact != nil {
-		data, marshalErr := json.Marshal(genResult)
+	if genResult.Report.Artifact != nil {
+		data, marshalErr := json.Marshal(genResult.Report)
 		if marshalErr != nil {
 			return nil, 0, fmt.Errorf("encode private processing report: %w", marshalErr)
 		}
-		affected, saveErr := q.SaveProcessingReport(ctx, db.SaveProcessingReportParams{ID: newSet.ID, AuthorID: userID, Version: genResult.Artifact.Version, Report: data})
+		affected, saveErr := q.SaveProcessingReport(ctx, db.SaveProcessingReportParams{ID: newSet.ID, AuthorID: userID, Version: genResult.Report.Artifact.Version, Report: data})
 		if saveErr != nil {
 			return nil, 0, fmt.Errorf("save private processing report: %w", saveErr)
 		}

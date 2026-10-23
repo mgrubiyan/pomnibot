@@ -26,12 +26,14 @@ func tableColumnsSchema(s any) map[string]any {
 func factSchema() map[string]any {
 	// Use the structured-output subset supported by Claude through OpenRouter.
 	// Local DTO and publication validation require both flip and input per fact;
-	// storedCard enforces nonempty values, unique answers/rows and table categories.
+	// validateCard enforces nonempty values, unique answers/rows and table categories.
 	s := map[string]any{"type": "string", "description": "Nonempty text."}
 	nonempty := func(v any) map[string]any { a := schemaArray(v); a["minItems"] = 1; return a }
 	variant := func(kind string, fields map[string]any) any {
 		fields["kind"] = map[string]any{"type": "string", "const": kind}
 		fields["question"] = s
+		fields["source"] = map[string]any{"type": "string", "description": "Nonempty source information supporting this specific card, including formulas and conditions."}
+		fields["sourceQuote"] = map[string]any{"type": "string", "description": "Verbatim quote for this card from text blocks on the fact pages; empty string if unavailable."}
 		return schemaObject(fields)
 	}
 	variants := []any{
@@ -44,14 +46,12 @@ func factSchema() map[string]any {
 	// Distinct kind constants make the variants mutually exclusive under anyOf.
 	cs := nonempty(map[string]any{"anyOf": variants})
 	cs["description"] = "At least one flip card and one input card are required in every fact."
-	return schemaObject(map[string]any{"name": s, "cards": cs})
+	pages := nonempty(map[string]any{"type": "integer"})
+	pages["description"] = "Source pages for this fact, numbered from 1 across all files."
+	return schemaObject(map[string]any{"name": s, "pages": pages, "cards": cs})
 }
 func stageSchema() json.RawMessage {
-	s := map[string]any{"type": "string"}
-	goal := schemaObject(map[string]any{"goalId": s, "name": s, "topic": s, "pages": schemaArray(map[string]any{"type": "integer"}), "source": s, "sourceQuote": s})
-	fact := factSchema()
-	variants := fact["properties"].(map[string]any)["cards"].(map[string]any)["items"].(map[string]any)["anyOf"].([]any)
-	content := schemaObject(map[string]any{"name": s, "question": s, "answer": s, "cards": schemaArray(map[string]any{"anyOf": variants[1:4]})})
-	group := schemaObject(map[string]any{"goalId": s, "content": content})
-	return schemaBytes(schemaObject(map[string]any{"issues": schemaArray(s), "goals": schemaArray(goal), "cards": schemaArray(group)}))
+	facts := schemaArray(factSchema())
+	facts["minItems"] = 1
+	return schemaBytes(schemaObject(map[string]any{"issues": schemaArray(map[string]any{"type": "string"}), "facts": facts}))
 }

@@ -1,5 +1,4 @@
-// Package cards holds the card model: what the generator produces, the
-// storage keeps and the feed shows, plus exact choice answer comparison.
+// Package cards holds the storage and feed models, plus exact choice answer comparison.
 package cards
 
 import "github.com/mgrubiyan/pomnibot/backend/internal/material"
@@ -26,7 +25,7 @@ const (
 
 // Fact is one statement of the notes. A card refers to its fact by id.
 type Fact struct {
-	ID    string `json:"id"`   // derived from the document id and fact name
+	ID    string `json:"id"`   // UUID assigned by the usecase
 	Name  string `json:"name"` // short name of the fact, narrower than Topic
 	Topic string `json:"topic"`
 }

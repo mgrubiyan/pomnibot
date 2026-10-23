@@ -3,25 +3,21 @@ package generator
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/mgrubiyan/pomnibot/backend/internal/material"
-	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
-	"hash/fnv"
 	"log/slog"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/mgrubiyan/pomnibot/backend/internal/material"
 	"github.com/mgrubiyan/pomnibot/backend/internal/prompts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
 // PipelineVersion identifies source input, prompt and code validation semantics.
-const PipelineVersion = "direct-generation-v9"
+const PipelineVersion = "direct-generation-v10"
 
 // Generator is safe for concurrent use. The provider owns transport retries.
 type Generator struct {
@@ -44,7 +40,7 @@ func (g *Generator) WithOnBatch(cb func(Batch)) *Generator {
 	return &cp
 }
 
-// Generate creates goals and cards together from the complete source.
+// Generate creates facts and cards together from the complete source.
 // It publishes atomically after structural validation, not semantic verification.
 func (g *Generator) Generate(ctx context.Context, doc Document) (out Result, err error) {
 	if providers.BudgetFrom(ctx) == nil {
@@ -53,9 +49,6 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (out Result, err
 	defer func() { out.Budget = providers.BudgetFrom(ctx).Snapshot() }()
 	started := time.Now()
 	defer func() { out.Stats.Total = time.Since(started) }()
-	if doc.ID == "" {
-		doc.ID = rand.Text()
-	}
 	if g.opts.MaxTokens < 1 {
 		return out, errors.New("invalid generation output limit")
 	}
@@ -94,56 +87,27 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (out Result, err
 	if e != nil {
 		return out, e
 	}
-	goals, groups := r.Goals, r.Cards
 	out.Coverage.Issues = slices.Clone(r.Issues)
-	if e = validateGoals(goals, pages); e != nil {
+	if e = validateFacts(r.Facts, pages); e != nil {
 		return out, invalidStage(&out, "generation", e)
 	}
-	if e = validateGoalCards(goals, groups); e != nil {
-		return out, invalidStage(&out, "generation", e)
+	if g.opts.MaxFactsPerDoc > 0 && len(r.Facts) > g.opts.MaxFactsPerDoc {
+		return out, invalidStage(&out, "generation", errors.New("generated facts exceed configured fact limit"))
 	}
-	if g.opts.MaxFactsPerDoc > 0 && len(goals) > g.opts.MaxFactsPerDoc {
-		return out, invalidStage(&out, "generation", errors.New("generated goals exceed configured fact limit"))
-	}
-	// Validate model references before replacing them with canonical server IDs.
-	ids := map[string]string{}
-	for i := range goals {
-		old := goals[i].GoalID
-		goals[i].GoalID = "g" + strconv.Itoa(i+1)
-		ids[old] = goals[i].GoalID
-		if quote := goals[i].SourceQuote; quote != "" && !sourceContainsQuote(doc, goals[i].Pages, quote) {
-			return out, invalidStage(&out, "generation", errors.New("source quote is not present on cited text pages"))
+	for _, f := range r.Facts {
+		for _, c := range f.Cards {
+			if quote := c.Base().SourceQuote; quote != "" && !sourceContainsQuote(doc, f.Pages, quote) {
+				return out, invalidStage(&out, "generation", errors.New("source quote is not present on cited text pages"))
+			}
 		}
 	}
-	for i := range groups {
-		groups[i].GoalID = ids[groups[i].GoalID]
-	}
-	byID := map[string]Fact{}
-	for _, v := range groups {
-		byID[v.GoalID] = v.Content
-	}
-	for _, v := range goals {
-		id := factID(doc.ID, v.GoalID)
-		out.Facts = append(out.Facts, cards.Fact{ID: id, Name: v.Name, Topic: v.Topic})
-		refs := []string{}
-		for _, p := range v.Pages {
-			refs = append(refs, strconv.Itoa(p))
-		}
-		for _, raw := range byID[v.GoalID].Cards {
-			c, _ := storedCard(raw)
-			c.FactID = id
-			c.SourceRef = doc.Title + ", стр. " + strings.Join(refs, ", ")
-			c.Explanation = v.Source
-			c.SourceQuote = v.SourceQuote
-			out.Cards = append(out.Cards, c)
-		}
-	}
-	out.Artifact.Goals = goals
-	out.Stats.Cards = len(out.Cards)
-	out.Stats.CardsFromModel = len(out.Cards)
-	out.Stats.Facts = len(out.Facts)
+	out.Facts = r.Facts
+	out.Artifact.Facts = r.Facts
+	out.Stats.Cards = CardCount(r.Facts)
+	out.Stats.CardsFromModel = out.Stats.Cards
+	out.Stats.Facts = len(r.Facts)
 	out.Stats.FirstCardAfter = time.Since(started)
-	g.notify(Batch{Cards: out.Cards, Facts: out.Facts})
+	g.notify(Batch{Facts: out.Facts})
 	return out, nil
 }
 
@@ -156,18 +120,34 @@ func (g *Generator) notify(b Batch) {
 			slog.Error("cards: OnBatch panicked", "panic", p)
 		}
 	}()
-	g.opts.OnBatch(Batch{Cards: slices.Clone(b.Cards), Facts: slices.Clone(b.Facts)})
+	g.opts.OnBatch(Batch{Facts: cloneFacts(b.Facts)})
 }
 
-func factID(docID, key string) string {
-	h := fnv.New64a()
-	_, _ = h.Write([]byte(docID))
-	_, _ = h.Write([]byte{0})
-	_, _ = h.Write([]byte(key))
-	return fmt.Sprintf("%016x", h.Sum64())
+// Clone nested slices so a progress callback cannot mutate the validated result.
+func cloneFacts(facts []Fact) []Fact {
+	out := slices.Clone(facts)
+	for i := range out {
+		out[i].Pages = slices.Clone(out[i].Pages)
+		out[i].Cards = slices.Clone(out[i].Cards)
+		for j, c := range out[i].Cards {
+			switch v := c.(type) {
+			case ChoiceCard:
+				v.RightAnswers = slices.Clone(v.RightAnswers)
+				v.WrongAnswers = slices.Clone(v.WrongAnswers)
+				out[i].Cards[j] = v
+			case TableCard:
+				v.Columns = slices.Clone(v.Columns)
+				for k := range v.Columns {
+					v.Columns[k].Rows = slices.Clone(v.Columns[k].Rows)
+				}
+				out[i].Cards[j] = v
+			}
+		}
+	}
+	return out
 }
 
-func (g *Generator) completeStage(ctx context.Context, doc Document, source, stage string, input any, out *Result) (reply stageResponse, callErr error) {
+func (g *Generator) completeStage(ctx context.Context, doc Document, source, stage string, input any, out *Result) (reply AIResponse, callErr error) {
 	began := time.Now()
 	before := providers.BudgetFrom(ctx).Snapshot()
 	payload, _ := json.Marshal(input)
@@ -199,7 +179,7 @@ func (g *Generator) completeStage(ctx context.Context, doc Document, source, sta
 	if resp.Usage.CacheWriteTokens != nil {
 		st.CacheWriteTokens = *resp.Usage.CacheWriteTokens
 	}
-	if e == nil && (resp.Truncated || !json.Valid(resp.Content) || strictJSON(resp.Content, &reply) != nil || reply.Issues == nil || reply.Goals == nil || reply.Cards == nil) {
+	if e == nil && (resp.Truncated || !json.Valid(resp.Content) || strictJSON(resp.Content, &reply) != nil || reply.Issues == nil || reply.Facts == nil) {
 		e = errors.New("invalid or unfinished structured response")
 		st.InvalidResponses = 1
 	}

@@ -13,7 +13,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
-	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
@@ -185,7 +184,7 @@ func TestManualCardsPostgres(t *testing.T) {
 	}
 	// Generated facts can contain several cards; deleting one must preserve the others.
 	factID := uuid.NewString()
-	generated, _, err := repository.SaveGeneratedSet(ctx, q, 11, "Generated", generator.Result{Facts: []cards.Fact{{ID: factID, Name: "Fact"}}, Cards: []cards.Card{{FactID: factID, Kind: cards.KindFlip, Question: "Q1", Answer: "A"}, {FactID: factID, Kind: cards.KindInput, Question: "Q2", Answer: "A"}}})
+	generated, _, err := repository.SaveGeneratedSet(ctx, q, 11, "Generated", repository.GeneratedSet{Facts: []cards.Fact{{ID: factID, Name: "Fact"}}, Cards: []cards.Card{{FactID: factID, Kind: cards.KindFlip, Question: "Q1", Answer: "A"}, {FactID: factID, Kind: cards.KindInput, Question: "Q2", Answer: "A"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,7 +294,7 @@ func TestGeneratedFactOrderAndKnowledgeSelectionPostgres(t *testing.T) {
 	if err := users.EnsureUser(ctx, 77); err != nil {
 		t.Fatal(err)
 	}
-	result := generator.Result{Facts: []cards.Fact{{ID: "shared", Name: "Fact", Topic: "Topic"}}, Cards: []cards.Card{
+	result := repository.GeneratedSet{Facts: []cards.Fact{{ID: "shared", Name: "Fact", Topic: "Topic"}}, Cards: []cards.Card{
 		{FactID: "shared", Kind: cards.KindFlip, Question: "Easy flip", Answer: "A"},
 		{FactID: "shared", Kind: cards.KindFlip, Question: "Hard flip", Answer: "A and B"},
 		{FactID: "shared", Kind: cards.KindBoolean, Question: "True?", Answer: "true"},

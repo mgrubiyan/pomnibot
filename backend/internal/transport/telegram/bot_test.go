@@ -14,7 +14,6 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
-	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/notes"
 	maxtransport "github.com/mgrubiyan/pomnibot/backend/internal/transport/max"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
@@ -397,9 +396,9 @@ func TestTelegramUsesSharedMakerAndInternalUserID(t *testing.T) {
 			case <-ctx.Done():
 				return generator.Result{}, ctx.Err()
 			}
-			card := cards.Card{FactID: "fact", Question: "Question", Answer: "Answer"}
-			onBatch(generator.Batch{Cards: []cards.Card{card}})
-			return generator.Result{Cards: []cards.Card{card}}, nil
+			facts := []generator.Fact{{Name: "Fact", Pages: []int{1}, Cards: []generator.Card{generator.FlipCard{CardBase: generator.CardBase{Question: "Question", Source: "source"}, Answer: "Answer"}}}}
+			onBatch(generator.Batch{Facts: facts})
+			return generator.Result{Facts: facts}, nil
 		}), savingFunc(func(_ context.Context, id int64, title string, _ generator.Result) (*contracts.CardSet, error) {
 			savedIDs = append(savedIDs, id)
 			return &contracts.CardSet{Title: title, ShareCode: contracts.NewOptString("123456")}, nil
