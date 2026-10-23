@@ -1,4 +1,4 @@
-import type { AnswerResult, Card } from '../types';
+import type { Answer, Card } from '../types';
 
 /** How a topic went in a run: errors out of the cards answered on it. */
 export interface TopicScore {
@@ -8,7 +8,7 @@ export interface TopicScore {
 }
 
 /** Topics of a finished run, the weakest first. */
-export function scoreByTopic(cards: Card[], results: AnswerResult[]): TopicScore[] {
+export function scoreByTopic(cards: Card[], results: Answer[]): TopicScore[] {
     const topicOf = new Map(cards.map((card) => [card.id, card.topic]));
     const scores = new Map<string, TopicScore>();
 
@@ -34,12 +34,12 @@ export function scoreByTopic(cards: Card[], results: AnswerResult[]): TopicScore
 
 /** Topics of a finished run that had an error, the weakest first: a topic
  *  answered without a mistake has nothing to show. */
-export function topicsWithErrors(cards: Card[], results: AnswerResult[]): TopicScore[] {
+export function topicsWithErrors(cards: Card[], results: Answer[]): TopicScore[] {
     return scoreByTopic(cards, results).filter((topic) => topic.wrong > 0);
 }
 
 /** A run without a single error. Judged by the answers, not the topics: a
     card without a topic is left out of them, and its error would read as none. */
-export function allCorrect(results: AnswerResult[]): boolean {
+export function allCorrect(results: Answer[]): boolean {
     return results.length > 0 && results.every((result) => result.correct);
 }

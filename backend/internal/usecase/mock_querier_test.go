@@ -39,7 +39,7 @@ type mockQuerier struct {
 	initUserFactProgressFunc       func(ctx context.Context, arg db.InitUserFactProgressParams) error
 	isSetAuthorFunc                func(ctx context.Context, arg db.IsSetAuthorParams) (bool, error)
 	joinSetFunc                    func(ctx context.Context, arg db.JoinSetParams) (db.UserSet, error)
-	recordAnswerResultFunc         func(ctx context.Context, arg db.RecordAnswerResultParams) (db.AnswerResult, error)
+	recordAnswerFunc               func(ctx context.Context, arg db.RecordAnswerParams) (db.Answer, error)
 	updateCardFunc                 func(ctx context.Context, arg db.UpdateCardParams) (db.UpdateCardRow, error)
 	updateFactProgressOnAnswerFunc func(ctx context.Context, arg db.UpdateFactProgressOnAnswerParams) (db.UserFactProgress, error)
 	ensureUserFunc                 func(ctx context.Context, id pgtype.UUID) (db.User, error)
@@ -267,11 +267,11 @@ func (m *mockQuerier) LeaveSet(ctx context.Context, arg db.LeaveSetParams) (int6
 	return 1, nil
 }
 
-func (m *mockQuerier) RecordAnswerResult(ctx context.Context, arg db.RecordAnswerResultParams) (db.AnswerResult, error) {
-	if m.recordAnswerResultFunc != nil {
-		return m.recordAnswerResultFunc(ctx, arg)
+func (m *mockQuerier) RecordAnswer(ctx context.Context, arg db.RecordAnswerParams) (db.Answer, error) {
+	if m.recordAnswerFunc != nil {
+		return m.recordAnswerFunc(ctx, arg)
 	}
-	return db.AnswerResult{}, nil
+	return db.Answer{}, nil
 }
 
 func (m *mockQuerier) UpdateCard(ctx context.Context, arg db.UpdateCardParams) (db.UpdateCardRow, error) {

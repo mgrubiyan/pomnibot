@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -258,18 +257,13 @@ func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID uuid.UUID, 
 
 	isCorrect := s.grader.Check(ctx, gradeInput(card, answer)).Correct
 
-	now := time.Now()
-	var answeredAt pgtype.Timestamptz
-	_ = answeredAt.Scan(now)
-
-	_, err = s.querier.RecordAnswerResult(ctx, db.RecordAnswerResultParams{
-		UserID:     pgUserID,
-		CardID:     pgCardID,
-		Correct:    isCorrect,
-		AnsweredAt: answeredAt,
+	_, err = s.querier.RecordAnswer(ctx, db.RecordAnswerParams{
+		UserID:  pgUserID,
+		CardID:  pgCardID,
+		Correct: isCorrect,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("record answer result: %w", err)
+		return nil, fmt.Errorf("record answer: %w", err)
 	}
 
 	_, err = s.querier.UpdateFactProgressOnAnswer(ctx, db.UpdateFactProgressOnAnswerParams{

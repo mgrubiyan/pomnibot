@@ -8,12 +8,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type AnswerResult struct {
-	Correct    bool               `json:"correct"`
-	AnsweredAt pgtype.Timestamptz `json:"answered_at"`
-	ID         pgtype.UUID        `json:"id"`
-	UserID     pgtype.UUID        `json:"user_id"`
-	CardID     pgtype.UUID        `json:"card_id"`
+type Answer struct {
+	Correct bool        `json:"correct"`
+	ID      pgtype.UUID `json:"id"`
+	UserID  pgtype.UUID `json:"user_id"`
+	CardID  pgtype.UUID `json:"card_id"`
 }
 
 type Card struct {

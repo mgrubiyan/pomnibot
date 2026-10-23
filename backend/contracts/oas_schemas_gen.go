@@ -9,6 +9,32 @@ import (
 	"github.com/google/uuid"
 )
 
+// Ref: #/components/schemas/Answer
+type Answer struct {
+	CardId  uuid.UUID `json:"cardId"`
+	Correct bool      `json:"correct"`
+}
+
+// GetCardId returns the value of CardId.
+func (s *Answer) GetCardId() uuid.UUID {
+	return s.CardId
+}
+
+// GetCorrect returns the value of Correct.
+func (s *Answer) GetCorrect() bool {
+	return s.Correct
+}
+
+// SetCardId sets the value of CardId.
+func (s *Answer) SetCardId(val uuid.UUID) {
+	s.CardId = val
+}
+
+// SetCorrect sets the value of Correct.
+func (s *Answer) SetCorrect(val bool) {
+	s.Correct = val
+}
+
 type AnswerQuestionBadRequest ErrorResponse
 
 func (*AnswerQuestionBadRequest) answerQuestionRes() {}
@@ -67,43 +93,6 @@ func (s *AnswerQuestionResponse) SetUserAnswer(val string) {
 }
 
 func (*AnswerQuestionResponse) answerQuestionRes() {}
-
-// Ref: #/components/schemas/AnswerResult
-type AnswerResult struct {
-	CardId     uuid.UUID `json:"cardId"`
-	Correct    bool      `json:"correct"`
-	AnsweredAt time.Time `json:"answeredAt"`
-}
-
-// GetCardId returns the value of CardId.
-func (s *AnswerResult) GetCardId() uuid.UUID {
-	return s.CardId
-}
-
-// GetCorrect returns the value of Correct.
-func (s *AnswerResult) GetCorrect() bool {
-	return s.Correct
-}
-
-// GetAnsweredAt returns the value of AnsweredAt.
-func (s *AnswerResult) GetAnsweredAt() time.Time {
-	return s.AnsweredAt
-}
-
-// SetCardId sets the value of CardId.
-func (s *AnswerResult) SetCardId(val uuid.UUID) {
-	s.CardId = val
-}
-
-// SetCorrect sets the value of Correct.
-func (s *AnswerResult) SetCorrect(val bool) {
-	s.Correct = val
-}
-
-// SetAnsweredAt sets the value of AnsweredAt.
-func (s *AnswerResult) SetAnsweredAt(val time.Time) {
-	s.AnsweredAt = val
-}
 
 // Ref: #/components/schemas/Card
 type Card struct {
@@ -1482,7 +1471,7 @@ type SendResultsNoContent struct{}
 
 func (*SendResultsNoContent) sendResultsRes() {}
 
-type SendResultsRequest []AnswerResult
+type SendResultsRequest []Answer
 
 // Ref: #/components/schemas/SetLeaderboardResponse
 type SetLeaderboardResponse struct {

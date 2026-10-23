@@ -12,7 +12,7 @@ import Share from './screens/Share';
 import Leaderboard from './screens/Leaderboard';
 import WhyItWorks from './screens/WhyItWorks';
 import { api } from './api';
-import type { AnswerResult, Card, TodayData, User } from './types';
+import type { Answer, Card, TodayData, User } from './types';
 import type { CardPatch } from './utils/cards';
 
 /** No router yet: browser history is not used. */
@@ -25,7 +25,7 @@ type Screen =
           setId?: string;
           setTitle?: string;
           initialIndex?: number;
-          initialResults?: AnswerResult[];
+          initialResults?: Answer[];
       }
     | { name: 'share'; setId: string; setTitle?: string }
     | { name: 'leaderboard'; setId: string; setTitle?: string }
@@ -42,7 +42,7 @@ type Screen =
           fromFeed?: boolean;
           feedSetId?: string;
           feedIndex?: number;
-          feedResults?: AnswerResult[];
+          feedResults?: Answer[];
       };
 
 /** What to report on the cards screen after an action on a card. */
@@ -105,7 +105,7 @@ function App() {
         feedSetId?: string,
         feedSetTitle?: string,
         feedIndex?: number,
-        feedResults?: AnswerResult[],
+        feedResults?: Answer[],
     ) => {
         try {
             await api.DELETE('/cards/{cardId}', {
@@ -141,7 +141,7 @@ function App() {
         feedSetId?: string,
         feedSetTitle?: string,
         feedIndex?: number,
-        feedResults?: AnswerResult[],
+        feedResults?: Answer[],
     ) => {
         try {
             const { error } = await api.PUT('/cards/{cardId}', {

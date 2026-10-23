@@ -30,7 +30,7 @@ func TestUsersMigrationPreservesLegacyMAXData(t *testing.T) {
 			}
 		}
 	})
-	for _, table := range []string{"sets", "user_sets", "user_fact_progress", "answer_results"} {
+	for _, table := range []string{"sets", "user_sets", "user_fact_progress", "answers"} {
 		var snapshot string
 		if err := pool.QueryRow(ctx, "SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text)::text FROM "+table+" t").Scan(&snapshot); err != nil {
 			t.Fatal(err)
@@ -92,6 +92,22 @@ func TestMigration00009UpDown(t *testing.T) {
 	upSQL := parts[0]
 	downSQL := parts[1]
 
+	// 0. Roll back 00010 first so 00009 operates on answer_results
+	m10Data, err := repository.MigrationsFS.ReadFile("migrations/00010_rename_answer_results_to_answers.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m10Parts := strings.Split(string(m10Data), "-- +goose Down")
+	if len(m10Parts) != 2 {
+		t.Fatalf("expected 2 parts for 00010, got %d", len(m10Parts))
+	}
+	m10Up := m10Parts[0]
+	m10Down := m10Parts[1]
+
+	if _, err := pool.Exec(ctx, m10Down); err != nil {
+		t.Fatalf("failed to run 00010 Down: %v", err)
+	}
+
 	// 1. Run Down migration
 	if _, err := pool.Exec(ctx, downSQL); err != nil {
 		t.Fatalf("failed to run 00009 Down: %v", err)
@@ -123,5 +139,14 @@ func TestMigration00009UpDown(t *testing.T) {
 	// Verify users.id is UUID again
 	if err := pool.QueryRow(ctx, "SELECT data_type FROM information_schema.columns WHERE table_name='users' AND column_name='id'").Scan(&usersIDType); err != nil || usersIDType != "uuid" {
 		t.Fatalf("expected users.id to be uuid after re-running Up, got %q, err: %v", usersIDType, err)
+	}
+
+	// 4. Re-run 00010 Up and verify answers table exists and answered_at is dropped
+	if _, err := pool.Exec(ctx, m10Up); err != nil {
+		t.Fatalf("failed to re-run 00010 Up after 00009 Up: %v", err)
+	}
+	var hasAnsweredAt bool
+	if err := pool.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='answers' AND column_name='answered_at')").Scan(&hasAnsweredAt); err != nil || hasAnsweredAt {
+		t.Fatalf("expected answers.answered_at to NOT exist after 00010 Up, err: %v", err)
 	}
 }

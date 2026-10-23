@@ -1,6 +1,6 @@
--- name: RecordAnswerResult :one
-INSERT INTO answer_results (user_id, card_id, correct, answered_at)
-VALUES ($1, $2, $3, $4)
+-- name: RecordAnswer :one
+INSERT INTO answers (user_id, card_id, correct)
+VALUES ($1, $2, $3)
 RETURNING *;
 
 -- name: UpdateFactProgressOnAnswer :one

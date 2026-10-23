@@ -227,7 +227,7 @@ func TestAPIHandler_HomescreenDelegation(t *testing.T) {
 			}
 			return []contracts.Card{{ID: uuid.New(), SetId: uuid.New(), Kind: contracts.CardKindChoice, Question: "Feed Card"}}, nil
 		},
-		sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.AnswerResult) error {
+		sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.Answer) error {
 			if userID != testAPIUserID789 || len(results) != 1 {
 				t.Errorf("unexpected args: userID=%s, len=%d", userID, len(results))
 			}
@@ -260,7 +260,7 @@ func TestAPIHandler_HomescreenDelegation(t *testing.T) {
 
 	t.Run("SendResults delegates to homescreenHandler", func(t *testing.T) {
 		res, err := h.SendResults(ctx, contracts.SendResultsRequest{
-			contracts.AnswerResult{CardId: uuid.New(), Correct: true, AnsweredAt: time.Now()},
+			contracts.Answer{CardId: uuid.New(), Correct: true},
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)

@@ -434,7 +434,7 @@ func (s ProfileResponsePlatform) Validate() error {
 }
 
 func (s SendResultsRequest) Validate() error {
-	alias := ([]AnswerResult)(s)
+	alias := ([]Answer)(s)
 	if alias == nil {
 		return errors.New("nil is invalid value")
 	}

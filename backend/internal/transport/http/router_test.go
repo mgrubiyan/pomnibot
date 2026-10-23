@@ -395,7 +395,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 				},
 			}, nil
 		},
-		sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.AnswerResult) error {
+		sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.Answer) error {
 			if userID != testUserID {
 				t.Errorf("expected userID %s, got %s", testUserID, userID)
 			}
@@ -559,7 +559,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 	})
 
 	t.Run("POST /api/results with auth returns 204 No Content", func(t *testing.T) {
-		body := bytes.NewBufferString(fmt.Sprintf(`[{"cardId":"%s","correct":true,"answeredAt":"2026-09-27T05:00:00Z"}]`, testCardID))
+		body := bytes.NewBufferString(fmt.Sprintf(`[{"cardId":"%s","correct":true}]`, testCardID))
 		req := httptest.NewRequest(http.MethodPost, "/api/results", body)
 		req.Header.Set("Authorization", "max "+authHeader)
 		req.Header.Set("Content-Type", "application/json")

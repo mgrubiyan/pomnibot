@@ -35,7 +35,7 @@ type CardService interface {
 type HomescreenService interface {
 	GetToday(ctx context.Context, userID uuid.UUID) (*contracts.TodayData, error)
 	GetFeedQuestions(ctx context.Context, userID uuid.UUID) ([]contracts.Card, error)
-	SendResults(ctx context.Context, userID uuid.UUID, results []contracts.AnswerResult) error
+	SendResults(ctx context.Context, userID uuid.UUID, results []contracts.Answer) error
 }
 
 // MAXUserParams comes from a verified MAX request or bot update.

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'bun:test';
-import type { AnswerResult, Card } from '../types';
+import type { Answer, Card } from '../types';
 import { allCorrect, topicsWithErrors } from './results';
 
 const card = (id: string, topic: string) => ({ id, topic }) as Card;
-const result = (cardId: string, correct: boolean) => ({ cardId, correct, answeredAt: '' }) as AnswerResult;
+const result = (cardId: string, correct: boolean) => ({ cardId, correct }) as Answer;
 
 describe('topicsWithErrors', () => {
     const cards = [card('1', 'Митоз'), card('2', 'Митоз'), card('3', 'Мейоз'), card('4', 'Апоптоз')];

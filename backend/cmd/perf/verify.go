@@ -36,7 +36,7 @@ func verify(ctx context.Context, pool *pgxpool.Pool, w *workload) error {
 		if membership != 3 {
 			return fmt.Errorf("user %d memberships=%d", a.id, membership)
 		}
-		if err := pool.QueryRow(ctx, "SELECT count(*) FROM answer_results WHERE user_id=$1", a.id).Scan(&answers); err != nil {
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM answers WHERE user_id=$1", a.id).Scan(&answers); err != nil {
 			return err
 		}
 		if answers != a.submitted.Load() {
@@ -44,7 +44,7 @@ func verify(ctx context.Context, pool *pgxpool.Pool, w *workload) error {
 		}
 		var bad int
 		// Independent expected progress from persisted answers, checked per fact.
-		if err := pool.QueryRow(ctx, `WITH expected AS (SELECT c.fact_id,count(*) n FROM answer_results a JOIN cards c ON c.id=a.card_id WHERE a.user_id=$1 GROUP BY c.fact_id)
+		if err := pool.QueryRow(ctx, `WITH expected AS (SELECT c.fact_id,count(*) n FROM answers a JOIN cards c ON c.id=a.card_id WHERE a.user_id=$1 GROUP BY c.fact_id)
  SELECT count(*) FROM expected e LEFT JOIN user_fact_progress p ON p.user_id=$1 AND p.fact_id=e.fact_id WHERE p.fact_id IS NULL OR p.elo<>700+201*e.n OR p.consecutive_correct<>e.n OR p.last_reviewed_at IS NULL OR p.consecutive_incorrect<>0`, a.id).Scan(&bad); err != nil {
 			return err
 		}
@@ -53,7 +53,7 @@ func verify(ctx context.Context, pool *pgxpool.Pool, w *workload) error {
 		}
 	}
 	var total int64
-	if err := pool.QueryRow(ctx, "SELECT count(*) FROM answer_results WHERE user_id BETWEEN 1 AND 1000").Scan(&total); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM answers WHERE user_id BETWEEN 1 AND 1000").Scan(&total); err != nil {
 		return err
 	}
 	if total != 100000 {

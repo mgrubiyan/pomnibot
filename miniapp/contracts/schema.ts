@@ -416,14 +416,12 @@ export interface components {
             nextReviewAt?: string | null;
             sets: components["schemas"]["CardSet"][];
         };
-        AnswerResult: {
+        Answer: {
             /** Format: uuid */
             cardId: string;
             correct: boolean;
-            /** Format: date-time */
-            answeredAt: string;
         };
-        SendResultsRequest: components["schemas"]["AnswerResult"][];
+        SendResultsRequest: components["schemas"]["Answer"][];
         AnswerQuestionRequest: {
             answer: string;
         };

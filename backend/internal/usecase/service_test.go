@@ -270,12 +270,12 @@ func TestCardService_AnswerQuestion(t *testing.T) {
 				SourceQuote: "C++ is a language.",
 			}, nil
 		},
-		recordAnswerResultFunc: func(_ context.Context, arg db.RecordAnswerResultParams) (db.AnswerResult, error) {
+		recordAnswerFunc: func(_ context.Context, arg db.RecordAnswerParams) (db.Answer, error) {
 			recorded = true
 			if !arg.Correct {
 				t.Fatalf("expected correct answer, got incorrect")
 			}
-			return db.AnswerResult{}, nil
+			return db.Answer{}, nil
 		},
 		updateFactProgressOnAnswerFunc: func(_ context.Context, _ db.UpdateFactProgressOnAnswerParams) (db.UserFactProgress, error) {
 			progressUpdated = true
@@ -327,9 +327,9 @@ func TestCardService_CheckAnswer(t *testing.T) {
 				SourceQuote: "Бинарный поиск работает только на отсортированном массиве",
 			}, nil
 		},
-		recordAnswerResultFunc: func(context.Context, db.RecordAnswerResultParams) (db.AnswerResult, error) {
+		recordAnswerFunc: func(context.Context, db.RecordAnswerParams) (db.Answer, error) {
 			t.Fatal("a check must not record the answer")
-			return db.AnswerResult{}, nil
+			return db.Answer{}, nil
 		},
 	}
 	model := &fakeModel{}
@@ -438,9 +438,9 @@ func TestHomescreenService_SendResults(t *testing.T) {
 				FactID: factUUID,
 			}, nil
 		},
-		recordAnswerResultFunc: func(_ context.Context, _ db.RecordAnswerResultParams) (db.AnswerResult, error) {
+		recordAnswerFunc: func(_ context.Context, _ db.RecordAnswerParams) (db.Answer, error) {
 			count++
-			return db.AnswerResult{}, nil
+			return db.Answer{}, nil
 		},
 		updateFactProgressOnAnswerFunc: func(_ context.Context, _ db.UpdateFactProgressOnAnswerParams) (db.UserFactProgress, error) {
 			return db.UserFactProgress{}, nil
@@ -449,11 +449,10 @@ func TestHomescreenService_SendResults(t *testing.T) {
 
 	svc := usecase.NewHomescreenService(mock, usecase.NewUserService(mock))
 
-	results := []contracts.AnswerResult{
+	results := []contracts.Answer{
 		{
-			CardId:     cardUUID,
-			Correct:    true,
-			AnsweredAt: time.Now(),
+			CardId:  cardUUID,
+			Correct: true,
 		},
 	}
 

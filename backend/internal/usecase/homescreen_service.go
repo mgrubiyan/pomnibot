@@ -129,7 +129,7 @@ func (s *homescreenServiceImpl) GetFeedQuestions(ctx context.Context, userID uui
 	return cards, nil
 }
 
-func (s *homescreenServiceImpl) SendResults(ctx context.Context, userID uuid.UUID, results []contracts.AnswerResult) error {
+func (s *homescreenServiceImpl) SendResults(ctx context.Context, userID uuid.UUID, results []contracts.Answer) error {
 	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return err
 	}
@@ -149,17 +149,13 @@ func (s *homescreenServiceImpl) SendResults(ctx context.Context, userID uuid.UUI
 			return fmt.Errorf("card %s not found: %w", res.CardId, ErrNotFound)
 		}
 
-		var answeredAt pgtype.Timestamptz
-		_ = answeredAt.Scan(res.AnsweredAt)
-
-		_, err = s.querier.RecordAnswerResult(ctx, db.RecordAnswerResultParams{
-			UserID:     pgUserID,
-			CardID:     pgCardID,
-			Correct:    res.Correct,
-			AnsweredAt: answeredAt,
+		_, err = s.querier.RecordAnswer(ctx, db.RecordAnswerParams{
+			UserID:  pgUserID,
+			CardID:  pgCardID,
+			Correct: res.Correct,
 		})
 		if err != nil {
-			return fmt.Errorf("record answer result: %w", err)
+			return fmt.Errorf("record answer: %w", err)
 		}
 
 		_, err = s.querier.UpdateFactProgressOnAnswer(ctx, db.UpdateFactProgressOnAnswerParams{

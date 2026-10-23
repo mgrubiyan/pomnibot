@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
@@ -20,7 +19,7 @@ var (
 type mockHomescreenService struct {
 	getTodayFunc         func(ctx context.Context, userID uuid.UUID) (*contracts.TodayData, error)
 	getFeedQuestionsFunc func(ctx context.Context, userID uuid.UUID) ([]contracts.Card, error)
-	sendResultsFunc      func(ctx context.Context, userID uuid.UUID, results []contracts.AnswerResult) error
+	sendResultsFunc      func(ctx context.Context, userID uuid.UUID, results []contracts.Answer) error
 }
 
 func (m *mockHomescreenService) GetToday(ctx context.Context, userID uuid.UUID) (*contracts.TodayData, error) {
@@ -37,7 +36,7 @@ func (m *mockHomescreenService) GetFeedQuestions(ctx context.Context, userID uui
 	return nil, nil
 }
 
-func (m *mockHomescreenService) SendResults(ctx context.Context, userID uuid.UUID, results []contracts.AnswerResult) error {
+func (m *mockHomescreenService) SendResults(ctx context.Context, userID uuid.UUID, results []contracts.Answer) error {
 	if m.sendResultsFunc != nil {
 		return m.sendResultsFunc(ctx, userID, results)
 	}
@@ -382,10 +381,9 @@ func TestHomescreenHandler_GetFeedQuestions(t *testing.T) {
 func TestHomescreenHandler_SendResults(t *testing.T) {
 	cardID1 := uuid.New()
 	cardID2 := uuid.New()
-	now := time.Now()
 	validResults := contracts.SendResultsRequest{
-		contracts.AnswerResult{CardId: cardID1, Correct: true, AnsweredAt: now},
-		contracts.AnswerResult{CardId: cardID2, Correct: false, AnsweredAt: now},
+		contracts.Answer{CardId: cardID1, Correct: true},
+		contracts.Answer{CardId: cardID2, Correct: false},
 	}
 
 	tests := []struct {
@@ -402,7 +400,7 @@ func TestHomescreenHandler_SendResults(t *testing.T) {
 			req:  validResults,
 			mockSetup: func(t *testing.T) *mockHomescreenService {
 				return &mockHomescreenService{
-					sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.AnswerResult) error {
+					sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.Answer) error {
 						if userID != testHomeUserID {
 							t.Fatalf("unexpected userID: %s", userID)
 						}
@@ -427,7 +425,7 @@ func TestHomescreenHandler_SendResults(t *testing.T) {
 			req:  validResults,
 			mockSetup: func(t *testing.T) *mockHomescreenService {
 				return &mockHomescreenService{
-					sendResultsFunc: func(_ context.Context, userID uuid.UUID, _ []contracts.AnswerResult) error {
+					sendResultsFunc: func(_ context.Context, userID uuid.UUID, _ []contracts.Answer) error {
 						if userID != uuid.Nil {
 							t.Fatalf("expected fallback userID 0, got %d", userID)
 						}
@@ -479,7 +477,7 @@ func TestHomescreenHandler_SendResults(t *testing.T) {
 			req:  validResults,
 			mockSetup: func(t *testing.T) *mockHomescreenService {
 				return &mockHomescreenService{
-					sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.AnswerResult) error {
+					sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.Answer) error {
 						if userID != testHomeUserID {
 							t.Fatalf("unexpected userID: %s", userID)
 						}
@@ -507,7 +505,7 @@ func TestHomescreenHandler_SendResults(t *testing.T) {
 			req:  validResults,
 			mockSetup: func(t *testing.T) *mockHomescreenService {
 				return &mockHomescreenService{
-					sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.AnswerResult) error {
+					sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.Answer) error {
 						if userID != testHomeUserID {
 							t.Fatalf("unexpected userID: %s", userID)
 						}
@@ -535,7 +533,7 @@ func TestHomescreenHandler_SendResults(t *testing.T) {
 			req:  validResults,
 			mockSetup: func(t *testing.T) *mockHomescreenService {
 				return &mockHomescreenService{
-					sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.AnswerResult) error {
+					sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.Answer) error {
 						if userID != testHomeUserID {
 							t.Fatalf("unexpected userID: %s", userID)
 						}
@@ -563,7 +561,7 @@ func TestHomescreenHandler_SendResults(t *testing.T) {
 			req:  validResults,
 			mockSetup: func(t *testing.T) *mockHomescreenService {
 				return &mockHomescreenService{
-					sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.AnswerResult) error {
+					sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.Answer) error {
 						if userID != testHomeUserID {
 							t.Fatalf("unexpected userID: %s", userID)
 						}

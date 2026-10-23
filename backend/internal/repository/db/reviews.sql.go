@@ -11,30 +11,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const recordAnswerResult = `-- name: RecordAnswerResult :one
-INSERT INTO answer_results (user_id, card_id, correct, answered_at)
-VALUES ($1, $2, $3, $4)
-RETURNING correct, answered_at, id, user_id, card_id
+const recordAnswer = `-- name: RecordAnswer :one
+INSERT INTO answers (user_id, card_id, correct)
+VALUES ($1, $2, $3)
+RETURNING correct, id, user_id, card_id
 `
 
-type RecordAnswerResultParams struct {
-	UserID     pgtype.UUID        `json:"user_id"`
-	CardID     pgtype.UUID        `json:"card_id"`
-	Correct    bool               `json:"correct"`
-	AnsweredAt pgtype.Timestamptz `json:"answered_at"`
+type RecordAnswerParams struct {
+	UserID  pgtype.UUID `json:"user_id"`
+	CardID  pgtype.UUID `json:"card_id"`
+	Correct bool        `json:"correct"`
 }
 
-func (q *Queries) RecordAnswerResult(ctx context.Context, arg RecordAnswerResultParams) (AnswerResult, error) {
-	row := q.db.QueryRow(ctx, recordAnswerResult,
-		arg.UserID,
-		arg.CardID,
-		arg.Correct,
-		arg.AnsweredAt,
-	)
-	var i AnswerResult
+func (q *Queries) RecordAnswer(ctx context.Context, arg RecordAnswerParams) (Answer, error) {
+	row := q.db.QueryRow(ctx, recordAnswer, arg.UserID, arg.CardID, arg.Correct)
+	var i Answer
 	err := row.Scan(
 		&i.Correct,
-		&i.AnsweredAt,
 		&i.ID,
 		&i.UserID,
 		&i.CardID,
