@@ -34,11 +34,13 @@ type Document struct {
 
 // Artifact retains private originals and the source representation for auditing.
 type Artifact struct {
-	Stages  map[string]json.RawMessage `json:"stages,omitempty"`
-	Goals   []KnowledgeGoal            `json:"goals,omitempty"`
-	Version string                     `json:"version"`
-	Reading material.Document          `json:"reading"`
-	Files   []ingest.File              `json:"files"` // private originals for reproducible region references
+	Request  *providers.Request         `json:"request,omitempty"`  // private reproducible input, no provider credentials
+	Response string                     `json:"response,omitempty"` // full model content, including malformed or truncated responses
+	Stages   map[string]json.RawMessage `json:"stages,omitempty"`
+	Goals    []KnowledgeGoal            `json:"goals,omitempty"`
+	Version  string                     `json:"version"`
+	Reading  material.Document          `json:"reading"`
+	Files    []ingest.File              `json:"files"` // private originals for reproducible region references
 }
 
 // Result includes cards, available source coverage and processing metrics.
@@ -99,7 +101,7 @@ type Stats struct {
 // DefaultCallTimeout bounds one generation stage, including transport retries.
 const DefaultCallTimeout = 15 * time.Minute
 
-// Options controls generation stages and their shared document budget.
+// Options controls generation and its shared document budget.
 type Options struct {
 	ReasoningEffort string
 	MaxTokens       int

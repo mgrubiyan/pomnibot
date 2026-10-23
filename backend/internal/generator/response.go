@@ -198,22 +198,21 @@ func (f Fact) MarshalJSON() ([]byte, error) {
 
 // KnowledgeGoal preserves sufficient source information, not a page transcript.
 type KnowledgeGoal struct {
-	GoalID string `json:"goalId"`
-	Name   string `json:"name"`
-	Topic  string `json:"topic"`
-	Pages  []int  `json:"pages"`
-	Source string `json:"source"`
+	GoalID      string `json:"goalId"`
+	Name        string `json:"name"`
+	Topic       string `json:"topic"`
+	Pages       []int  `json:"pages"`
+	Source      string `json:"source"`
+	SourceQuote string `json:"sourceQuote"`
 }
 type goalCards struct {
 	GoalID  string `json:"goalId"`
 	Content Fact   `json:"content"`
 }
 type stageResponse struct {
-	Issues    []string        `json:"issues"`
-	Goals     []KnowledgeGoal `json:"goals"`
-	Cards     []goalCards     `json:"cards"`
-	Complete  *bool           `json:"complete"`
-	Additions []KnowledgeGoal `json:"additions"`
+	Issues []string        `json:"issues"`
+	Goals  []KnowledgeGoal `json:"goals"`
+	Cards  []goalCards     `json:"cards"`
 }
 
 func normalized(s string) string { return strings.ToLower(strings.Join(strings.Fields(s), " ")) }
@@ -241,15 +240,15 @@ func validateGoalCards(goals []KnowledgeGoal, groups []goalCards) error {
 	if len(groups) != len(goals) {
 		return errors.New("incomplete goal coverage")
 	}
-	ids := map[string]bool{}
+	ids := map[string]string{}
 	seen := map[string]bool{}
 	questions := map[string]bool{}
 	for _, g := range goals {
-		ids[g.GoalID] = true
+		ids[g.GoalID] = g.Name
 	}
 	for _, g := range groups {
-		if !ids[g.GoalID] || seen[g.GoalID] || normalized(g.Content.Name) == "" {
-			return errors.New("unknown or duplicate card goalId")
+		if ids[g.GoalID] == "" || seen[g.GoalID] || g.Content.Name != ids[g.GoalID] {
+			return errors.New("unknown or duplicate card goalId, or mismatched goal name")
 		}
 		seen[g.GoalID] = true
 		flip, input := false, false
@@ -353,73 +352,84 @@ func (g *KnowledgeGoal) UnmarshalJSON(b []byte) error {
 	return strictJSON(b, (*wire)(g))
 }
 
-// MarshalJSON makes the mandatory formats explicit in the stage contract.
+// MarshalJSON represents the mandatory pair with one question and answer.
+// The provider cannot generate different requirements for flip and input.
 func (g goalCards) MarshalJSON() ([]byte, error) {
-	data, err := json.Marshal(g.Content)
+	var flip *FlipCard
+	var input *InputCard
+	extra := []Card{}
+	for _, c := range g.Content.Cards {
+		switch v := c.(type) {
+		case FlipCard:
+			if flip != nil {
+				return nil, errors.New("duplicate mandatory flip")
+			}
+			flip = &v
+		case InputCard:
+			if input != nil {
+				return nil, errors.New("duplicate mandatory input")
+			}
+			input = &v
+		default:
+			extra = append(extra, c)
+		}
+	}
+	if flip == nil || input == nil || flip.Question != input.Question || flip.Answer != input.Answer {
+		return nil, errors.New("mandatory pair requires one common question and answer")
+	}
+	// Reuse card serialization for the optional formats.
+	b, err := json.Marshal(Fact{Name: g.Content.Name, Cards: extra})
 	if err != nil {
 		return nil, err
 	}
-	var f struct {
-		Name  string            `json:"name"`
+	var optional struct {
 		Cards []json.RawMessage `json:"cards"`
 	}
-	if err = json.Unmarshal(data, &f); err != nil {
+	if err = json.Unmarshal(b, &optional); err != nil {
 		return nil, err
-	}
-	var flip, input json.RawMessage
-	extra := []json.RawMessage{}
-	for _, raw := range f.Cards {
-		var kind struct {
-			Kind string `json:"kind"`
-		}
-		if err = json.Unmarshal(raw, &kind); err != nil {
-			return nil, err
-		}
-		switch {
-		case kind.Kind == "flip" && flip == nil:
-			flip = raw
-		case kind.Kind == "input" && input == nil:
-			input = raw
-		default:
-			extra = append(extra, raw)
-		}
 	}
 	return json.Marshal(struct {
 		GoalID  string `json:"goalId"`
 		Content any    `json:"content"`
 	}{g.GoalID, struct {
-		Name  string            `json:"name"`
-		Flip  json.RawMessage   `json:"flip"`
-		Input json.RawMessage   `json:"input"`
-		Cards []json.RawMessage `json:"cards"`
-	}{f.Name, flip, input, extra}})
+		Name     string            `json:"name"`
+		Question string            `json:"question"`
+		Answer   string            `json:"answer"`
+		Cards    []json.RawMessage `json:"cards"`
+	}{g.Content.Name, flip.Question, flip.Answer, optional.Cards}})
 }
 
 func (g *goalCards) UnmarshalJSON(b []byte) error {
 	var wire struct {
 		GoalID  string `json:"goalId"`
 		Content struct {
-			Name  string            `json:"name"`
-			Flip  json.RawMessage   `json:"flip"`
-			Input json.RawMessage   `json:"input"`
-			Cards []json.RawMessage `json:"cards"`
+			Name     string            `json:"name"`
+			Question *string           `json:"question"`
+			Answer   *string           `json:"answer"`
+			Cards    []json.RawMessage `json:"cards"`
 		} `json:"content"`
 	}
 	if err := strictJSON(b, &wire); err != nil {
 		return err
 	}
-	for kind, raw := range map[string]json.RawMessage{"flip": wire.Content.Flip, "input": wire.Content.Input} {
+	if wire.Content.Question == nil || wire.Content.Answer == nil || wire.Content.Cards == nil {
+		return errors.New("missing common question, answer or additional cards")
+	}
+	for _, raw := range wire.Content.Cards {
 		var v struct {
 			Kind string `json:"kind"`
 		}
-		if json.Unmarshal(raw, &v) != nil || v.Kind != kind {
-			return fmt.Errorf("goal requires explicit %s card", kind)
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return err
+		}
+		if v.Kind == "flip" || v.Kind == "input" {
+			return errors.New("mandatory pair must use common question and answer")
 		}
 	}
-	if wire.Content.Cards == nil {
-		return fmt.Errorf("missing additional cards array")
-	}
-	rawCards := append([]json.RawMessage{wire.Content.Flip, wire.Content.Input}, wire.Content.Cards...)
+	q, a := *wire.Content.Question, *wire.Content.Answer
+	flip, _ := json.Marshal(map[string]any{"kind": "flip", "question": q, "answer": a})
+	input, _ := json.Marshal(map[string]any{"kind": "input", "question": q, "answer": a})
+	rawCards := append([]json.RawMessage{flip, input}, wire.Content.Cards...)
 	f, err := json.Marshal(struct {
 		Name  string            `json:"name"`
 		Cards []json.RawMessage `json:"cards"`

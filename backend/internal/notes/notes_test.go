@@ -328,9 +328,9 @@ func TestMakeWarnsWhenSourceBlocksRemainUnassigned(t *testing.T) {
 	}
 }
 
-func TestMakeNativePDFWithoutTextAndNeverSavesFailedReview(t *testing.T) {
+func TestMakeNativePDFWithoutTextAndNeverSavesFailedGeneration(t *testing.T) {
 	for _, failed := range []bool{false, true} {
-		t.Run(map[bool]string{false: "save verified", true: "reject review"}[failed], func(t *testing.T) {
+		t.Run(map[bool]string{false: "save validated", true: "reject generation"}[failed], func(t *testing.T) {
 			saver := &fakeSaver{}
 			ex := &fakeExtractor{result: ingest.Result{PDFs: []providers.PDF{{Name: "scan.pdf", Data: []byte("%PDF"), Pages: 2}}, Warnings: []string{}}}
 			gen := &fakeGenerator{generate: func(_ context.Context, doc generator.Document, _ func(generator.Batch)) (generator.Result, error) {
@@ -338,14 +338,14 @@ func TestMakeNativePDFWithoutTextAndNeverSavesFailedReview(t *testing.T) {
 					t.Fatalf("lost originals: %+v", doc)
 				}
 				if failed {
-					return oneCard("T"), errors.New("review failed")
+					return oneCard("T"), errors.New("generation failed")
 				}
 				return oneCard("T"), nil
 			}}
 			_, err := New(ex, gen, saver, 1).Make(context.Background(), Request{UserID: 1, Files: file("scan.pdf")}, Progress{})
 			if failed {
 				if err == nil || len(saver.titles) != 0 {
-					t.Fatal("saved failed review")
+					t.Fatal("saved failed generation")
 				}
 			} else if err != nil || len(saver.titles) != 1 {
 				t.Fatalf("not saved: %v", err)

@@ -41,7 +41,7 @@ func run() error {
 		provider     = flag.String("provider", defaultProvider(), "who writes the cards: openrouter, gigachat, yandexgpt or qwen")
 		model        = flag.String("model", "", "override the selected provider's model")
 		limit        = flag.Int("limit", 0, "max facts per document, 0 for no limit")
-		concurrency  = flag.Int("concurrency", 0, "parallel page reading calls; generation uses three sequential stages")
+		concurrency  = flag.Int("concurrency", 0, "parallel page reading calls; generation uses one request")
 		timeout      = flag.Duration("call-timeout", generator.DefaultCallTimeout, "timeout per model call")
 		ocrMode      = flag.String("ocr", "vision", "how photos and scans are read: vision (GigaChat, checked by Yandex OCR) or yandex (Yandex OCR alone)")
 		visionBy     = flag.String("vision-provider", "", "who reads pages: openrouter, gigachat or qwen; defaults to openrouter with -provider openrouter, otherwise gigachat")
@@ -247,7 +247,7 @@ func run() error {
 
 	readingSeconds := time.Since(started).Seconds()
 	began := time.Now()
-	firstVerified := 0.0
+	firstValidated := 0.0
 	delivered := 0
 	genOptions, err := generator.OptionsFromEnv()
 	if err != nil {
@@ -259,8 +259,8 @@ func run() error {
 		MaxFactsPerDoc: *limit,
 		CallTimeout:    *timeout,
 		OnBatch: func(b generator.Batch) {
-			if firstVerified == 0 {
-				firstVerified = time.Since(started).Seconds()
+			if firstValidated == 0 {
+				firstValidated = time.Since(started).Seconds()
 			}
 			delivered += len(b.Cards)
 			refs := map[string]bool{}
@@ -288,14 +288,15 @@ func run() error {
 		enc.SetEscapeHTML(false)
 		out := struct {
 			generator.Result
-			Ingest               ingest.Result            `json:"ingest"`
-			ModelUsage           map[string]modelUsage    `json:"modelUsage"`
-			ElapsedSeconds       float64                  `json:"elapsedSeconds"`
-			ReadingSeconds       float64                  `json:"readingSeconds"`
+			Ingest         ingest.Result         `json:"ingest"`
+			ModelUsage     map[string]modelUsage `json:"modelUsage"`
+			ElapsedSeconds float64               `json:"elapsedSeconds"`
+			ReadingSeconds float64               `json:"readingSeconds"`
+			// FirstVerifiedSeconds is the legacy key for time to structural validation.
 			FirstVerifiedSeconds float64                  `json:"firstVerifiedSeconds"`
 			Budget               providers.BudgetSnapshot `json:"budget"`
 			ReadingCacheHit      bool                     `json:"readingCacheHit"`
-		}{res, notes, usage.snapshot(), time.Since(started).Seconds(), readingSeconds, firstVerified, ledger.Snapshot(), readingHit}
+		}{res, notes, usage.snapshot(), time.Since(started).Seconds(), readingSeconds, firstValidated, ledger.Snapshot(), readingHit}
 		out.Ingest.Text = "" // the notes themselves are not the output
 		for i := range out.Ingest.Pages {
 			out.Ingest.Pages[i].Image = nil

@@ -9,7 +9,7 @@ import (
 
 func requiredFormatsFixture() Fact {
 	cs := []Card{
-		InputCard{CardBase: CardBase{Question: "Recall"}, Answer: "A and B"},
+		InputCard{CardBase: CardBase{Question: "Explain"}, Answer: "A and B"},
 		TableCard{CardBase: CardBase{Question: "Sort"}, Columns: []Column{{Name: "X", Rows: []string{"A"}}, {Name: "Y", Rows: []string{"B"}}}},
 		ChoiceCard{CardBase: CardBase{Question: "Choose"}, RightAnswers: []string{"A", "B"}, WrongAnswers: []string{"C"}},
 		BooleanCard{CardBase: CardBase{Question: "True?"}, Answer: false},

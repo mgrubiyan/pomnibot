@@ -257,6 +257,7 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 	} else if doc.Structure != nil && len(genResult.Artifact.Goals) == 0 {
 		warnings = append(warnings, "Полнота набора не проверена. Сверь темы карточек с конспектом.")
 	}
+	warnings = append(warnings, genResult.Coverage.Issues...)
 	warnings = append(warnings, extracted.Warnings...)
 	return Result{Set: set, Warnings: warnings}, nil
 }

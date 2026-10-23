@@ -21,7 +21,7 @@ import (
 )
 
 // PipelineVersion identifies source input, prompt and code validation semantics.
-const PipelineVersion = "learning-goals-review-v6"
+const PipelineVersion = "direct-generation-v9"
 
 // Generator is safe for concurrent use. The provider owns transport retries.
 type Generator struct {
@@ -44,8 +44,8 @@ func (g *Generator) WithOnBatch(cb func(Batch)) *Generator {
 	return &cp
 }
 
-// Generate extracts learning goals, creates cards and reviews the complete source.
-// It publishes only after all three stages succeed.
+// Generate creates goals and cards together from the complete source.
+// It publishes atomically after structural validation, not semantic verification.
 func (g *Generator) Generate(ctx context.Context, doc Document) (out Result, err error) {
 	if providers.BudgetFrom(ctx) == nil {
 		ctx = providers.WithBudget(ctx, providers.NewBudget(g.opts.Budget))
@@ -90,69 +90,33 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (out Result, err
 	out.Stats.Stages = map[string]StageStats{}
 	out.Stats.CallsByModel = map[string]int{}
 	out.Artifact = &Artifact{Version: PipelineVersion, Stages: map[string]json.RawMessage{}}
-	var goals []KnowledgeGoal
-	var groups []goalCards
-	r, e := g.completeStage(ctx, doc, source, "knowledge", map[string]any{"task": prompts.ExtractGoals, "title": doc.Title}, &out)
+	r, e := g.completeStage(ctx, doc, source, "generation", map[string]any{"task": prompts.GenerateGoals, "title": doc.Title}, &out)
 	if e != nil {
 		return out, e
 	}
-	issues := r.Issues
-	goals = r.Goals
-	for i := range goals {
-		goals[i].GoalID = "g" + strconv.Itoa(i+1)
-	}
+	goals, groups := r.Goals, r.Cards
+	out.Coverage.Issues = slices.Clone(r.Issues)
 	if e = validateGoals(goals, pages); e != nil {
-		return out, invalidStage(&out, "knowledge", e)
+		return out, invalidStage(&out, "generation", e)
 	}
-	r, e = g.completeStage(ctx, doc, source, "generation", map[string]any{"task": prompts.GenerateGoals, "goals": goals}, &out)
-	if e != nil {
-		return out, e
-	}
-	issues = append(issues, r.Issues...)
-	groups = r.Cards
 	if e = validateGoalCards(goals, groups); e != nil {
 		return out, invalidStage(&out, "generation", e)
 	}
-	r, e = g.completeStage(ctx, doc, source, "review", map[string]any{"issues": issues, "task": prompts.ReviewGoals, "goals": goals, "cards": groups}, &out)
-	if e != nil {
-		return out, e
-	}
-	if r.Complete == nil || !*r.Complete || len(r.Issues) > 0 || r.Additions == nil || len(r.Goals) != len(goals) {
-		return out, invalidStage(&out, "review", fmt.Errorf("review did not confirm completion: %s", strings.Join(r.Issues, "; ")))
-	}
-	ids := map[string]bool{}
-	for _, v := range goals {
-		ids[v.GoalID] = true
-	}
-	for _, v := range r.Goals {
-		if !ids[v.GoalID] {
-			return out, invalidStage(&out, "review", errors.New("review changed goalId"))
-		}
-	}
-	goals, groups = r.Goals, r.Cards
-	for _, a := range r.Additions {
-		if !strings.HasPrefix(a.GoalID, "new:") || ids[a.GoalID] {
-			return out, invalidStage(&out, "review", errors.New("invalid addition reference"))
-		}
-		old := a.GoalID
-		ids[old] = true
-		a.GoalID = "g" + strconv.Itoa(len(goals)+1)
-		for i := range groups {
-			if groups[i].GoalID == old {
-				groups[i].GoalID = a.GoalID
-			}
-		}
-		goals = append(goals, a)
-	}
-
-	if e = validateGoals(goals, pages); e != nil {
-		return out, invalidStage(&out, "review", e)
-	}
-	if e = validateGoalCards(goals, groups); e != nil {
-		return out, invalidStage(&out, "review", e)
-	}
 	if g.opts.MaxFactsPerDoc > 0 && len(goals) > g.opts.MaxFactsPerDoc {
-		return out, invalidStage(&out, "review", errors.New("verified goals exceed configured fact limit"))
+		return out, invalidStage(&out, "generation", errors.New("generated goals exceed configured fact limit"))
+	}
+	// Validate model references before replacing them with canonical server IDs.
+	ids := map[string]string{}
+	for i := range goals {
+		old := goals[i].GoalID
+		goals[i].GoalID = "g" + strconv.Itoa(i+1)
+		ids[old] = goals[i].GoalID
+		if quote := goals[i].SourceQuote; quote != "" && !sourceContainsQuote(doc, goals[i].Pages, quote) {
+			return out, invalidStage(&out, "generation", errors.New("source quote is not present on cited text pages"))
+		}
+	}
+	for i := range groups {
+		groups[i].GoalID = ids[groups[i].GoalID]
 	}
 	byID := map[string]Fact{}
 	for _, v := range groups {
@@ -170,6 +134,7 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (out Result, err
 			c.FactID = id
 			c.SourceRef = doc.Title + ", стр. " + strings.Join(refs, ", ")
 			c.Explanation = v.Source
+			c.SourceQuote = v.SourceQuote
 			out.Cards = append(out.Cards, c)
 		}
 	}
@@ -208,11 +173,14 @@ func (g *Generator) completeStage(ctx context.Context, doc Document, source, sta
 	payload, _ := json.Marshal(input)
 	callCtx, cancel := context.WithTimeout(ctx, g.opts.CallTimeout)
 	defer cancel()
-	resp, e := g.provider.Complete(callCtx, providers.Request{Source: source, NoFallback: true, System: prompts.GeneratorSystem, User: string(payload), PDFs: doc.PDFs, Schema: stageSchema(), ReasoningEffort: g.opts.ReasoningEffort, MaxTokens: g.opts.MaxTokens, NoCache: true})
+	req := providers.Request{Source: source, NoFallback: true, System: prompts.GeneratorSystem, User: string(payload), PDFs: doc.PDFs, Schema: stageSchema(), ReasoningEffort: g.opts.ReasoningEffort, MaxTokens: g.opts.MaxTokens, NoCache: true}
+	out.Artifact.Request = &req
+	resp, e := g.provider.Complete(callCtx, req)
+	out.Artifact.Response = string(resp.Content)
 	if json.Valid(resp.Content) {
 		out.Artifact.Stages[stage] = resp.Content
 	}
-	// The task-specific instruction is part of the JSON suffix; the system/PDF prefix stays identical.
+	// Usage includes transport attempts; a failed or truncated answer is still billed.
 	st := StageStats{UnreportedUsageCalls: resp.Usage.UnreportedCalls, ModelCalls: max(1, resp.Usage.Attempts), PromptTokens: resp.Usage.PromptTokens, CompletionTokens: resp.Usage.CompletionTokens, ReasoningTokens: resp.Usage.ReasoningTokens, CostUSD: resp.Usage.CostUSD, Duration: time.Since(began)}
 	if resp.Cached {
 		st.ModelCalls = 0
@@ -231,7 +199,7 @@ func (g *Generator) completeStage(ctx context.Context, doc Document, source, sta
 	if resp.Usage.CacheWriteTokens != nil {
 		st.CacheWriteTokens = *resp.Usage.CacheWriteTokens
 	}
-	if e == nil && (resp.Truncated || !json.Valid(resp.Content) || strictJSON(resp.Content, &reply) != nil || reply.Issues == nil || reply.Goals == nil || reply.Cards == nil || reply.Complete == nil || reply.Additions == nil) {
+	if e == nil && (resp.Truncated || !json.Valid(resp.Content) || strictJSON(resp.Content, &reply) != nil || reply.Issues == nil || reply.Goals == nil || reply.Cards == nil) {
 		e = errors.New("invalid or unfinished structured response")
 		st.InvalidResponses = 1
 	}
@@ -241,9 +209,6 @@ func (g *Generator) completeStage(ctx context.Context, doc Document, source, sta
 	}
 	st.Model = resp.Model
 	out.Stats.recordStage(stage, st)
-	if stage != "knowledge" && st.CachedTokens == 0 && !resp.Cached {
-		slog.Warn("generation common input cache hit not reported", "stage", stage, "usage_reported", st.CacheUsageReported)
-	}
 	after := providers.BudgetFrom(ctx).Snapshot()
 	after.Calls -= before.Calls
 	after.CommittedUSD -= before.CommittedUSD
@@ -318,4 +283,35 @@ func generationSource(doc Document) (string, int, error) {
 	}
 	data, e := json.Marshal(source)
 	return string(data), pages, e
+}
+
+// sourceContainsQuote accepts only verbatim fragments in the supplied text layer.
+// Native PDFs without a text layer retain page references and source explanations.
+func sourceContainsQuote(doc Document, pages []int, quote string) bool {
+	cited := map[int]bool{}
+	for _, p := range pages {
+		cited[p] = true
+	}
+	if doc.Structure != nil {
+		for _, b := range doc.Structure.Blocks {
+			if cited[b.Page] && strings.Contains(b.Text, quote) {
+				return true
+			}
+		}
+		return false
+	}
+	starts := doc.PageStarts
+	if len(starts) == 0 {
+		starts = []int{0}
+	}
+	for i, start := range starts {
+		end := len(doc.Text)
+		if i+1 < len(starts) {
+			end = starts[i+1]
+		}
+		if cited[i+1] && strings.Contains(doc.Text[start:end], quote) {
+			return true
+		}
+	}
+	return false
 }

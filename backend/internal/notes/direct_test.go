@@ -30,7 +30,7 @@ func (s *captureDirectSaver) SaveGeneratedSet(_ context.Context, _ int64, title 
 	return &contracts.CardSet{Title: title}, nil
 }
 
-func TestMakeWithReviewedGeneratorPreservesProgressAndSavePayload(t *testing.T) {
+func TestMakeWithDirectGeneratorPreservesProgressAndSavePayload(t *testing.T) {
 	for _, failure := range []bool{false, true} {
 		t.Run(fmt.Sprint(failure), func(t *testing.T) {
 			text := "Индекс ускоряет поиск записей по ключу."
@@ -49,12 +49,8 @@ func TestMakeWithReviewedGeneratorPreservesProgressAndSavePayload(t *testing.T) 
 					return providers.Response{}, errors.New("unavailable")
 				}
 				goal := `{"goalId":"g1","name":"Назначение","topic":"Индекс","pages":[1],"source":"` + text + `"}`
-				group := `{"goalId":"g1","content":{"name":"Назначение","flip":{"kind":"flip","question":"Для чего нужен индекс?","answer":"Для ускорения поиска по ключу."},"input":{"kind":"input","question":"Для чего нужен индекс?","answer":"Для ускорения поиска по ключу."},"cards":[]}}`
-				content := []string{
-					`{"issues":[],"goals":[` + goal + `],"cards":[],"complete":false,"additions":[]}`,
-					`{"issues":[],"goals":[],"cards":[` + group + `],"complete":false,"additions":[]}`,
-					`{"issues":[],"goals":[` + goal + `],"cards":[` + group + `],"complete":true,"additions":[]}`,
-				}[calls-1]
+				group := `{"goalId":"g1","content":{"name":"Назначение","question":"Для чего нужен индекс?","answer":"Для ускорения поиска по ключу.","cards":[]}}`
+				content := `{"issues":[],"goals":[` + goal + `],"cards":[` + group + `]}`
 				return providers.Response{Usage: usage, Content: []byte(content)}, nil
 			})
 			saver := &captureDirectSaver{}
@@ -72,7 +68,7 @@ func TestMakeWithReviewedGeneratorPreservesProgressAndSavePayload(t *testing.T) 
 				t.Fatalf("obsolete coverage warning: %v", result.Warnings)
 			}
 			r := saver.result
-			if err != nil || calls != 3 || saver.calls != 1 || !generating || progress != 2 || len(r.Facts) != 1 || len(r.Cards) != 2 || r.Cards[0].FactID != r.Facts[0].ID || r.Budget.Calls != 3 || r.Budget.ReportedUSD != .003 {
+			if err != nil || calls != 1 || saver.calls != 1 || !generating || progress != 2 || len(r.Facts) != 1 || len(r.Cards) != 2 || r.Cards[0].FactID != r.Facts[0].ID || r.Budget.Calls != 1 || r.Budget.ReportedUSD != .001 {
 				t.Fatalf("lost save/progress/ledger: %+v err=%v", r, err)
 			}
 			if r.Artifact == nil || r.Artifact.Version != generator.PipelineVersion || len(r.Artifact.Files) != 1 || r.Artifact.Reading.Blocks[0].Text != text {
@@ -85,5 +81,19 @@ func TestFailureTextForWholeSourceLimit(t *testing.T) {
 	got := FailureText(fmt.Errorf("generate: %w", providers.ErrCapability))
 	if got == TextTryLater || got == "" {
 		t.Fatal("source limit tells user to retry unchanged document")
+	}
+}
+
+func TestMakeSurfacesSourceUncertainty(t *testing.T) {
+	gen := &fakeGenerator{generate: func(context.Context, generator.Document, func(generator.Batch)) (generator.Result, error) {
+		r := oneCard("T")
+		r.Coverage.Issues = []string{"Страница 2: неразборчивое условие пропущено"}
+		return r, nil
+	}}
+	ex := &fakeExtractor{result: ingest.Result{Text: "Читаемая часть"}}
+	saver := &captureDirectSaver{}
+	r, err := New(ex, gen, saver, 1).Make(context.Background(), Request{Files: file("notes.txt")}, Progress{})
+	if err != nil || saver.calls != 1 || len(r.Warnings) != 1 || r.Warnings[0] != "Страница 2: неразборчивое условие пропущено" {
+		t.Fatalf("%+v %v", r, err)
 	}
 }

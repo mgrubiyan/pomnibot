@@ -48,10 +48,10 @@ func factSchema() map[string]any {
 }
 func stageSchema() json.RawMessage {
 	s := map[string]any{"type": "string"}
-	goal := schemaObject(map[string]any{"goalId": s, "name": s, "topic": s, "pages": schemaArray(map[string]any{"type": "integer"}), "source": s})
+	goal := schemaObject(map[string]any{"goalId": s, "name": s, "topic": s, "pages": schemaArray(map[string]any{"type": "integer"}), "source": s, "sourceQuote": s})
 	fact := factSchema()
 	variants := fact["properties"].(map[string]any)["cards"].(map[string]any)["items"].(map[string]any)["anyOf"].([]any)
-	content := schemaObject(map[string]any{"name": s, "flip": variants[0], "input": variants[4], "cards": schemaArray(map[string]any{"anyOf": variants})})
+	content := schemaObject(map[string]any{"name": s, "question": s, "answer": s, "cards": schemaArray(map[string]any{"anyOf": variants[1:4]})})
 	group := schemaObject(map[string]any{"goalId": s, "content": content})
-	return schemaBytes(schemaObject(map[string]any{"issues": schemaArray(s), "complete": map[string]any{"type": "boolean"}, "goals": schemaArray(goal), "cards": schemaArray(group), "additions": schemaArray(goal)}))
+	return schemaBytes(schemaObject(map[string]any{"issues": schemaArray(s), "goals": schemaArray(goal), "cards": schemaArray(group)}))
 }

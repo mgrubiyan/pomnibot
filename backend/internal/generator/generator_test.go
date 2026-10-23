@@ -20,7 +20,7 @@ func TestCompleteSourceLimitBeforeBilling(t *testing.T) {
 		t.Fatalf("%v calls %d", e, calls)
 	}
 }
-func TestStructuredSourceAndWarningsReachEveryStage(t *testing.T) {
+func TestStructuredSourceAndWarningsReachGeneration(t *testing.T) {
 	goals := []KnowledgeGoal{learningGoal("g1", "F")}
 	f := requiredFormatsFixture()
 	p := stageFixture(goals, []goalCards{{GoalID: "g1", Content: f}})
@@ -33,14 +33,14 @@ func TestStructuredSourceAndWarningsReachEveryStage(t *testing.T) {
 		return p.Complete(ctx, r)
 	})
 	r, e := NewGenerator(wrapped, Options{}).Generate(context.Background(), Document{Structure: &material.Document{Blocks: []material.Block{{ID: "p1", Page: 1, Text: "formula"}}, Pages: []material.Page{{Number: 1, Issues: []string{"uncertain"}}}}})
-	if e != nil || calls != 3 || len(r.Cards) != 5 {
+	if e != nil || calls != 1 || len(r.Cards) != 5 {
 		t.Fatalf("%+v %v", r, e)
 	}
 }
 
 func TestGoalRequiresSourceFieldsBeforeServerIDAssignment(t *testing.T) {
 	p := providerFunc(func(context.Context, providers.Request) (providers.Response, error) {
-		return providers.Response{Content: []byte(`{"issues":[],"complete":false,"cards":[],"additions":[],"goals":[{"name":"A","topic":"T","pages":[1],"source":"A"}]}`)}, nil
+		return providers.Response{Content: []byte(`{"issues":[],"cards":[],"goals":[{"name":"A","topic":"T","pages":[1],"source":"A"}]}`)}, nil
 	})
 	r, e := NewGenerator(p, Options{}).Generate(context.Background(), Document{Text: "A"})
 	if e == nil || r.Stats.InvalidResponses != 1 || len(r.Cards) != 0 {

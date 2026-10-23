@@ -9,20 +9,10 @@ import _ "embed"
 //go:embed generator_system.md
 var GeneratorSystem string
 
-// ExtractGoals asks the model to extract learning goals.
-//
-//go:embed generator_extract_goals.md
-var ExtractGoals string
-
-// GenerateGoals asks the model to create cards for each learning goal.
+// GenerateGoals asks for goals and their cards together from the original source.
 //
 //go:embed generator_generate_goals.md
 var GenerateGoals string
-
-// ReviewGoals asks the model to review goals and cards against the source.
-//
-//go:embed generator_review_goals.md
-var ReviewGoals string
 
 // VisionSystem sets the rules for transcribing handwritten notes.
 //
