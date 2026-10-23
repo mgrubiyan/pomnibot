@@ -15,6 +15,10 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/openrouter"
 )
 
+type replayTransport func(*http.Request) (*http.Response, error)
+
+func (f replayTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
 // Replay the original lecture SSE through the real transport decoder, with
 // an in-memory HTTP transport. This test cannot send a network request.
 func TestLectureFlipOnlyRecordingIsRejectedWithoutRepair(t *testing.T) {
