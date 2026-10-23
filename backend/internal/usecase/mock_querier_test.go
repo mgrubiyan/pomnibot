@@ -46,38 +46,6 @@ type mockQuerier struct {
 	getSetLeaderboardFunc          func(ctx context.Context, setID pgtype.UUID) ([]db.GetSetLeaderboardRow, error)
 	getUserSetRatingFunc           func(ctx context.Context, arg db.GetUserSetRatingParams) (db.GetUserSetRatingRow, error)
 	getUsersWithDueFactsFunc       func(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]int64, error)
-	createCardIssueFunc            func(ctx context.Context, arg db.CreateCardIssueParams) (db.CreateCardIssueRow, error)
-	getSetIssuesFunc               func(ctx context.Context, arg db.GetSetIssuesParams) ([]db.GetSetIssuesRow, error)
-	closeCardIssuesFunc            func(ctx context.Context, arg db.CloseCardIssuesParams) (bool, error)
-	listCardIssuesFunc             func(ctx context.Context) ([]db.ListCardIssuesRow, error)
-}
-
-func (m *mockQuerier) ListCardIssues(ctx context.Context) ([]db.ListCardIssuesRow, error) {
-	if m.listCardIssuesFunc != nil {
-		return m.listCardIssuesFunc(ctx)
-	}
-	return nil, nil
-}
-
-func (m *mockQuerier) GetSetIssues(ctx context.Context, arg db.GetSetIssuesParams) ([]db.GetSetIssuesRow, error) {
-	if m.getSetIssuesFunc != nil {
-		return m.getSetIssuesFunc(ctx, arg)
-	}
-	return nil, nil
-}
-
-func (m *mockQuerier) CloseCardIssues(ctx context.Context, arg db.CloseCardIssuesParams) (bool, error) {
-	if m.closeCardIssuesFunc != nil {
-		return m.closeCardIssuesFunc(ctx, arg)
-	}
-	return false, nil
-}
-
-func (m *mockQuerier) CreateCardIssue(ctx context.Context, arg db.CreateCardIssueParams) (db.CreateCardIssueRow, error) {
-	if m.createCardIssueFunc != nil {
-		return m.createCardIssueFunc(ctx, arg)
-	}
-	return db.CreateCardIssueRow{}, nil
 }
 
 func (m *mockQuerier) GetUsersWithDueFacts(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]int64, error) {

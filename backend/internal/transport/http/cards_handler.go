@@ -53,50 +53,6 @@ func (h *CardsHandler) DeleteCard(ctx context.Context, params contracts.DeleteCa
 	return &contracts.DeleteCardNoContent{}, nil
 }
 
-// ReportCardIssue implements contracts.Handler.ReportCardIssue.
-func (h *CardsHandler) ReportCardIssue(ctx context.Context, req *contracts.ReportCardIssueRequest, params contracts.ReportCardIssueParams) (contracts.ReportCardIssueRes, error) {
-	if req == nil || req.Reason.Validate() != nil {
-		return &contracts.ReportCardIssueBadRequest{Message: "reason is required"}, nil
-	}
-	userID, _ := UserIDFromContext(ctx)
-	if err := h.cardService.ReportCardIssue(ctx, userID, params.CardId, req.Reason); err != nil {
-		if errors.Is(err, usecase.ErrNotFound) {
-			return &contracts.ReportCardIssueNotFound{Message: err.Error()}, nil
-		}
-		return &contracts.ReportCardIssueInternalServerError{Message: internalError(ctx, "ReportCardIssue", err)}, nil
-	}
-	return &contracts.ReportCardIssueNoContent{}, nil
-}
-
-// GetSetIssues implements contracts.Handler.GetSetIssues.
-func (h *CardsHandler) GetSetIssues(ctx context.Context, params contracts.GetSetIssuesParams) (contracts.GetSetIssuesRes, error) {
-	userID, _ := UserIDFromContext(ctx)
-	issues, err := h.cardService.GetSetIssues(ctx, userID, params.SetId)
-	if err != nil {
-		if errors.Is(err, usecase.ErrNotFound) {
-			return &contracts.GetSetIssuesNotFound{Message: err.Error()}, nil
-		}
-		return &contracts.GetSetIssuesInternalServerError{Message: internalError(ctx, "GetSetIssues", err)}, nil
-	}
-	res := contracts.GetSetIssuesOKApplicationJSON(issues)
-	if res == nil {
-		res = contracts.GetSetIssuesOKApplicationJSON{}
-	}
-	return &res, nil
-}
-
-// ResolveCardIssues implements contracts.Handler.ResolveCardIssues.
-func (h *CardsHandler) ResolveCardIssues(ctx context.Context, params contracts.ResolveCardIssuesParams) (contracts.ResolveCardIssuesRes, error) {
-	userID, _ := UserIDFromContext(ctx)
-	if err := h.cardService.ResolveCardIssues(ctx, userID, params.CardId); err != nil {
-		if errors.Is(err, usecase.ErrNotFound) {
-			return &contracts.ResolveCardIssuesNotFound{Message: err.Error()}, nil
-		}
-		return &contracts.ResolveCardIssuesInternalServerError{Message: internalError(ctx, "ResolveCardIssues", err)}, nil
-	}
-	return &contracts.ResolveCardIssuesNoContent{}, nil
-}
-
 // AnswerQuestion implements contracts.Handler.AnswerQuestion.
 func (h *CardsHandler) AnswerQuestion(ctx context.Context, req *contracts.AnswerQuestionRequest, params contracts.AnswerQuestionParams) (contracts.AnswerQuestionRes, error) {
 	if req == nil || strings.TrimSpace(req.Answer) == "" {

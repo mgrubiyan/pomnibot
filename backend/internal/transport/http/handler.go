@@ -15,7 +15,6 @@ type APIHandler struct {
 	sets       *SetsHandler
 	cards      *CardsHandler
 	homescreen *HomescreenHandler
-	admin      usecase.AdminService
 }
 
 var _ contracts.Handler = (*APIHandler)(nil)
@@ -147,42 +146,14 @@ func (h *APIHandler) AnswerQuestion(ctx context.Context, req *contracts.AnswerQu
 	return h.UnimplementedHandler.AnswerQuestion(ctx, req, params)
 }
 
-// ReportCardIssue implements contracts.Handler.ReportCardIssue.
-func (h *APIHandler) ReportCardIssue(ctx context.Context, req *contracts.ReportCardIssueRequest, params contracts.ReportCardIssueParams) (contracts.ReportCardIssueRes, error) {
-	if h.cards != nil {
-		return h.cards.ReportCardIssue(ctx, req, params)
-	}
-	return h.UnimplementedHandler.ReportCardIssue(ctx, req, params)
-}
-
-// GetSetIssues implements contracts.Handler.GetSetIssues.
-func (h *APIHandler) GetSetIssues(ctx context.Context, params contracts.GetSetIssuesParams) (contracts.GetSetIssuesRes, error) {
-	if h.cards != nil {
-		return h.cards.GetSetIssues(ctx, params)
-	}
-	return h.UnimplementedHandler.GetSetIssues(ctx, params)
-}
-
-// ResolveCardIssues implements contracts.Handler.ResolveCardIssues.
-func (h *APIHandler) ResolveCardIssues(ctx context.Context, params contracts.ResolveCardIssuesParams) (contracts.ResolveCardIssuesRes, error) {
-	if h.cards != nil {
-		return h.cards.ResolveCardIssues(ctx, params)
-	}
-	return h.UnimplementedHandler.ResolveCardIssues(ctx, params)
-}
-
 // --- Homescreen Domain Delegation ---
 
 // GetToday implements contracts.Handler.GetToday.
 func (h *APIHandler) GetToday(ctx context.Context) (contracts.GetTodayRes, error) {
-	if h.homescreen == nil {
-		return h.UnimplementedHandler.GetToday(ctx)
+	if h.homescreen != nil {
+		return h.homescreen.GetToday(ctx)
 	}
-	res, err := h.homescreen.GetToday(ctx)
-	if today, ok := res.(*contracts.TodayData); ok && err == nil {
-		h.markAdmin(ctx, today)
-	}
-	return res, err
+	return h.UnimplementedHandler.GetToday(ctx)
 }
 
 // GetFeedQuestions implements contracts.Handler.GetFeedQuestions.

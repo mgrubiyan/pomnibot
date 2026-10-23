@@ -25,10 +25,6 @@ type DeleteSetRes interface {
 	deleteSetRes()
 }
 
-type GetAdminIssuesRes interface {
-	getAdminIssuesRes()
-}
-
 type GetCardsBySetIDRes interface {
 	getCardsBySetIDRes()
 }
@@ -43,10 +39,6 @@ type GetHealthRes interface {
 
 type GetProfileRes interface {
 	getProfileRes()
-}
-
-type GetSetIssuesRes interface {
-	getSetIssuesRes()
 }
 
 type GetSetLeaderboardRes interface {
@@ -75,14 +67,6 @@ type JoinSetByShareCodeRes interface {
 
 type PutProfileRes interface {
 	putProfileRes()
-}
-
-type ReportCardIssueRes interface {
-	reportCardIssueRes()
-}
-
-type ResolveCardIssuesRes interface {
-	resolveCardIssuesRes()
 }
 
 type SendResultsRes interface {
