@@ -3,6 +3,7 @@ import ManualCreate from './screens/ManualCreate';
 import AddNote from './screens/AddNote';
 import CreateSet from './screens/CreateSet';
 import CardEdit from './screens/CardEdit';
+import AdminIssues from './screens/AdminIssues';
 import CardIssue from './screens/CardIssue';
 import Feed from './screens/Feed';
 import Home from './screens/Home';
@@ -23,6 +24,7 @@ type Screen =
     | { name: 'set'; setId: string }
     | { name: 'set-cards'; setId: string }
     | { name: 'set-issues'; setId: string }
+    | { name: 'admin-issues' }
     | {
           name: 'feed';
           setId?: string;
@@ -239,6 +241,7 @@ function App() {
             onAddNote={() => go({ name: 'create-method' })}
             onJoinSet={() => go({ name: 'join' })}
             onOpenWhy={() => go({ name: 'why' })}
+            onOpenAdminIssues={() => go({ name: 'admin-issues' })}
             removedSetIds={removedSetIds}
             onTodayLoaded={handleTodayLoaded}
         />
@@ -421,6 +424,10 @@ function App() {
 
     if (screen.name === 'why') {
         return <WhyItWorks onBack={goHome} />;
+    }
+
+    if (screen.name === 'admin-issues') {
+        return <AdminIssues onBack={goHome} />;
     }
 
     if (screen.name === 'set-issues') {

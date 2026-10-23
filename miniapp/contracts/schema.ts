@@ -323,6 +323,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every complaint about cards, for admins
+         * @description All complaints across all sets, newest first, each with the copy of the card as it was reported and who reported it. Anyone but an admin gets an empty list.
+         */
+        get: operations["GetAdminIssues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -416,6 +436,28 @@ export interface components {
         ReportCardIssueRequest: {
             reason: components["schemas"]["CardIssueReason"];
         };
+        /**
+         * @description open until the author answers; fixed when the card was edited after the complaint; kept when the author left the card as it is; deleted when the card is gone.
+         * @enum {string}
+         */
+        CardIssueStatus: "open" | "fixed" | "kept" | "deleted";
+        AdminCardIssue: {
+            /** Format: uuid */
+            id: string;
+            reason: components["schemas"]["CardIssueReason"];
+            status: components["schemas"]["CardIssueStatus"];
+            /** @description Absent when the set is deleted */
+            setTitle?: string;
+            kind: components["schemas"]["CardKind"];
+            question: string;
+            /** @description The answer as stored with the card; absent for tables */
+            answer?: string;
+            explanation: string;
+            sourceQuote: string;
+            reporter: components["schemas"]["User"];
+            /** Format: date-time */
+            createdAt: string;
+        };
         SetIssue: {
             /** Format: uuid */
             cardId: string;
@@ -489,6 +531,8 @@ export interface components {
              */
             nextReviewAt?: string | null;
             sets: components["schemas"]["CardSet"][];
+            /** @description The user sees every complaint, at GET /admin/issues */
+            isAdmin?: boolean;
         };
         AnswerResult: {
             /** Format: uuid */
@@ -1132,6 +1176,28 @@ export interface operations {
             };
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    GetAdminIssues: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminCardIssue"][];
+                };
+            };
+            403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalServerError"];
         };
     };

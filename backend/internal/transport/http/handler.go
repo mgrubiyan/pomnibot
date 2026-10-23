@@ -15,6 +15,7 @@ type APIHandler struct {
 	sets       *SetsHandler
 	cards      *CardsHandler
 	homescreen *HomescreenHandler
+	admin      usecase.AdminService
 }
 
 var _ contracts.Handler = (*APIHandler)(nil)
@@ -174,10 +175,14 @@ func (h *APIHandler) ResolveCardIssues(ctx context.Context, params contracts.Res
 
 // GetToday implements contracts.Handler.GetToday.
 func (h *APIHandler) GetToday(ctx context.Context) (contracts.GetTodayRes, error) {
-	if h.homescreen != nil {
-		return h.homescreen.GetToday(ctx)
+	if h.homescreen == nil {
+		return h.UnimplementedHandler.GetToday(ctx)
 	}
-	return h.UnimplementedHandler.GetToday(ctx)
+	res, err := h.homescreen.GetToday(ctx)
+	if today, ok := res.(*contracts.TodayData); ok && err == nil {
+		h.markAdmin(ctx, today)
+	}
+	return res, err
 }
 
 // GetFeedQuestions implements contracts.Handler.GetFeedQuestions.

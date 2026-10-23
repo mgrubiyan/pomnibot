@@ -13,3 +13,5 @@ export type LeaderboardEntry = components['schemas']['LeaderboardEntry'];
 export type SetLeaderboardResponse = components['schemas']['SetLeaderboardResponse'];
 export type CardIssueReason = components['schemas']['CardIssueReason'];
 export type SetIssue = components['schemas']['SetIssue'];
+export type CardIssueStatus = components['schemas']['CardIssueStatus'];
+export type AdminCardIssue = components['schemas']['AdminCardIssue'];

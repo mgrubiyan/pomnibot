@@ -66,6 +66,13 @@ type Invoker interface {
 	//
 	// DELETE /sets/{setId}
 	DeleteSet(ctx context.Context, params DeleteSetParams) (DeleteSetRes, error)
+	// GetAdminIssues invokes GetAdminIssues operation.
+	//
+	// All complaints across all sets, newest first, each with the copy of the card as it was reported and
+	// who reported it. Anyone but an admin gets an empty list.
+	//
+	// GET /admin/issues
+	GetAdminIssues(ctx context.Context) (GetAdminIssuesRes, error)
 	// GetCardsBySetID invokes GetCardsBySetID operation.
 	//
 	// Get cards.
@@ -785,6 +792,87 @@ func (c *Client) sendDeleteSet(ctx context.Context, params DeleteSetParams) (res
 
 	stage = "DecodeResponse"
 	result, err := decodeDeleteSetResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// GetAdminIssues invokes GetAdminIssues operation.
+//
+// All complaints across all sets, newest first, each with the copy of the card as it was reported and
+// who reported it. Anyone but an admin gets an empty list.
+//
+// GET /admin/issues
+func (c *Client) GetAdminIssues(ctx context.Context) (GetAdminIssuesRes, error) {
+	res, err := c.sendGetAdminIssues(ctx)
+	return res, err
+}
+
+func (c *Client) sendGetAdminIssues(ctx context.Context) (res GetAdminIssuesRes, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("GetAdminIssues"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/admin/issues"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, GetAdminIssuesOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/admin/issues"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer func() {
+		// Drain the body to EOF before closing, so the underlying
+		// connection can be reused by the Transport regardless of the
+		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
+		_, _ = io.Copy(io.Discard, body)
+		_ = body.Close()
+	}()
+
+	stage = "DecodeResponse"
+	result, err := decodeGetAdminIssuesResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}

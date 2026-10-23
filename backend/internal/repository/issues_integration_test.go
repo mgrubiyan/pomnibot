@@ -370,3 +370,110 @@ func TestCardIssueNotifiesAuthorOncePostgres(t *testing.T) {
 		t.Fatalf("outsider: %v", err)
 	}
 }
+
+// Admins see every complaint with what became of it.
+func TestListCardIssuesPostgres(t *testing.T) {
+	pool := manualTestPool(t)
+	ctx := context.Background()
+	q := db.New(pool)
+	users := usecase.NewUserService(q)
+	writer := repository.NewManualStore(pool)
+	sets := usecase.NewSetService(q, users, writer)
+	svc := usecase.NewCardService(q, users, usecase.WithManualCards(writer))
+	for _, id := range []int64{11, 22, 33} {
+		if err := users.EnsureUser(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := pool.Exec(ctx, "UPDATE users SET first_name = 'Анна', last_name = 'Иванова' WHERE id = 22"); err != nil {
+		t.Fatal(err)
+	}
+	questions := []string{"open", "fixed", "kept", "kept-then-edited", "fixed-then-kept", "deleted"}
+	result := generator.Result{Facts: []cards.Fact{{ID: "f", Name: "F"}}}
+	for _, question := range questions {
+		result.Cards = append(result.Cards, cards.Card{FactID: "f", Kind: cards.KindFlip, Question: question, Answer: "A"})
+	}
+	kept, _, err := repository.SaveGeneratedSet(ctx, q, 11, "Биология", result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gone, _, err := repository.SaveGeneratedSet(ctx, q, 11, "Удалённый", generator.Result{
+		Facts: []cards.Fact{{ID: "g", Name: "G"}},
+		Cards: []cards.Card{{FactID: "g", Kind: cards.KindInput, Question: "set-deleted", Answer: "A", Explanation: "E", SourceQuote: "Quote"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, set := range []*db.Set{kept, gone} {
+		for _, id := range []int64{22, 33} {
+			if _, err = sets.JoinSetByShareCode(ctx, id, set.ShareCode); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	card := map[string]uuid.UUID{}
+	for _, set := range []*db.Set{kept, gone} {
+		got, err := sets.GetCardsBySetID(ctx, 11, uuid.UUID(set.ID.Bytes))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range got {
+			card[c.Question] = c.ID
+		}
+	}
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	report := func(user int64, question string) {
+		t.Helper()
+		must(svc.ReportCardIssue(ctx, user, card[question], contracts.CardIssueReasonAnswer))
+	}
+	edit := func(question string) {
+		t.Helper()
+		_, err := svc.UpdateCard(ctx, 11, card[question], &contracts.UpdateCardRequest{Explanation: contracts.NewOptString("Fixed")})
+		must(err)
+	}
+	for _, question := range append(questions, "set-deleted") {
+		report(22, question)
+	}
+	edit("fixed")
+	must(svc.ResolveCardIssues(ctx, 11, card["kept"]))
+	must(svc.ResolveCardIssues(ctx, 11, card["kept-then-edited"]))
+	edit("kept-then-edited")
+	edit("fixed-then-kept")
+	report(33, "fixed-then-kept")
+	must(svc.ResolveCardIssues(ctx, 11, card["fixed-then-kept"]))
+	must(svc.DeleteCard(ctx, 11, card["deleted"]))
+	must(sets.DeleteSet(ctx, 11, uuid.UUID(gone.ID.Bytes)))
+
+	rows, err := q.ListCardIssues(ctx)
+	must(err)
+	type issue struct{ question, status, set string }
+	var got []issue
+	for _, r := range rows {
+		got = append(got, issue{r.Question, r.Status, r.SetTitle.String})
+	}
+	want := []issue{
+		{"fixed-then-kept", "kept", "Биология"},
+		{"set-deleted", "deleted", ""},
+		{"deleted", "deleted", "Биология"},
+		{"fixed-then-kept", "fixed", "Биология"},
+		{"kept-then-edited", "kept", "Биология"},
+		{"kept", "kept", "Биология"},
+		{"fixed", "fixed", "Биология"},
+		{"open", "open", "Биология"},
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("issues:\n got %v\nwant %v", got, want)
+	}
+	last := rows[len(rows)-1]
+	if last.ReporterID != 22 || last.ReporterFirstName != "Анна" || last.ReporterLastName.String != "Иванова" || last.Kind != "flip" || last.AnswerText.String != "A" {
+		t.Errorf("row = %+v", last)
+	}
+	if r := rows[1]; r.Explanation != "E" || r.SourceQuote != "Quote" || r.SetTitle.Valid {
+		t.Errorf("copy of the deleted set's card = %+v", r)
+	}
+}

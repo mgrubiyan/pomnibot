@@ -25,6 +25,10 @@ type DeleteSetRes interface {
 	deleteSetRes()
 }
 
+type GetAdminIssuesRes interface {
+	getAdminIssuesRes()
+}
+
 type GetCardsBySetIDRes interface {
 	getCardsBySetIDRes()
 }

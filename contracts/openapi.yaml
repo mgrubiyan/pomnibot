@@ -599,6 +599,30 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /admin/issues:
+    get:
+      tags:
+        - Cards
+      summary: Every complaint about cards, for admins
+      description: >-
+        All complaints across all sets, newest first, each with the copy of
+        the card as it was reported and who reported it. Anyone but an admin
+        gets an empty list.
+      operationId: GetAdminIssues
+      responses:
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminCardIssue'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
 components:
   securitySchemes:
     MiniAppAuthorization:
@@ -844,6 +868,58 @@ components:
         reason:
           $ref: '#/components/schemas/CardIssueReason'
 
+    CardIssueStatus:
+      type: string
+      description: >-
+        open until the author answers; fixed when the card was edited after
+        the complaint; kept when the author left the card as it is; deleted
+        when the card is gone.
+      enum:
+        - open
+        - fixed
+        - kept
+        - deleted
+
+    AdminCardIssue:
+      type: object
+      required:
+        - id
+        - reason
+        - status
+        - kind
+        - question
+        - explanation
+        - sourceQuote
+        - reporter
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        reason:
+          $ref: '#/components/schemas/CardIssueReason'
+        status:
+          $ref: '#/components/schemas/CardIssueStatus'
+        setTitle:
+          type: string
+          description: Absent when the set is deleted
+        kind:
+          $ref: '#/components/schemas/CardKind'
+        question:
+          type: string
+        answer:
+          type: string
+          description: The answer as stored with the card; absent for tables
+        explanation:
+          type: string
+        sourceQuote:
+          type: string
+        reporter:
+          $ref: '#/components/schemas/User'
+        createdAt:
+          type: string
+          format: date-time
+
     SetIssue:
       type: object
       required:
@@ -996,6 +1072,9 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CardSet'
+        isAdmin:
+          type: boolean
+          description: The user sees every complaint, at GET /admin/issues
 
     AnswerResult:
       type: object

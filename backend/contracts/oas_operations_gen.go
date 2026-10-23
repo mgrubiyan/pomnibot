@@ -12,6 +12,7 @@ const (
 	CreateSetOperation          OperationName = "CreateSet"
 	DeleteCardOperation         OperationName = "DeleteCard"
 	DeleteSetOperation          OperationName = "DeleteSet"
+	GetAdminIssuesOperation     OperationName = "GetAdminIssues"
 	GetCardsBySetIDOperation    OperationName = "GetCardsBySetID"
 	GetFeedQuestionsOperation   OperationName = "GetFeedQuestions"
 	GetHealthOperation          OperationName = "GetHealth"

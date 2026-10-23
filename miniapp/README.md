@@ -41,7 +41,8 @@ Home ─┬─ «Начать» ─────────────► Feed 
       │                                    ├─ «Жалобы» (владелец) ─► SetIssues ─► CardEdit ──► SetIssues
       │                                    └─ «Удалить набор»
       ├─ «Добавить конспект» ─► AddNote
-      └─ «Ввести код набора» ─► JoinSet ───► SetScreen
+      ├─ «Ввести код набора» ─► JoinSet ───► SetScreen
+      └─ «Все жалобы» (админ) ─► AdminIssues
 
 Feed ── «Ошибка в карточке» ──► CardIssue ─┬─ «Сообщить» (не владелец) ──► Feed без этой карточки
                                            ├─ «Исправить» ──► CardEdit ──► Feed
@@ -61,6 +62,7 @@ Feed ── «Ошибка в карточке» ──► CardIssue ─┬─ �
 | AddNote | [src/screens/AddNote.tsx](src/screens/AddNote.tsx) | Объясняет, что конспект отправляют боту в чат |
 | CardIssue | [src/screens/CardIssue.tsx](src/screens/CardIssue.tsx) | Причина, почему карточка плохая: жалоба сохраняется, владелец может поправить или убрать карточку |
 | SetIssues | [src/screens/SetIssues.tsx](src/screens/SetIssues.tsx) | Жалобы на карточки набора для автора: исправить или отметить «Всё верно» |
+| AdminIssues | [src/screens/AdminIssues.tsx](src/screens/AdminIssues.tsx) | Все жалобы по всем наборам для админа: копия карточки, причина, кто пожаловался, что стало с карточкой |
 | CardEdit | [src/screens/CardEdit.tsx](src/screens/CardEdit.tsx) | Правка вопроса, ответа и неверных вариантов |
 
 ## Общее между экранами

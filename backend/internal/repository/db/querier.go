@@ -61,6 +61,11 @@ type Querier interface {
 	IsSetAuthor(ctx context.Context, arg IsSetAuthorParams) (bool, error)
 	JoinSet(ctx context.Context, arg JoinSetParams) (UserSet, error)
 	LeaveSet(ctx context.Context, arg LeaveSetParams) (int64, error)
+	// Every complaint, for admins, newest first. The status: deleted when the
+	// card is gone; fixed when the card was edited after the complaint and before
+	// any «Всё верно» (which also closes complaints the edit answered); kept when
+	// the author left the card as it is; open otherwise.
+	ListCardIssues(ctx context.Context) ([]ListCardIssuesRow, error)
 	LockSetForAuthor(ctx context.Context, arg LockSetForAuthorParams) (pgtype.UUID, error)
 	RecordAnswerResult(ctx context.Context, arg RecordAnswerResultParams) (AnswerResult, error)
 	// Dismisses the open complaints of a card; false when the user is not the

@@ -65,3 +65,35 @@ WITH card AS (
     WHERE card_id IN (SELECT id FROM card) AND resolved_at IS NULL
 )
 SELECT EXISTS (SELECT 1 FROM card) AS found;
+
+-- name: ListCardIssues :many
+-- Every complaint, for admins, newest first. The status: deleted when the
+-- card is gone; fixed when the card was edited after the complaint and before
+-- any «Всё верно» (which also closes complaints the edit answered); kept when
+-- the author left the card as it is; open otherwise.
+SELECT
+    i.id,
+    i.reason,
+    i.kind,
+    i.question,
+    i.answer_text,
+    i.explanation,
+    i.source_quote,
+    i.created_at,
+    s.title AS set_title,
+    u.id AS reporter_id,
+    u.first_name AS reporter_first_name,
+    u.last_name AS reporter_last_name,
+    u.username AS reporter_username,
+    (CASE
+        WHEN c.id IS NULL THEN 'deleted'
+        WHEN c.updated_at > i.created_at AND (i.resolved_at IS NULL OR i.resolved_at > c.updated_at) THEN 'fixed'
+        WHEN i.resolved_at IS NOT NULL THEN 'kept'
+        ELSE 'open'
+    END)::text AS status
+FROM card_issues i
+JOIN users u ON u.id = i.user_id
+LEFT JOIN sets s ON s.id = i.set_id
+LEFT JOIN cards c ON c.id = i.card_id
+ORDER BY i.created_at DESC, i.id
+LIMIT 1000;

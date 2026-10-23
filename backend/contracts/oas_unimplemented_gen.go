@@ -69,6 +69,16 @@ func (UnimplementedHandler) DeleteSet(ctx context.Context, params DeleteSetParam
 	return r, ht.ErrNotImplemented
 }
 
+// GetAdminIssues implements GetAdminIssues operation.
+//
+// All complaints across all sets, newest first, each with the copy of the card as it was reported and
+// who reported it. Anyone but an admin gets an empty list.
+//
+// GET /admin/issues
+func (UnimplementedHandler) GetAdminIssues(ctx context.Context) (r GetAdminIssuesRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // GetCardsBySetID implements GetCardsBySetID operation.
 //
 // Get cards.

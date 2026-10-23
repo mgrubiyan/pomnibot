@@ -9,6 +9,51 @@ import (
 	"github.com/ogen-go/ogen/validate"
 )
 
+func (s *AdminCardIssue) Validate() error {
+	if s == nil {
+		return validate.ErrNilPointer
+	}
+
+	var failures []validate.FieldError
+	if err := func() error {
+		if err := s.Reason.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "reason",
+			Error: err,
+		})
+	}
+	if err := func() error {
+		if err := s.Status.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "status",
+			Error: err,
+		})
+	}
+	if err := func() error {
+		if err := s.Kind.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "kind",
+			Error: err,
+		})
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+	return nil
+}
+
 func (s *Card) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
@@ -88,6 +133,21 @@ func (s CardIssueReason) Validate() error {
 	case "not-in-notes":
 		return nil
 	case "other":
+		return nil
+	default:
+		return errors.Errorf("invalid value: %v", s)
+	}
+}
+
+func (s CardIssueStatus) Validate() error {
+	switch s {
+	case "open":
+		return nil
+	case "fixed":
+		return nil
+	case "kept":
+		return nil
+	case "deleted":
 		return nil
 	default:
 		return errors.Errorf("invalid value: %v", s)
@@ -257,6 +317,31 @@ func (s *CreateSetRequest) Validate() error {
 			Name:  "card",
 			Error: err,
 		})
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+	return nil
+}
+
+func (s GetAdminIssuesOKApplicationJSON) Validate() error {
+	alias := ([]AdminCardIssue)(s)
+	if alias == nil {
+		return errors.New("nil is invalid value")
+	}
+	var failures []validate.FieldError
+	for i, elem := range alias {
+		if err := func() error {
+			if err := elem.Validate(); err != nil {
+				return err
+			}
+			return nil
+		}(); err != nil {
+			failures = append(failures, validate.FieldError{
+				Name:  fmt.Sprintf("[%d]", i),
+				Error: err,
+			})
+		}
 	}
 	if len(failures) > 0 {
 		return &validate.Error{Fields: failures}

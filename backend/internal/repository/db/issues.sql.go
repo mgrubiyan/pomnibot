@@ -121,6 +121,91 @@ func (q *Queries) GetOpenCardIssuesBySet(ctx context.Context, arg GetOpenCardIss
 	return items, nil
 }
 
+const listCardIssues = `-- name: ListCardIssues :many
+SELECT
+    i.id,
+    i.reason,
+    i.kind,
+    i.question,
+    i.answer_text,
+    i.explanation,
+    i.source_quote,
+    i.created_at,
+    s.title AS set_title,
+    u.id AS reporter_id,
+    u.first_name AS reporter_first_name,
+    u.last_name AS reporter_last_name,
+    u.username AS reporter_username,
+    (CASE
+        WHEN c.id IS NULL THEN 'deleted'
+        WHEN c.updated_at > i.created_at AND (i.resolved_at IS NULL OR i.resolved_at > c.updated_at) THEN 'fixed'
+        WHEN i.resolved_at IS NOT NULL THEN 'kept'
+        ELSE 'open'
+    END)::text AS status
+FROM card_issues i
+JOIN users u ON u.id = i.user_id
+LEFT JOIN sets s ON s.id = i.set_id
+LEFT JOIN cards c ON c.id = i.card_id
+ORDER BY i.created_at DESC, i.id
+LIMIT 1000
+`
+
+type ListCardIssuesRow struct {
+	ID                pgtype.UUID        `json:"id"`
+	Reason            CardIssueReason    `json:"reason"`
+	Kind              string             `json:"kind"`
+	Question          string             `json:"question"`
+	AnswerText        pgtype.Text        `json:"answer_text"`
+	Explanation       string             `json:"explanation"`
+	SourceQuote       string             `json:"source_quote"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	SetTitle          pgtype.Text        `json:"set_title"`
+	ReporterID        int64              `json:"reporter_id"`
+	ReporterFirstName string             `json:"reporter_first_name"`
+	ReporterLastName  pgtype.Text        `json:"reporter_last_name"`
+	ReporterUsername  pgtype.Text        `json:"reporter_username"`
+	Status            string             `json:"status"`
+}
+
+// Every complaint, for admins, newest first. The status: deleted when the
+// card is gone; fixed when the card was edited after the complaint and before
+// any «Всё верно» (which also closes complaints the edit answered); kept when
+// the author left the card as it is; open otherwise.
+func (q *Queries) ListCardIssues(ctx context.Context) ([]ListCardIssuesRow, error) {
+	rows, err := q.db.Query(ctx, listCardIssues)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCardIssuesRow
+	for rows.Next() {
+		var i ListCardIssuesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Reason,
+			&i.Kind,
+			&i.Question,
+			&i.AnswerText,
+			&i.Explanation,
+			&i.SourceQuote,
+			&i.CreatedAt,
+			&i.SetTitle,
+			&i.ReporterID,
+			&i.ReporterFirstName,
+			&i.ReporterLastName,
+			&i.ReporterUsername,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const resolveCardIssues = `-- name: ResolveCardIssues :one
 WITH card AS (
     SELECT c.id

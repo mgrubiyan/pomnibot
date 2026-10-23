@@ -46,6 +46,13 @@ type Handler interface {
 	//
 	// DELETE /sets/{setId}
 	DeleteSet(ctx context.Context, params DeleteSetParams) (DeleteSetRes, error)
+	// GetAdminIssues implements GetAdminIssues operation.
+	//
+	// All complaints across all sets, newest first, each with the copy of the card as it was reported and
+	// who reported it. Anyone but an admin gets an empty list.
+	//
+	// GET /admin/issues
+	GetAdminIssues(ctx context.Context) (GetAdminIssuesRes, error)
 	// GetCardsBySetID implements GetCardsBySetID operation.
 	//
 	// Get cards.
