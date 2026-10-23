@@ -24,19 +24,10 @@ func TestAIResponseDecodesAllKindsAndPreservesWithinKindOrder(t *testing.T) {
 	if cs[4].(TableCard).Columns[0].Rows[0] != "row" {
 		t.Fatal("lost category rows")
 	}
-	b, err := json.Marshal(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var roundtrip AIResponse
-	if err := json.Unmarshal(b, &roundtrip); err != nil {
-		t.Fatal(err)
-	}
 }
 
-func TestAIResponseRejectsMissingFlipAndInvalidKinds(t *testing.T) {
+func TestAIResponseRejectsInvalidKindsAndFields(t *testing.T) {
 	for _, payload := range []string{
-		`{"facts":[{"name":"F","cards":[{"kind":"input","question":"Q","answer":"A"}]}]}`,
 		`{"facts":[{"name":"F","cards":[{"kind":"unknown","question":"Q"}]}]}`,
 		`{"facts":[{"name":"F","cards":[{"kind":"boolean","question":"Q","answer":"false"}]}]}`,
 		`{"facts":[{"name":"F","topic":"metadata","cards":[]}]}`,

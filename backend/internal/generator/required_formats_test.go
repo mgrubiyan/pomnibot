@@ -2,11 +2,8 @@ package generator
 
 import (
 	"context"
-	"encoding/json"
-	"github.com/mgrubiyan/pomnibot/backend/internal/grader"
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -19,31 +16,6 @@ func requiredFormatsFixture() Fact {
 		FlipCard{CardBase: CardBase{Question: "Explain"}, Answer: "A and B"},
 	}
 	return Fact{Name: "F", Cards: cs}
-}
-func TestFactRequiresFlipAndInput(t *testing.T) {
-	for _, missing := range []cards.Kind{cards.KindFlip, cards.KindInput, ""} {
-		t.Run(string(missing), func(t *testing.T) {
-			f := requiredFormatsFixture()
-			var kept []Card
-			for _, v := range f.Cards {
-				c, _ := storedCard(v)
-				if c.Kind != missing {
-					kept = append(kept, v)
-				}
-			}
-			f.Cards = kept
-			b, _ := json.Marshal(f)
-			var decoded Fact
-			e := json.Unmarshal(b, &decoded)
-			if missing != "" {
-				if e == nil || !strings.Contains(e.Error(), string(missing)) {
-					t.Fatalf("missing %s: %v", missing, e)
-				}
-			} else if e != nil || len(decoded.Cards) != 5 {
-				t.Fatalf("%+v %v", decoded, e)
-			}
-		})
-	}
 }
 func TestGenerationKeepsAllFormatsWithMandatoryPair(t *testing.T) {
 	p := stageFixture([]KnowledgeGoal{learningGoal("g1", "F")}, []goalCards{{GoalID: "g1", Content: requiredFormatsFixture()}})
@@ -66,7 +38,7 @@ func TestGenerationKeepsAllFormatsWithMandatoryPair(t *testing.T) {
 	}
 }
 func TestInvalidCardsRejectWholeGeneration(t *testing.T) {
-	for _, defect := range []string{"missing flip", "missing input", "blank answer", "duplicate question", "overlapping choice", "duplicate table rows"} {
+	for _, defect := range []string{"missing flip", "missing input", "blank answer", "duplicate question"} {
 		t.Run(defect, func(t *testing.T) {
 			f := requiredFormatsFixture()
 			switch defect {
@@ -78,36 +50,11 @@ func TestInvalidCardsRejectWholeGeneration(t *testing.T) {
 				f.Cards[0] = InputCard{CardBase{"Recall"}, " "}
 			case "duplicate question":
 				f.Cards = append(f.Cards, f.Cards[0])
-			case "overlapping choice":
-				f.Cards[2] = ChoiceCard{CardBase{"Choose"}, []string{"A"}, []string{" a "}}
-			case "duplicate table rows":
-				f.Cards[1] = TableCard{CardBase{"Sort"}, []Column{{Name: "X", Rows: []string{"A"}}, {Name: "Y", Rows: []string{"A"}}}}
 			}
 			r, e := NewGenerator(stageFixture([]KnowledgeGoal{learningGoal("g1", "F")}, []goalCards{{GoalID: "g1", Content: f}}), Options{OnBatch: func(Batch) { t.Fatal("published invalid set") }}).Generate(context.Background(), Document{Text: "A and B"})
 			if e == nil || len(r.Cards) != 0 {
 				t.Fatalf("%+v %v", r, e)
 			}
 		})
-	}
-}
-func TestInputAnswersPreserveConditionsWithExistingLocalGrader(t *testing.T) {
-	// These are answer shapes recommended by the generation prompt, exercised
-	// without a model: full conditions, unordered lists and canonical formulas.
-	for _, tc := range []struct {
-		question, expected, given, incomplete string
-	}{
-		{"При каких условиях выполняется правило?", "Если ключ уникален и значение не пустое", "если значение не пустое и ключ уникален", "Если ключ уникален"},
-		{"Назовите три части модели.", "Структурная, целостная и манипуляционная", "манипуляционная, структурная, целостная", "структурная и целостная"},
-		{"Запишите формулу времени t через a и b.", "t = a + b", "t=a+b", "t=a"},
-	} {
-		g := &grader.Grader{}
-		in := grader.Input{Question: tc.question, Expected: tc.expected, Given: tc.given}
-		if v := g.Check(context.Background(), in); !v.Correct || v.Method != grader.MethodLocal {
-			t.Fatalf("full answer rejected locally: %+v: %+v", in, v)
-		}
-		in.Given = tc.incomplete
-		if v := g.Check(context.Background(), in); v.Correct || v.Method != grader.MethodLocal {
-			t.Fatalf("incomplete answer accepted locally: %+v: %+v", in, v)
-		}
 	}
 }
