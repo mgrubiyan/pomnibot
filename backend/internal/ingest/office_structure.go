@@ -90,6 +90,15 @@ type nativeSlide struct {
 	issues []string
 }
 
+// Absolute relationship targets start at the ZIP root; relative targets start
+// at the directory containing the source part. ZIP entry names have no leading slash.
+func officeTarget(source, target string) string {
+	if path.IsAbs(target) {
+		return strings.TrimPrefix(path.Clean(target), "/")
+	}
+	return path.Join(path.Dir(source), target)
+}
+
 func (e *Extractor) structuredSlides(ctx context.Context, data []byte) ([]nativeSlide, error) {
 	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
@@ -120,7 +129,7 @@ func (e *Extractor) structuredSlides(ctx context.Context, data []byte) ([]native
 		targets := map[string]string{}
 		for _, r := range relationships.find("Relationship") {
 			if r.attr("TargetMode") != "External" {
-				targets[r.attr("Id")] = path.Clean(path.Join("ppt", r.attr("Target")))
+				targets[r.attr("Id")] = officeTarget("ppt/presentation.xml", r.attr("Target"))
 			}
 		}
 		var declared []string
@@ -163,7 +172,7 @@ func (e *Extractor) structuredSlides(ctx context.Context, data []byte) ([]native
 			}
 			for _, rel := range r.find("Relationship") {
 				if rel.attr("TargetMode") != "External" {
-					rels[rel.attr("Id")] = path.Clean(path.Join(path.Dir(name), rel.attr("Target")))
+					rels[rel.attr("Id")] = officeTarget(name, rel.attr("Target"))
 				}
 			}
 		}
