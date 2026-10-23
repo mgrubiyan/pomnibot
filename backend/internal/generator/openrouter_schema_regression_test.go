@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestDirectSchemaCompatibleWithOpenRouterClaudeStructuredOutputs(t *testing.T) {
+func TestStageSchemaCompatibleWithOpenRouterClaudeStructuredOutputs(t *testing.T) {
 	// Reproduced against anthropic/claude-haiku-5.5 on 2026-10-22:
 	// HTTP 400: output_config.format.schema: Schema type 'oneOf' is not supported.
 	// Claude also rejects string/numeric bounds and array constraints other than
@@ -15,7 +15,7 @@ func TestDirectSchemaCompatibleWithOpenRouterClaudeStructuredOutputs(t *testing.
 	// The request and provider error are retained in
 	// artifacts/cardsgen-audit-20261022/attempt-2/. This guard is entirely offline.
 	var schema any
-	if err := json.Unmarshal(directSchema(), &schema); err != nil {
+	if err := json.Unmarshal(stageSchema(), &schema); err != nil {
 		t.Fatal(err)
 	}
 	var check func(any, string)

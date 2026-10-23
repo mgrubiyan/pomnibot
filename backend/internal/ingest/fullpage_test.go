@@ -170,3 +170,14 @@ func TestMissingPageNumberDoesNotDuplicateAllSourceBlocks(t *testing.T) {
 		t.Fatalf("source duplicated for omitted page number: count=%d issues=%v", count, p.Issues)
 	}
 }
+
+func TestNativePDFSkipsOCRIncludingScans(t *testing.T) {
+	ex, err := NewExtractor(nil, Options{PDF: &fakePDF{pages: []string{"", "diagram"}}, NativePDF: true, AssessPDF: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := ex.Extract(context.Background(), []File{{Name: "source.pdf", Data: pdfBytes}})
+	if err != nil || len(r.PDFs) != 1 || r.PDFs[0].Pages != 2 || len(r.Warnings) != 0 {
+		t.Fatalf("%+v %v", r, err)
+	}
+}

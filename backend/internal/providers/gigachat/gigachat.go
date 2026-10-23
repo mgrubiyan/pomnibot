@@ -254,6 +254,12 @@ func (e transportError) Unwrap() error { return e.err }
 // When GigaChat cannot answer anyone for a while, the error wraps
 // providers.ErrUnavailable, so another provider can take over.
 func (c *Client) Complete(ctx context.Context, req providers.Request) (providers.Response, error) {
+	if req.Source != "" {
+		req.User = req.Source + "\n" + req.User
+	}
+	if len(req.PDFs) > 0 || req.ReasoningEffort != "" {
+		return providers.Response{}, providers.ErrCapability
+	}
 	resp, err := c.complete(ctx, req)
 	switch {
 	case err == nil:
@@ -282,6 +288,9 @@ func (c *Client) complete(ctx context.Context, req providers.Request) (providers
 	}
 
 	models := c.models()
+	if req.NoFallback {
+		models = []string{c.cfg.Model}
+	}
 	var err error
 	for i, model := range models {
 		var resp providers.Response

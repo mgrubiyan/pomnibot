@@ -82,6 +82,12 @@ func readStream(body io.Reader, began time.Time, log *slog.Logger) (response cha
 		if chunk.Usage.PromptTokens != 0 {
 			response.Usage.PromptTokens = chunk.Usage.PromptTokens
 		}
+		if chunk.Usage.PromptDetails.CachedTokens != nil {
+			response.Usage.PromptDetails.CachedTokens = chunk.Usage.PromptDetails.CachedTokens
+		}
+		if chunk.Usage.PromptDetails.CacheWriteTokens != nil {
+			response.Usage.PromptDetails.CacheWriteTokens = chunk.Usage.PromptDetails.CacheWriteTokens
+		}
 		if chunk.Usage.CompletionDetails.ReasoningTokens != nil {
 			response.Usage.CompletionDetails.ReasoningTokens = chunk.Usage.CompletionDetails.ReasoningTokens
 		}

@@ -199,7 +199,7 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 		log.Error("failed to extract text from files", "error", err)
 		return Result{}, &extractError{err: err, files: len(req.Files)}
 	}
-	if strings.TrimSpace(extracted.Text) == "" {
+	if strings.TrimSpace(extracted.Text) == "" && len(extracted.PDFs) == 0 {
 		log.Warn("no text found in files", "files_count", len(req.Files))
 		return Result{}, ErrNoText
 	}
@@ -207,7 +207,7 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 		p.Generating()
 	}
 
-	doc := generator.Document{Text: extracted.Text, Title: title}
+	doc := generator.Document{Text: extracted.Text, Title: title, PDFs: extracted.PDFs}
 	if len(extracted.Document.Blocks) > 0 {
 		doc.Structure = &extracted.Document
 	}
@@ -240,7 +240,12 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 			title = t
 		}
 	}
-	genResult.Artifact = &generator.Artifact{Version: generator.PipelineVersion, Reading: extracted.Document, Files: req.Files}
+	if genResult.Artifact == nil {
+		genResult.Artifact = &generator.Artifact{}
+	}
+	genResult.Artifact.Version = generator.PipelineVersion
+	genResult.Artifact.Reading = extracted.Document
+	genResult.Artifact.Files = req.Files
 	set, err := m.sets.SaveGeneratedSet(ctx, req.UserID, title, genResult)
 	if err != nil {
 		log.Error("failed to save generated set to database", "error", err)
@@ -249,7 +254,7 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 	var warnings []string
 	if len(genResult.Coverage.Unassigned) > 0 {
 		warnings = append(warnings, fmt.Sprintf("Набор частичный: без цитат в карточках осталось блоков — %d. Сверь темы карточек с конспектом.", len(genResult.Coverage.Unassigned)))
-	} else if doc.Structure != nil {
+	} else if doc.Structure != nil && len(genResult.Artifact.Goals) == 0 {
 		warnings = append(warnings, "Полнота набора не проверена. Сверь темы карточек с конспектом.")
 	}
 	warnings = append(warnings, extracted.Warnings...)

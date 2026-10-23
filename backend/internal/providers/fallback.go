@@ -53,6 +53,20 @@ func NewFallback(cooldown time.Duration, backends ...Backend) *Fallback {
 // When every backend fails, the error joins theirs, so errors.Is sees
 // ErrRefused or ErrUnavailable from any of them.
 func (f *Fallback) Complete(ctx context.Context, req Request) (Response, error) {
+	if len(req.PDFs) > 0 {
+		for _, b := range f.backends {
+			if b.Name == "openrouter" {
+				return f.call(ctx, b, req)
+			}
+		}
+		return Response{}, ErrCapability
+	}
+	if req.NoFallback {
+		if len(f.backends) == 0 {
+			return Response{}, ErrCapability
+		}
+		return f.call(ctx, f.backends[0], req)
+	}
 	order := f.inService()
 	var errs []error
 	for i, idx := range order {

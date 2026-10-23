@@ -370,3 +370,26 @@ func TestFallbackWaitingForASlotIsNotUnavailable(t *testing.T) {
 		t.Errorf("next call: got %+v, %v; want the primary, not cooled down", resp, err)
 	}
 }
+
+func TestNativePDFNeverFallsBackOrUsesLegacyPrimary(t *testing.T) {
+	legacy := answers("legacy")
+	router := fails(ErrUnavailable)
+	f := NewFallback(time.Minute, Backend{Name: "gigachat", Provider: legacy}, Backend{Name: "openrouter", Provider: router})
+	_, err := f.Complete(context.Background(), Request{PDFs: []PDF{{Name: "source.pdf"}}})
+	if !errors.Is(err, ErrUnavailable) || legacy.callCount() != 0 || router.callCount() != 1 {
+		t.Fatalf("legacy=%d router=%d err=%v", legacy.callCount(), router.callCount(), err)
+	}
+	f = NewFallback(time.Minute, Backend{Name: "gigachat", Provider: legacy})
+	if _, err = f.Complete(context.Background(), Request{PDFs: []PDF{{Name: "source.pdf"}}}); !errors.Is(err, ErrCapability) || legacy.callCount() != 0 {
+		t.Fatalf("unsupported native source: %v", err)
+	}
+}
+
+func TestGenerationCannotSilentlySwitchPaidProviders(t *testing.T) {
+	primary, backup := fails(ErrUnavailable), answers("backup")
+	f := NewFallback(time.Minute, Backend{Name: "primary", Provider: primary}, Backend{Name: "backup", Provider: backup})
+	_, err := f.Complete(context.Background(), Request{NoFallback: true, Source: "complete source"})
+	if !errors.Is(err, ErrUnavailable) || primary.callCount() != 1 || backup.callCount() != 0 {
+		t.Fatalf("primary=%d backup=%d err=%v", primary.callCount(), backup.callCount(), err)
+	}
+}

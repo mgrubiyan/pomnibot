@@ -2,24 +2,34 @@ package generator
 
 import (
 	"context"
-	"github.com/mgrubiyan/pomnibot/backend/internal/material"
+	"encoding/json"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
-
-type fakeProvider struct {
-	answer func(int, string, providers.Request) (string, error)
-}
-
-func (p *fakeProvider) Complete(_ context.Context, r providers.Request) (providers.Response, error) {
-	s, err := p.answer(1, r.User, r)
-	return providers.Response{Content: []byte(s), Model: "fake-model"}, err
-}
 
 type providerFunc func(context.Context, providers.Request) (providers.Response, error)
 
 func (p providerFunc) Complete(ctx context.Context, r providers.Request) (providers.Response, error) {
 	return p(ctx, r)
 }
-func sourceFixture() material.Document {
-	return material.Document{Blocks: []material.Block{{ID: "h", Kind: "heading", Text: "Удаление"}, {ID: "s", Kind: "text", Text: "При удалении записи индекс не перестраивается, если занято не более 900 байт."}}}
+func stageFixture(goals []KnowledgeGoal, groups []goalCards) providers.Provider {
+	calls := 0
+	return providerFunc(func(context.Context, providers.Request) (providers.Response, error) {
+		calls++
+		r := stageResponse{Issues: []string{}, Goals: []KnowledgeGoal{}, Cards: []goalCards{}, Additions: []KnowledgeGoal{}, Complete: new(false)}
+		switch calls {
+		case 1:
+			r.Goals = goals
+		case 2:
+			r.Cards = groups
+		case 3:
+			r.Goals = goals
+			r.Cards = groups
+			r.Complete = new(true)
+		}
+		b, e := json.Marshal(r)
+		return providers.Response{Content: b, Model: "fixture"}, e
+	})
+}
+func learningGoal(id, name string) KnowledgeGoal {
+	return KnowledgeGoal{GoalID: id, Name: name, Topic: "T", Pages: []int{1}, Source: "A and B"}
 }

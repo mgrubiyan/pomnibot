@@ -38,7 +38,7 @@ type trackedProvider struct {
 
 func (p trackedProvider) Complete(ctx context.Context, req providers.Request) (providers.Response, error) {
 	res, err := p.Provider.Complete(ctx, req)
-	if err != nil || res.Cached {
+	if res.Cached {
 		return res, err
 	}
 	p.usage.mu.Lock()
@@ -47,7 +47,7 @@ func (p trackedProvider) Complete(ctx context.Context, req providers.Request) (p
 		p.usage.models = make(map[string]modelUsage)
 	}
 	u := p.usage.models[res.Model]
-	u.Calls++
+	u.Calls += max(1, res.Usage.Attempts)
 	u.PromptTokens += res.Usage.PromptTokens
 	u.CompletionTokens += res.Usage.CompletionTokens
 	if res.Usage.ReasoningTokens != nil {
@@ -58,7 +58,7 @@ func (p trackedProvider) Complete(ctx context.Context, req providers.Request) (p
 	}
 	u.CostUSD += res.Usage.CostUSD
 	p.usage.models[res.Model] = u
-	return res, nil
+	return res, err
 }
 
 func (u *runUsage) snapshot() map[string]modelUsage {

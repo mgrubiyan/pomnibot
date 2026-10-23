@@ -83,13 +83,18 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 		if err != nil {
 			return fmt.Errorf("initialize OCR: %w", err)
 		}
-		extractor, err := ingest.NewExtractor(&ingest.VisionOCR{Model: llm.vision, Checker: ocr, FullPage: true, Concurrency: llm.tasks, CallTimeout: generator.DefaultCallTimeout}, ingest.Options{AssessPDF: true})
+		extractor, err := ingest.NewExtractor(&ingest.VisionOCR{Model: llm.vision, Checker: ocr, FullPage: true, Concurrency: llm.tasks, CallTimeout: generator.DefaultCallTimeout}, ingest.Options{NativePDF: true})
 		if err != nil {
 			return fmt.Errorf("initialize extractor: %w", err)
 		}
-		cardGenerator := generator.NewGenerator(llm.text, generator.Options{SourceBudget: llm.sourceBytes})
+		genOptions, err := generator.OptionsFromEnv()
+		if err != nil {
+			return err
+		}
+		genOptions.SourceBudget = llm.sourceBytes
+		cardGenerator := generator.NewGenerator(llm.text, genOptions)
 		limits := providers.DefaultDocumentLimits()
-		if cfg.LLM.Primary == config.PrimaryOpenRouter {
+		if cfg.OpenRouter != nil {
 			limits.USD = .15
 		}
 		maker := notes.New(extractor, notes.FromGenerator(cardGenerator), sets, llm.slots).WithCache(llm.cache, llm.readingIdentity).WithBudget(limits)

@@ -358,3 +358,57 @@ func TestThinkingOnlyResponsePreservesTokensCostAndTruncation(t *testing.T) {
 		t.Fatalf("lost thinking-only accounting: %+v %v", r, err)
 	}
 }
+
+func TestPDFNativeCachingReasoningAndUsage(t *testing.T) {
+	c := clientFor(t, func(w http.ResponseWriter, r *http.Request) {
+		var b chatRequest
+		if e := json.NewDecoder(r.Body).Decode(&b); e != nil {
+			t.Fatal(e)
+		}
+		raw, _ := json.Marshal(b)
+		if len(b.Messages) != 3 || b.MaxTokens != 128000 || b.Reasoning.Effort != "medium" || !b.Reasoning.Enabled || !strings.Contains(string(raw), `"engine":"native"`) || !strings.Contains(string(raw), `"cache_control":{"type":"ephemeral"}`) || !strings.Contains(string(raw), "data:application/pdf;base64,") {
+			t.Fatalf("bad PDF request %s", raw)
+		}
+		_, _ = fmt.Fprint(w, `{"choices":[{"message":{"content":"{}"},"finish_reason":"stop"}],"usage":{"cost":0.01,"prompt_tokens_details":{"cached_tokens":500,"cache_write_tokens":2}}}`)
+	})
+	r, e := c.Complete(context.Background(), providers.Request{PDFs: []providers.PDF{{Name: "a.pdf", Data: []byte("%PDF"), Pages: 1}}, User: "suffix", ReasoningEffort: "medium", MaxTokens: 128000})
+	if e != nil || r.Usage.CachedTokens == nil || *r.Usage.CachedTokens != 500 || r.Usage.Attempts != 1 {
+		t.Fatalf("%+v %v", r, e)
+	}
+}
+
+func TestPDFRetryAccountsForAllChargesAndCacheUsage(t *testing.T) {
+	calls := 0
+	c := clientFor(t, func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "text/event-stream")
+		if calls == 1 {
+			_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"partial\"}}],\"usage\":{\"cost\":0.002,\"prompt_tokens\":10,\"completion_tokens\":3,\"completion_tokens_details\":{\"reasoning_tokens\":2}}}\n\n")
+			return
+		}
+		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"{}\"},\"finish_reason\":\"stop\"}],\"usage\":{\"cost\":0.001,\"prompt_tokens\":20,\"completion_tokens\":5,\"prompt_tokens_details\":{\"cached_tokens\":10}}}\n\ndata: [DONE]\n\n")
+	})
+	b := providers.NewBudget(providers.BudgetLimits{USD: .1})
+	r, e := c.Complete(providers.WithBudget(context.Background(), b), providers.Request{PDFs: []providers.PDF{{Name: "a.pdf", Data: []byte("%PDF"), Pages: 1}}, ReasoningEffort: "medium"})
+	if e != nil || calls != 2 || r.Usage.Attempts != 2 || r.Usage.FailedAttempts != 1 || r.Usage.CostUSD != .003 || r.Usage.PromptTokens != 30 || r.Usage.CompletionTokens != 8 || r.Usage.ReasoningTokens == nil || *r.Usage.ReasoningTokens != 2 || r.Usage.CachedTokens == nil || *r.Usage.CachedTokens != 10 || b.Snapshot().ReportedUSD != .003 {
+		t.Fatalf("%+v %v budget %+v", r, e, b.Snapshot())
+	}
+}
+
+func TestRetryWithoutUsageRetainsReservationAndMarksUnknownUsage(t *testing.T) {
+	calls := 0
+	c := clientFor(t, func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		if calls == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = fmt.Fprint(w, `{"choices":[{"message":{"content":"{}"},"finish_reason":"stop"}],"usage":{"cost":0.001}}`)
+	})
+	req := providers.Request{Source: "whole source", NoFallback: true, ReasoningEffort: "medium"}
+	b := providers.NewBudget(providers.BudgetLimits{USD: .03})
+	r, e := c.Complete(providers.WithBudget(context.Background(), b), req)
+	if e != nil || r.Usage.UnreportedCalls != 1 || r.Usage.Attempts != 2 || r.Usage.FailedAttempts != 1 || math.Abs(b.Snapshot().CommittedUSD-(c.costBound(req)+.001)) > 1e-12 {
+		t.Fatalf("%+v %v budget %+v", r, e, b.Snapshot())
+	}
+}

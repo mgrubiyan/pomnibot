@@ -166,6 +166,12 @@ var errNoImages = errors.New("yandexgpt: images are not supported")
 // errors. When YandexGPT cannot answer anyone for a while, the error wraps
 // providers.ErrUnavailable.
 func (c *Client) Complete(ctx context.Context, req providers.Request) (providers.Response, error) {
+	if req.Source != "" {
+		req.User = req.Source + "\n" + req.User
+	}
+	if len(req.PDFs) > 0 || req.ReasoningEffort != "" {
+		return providers.Response{}, providers.ErrCapability
+	}
 	if req.Image != nil {
 		return providers.Response{}, errNoImages
 	}

@@ -17,10 +17,14 @@ var ErrRefused = errors.New("refused by the content filter")
 // providers pass it to structured output when the API supports it and must
 // return the raw text either way: the caller validates the answer itself.
 //
-// The completion budget (max tokens) is not here: it depends on the model's
-// tokenizer and price, so each provider sets it in its own config.
+// MaxTokens and ReasoningEffort can override provider defaults for staged tasks.
 type Request struct {
-	NoCache bool // caller must still validate semantics/source links after the response
+	Source          string
+	NoFallback      bool
+	PDFs            []PDF
+	ReasoningEffort string
+	MaxTokens       int
+	NoCache         bool // caller must still validate semantics/source links after the response
 
 	System      string
 	User        string
@@ -28,6 +32,15 @@ type Request struct {
 	Temperature float64
 	Images      []Image // ordered additional source pages
 	Image       *Image  // shown to the model with the user message; nil for text only
+}
+
+// PDF is an original source file with a locally verified page count.
+type PDF struct {
+	StartPage int    `json:"startPage"`
+	TextBytes int    `json:"textBytes"`
+	Name      string `json:"name"`
+	Data      []byte `json:"data"`
+	Pages     int    `json:"pages"`
 }
 
 // Image is a picture the model reads, such as a photo of a page of notes.
@@ -38,6 +51,11 @@ type Image struct {
 
 // Usage is the token count reported by the provider.
 type Usage struct {
+	CachedTokens     *int
+	CacheWriteTokens *int
+	UnreportedCalls  int
+	FailedAttempts   int
+	Attempts         int
 	PromptTokens     int
 	CompletionTokens int
 	ReasoningTokens  *int    // part of CompletionTokens; nil means unreported, not zero

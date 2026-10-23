@@ -327,3 +327,29 @@ func TestMakeWarnsWhenSourceBlocksRemainUnassigned(t *testing.T) {
 		t.Fatalf("hidden partial result: %+v", res)
 	}
 }
+
+func TestMakeNativePDFWithoutTextAndNeverSavesFailedReview(t *testing.T) {
+	for _, failed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "save verified", true: "reject review"}[failed], func(t *testing.T) {
+			saver := &fakeSaver{}
+			ex := &fakeExtractor{result: ingest.Result{PDFs: []providers.PDF{{Name: "scan.pdf", Data: []byte("%PDF"), Pages: 2}}, Warnings: []string{}}}
+			gen := &fakeGenerator{generate: func(_ context.Context, doc generator.Document, _ func(generator.Batch)) (generator.Result, error) {
+				if len(doc.PDFs) != 1 || doc.PDFs[0].Pages != 2 {
+					t.Fatalf("lost originals: %+v", doc)
+				}
+				if failed {
+					return oneCard("T"), errors.New("review failed")
+				}
+				return oneCard("T"), nil
+			}}
+			_, err := New(ex, gen, saver, 1).Make(context.Background(), Request{UserID: 1, Files: file("scan.pdf")}, Progress{})
+			if failed {
+				if err == nil || len(saver.titles) != 0 {
+					t.Fatal("saved failed review")
+				}
+			} else if err != nil || len(saver.titles) != 1 {
+				t.Fatalf("not saved: %v", err)
+			}
+		})
+	}
+}

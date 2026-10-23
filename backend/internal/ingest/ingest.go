@@ -18,6 +18,7 @@ import (
 	"unicode"
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/material"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
 // File is one file as received, with whatever name the messenger gave it.
@@ -60,6 +61,7 @@ type PageInfo struct {
 // Result is the extracted text. Warnings are for the student, in Russian: the
 // confirmation screen shows them before cards are made.
 type Result struct {
+	PDFs     []providers.PDF   `json:"pdfs,omitempty"`
 	Document material.Document `json:"document"`
 	Text     string            `json:"text"`
 	Source   Source            `json:"source"`
@@ -114,6 +116,7 @@ type OCRPage struct {
 
 // Options configure an Extractor.
 type Options struct {
+	NativePDF       bool    // retain originals; local page count only, never paid page reading
 	MinPageChars    int     // default DefaultMinPageChars
 	PDF             PDFText // nil: pdftotext from PATH, checked in NewExtractor
 	DisablePDF      bool    // no pdftotext needed; PDFs are rejected
@@ -304,6 +307,18 @@ func (e *Extractor) readPDF(ctx context.Context, res *Result, file int, f File) 
 	}
 
 	first := len(res.Pages)
+	if e.opts.NativePDF {
+		textBytes := 0
+		for _, text := range pages {
+			textBytes += len(text)
+		}
+		res.PDFs = append(res.PDFs, providers.PDF{Name: f.Name, Data: f.Data, Pages: len(pages), StartPage: first + 1, TextBytes: textBytes})
+		for i := range pages {
+			res.Pages = append(res.Pages, PageInfo{Number: first + i + 1, File: file, Page: i + 1, Source: SourceText})
+			pages[i] = ""
+		}
+		return pages, nil
+	}
 	// Text-only PDFs previously bypassed OCR service limits. If a document
 	// exceeds them, keep that behavior and only request OCR for actual scans.
 	fullRead := e.opts.ReadAllPDFPages && len(pages) <= e.lim.pages && len(f.Data) <= e.lim.bytes

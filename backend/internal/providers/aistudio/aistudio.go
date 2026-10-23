@@ -158,6 +158,12 @@ func (e transportError) Unwrap() error { return e.err }
 // network errors. When the model cannot answer anyone for a while, the error
 // wraps providers.ErrUnavailable.
 func (c *Client) Complete(ctx context.Context, req providers.Request) (providers.Response, error) {
+	if req.Source != "" {
+		req.User = req.Source + "\n" + req.User
+	}
+	if len(req.PDFs) > 0 {
+		return providers.Response{}, providers.ErrCapability
+	}
 	resp, err := c.complete(ctx, req)
 	switch {
 	case err == nil:
@@ -295,12 +301,20 @@ func (c *Client) call(ctx context.Context, req providers.Request, withSchema boo
 		user = parts
 	}
 
+	effort := "none"
+	if req.ReasoningEffort != "" {
+		effort = req.ReasoningEffort
+	}
+	maxTokens := c.cfg.MaxTokens
+	if req.MaxTokens > 0 {
+		maxTokens = min(maxTokens, req.MaxTokens)
+	}
 	body, err := json.Marshal(chatRequest{
 		Model:           c.modelURI(),
 		Messages:        []message{{Role: "system", Content: system}, {Role: "user", Content: user}},
 		Temperature:     req.Temperature,
-		MaxTokens:       c.cfg.MaxTokens,
-		ReasoningEffort: "none",
+		MaxTokens:       maxTokens,
+		ReasoningEffort: effort,
 		ResponseFormat:  format,
 	})
 	if err != nil {

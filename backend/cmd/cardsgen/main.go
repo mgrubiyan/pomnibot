@@ -41,7 +41,7 @@ func run() error {
 		provider     = flag.String("provider", defaultProvider(), "who writes the cards: openrouter, gigachat, yandexgpt or qwen")
 		model        = flag.String("model", "", "override the selected provider's model")
 		limit        = flag.Int("limit", 0, "max facts per document, 0 for no limit")
-		concurrency  = flag.Int("concurrency", 0, "parallel page reading calls; generation always uses one request")
+		concurrency  = flag.Int("concurrency", 0, "parallel page reading calls; generation uses three sequential stages")
 		timeout      = flag.Duration("call-timeout", generator.DefaultCallTimeout, "timeout per model call")
 		ocrMode      = flag.String("ocr", "vision", "how photos and scans are read: vision (GigaChat, checked by Yandex OCR) or yandex (Yandex OCR alone)")
 		visionBy     = flag.String("vision-provider", "", "who reads pages: openrouter, gigachat or qwen; defaults to openrouter with -provider openrouter, otherwise gigachat")
@@ -201,7 +201,7 @@ func run() error {
 	readingHit := false
 	cacheKey := ""
 	if *readingCache != "" {
-		readerIdentity := []any{*ocrMode, *ocrModel, false, os.Getenv("YC_OCR_BASE_URL"), os.Getenv("YC_FOLDER_ID"), os.Getenv("YC_API_KEY") != ""}
+		readerIdentity := []any{*ocrMode, *ocrModel, "native-pdf-v1", os.Getenv("YC_OCR_BASE_URL"), os.Getenv("YC_FOLDER_ID"), os.Getenv("YC_API_KEY") != ""}
 		if *ocrMode == "vision" {
 			readerIdentity = append(readerIdentity, readerEnvironment(*visionBy))
 		}
@@ -249,7 +249,12 @@ func run() error {
 	began := time.Now()
 	firstVerified := 0.0
 	delivered := 0
+	genOptions, err := generator.OptionsFromEnv()
+	if err != nil {
+		return err
+	}
 	gen := generator.NewGenerator(writer, generator.Options{
+		ReasoningEffort: genOptions.ReasoningEffort, MaxTokens: genOptions.MaxTokens,
 		SourceBudget:   profile.SourceBytes,
 		MaxFactsPerDoc: *limit,
 		CallTimeout:    *timeout,
@@ -268,7 +273,7 @@ func run() error {
 	})
 
 	fmt.Fprintf(os.Stderr, "%s: %d символов, модель %s\n", strings.Join(paths, ", "), len([]rune(notes.Text)), modelName)
-	doc := generator.Document{Text: notes.Text, Title: *title}
+	doc := generator.Document{Text: notes.Text, Title: *title, PDFs: notes.PDFs}
 	if len(notes.Document.Blocks) > 0 {
 		doc.Structure = &notes.Document
 	}
@@ -333,7 +338,7 @@ func extract(ctx context.Context, paths []string, ocrModel string, vision provid
 	// Yandex OCR turns photos upright and checks GigaChat's reading, or
 	// reads them alone with -ocr yandex.
 	var ocr ingest.OCR
-	if !local {
+	if !local && (!hasPDF || len(files) != 1) {
 		cfg, err := yandex.ConfigFromEnv()
 		var checker ingest.OCR
 		if err == nil {
@@ -352,7 +357,7 @@ func extract(ctx context.Context, paths []string, ocrModel string, vision provid
 			ocr = checker
 		}
 	}
-	ext, err := ingest.NewExtractor(ocr, ingest.Options{DisablePDF: !hasPDF, OCRModel: ocrModel, AssessPDF: true})
+	ext, err := ingest.NewExtractor(ocr, ingest.Options{DisablePDF: !hasPDF, OCRModel: ocrModel, NativePDF: true})
 	if err != nil {
 		return ingest.Result{}, err
 	}
@@ -377,7 +382,7 @@ func extract(ctx context.Context, paths []string, ocrModel string, vision provid
 	for _, w := range res.Warnings {
 		fmt.Fprintln(os.Stderr, "  ⚠", w)
 	}
-	if strings.TrimSpace(res.Text) == "" {
+	if strings.TrimSpace(res.Text) == "" && len(res.PDFs) == 0 {
 		return ingest.Result{}, errors.New("в файлах не нашлось текста")
 	}
 	return res, nil
