@@ -12,6 +12,12 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 )
 
+var (
+	testAPIUserID123 = uuid.MustParse("00000000-0000-0000-0000-000000000123")
+	testAPIUserID456 = uuid.MustParse("00000000-0000-0000-0000-000000000456")
+	testAPIUserID789 = uuid.MustParse("00000000-0000-0000-0000-000000000789")
+)
+
 var _ contracts.Handler = (*APIHandler)(nil)
 
 func TestAPIHandler_GetHealth(t *testing.T) {
@@ -32,52 +38,52 @@ func TestAPIHandler_GetHealth(t *testing.T) {
 func TestAPIHandler_SetsDelegation(t *testing.T) {
 	setID := uuid.New()
 	mockSet := &mockSetService{
-		getSetFunc: func(_ context.Context, userID int64, id uuid.UUID) (*contracts.CardSet, error) {
-			if userID != 123 || id != setID {
-				t.Errorf("unexpected args: userID=%d, id=%s", userID, id)
+		getSetFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID) (*contracts.CardSet, error) {
+			if userID != testAPIUserID123 || id != setID {
+				t.Errorf("unexpected args: userID=%s, id=%s", userID, id)
 			}
 			return &contracts.CardSet{ID: id, Title: "Math"}, nil
 		},
-		deleteSetFunc: func(_ context.Context, userID int64, id uuid.UUID) error {
-			if userID != 123 || id != setID {
-				t.Errorf("unexpected args: userID=%d, id=%s", userID, id)
+		deleteSetFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID) error {
+			if userID != testAPIUserID123 || id != setID {
+				t.Errorf("unexpected args: userID=%s, id=%s", userID, id)
 			}
 			return nil
 		},
-		getCardsBySetIDFunc: func(_ context.Context, userID int64, id uuid.UUID) ([]contracts.Card, error) {
-			if userID != 123 || id != setID {
-				t.Errorf("unexpected args: userID=%d, id=%s", userID, id)
+		getCardsBySetIDFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID) ([]contracts.Card, error) {
+			if userID != testAPIUserID123 || id != setID {
+				t.Errorf("unexpected args: userID=%s, id=%s", userID, id)
 			}
 			return []contracts.Card{{ID: uuid.New(), SetId: id, Kind: contracts.CardKindChoice, Question: "Q1"}}, nil
 		},
-		getSetShareCodeFunc: func(_ context.Context, userID int64, id uuid.UUID) (*contracts.CardSet, error) {
-			if userID != 123 || id != setID {
-				t.Errorf("unexpected args: userID=%d, id=%s", userID, id)
+		getSetShareCodeFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID) (*contracts.CardSet, error) {
+			if userID != testAPIUserID123 || id != setID {
+				t.Errorf("unexpected args: userID=%s, id=%s", userID, id)
 			}
 			return &contracts.CardSet{ID: id, ShareCode: contracts.NewOptString("CODE123")}, nil
 		},
-		getSetPlanFunc: func(_ context.Context, userID int64, id uuid.UUID) ([]contracts.SetPlanItem, error) {
-			if userID != 123 || id != setID {
-				t.Errorf("unexpected args: userID=%d, id=%s", userID, id)
+		getSetPlanFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID) ([]contracts.SetPlanItem, error) {
+			if userID != testAPIUserID123 || id != setID {
+				t.Errorf("unexpected args: userID=%s, id=%s", userID, id)
 			}
 			return []contracts.SetPlanItem{{FactName: "Fact 1", Date: time.Now()}}, nil
 		},
-		joinSetByShareCodeFunc: func(_ context.Context, userID int64, code string) (*contracts.CardSet, error) {
-			if userID != 123 || code != "JOIN123" {
-				t.Errorf("unexpected args: userID=%d, code=%s", userID, code)
+		joinSetByShareCodeFunc: func(_ context.Context, userID uuid.UUID, code string) (*contracts.CardSet, error) {
+			if userID != testAPIUserID123 || code != "JOIN123" {
+				t.Errorf("unexpected args: userID=%s, code=%s", userID, code)
 			}
 			return &contracts.CardSet{ID: setID, Title: "Joined"}, nil
 		},
-		getSetLeaderboardFunc: func(_ context.Context, userID int64, id uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
-			if userID != 123 || id != setID {
-				t.Errorf("unexpected args: userID=%d, id=%s", userID, id)
+		getSetLeaderboardFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
+			if userID != testAPIUserID123 || id != setID {
+				t.Errorf("unexpected args: userID=%s, id=%s", userID, id)
 			}
 			return &contracts.SetLeaderboardResponse{SetId: id}, nil
 		},
 	}
 
 	h := NewAPIHandler(mockSet, nil, nil, nil)
-	ctx := WithUserID(context.Background(), 123)
+	ctx := WithUserID(context.Background(), testAPIUserID123)
 
 	t.Run("GetSet delegates to setsHandler", func(t *testing.T) {
 		res, err := h.GetSet(ctx, contracts.GetSetParams{SetId: setID})
@@ -153,28 +159,28 @@ func TestAPIHandler_SetsDelegation(t *testing.T) {
 func TestAPIHandler_CardsDelegation(t *testing.T) {
 	cardID := uuid.New()
 	mockCard := &mockCardService{
-		updateCardFunc: func(_ context.Context, userID int64, id uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error) {
-			if userID != 456 || id != cardID || req == nil {
-				t.Errorf("unexpected args: userID=%d, id=%s, req=%v", userID, id, req)
+		updateCardFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error) {
+			if userID != testAPIUserID456 || id != cardID || req == nil {
+				t.Errorf("unexpected args: userID=%s, id=%s, req=%v", userID, id, req)
 			}
 			return &contracts.Card{ID: id, SetId: uuid.New(), Kind: contracts.CardKindChoice, Question: "Updated Question"}, nil
 		},
-		deleteCardFunc: func(_ context.Context, userID int64, id uuid.UUID) error {
-			if userID != 456 || id != cardID {
-				t.Errorf("unexpected args: userID=%d, id=%s", userID, id)
+		deleteCardFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID) error {
+			if userID != testAPIUserID456 || id != cardID {
+				t.Errorf("unexpected args: userID=%s, id=%s", userID, id)
 			}
 			return nil
 		},
-		answerQuestionFunc: func(_ context.Context, userID int64, id uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error) {
-			if userID != 456 || id != cardID || answer != "my answer" {
-				t.Errorf("unexpected args: userID=%d, id=%s, answer=%s", userID, id, answer)
+		answerQuestionFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error) {
+			if userID != testAPIUserID456 || id != cardID || answer != "my answer" {
+				t.Errorf("unexpected args: userID=%s, id=%s, answer=%s", userID, id, answer)
 			}
 			return &contracts.AnswerQuestionResponse{IsCorrect: true, UserAnswer: answer}, nil
 		},
 	}
 
 	h := NewAPIHandler(nil, mockCard, nil, nil)
-	ctx := WithUserID(context.Background(), 456)
+	ctx := WithUserID(context.Background(), testAPIUserID456)
 
 	t.Run("UpdateCard delegates to cardsHandler", func(t *testing.T) {
 		res, err := h.UpdateCard(ctx, &contracts.UpdateCardRequest{Question: contracts.NewOptString("Updated Question")}, contracts.UpdateCardParams{CardId: cardID})
@@ -209,28 +215,28 @@ func TestAPIHandler_CardsDelegation(t *testing.T) {
 
 func TestAPIHandler_HomescreenDelegation(t *testing.T) {
 	mockHome := &mockHomescreenService{
-		getTodayFunc: func(_ context.Context, userID int64) (*contracts.TodayData, error) {
-			if userID != 789 {
-				t.Errorf("unexpected userID: %d", userID)
+		getTodayFunc: func(_ context.Context, userID uuid.UUID) (*contracts.TodayData, error) {
+			if userID != testAPIUserID789 {
+				t.Errorf("unexpected userID: %s", userID)
 			}
-			return &contracts.TodayData{User: contracts.User{ID: 789, FirstName: "Alex"}, DueCount: 10, EstimatedMinutes: 15}, nil
+			return &contracts.TodayData{User: contracts.User{ID: testAPIUserID789, FirstName: "Alex"}, DueCount: 10, EstimatedMinutes: 15}, nil
 		},
-		getFeedQuestionsFunc: func(_ context.Context, userID int64) ([]contracts.Card, error) {
-			if userID != 789 {
-				t.Errorf("unexpected userID: %d", userID)
+		getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID) ([]contracts.Card, error) {
+			if userID != testAPIUserID789 {
+				t.Errorf("unexpected userID: %s", userID)
 			}
 			return []contracts.Card{{ID: uuid.New(), SetId: uuid.New(), Kind: contracts.CardKindChoice, Question: "Feed Card"}}, nil
 		},
-		sendResultsFunc: func(_ context.Context, userID int64, results []contracts.AnswerResult) error {
-			if userID != 789 || len(results) != 1 {
-				t.Errorf("unexpected args: userID=%d, len=%d", userID, len(results))
+		sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.AnswerResult) error {
+			if userID != testAPIUserID789 || len(results) != 1 {
+				t.Errorf("unexpected args: userID=%s, len=%d", userID, len(results))
 			}
 			return nil
 		},
 	}
 
 	h := NewAPIHandler(nil, nil, mockHome, nil)
-	ctx := WithUserID(context.Background(), 789)
+	ctx := WithUserID(context.Background(), testAPIUserID789)
 
 	t.Run("GetToday delegates to homescreenHandler", func(t *testing.T) {
 		res, err := h.GetToday(ctx)

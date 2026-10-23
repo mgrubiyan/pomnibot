@@ -743,8 +743,8 @@ components:
         - firstName
       properties:
         id:
-          type: integer
-          format: int64
+          type: string
+          format: uuid
         firstName:
           type: string
         lastName:

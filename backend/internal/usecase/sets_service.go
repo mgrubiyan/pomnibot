@@ -35,15 +35,16 @@ func NewSetService(querier db.Querier, userService UserService, manual ...Manual
 	return s
 }
 
-func (s *setServiceImpl) GetSet(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.CardSet, error) {
+func (s *setServiceImpl) GetSet(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.CardSet, error) {
 	var pgUUID pgtype.UUID
 	if err := pgUUID.Scan(setID.String()); err != nil {
 		return nil, fmt.Errorf("%w: invalid set id", ErrValidation)
 	}
 
+	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
 	row, err := s.querier.GetSetByID(ctx, db.GetSetByIDParams{
 		ID:     pgUUID,
-		UserID: userID,
+		UserID: pgUserID,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -61,7 +62,7 @@ func (s *setServiceImpl) GetSet(ctx context.Context, userID int64, setID uuid.UU
 	// The rating is optional: a set is shown without it when it cannot be read.
 	rating, err := s.querier.GetUserSetRating(ctx, db.GetUserSetRatingParams{
 		SetID:  pgUUID,
-		UserID: userID,
+		UserID: pgUserID,
 	})
 	switch {
 	case err == nil:
@@ -74,15 +75,16 @@ func (s *setServiceImpl) GetSet(ctx context.Context, userID int64, setID uuid.UU
 	return res, nil
 }
 
-func (s *setServiceImpl) DeleteSet(ctx context.Context, userID int64, setID uuid.UUID) error {
+func (s *setServiceImpl) DeleteSet(ctx context.Context, userID uuid.UUID, setID uuid.UUID) error {
 	var pgUUID pgtype.UUID
 	if err := pgUUID.Scan(setID.String()); err != nil {
 		return fmt.Errorf("%w: invalid set id", ErrValidation)
 	}
 
+	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
 	isAuthor, err := s.querier.IsSetAuthor(ctx, db.IsSetAuthorParams{
 		ID:       pgUUID,
-		AuthorID: userID,
+		AuthorID: pgUserID,
 	})
 	if err != nil {
 		return fmt.Errorf("check set author: %w", err)
@@ -91,7 +93,7 @@ func (s *setServiceImpl) DeleteSet(ctx context.Context, userID int64, setID uuid
 	if isAuthor {
 		rows, err := s.querier.DeleteSet(ctx, db.DeleteSetParams{
 			ID:       pgUUID,
-			AuthorID: userID,
+			AuthorID: pgUserID,
 		})
 		if err != nil {
 			return fmt.Errorf("delete set: %w", err)
@@ -105,7 +107,7 @@ func (s *setServiceImpl) DeleteSet(ctx context.Context, userID int64, setID uuid
 	// If not author, user leaves the set
 	rows, err := s.querier.LeaveSet(ctx, db.LeaveSetParams{
 		SetID:  pgUUID,
-		UserID: userID,
+		UserID: pgUserID,
 	})
 	if err != nil {
 		return fmt.Errorf("leave set: %w", err)
@@ -116,16 +118,17 @@ func (s *setServiceImpl) DeleteSet(ctx context.Context, userID int64, setID uuid
 	return nil
 }
 
-func (s *setServiceImpl) GetCardsBySetID(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.Card, error) {
+func (s *setServiceImpl) GetCardsBySetID(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.Card, error) {
 	var pgUUID pgtype.UUID
 	if err := pgUUID.Scan(setID.String()); err != nil {
 		return nil, fmt.Errorf("%w: invalid set id", ErrValidation)
 	}
 
+	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
 	// Verify set exists and user has membership
 	if _, err := s.querier.GetSetByID(ctx, db.GetSetByIDParams{
 		ID:     pgUUID,
-		UserID: userID,
+		UserID: pgUserID,
 	}); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -135,7 +138,7 @@ func (s *setServiceImpl) GetCardsBySetID(ctx context.Context, userID int64, setI
 
 	rows, err := s.querier.GetCardsBySetID(ctx, db.GetCardsBySetIDParams{
 		SetID:  pgUUID,
-		UserID: userID,
+		UserID: pgUserID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("get cards by set id: %w", err)
@@ -169,20 +172,21 @@ func (s *setServiceImpl) GetCardsBySetID(ctx context.Context, userID int64, setI
 	return cards, nil
 }
 
-func (s *setServiceImpl) GetSetShareCode(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.CardSet, error) {
+func (s *setServiceImpl) GetSetShareCode(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.CardSet, error) {
 	return s.GetSet(ctx, userID, setID)
 }
 
-func (s *setServiceImpl) GetSetPlan(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.SetPlanItem, error) {
+func (s *setServiceImpl) GetSetPlan(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.SetPlanItem, error) {
 	var pgUUID pgtype.UUID
 	if err := pgUUID.Scan(setID.String()); err != nil {
 		return nil, fmt.Errorf("%w: invalid set id", ErrValidation)
 	}
 
+	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
 	// Verify set exists and user has membership
 	if _, err := s.querier.GetSetByID(ctx, db.GetSetByIDParams{
 		ID:     pgUUID,
-		UserID: userID,
+		UserID: pgUserID,
 	}); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -192,7 +196,7 @@ func (s *setServiceImpl) GetSetPlan(ctx context.Context, userID int64, setID uui
 
 	rows, err := s.querier.GetSetPlan(ctx, db.GetSetPlanParams{
 		SetID:  pgUUID,
-		UserID: userID,
+		UserID: pgUserID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("get set plan: %w", err)
@@ -209,16 +213,17 @@ func (s *setServiceImpl) GetSetPlan(ctx context.Context, userID int64, setID uui
 	return plan, nil
 }
 
-func (s *setServiceImpl) GetSetLeaderboard(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
+func (s *setServiceImpl) GetSetLeaderboard(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
 	var pgUUID pgtype.UUID
 	if err := pgUUID.Scan(setID.String()); err != nil {
 		return nil, fmt.Errorf("%w: invalid set id", ErrValidation)
 	}
 
+	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
 	// Verify set exists and caller has access
 	if _, err := s.querier.GetSetByID(ctx, db.GetSetByIDParams{
 		ID:     pgUUID,
-		UserID: userID,
+		UserID: pgUserID,
 	}); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -229,7 +234,7 @@ func (s *setServiceImpl) GetSetLeaderboard(ctx context.Context, userID int64, se
 	// Verify user is author of the set
 	isAuthor, err := s.querier.IsSetAuthor(ctx, db.IsSetAuthorParams{
 		ID:       pgUUID,
-		AuthorID: userID,
+		AuthorID: pgUserID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("check set author: %w", err)
@@ -259,7 +264,7 @@ func (s *setServiceImpl) GetSetLeaderboard(ctx context.Context, userID int64, se
 	}, nil
 }
 
-func (s *setServiceImpl) JoinSetByShareCode(ctx context.Context, userID int64, code string) (*contracts.CardSet, error) {
+func (s *setServiceImpl) JoinSetByShareCode(ctx context.Context, userID uuid.UUID, code string) (*contracts.CardSet, error) {
 	code = strings.TrimSpace(code)
 	if code == "" {
 		return nil, fmt.Errorf("%w: share code is required", ErrValidation)
@@ -269,10 +274,7 @@ func (s *setServiceImpl) JoinSetByShareCode(ctx context.Context, userID int64, c
 		return nil, err
 	}
 
-	row, err := s.querier.GetSetByShareCode(ctx, db.GetSetByShareCodeParams{
-		ShareCode: code,
-		UserID:    userID,
-	})
+	row, err := s.querier.GetSetByShareCode(ctx, code)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -280,25 +282,26 @@ func (s *setServiceImpl) JoinSetByShareCode(ctx context.Context, userID int64, c
 		return nil, fmt.Errorf("get set by share code: %w", err)
 	}
 
+	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
 	if _, err := s.querier.JoinSet(ctx, db.JoinSetParams{
-		UserID: userID,
+		UserID: pgUserID,
 		SetID:  row.ID,
 	}); err != nil {
 		return nil, fmt.Errorf("join set: %w", err)
 	}
 
 	if err := s.querier.InitUserFactProgress(ctx, db.InitUserFactProgressParams{
-		UserID: userID,
+		UserID: pgUserID,
 		SetID:  row.ID,
 	}); err != nil {
 		return nil, fmt.Errorf("init user fact progress: %w", err)
 	}
 
 	author := buildUserContract(row.AuthorID, row.AuthorFirstName, row.AuthorLastName, row.AuthorUsername)
-	return mapSetRowToContract(row.ID, row.Title, author, row.ShareCode, row.CardsTotal, row.CardsDue)
+	return mapSetRowToContract(row.ID, row.Title, author, row.ShareCode, row.CardsTotal, 0)
 }
 
-func (s *setServiceImpl) SaveGeneratedSet(ctx context.Context, userID int64, title string, genResult generator.Result) (*contracts.CardSet, error) {
+func (s *setServiceImpl) SaveGeneratedSet(ctx context.Context, userID uuid.UUID, title string, genResult generator.Result) (*contracts.CardSet, error) {
 	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return nil, err
 	}
@@ -445,18 +448,22 @@ func mapSetRowToContract(id pgtype.UUID, title string, author contracts.User, sh
 	return res, nil
 }
 
-func buildUserContract(id int64, firstName string, lastName, username pgtype.Text) contracts.User {
+func buildUserContract(id pgtype.UUID, firstName string, lastName, username pgtype.Text) contracts.User {
 	effectiveFirstName := strings.TrimSpace(firstName)
+	var uid uuid.UUID
+	if id.Valid {
+		uid = id.Bytes
+	}
 	if effectiveFirstName == "" {
 		if username.Valid && strings.TrimSpace(username.String) != "" {
 			effectiveFirstName = strings.TrimSpace(username.String)
 		} else {
-			effectiveFirstName = fmt.Sprintf("User %d", id)
+			effectiveFirstName = fmt.Sprintf("User %s", uid)
 		}
 	}
 
 	u := contracts.User{
-		ID:        id,
+		ID:        uid,
 		FirstName: effectiveFirstName,
 	}
 	if lastName.Valid && strings.TrimSpace(lastName.String) != "" {

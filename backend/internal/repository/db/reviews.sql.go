@@ -14,11 +14,11 @@ import (
 const recordAnswerResult = `-- name: RecordAnswerResult :one
 INSERT INTO answer_results (user_id, card_id, correct, answered_at)
 VALUES ($1, $2, $3, $4)
-RETURNING id, user_id, card_id, correct, answered_at, created_at
+RETURNING correct, answered_at, id, user_id, card_id
 `
 
 type RecordAnswerResultParams struct {
-	UserID     int64              `json:"user_id"`
+	UserID     pgtype.UUID        `json:"user_id"`
 	CardID     pgtype.UUID        `json:"card_id"`
 	Correct    bool               `json:"correct"`
 	AnsweredAt pgtype.Timestamptz `json:"answered_at"`
@@ -33,12 +33,11 @@ func (q *Queries) RecordAnswerResult(ctx context.Context, arg RecordAnswerResult
 	)
 	var i AnswerResult
 	err := row.Scan(
+		&i.Correct,
+		&i.AnsweredAt,
 		&i.ID,
 		&i.UserID,
 		&i.CardID,
-		&i.Correct,
-		&i.AnsweredAt,
-		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -104,21 +103,19 @@ ON CONFLICT (user_id, fact_id) DO UPDATE SET
         ELSE CURRENT_TIMESTAMP + (LEAST(30, (user_fact_progress.interval_days * user_fact_progress.ease_factor)::INT) || ' days')::INTERVAL
     END,
     last_reviewed_at = CURRENT_TIMESTAMP
-RETURNING user_id, fact_id, elo, ceiling_found, consecutive_correct, consecutive_incorrect, interval_days, ease_factor, next_review_at, last_reviewed_at
+RETURNING elo, ceiling_found, consecutive_correct, consecutive_incorrect, interval_days, ease_factor, next_review_at, last_reviewed_at, user_id, fact_id
 `
 
 type UpdateFactProgressOnAnswerParams struct {
-	UserID  int64  `json:"user_id"`
-	FactID  string `json:"fact_id"`
-	Column3 bool   `json:"column_3"`
+	UserID  pgtype.UUID `json:"user_id"`
+	FactID  pgtype.UUID `json:"fact_id"`
+	Column3 bool        `json:"column_3"`
 }
 
 func (q *Queries) UpdateFactProgressOnAnswer(ctx context.Context, arg UpdateFactProgressOnAnswerParams) (UserFactProgress, error) {
 	row := q.db.QueryRow(ctx, updateFactProgressOnAnswer, arg.UserID, arg.FactID, arg.Column3)
 	var i UserFactProgress
 	err := row.Scan(
-		&i.UserID,
-		&i.FactID,
 		&i.Elo,
 		&i.CeilingFound,
 		&i.ConsecutiveCorrect,
@@ -127,6 +124,8 @@ func (q *Queries) UpdateFactProgressOnAnswer(ctx context.Context, arg UpdateFact
 		&i.EaseFactor,
 		&i.NextReviewAt,
 		&i.LastReviewedAt,
+		&i.UserID,
+		&i.FactID,
 	)
 	return i, err
 }

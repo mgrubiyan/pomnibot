@@ -31,7 +31,7 @@ type ManualStore struct{ pool TxBeginner }
 func NewManualStore(pool TxBeginner) *ManualStore { return &ManualStore{pool: pool} }
 
 // CreateSet atomically creates a set, author membership and the first card.
-func (s *ManualStore) CreateSet(ctx context.Context, userID int64, title string, req *contracts.CreateCardRequest) (uuid.UUID, error) {
+func (s *ManualStore) CreateSet(ctx context.Context, userID uuid.UUID, title string, req *contracts.CreateCardRequest) (uuid.UUID, error) {
 	for range 20 {
 		n, err := rand.Int(rand.Reader, big.NewInt(900000))
 		if err != nil {
@@ -42,13 +42,14 @@ func (s *ManualStore) CreateSet(ctx context.Context, userID int64, title string,
 			continue
 		}
 		var setID uuid.UUID
+		pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
 		err = s.transaction(ctx, func(q *db.Queries) error {
-			set, err := q.CreateSet(ctx, db.CreateSetParams{Title: title, AuthorID: userID, ShareCode: code})
+			set, err := q.CreateSet(ctx, db.CreateSetParams{Title: title, AuthorID: pgUserID, ShareCode: code})
 			if err != nil {
 				return err
 			}
 			setID = uuid.UUID(set.ID.Bytes)
-			if _, err = q.JoinSet(ctx, db.JoinSetParams{UserID: userID, SetID: set.ID}); err != nil {
+			if _, err = q.JoinSet(ctx, db.JoinSetParams{UserID: pgUserID, SetID: set.ID}); err != nil {
 				return err
 			}
 			_, err = insertManualCard(ctx, q, set.ID, req)
@@ -64,11 +65,12 @@ func (s *ManualStore) CreateSet(ctx context.Context, userID int64, title string,
 }
 
 // CreateCard checks ownership while holding a lock until the card is committed.
-func (s *ManualStore) CreateCard(ctx context.Context, userID int64, setID uuid.UUID, req *contracts.CreateCardRequest) (uuid.UUID, error) {
+func (s *ManualStore) CreateCard(ctx context.Context, userID uuid.UUID, setID uuid.UUID, req *contracts.CreateCardRequest) (uuid.UUID, error) {
 	var cardID uuid.UUID
+	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
 	err := s.transaction(ctx, func(q *db.Queries) error {
 		id := pgtype.UUID{Bytes: setID, Valid: true}
-		if _, err := q.LockSetForAuthor(ctx, db.LockSetForAuthorParams{ID: id, AuthorID: userID}); err != nil {
+		if _, err := q.LockSetForAuthor(ctx, db.LockSetForAuthorParams{ID: id, AuthorID: pgUserID}); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return ErrManualSetNotFound
 			}
@@ -94,17 +96,18 @@ func (s *ManualStore) transaction(ctx context.Context, fn func(*db.Queries) erro
 }
 
 func insertManualCard(ctx context.Context, q db.Querier, setID pgtype.UUID, req *contracts.CreateCardRequest) (uuid.UUID, error) {
-	factID := uuid.NewString()
-	if _, err := q.CreateFact(ctx, db.CreateFactParams{ID: factID, SetID: setID, Name: req.Question}); err != nil {
+	factUUID := uuid.Must(uuid.NewV7())
+	pgFactID := pgtype.UUID{Bytes: factUUID, Valid: true}
+	if _, err := q.CreateFact(ctx, db.CreateFactParams{ID: pgFactID, SetID: setID, Name: req.Question}); err != nil {
 		return uuid.Nil, err
 	}
-	id := uuid.New()
+	id := uuid.Must(uuid.NewV7())
 	pgID := pgtype.UUID{Bytes: id, Valid: true}
 	answer := req.Answer.String
 	if req.Kind == contracts.CardKindBoolean {
 		answer = strconv.FormatBool(req.Answer.Bool)
 	}
-	if _, err := q.CreateCard(ctx, db.CreateCardParams{ID: pgID, FactID: factID, Kind: string(req.Kind), Question: req.Question, AnswerText: pgtype.Text{String: answer, Valid: true}, Explanation: req.Explanation.Value}); err != nil {
+	if _, err := q.CreateCard(ctx, db.CreateCardParams{ID: pgID, FactID: pgFactID, Kind: string(req.Kind), Question: req.Question, AnswerText: pgtype.Text{String: answer, Valid: true}, Explanation: req.Explanation.Value}); err != nil {
 		return uuid.Nil, err
 	}
 	if req.Kind == contracts.CardKindChoice {

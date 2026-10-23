@@ -193,7 +193,7 @@ func TestLoggingMiddleware(t *testing.T) {
 
 type authTestHandler struct {
 	contracts.UnimplementedHandler
-	capturedUserID int64
+	capturedUserID uuid.UUID
 	capturedOk     bool
 }
 
@@ -207,7 +207,16 @@ func TestRouter_AuthMiddlewareIntegration(t *testing.T) {
 
 	t.Run("propagates internal user ID from MAX authorization", func(t *testing.T) {
 		h := &authTestHandler{}
-		mockUserSvc := &mockUserService{}
+		testAuthID := uuid.MustParse("00000000-0000-0000-0000-000000524242")
+		mockUserSvc := &mockUserService{
+			maxFunc: func(_ context.Context, p usecase.MAXUserParams) (usecase.Account, error) {
+				return usecase.Account{
+					User:            contracts.User{ID: testAuthID, FirstName: p.FirstName},
+					MaxID:           p.MaxID,
+					ProfileComplete: true,
+				}, nil
+			},
+		}
 		router, err := NewRouter(h, fstest.MapFS{}, testBotToken, "", mockUserSvc)
 		if err != nil {
 			t.Fatalf("failed to create router: %v", err)
@@ -231,11 +240,8 @@ func TestRouter_AuthMiddlewareIntegration(t *testing.T) {
 		if !h.capturedOk {
 			t.Fatal("expected UserID to be present in context")
 		}
-		if h.capturedUserID != 524242 {
-			t.Fatalf("expected internal userID 524242, got %d", h.capturedUserID)
-		}
-		if len(mockUserSvc.upsertCalls) != 1 || mockUserSvc.upsertCalls[0].MaxID != 424242 {
-			t.Fatalf("expected UpsertMAXUser to be called for 424242, got %+v", mockUserSvc.upsertCalls)
+		if h.capturedUserID != testAuthID {
+			t.Fatalf("expected internal userID %s, got %s", testAuthID, h.capturedUserID)
 		}
 	})
 
@@ -257,8 +263,8 @@ func TestRouter_AuthMiddlewareIntegration(t *testing.T) {
 		if !h.capturedOk {
 			t.Fatal("expected UserID to be present in context")
 		}
-		if h.capturedUserID != 0 {
-			t.Fatalf("expected fallback userID 0, got %d", h.capturedUserID)
+		if h.capturedUserID != uuid.Nil {
+			t.Fatalf("expected fallback userID %s, got %s", uuid.Nil, h.capturedUserID)
 		}
 	})
 }
@@ -285,14 +291,14 @@ func TestRouter_E2E_Integration(t *testing.T) {
 	}
 
 	testMaxID := int64(98765)
-	testUserID := testMaxID + 100000
+	testUserID := uuid.MustParse("00000000-0000-0000-0000-000000198765")
 	testSetID := uuid.New()
 	testCardID := uuid.New()
 
 	mockSet := &mockSetService{
-		getSetFunc: func(_ context.Context, userID int64, setID uuid.UUID) (*contracts.CardSet, error) {
+		getSetFunc: func(_ context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.CardSet, error) {
 			if userID != testUserID {
-				t.Errorf("expected userID %d, got %d", testUserID, userID)
+				t.Errorf("expected userID %s, got %s", testUserID, userID)
 			}
 			if setID != testSetID {
 				return nil, usecase.ErrNotFound
@@ -306,9 +312,9 @@ func TestRouter_E2E_Integration(t *testing.T) {
 				},
 			}, nil
 		},
-		getCardsBySetIDFunc: func(_ context.Context, userID int64, setID uuid.UUID) ([]contracts.Card, error) {
+		getCardsBySetIDFunc: func(_ context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.Card, error) {
 			if userID != testUserID {
-				t.Errorf("expected userID %d, got %d", testUserID, userID)
+				t.Errorf("expected userID %s, got %s", testUserID, userID)
 			}
 			if setID != testSetID {
 				return nil, usecase.ErrNotFound
@@ -324,9 +330,9 @@ func TestRouter_E2E_Integration(t *testing.T) {
 				},
 			}, nil
 		},
-		getSetLeaderboardFunc: func(_ context.Context, userID int64, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
+		getSetLeaderboardFunc: func(_ context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
 			if userID != testUserID {
-				t.Errorf("expected userID %d, got %d", testUserID, userID)
+				t.Errorf("expected userID %s, got %s", testUserID, userID)
 			}
 			if setID != testSetID {
 				return nil, usecase.ErrNotFound
@@ -348,9 +354,9 @@ func TestRouter_E2E_Integration(t *testing.T) {
 	}
 
 	mockCard := &mockCardService{
-		answerQuestionFunc: func(_ context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error) {
+		answerQuestionFunc: func(_ context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error) {
 			if userID != testUserID {
-				t.Errorf("expected userID %d, got %d", testUserID, userID)
+				t.Errorf("expected userID %s, got %s", testUserID, userID)
 			}
 			if cardID != testCardID {
 				return nil, usecase.ErrNotFound
@@ -363,9 +369,9 @@ func TestRouter_E2E_Integration(t *testing.T) {
 	}
 
 	mockHome := &mockHomescreenService{
-		getTodayFunc: func(_ context.Context, userID int64) (*contracts.TodayData, error) {
+		getTodayFunc: func(_ context.Context, userID uuid.UUID) (*contracts.TodayData, error) {
 			if userID != testUserID {
-				t.Errorf("expected userID %d, got %d", testUserID, userID)
+				t.Errorf("expected userID %s, got %s", testUserID, userID)
 			}
 			return &contracts.TodayData{
 				User: contracts.User{
@@ -375,9 +381,9 @@ func TestRouter_E2E_Integration(t *testing.T) {
 				DueCount: 7,
 			}, nil
 		},
-		getFeedQuestionsFunc: func(_ context.Context, userID int64) ([]contracts.Card, error) {
+		getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID) ([]contracts.Card, error) {
 			if userID != testUserID {
-				t.Errorf("expected userID %d, got %d", testUserID, userID)
+				t.Errorf("expected userID %s, got %s", testUserID, userID)
 			}
 			return []contracts.Card{
 				{
@@ -389,9 +395,9 @@ func TestRouter_E2E_Integration(t *testing.T) {
 				},
 			}, nil
 		},
-		sendResultsFunc: func(_ context.Context, userID int64, results []contracts.AnswerResult) error {
+		sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.AnswerResult) error {
 			if userID != testUserID {
-				t.Errorf("expected userID %d, got %d", testUserID, userID)
+				t.Errorf("expected userID %s, got %s", testUserID, userID)
 			}
 			if len(results) != 1 {
 				t.Errorf("expected 1 result, got %d", len(results))
@@ -401,7 +407,18 @@ func TestRouter_E2E_Integration(t *testing.T) {
 	}
 
 	testBotToken := "e2e-token"
-	mockUserSvc := &mockUserService{}
+	mockUserSvc := &mockUserService{
+		maxFunc: func(_ context.Context, p usecase.MAXUserParams) (usecase.Account, error) {
+			return usecase.Account{
+				User: contracts.User{
+					ID:        testUserID,
+					FirstName: "Tester",
+				},
+				MaxID:           p.MaxID,
+				ProfileComplete: true,
+			}, nil
+		},
+	}
 	handler := NewAPIHandler(mockSet, mockCard, mockHome, nil)
 	router, err := NewRouter(handler, mockFS, testBotToken, "", mockUserSvc)
 	if err != nil {

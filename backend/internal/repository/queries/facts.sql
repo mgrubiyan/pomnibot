@@ -10,11 +10,11 @@ VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: GetFactsBySetID :many
-SELECT f.id, f.set_id, f.name, f.created_at, COALESCE(t.name, '') AS topic_name
+SELECT f.id, f.set_id, f.name, COALESCE(t.name, '') AS topic_name
 FROM facts f
 LEFT JOIN topics t ON f.topic_id = t.id
 WHERE f.set_id = $1
-ORDER BY f.created_at ASC;
+ORDER BY f.id ASC;
 
 -- name: GetSetPlan :many
 SELECT

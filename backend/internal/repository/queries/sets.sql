@@ -12,7 +12,6 @@ SELECT
     u.last_name AS author_last_name,
     u.username AS author_username,
     s.share_code,
-    s.created_at,
     s.updated_at,
     (SELECT COUNT(*)::INT FROM cards c JOIN facts f ON c.fact_id = f.id WHERE f.set_id = s.id) AS cards_total,
     (SELECT COUNT(*)::INT
@@ -34,14 +33,8 @@ SELECT
     u.last_name AS author_last_name,
     u.username AS author_username,
     s.share_code,
-    s.created_at,
     s.updated_at,
-    (SELECT COUNT(*)::INT FROM cards c JOIN facts f ON c.fact_id = f.id WHERE f.set_id = s.id) AS cards_total,
-    (SELECT COUNT(*)::INT
-     FROM facts f
-     LEFT JOIN user_fact_progress ufp ON ufp.fact_id = f.id AND ufp.user_id = $2
-     WHERE f.set_id = s.id
-       AND (ufp.next_review_at IS NULL OR ufp.next_review_at <= NOW())) AS cards_due
+    (SELECT COUNT(*)::INT FROM cards c JOIN facts f ON c.fact_id = f.id WHERE f.set_id = s.id) AS cards_total
 FROM sets s
 JOIN users u ON s.author_id = u.id
 WHERE s.share_code = $1;
@@ -61,7 +54,6 @@ SELECT
     u.last_name AS author_last_name,
     u.username AS author_username,
     s.share_code,
-    s.created_at,
     s.updated_at,
     (SELECT COUNT(*)::INT FROM cards c JOIN facts f ON c.fact_id = f.id WHERE f.set_id = s.id) AS cards_total,
     (SELECT COUNT(*)::INT
@@ -164,7 +156,7 @@ participants AS (
     UNION
     SELECT s.author_id AS user_id FROM sets s WHERE s.id = sqlc.arg('set_id')::UUID
     UNION
-    SELECT sqlc.arg('user_id')::BIGINT AS user_id
+    SELECT sqlc.arg('user_id')::UUID AS user_id
 ),
 -- Aggregate only existing progress before joining participants. Missing facts
 -- contribute the default 700 without expanding every participant into every fact.
@@ -201,7 +193,7 @@ ranked AS (
 )
 SELECT percentile, rank
 FROM ranked
-WHERE user_id = sqlc.arg('user_id')::BIGINT;
+WHERE user_id = sqlc.arg('user_id')::UUID;
 
 -- name: LockSetForAuthor :one
 SELECT id FROM sets WHERE id = $1 AND author_id = $2 FOR UPDATE;

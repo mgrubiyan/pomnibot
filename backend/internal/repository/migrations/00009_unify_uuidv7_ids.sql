@@ -427,21 +427,266 @@ DROP TABLE _answer_result_id_map;
 
 
 -- +goose Down
--- Recreate created_at columns using uuid_extract_timestamp(id)
-ALTER TABLE users ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
-UPDATE users SET created_at = COALESCE(uuid_extract_timestamp(id), CURRENT_TIMESTAMP);
+-- Full DDL rollback to Migration 00008 schema.
+-- Recreates created_at using uuid_extract_timestamp(id), reverts users and answer_results user_id to BIGINT,
+-- facts.id and foreign keys to TEXT, and restores sequences and constraints.
 
-ALTER TABLE sets ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
-UPDATE sets SET created_at = COALESCE(uuid_extract_timestamp(id), CURRENT_TIMESTAMP);
+-- 1. Create temporary rollback mapping for users
+CREATE SEQUENCE IF NOT EXISTS users_internal_id_seq;
 
-ALTER TABLE topics ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
-UPDATE topics SET created_at = COALESCE(uuid_extract_timestamp(id), CURRENT_TIMESTAMP);
+CREATE TEMP TABLE _user_rollback_map AS
+SELECT
+    id AS uuid_id,
+    CASE
+        WHEN id = '00000000-0000-0000-0000-000000000000'::uuid THEN 0::bigint
+        WHEN max_id IS NOT NULL THEN max_id
+        ELSE nextval('users_internal_id_seq')
+    END AS bigint_id
+FROM users;
 
-ALTER TABLE facts ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
-UPDATE facts SET created_at = COALESCE(uuid_extract_timestamp(id), CURRENT_TIMESTAMP);
+SELECT setval('users_internal_id_seq', GREATEST(COALESCE((SELECT MAX(bigint_id) FROM _user_rollback_map), 0), 100001));
 
-ALTER TABLE cards ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
-UPDATE cards SET created_at = COALESCE(uuid_extract_timestamp(id), CURRENT_TIMESTAMP);
+-- 2. Drop all foreign keys and composite primary keys
+ALTER TABLE sets DROP CONSTRAINT IF EXISTS sets_author_id_fkey;
+ALTER TABLE user_sets DROP CONSTRAINT IF EXISTS user_sets_user_id_fkey;
+ALTER TABLE user_sets DROP CONSTRAINT IF EXISTS user_sets_set_id_fkey;
+ALTER TABLE user_fact_progress DROP CONSTRAINT IF EXISTS user_fact_progress_user_id_fkey;
+ALTER TABLE user_fact_progress DROP CONSTRAINT IF EXISTS user_fact_progress_fact_id_fkey;
+ALTER TABLE facts DROP CONSTRAINT IF EXISTS facts_set_id_fkey;
+ALTER TABLE facts DROP CONSTRAINT IF EXISTS facts_topic_id_fkey;
+ALTER TABLE cards DROP CONSTRAINT IF EXISTS cards_fact_id_fkey;
+ALTER TABLE card_options DROP CONSTRAINT IF EXISTS card_options_card_id_fkey;
+ALTER TABLE card_table_columns DROP CONSTRAINT IF EXISTS card_table_columns_card_id_fkey;
+ALTER TABLE card_table_items DROP CONSTRAINT IF EXISTS card_table_items_card_id_fkey;
+ALTER TABLE answer_results DROP CONSTRAINT IF EXISTS answer_results_user_id_fkey;
+ALTER TABLE answer_results DROP CONSTRAINT IF EXISTS answer_results_card_id_fkey;
 
-ALTER TABLE answer_results ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
-UPDATE answer_results SET created_at = COALESCE(uuid_extract_timestamp(id), CURRENT_TIMESTAMP);
+ALTER TABLE user_sets DROP CONSTRAINT IF EXISTS user_sets_pkey;
+ALTER TABLE user_fact_progress DROP CONSTRAINT IF EXISTS user_fact_progress_pkey;
+
+-- 3. Rollback USERS table
+ALTER TABLE users
+    DROP CONSTRAINT users_pkey,
+    ADD COLUMN old_id BIGINT,
+    ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+UPDATE users u
+SET old_id = m.bigint_id,
+    created_at = COALESCE(uuid_extract_timestamp(u.id), CURRENT_TIMESTAMP)
+FROM _user_rollback_map m
+WHERE u.id = m.uuid_id;
+
+ALTER TABLE users
+    DROP COLUMN id;
+
+ALTER TABLE users
+    RENAME COLUMN old_id TO id;
+
+ALTER TABLE users
+    ALTER COLUMN id SET NOT NULL,
+    ALTER COLUMN id SET DEFAULT nextval('users_internal_id_seq'),
+    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+ALTER SEQUENCE users_internal_id_seq OWNED BY users.id;
+
+-- 4. Rollback SETS table
+ALTER TABLE sets
+    ADD COLUMN old_author_id BIGINT,
+    ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+UPDATE sets s
+SET old_author_id = m.bigint_id,
+    created_at = COALESCE(uuid_extract_timestamp(s.id), CURRENT_TIMESTAMP)
+FROM _user_rollback_map m
+WHERE s.author_id = m.uuid_id;
+
+ALTER TABLE sets
+    DROP COLUMN author_id;
+
+ALTER TABLE sets
+    RENAME COLUMN old_author_id TO author_id;
+
+ALTER TABLE sets
+    ALTER COLUMN author_id SET NOT NULL,
+    ALTER COLUMN id SET DEFAULT gen_random_uuid();
+
+-- 5. Rollback USER_SETS table
+ALTER TABLE user_sets
+    ADD COLUMN old_user_id BIGINT;
+
+UPDATE user_sets us
+SET old_user_id = m.bigint_id
+FROM _user_rollback_map m
+WHERE us.user_id = m.uuid_id;
+
+ALTER TABLE user_sets
+    DROP COLUMN user_id;
+
+ALTER TABLE user_sets
+    RENAME COLUMN old_user_id TO user_id;
+
+ALTER TABLE user_sets
+    ALTER COLUMN user_id SET NOT NULL,
+    ADD CONSTRAINT user_sets_pkey PRIMARY KEY (user_id, set_id);
+
+-- 6. Rollback TOPICS table
+ALTER TABLE topics
+    ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+UPDATE topics
+SET created_at = COALESCE(uuid_extract_timestamp(id), CURRENT_TIMESTAMP);
+
+ALTER TABLE topics
+    ALTER COLUMN id SET DEFAULT gen_random_uuid();
+
+-- 7. Rollback FACTS table
+ALTER TABLE facts
+    DROP CONSTRAINT facts_pkey,
+    ADD COLUMN old_id TEXT,
+    ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+UPDATE facts
+SET old_id = id::text,
+    created_at = COALESCE(uuid_extract_timestamp(id), CURRENT_TIMESTAMP);
+
+ALTER TABLE facts
+    DROP COLUMN id;
+
+ALTER TABLE facts
+    RENAME COLUMN old_id TO id;
+
+ALTER TABLE facts
+    ALTER COLUMN id SET NOT NULL,
+    ADD CONSTRAINT facts_pkey PRIMARY KEY (id);
+
+-- 8. Rollback CARDS table
+ALTER TABLE cards
+    ADD COLUMN old_fact_id TEXT,
+    ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+UPDATE cards
+SET old_fact_id = fact_id::text,
+    created_at = COALESCE(uuid_extract_timestamp(id), CURRENT_TIMESTAMP);
+
+ALTER TABLE cards
+    DROP COLUMN fact_id;
+
+ALTER TABLE cards
+    RENAME COLUMN old_fact_id TO fact_id;
+
+ALTER TABLE cards
+    ALTER COLUMN fact_id SET NOT NULL,
+    ALTER COLUMN id SET DEFAULT gen_random_uuid();
+
+-- 9. Rollback CARD_OPTIONS, CARD_TABLE_COLUMNS, CARD_TABLE_ITEMS defaults
+ALTER TABLE card_options ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE card_table_columns ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE card_table_items ALTER COLUMN id SET DEFAULT gen_random_uuid();
+
+-- 10. Rollback USER_FACT_PROGRESS table
+ALTER TABLE user_fact_progress
+    ADD COLUMN old_user_id BIGINT,
+    ADD COLUMN old_fact_id TEXT;
+
+UPDATE user_fact_progress ufp
+SET old_user_id = m.bigint_id,
+    old_fact_id = ufp.fact_id::text
+FROM _user_rollback_map m
+WHERE ufp.user_id = m.uuid_id;
+
+ALTER TABLE user_fact_progress
+    DROP COLUMN user_id,
+    DROP COLUMN fact_id;
+
+ALTER TABLE user_fact_progress
+    RENAME COLUMN old_user_id TO user_id;
+ALTER TABLE user_fact_progress
+    RENAME COLUMN old_fact_id TO fact_id;
+
+ALTER TABLE user_fact_progress
+    ALTER COLUMN user_id SET NOT NULL,
+    ALTER COLUMN fact_id SET NOT NULL,
+    ADD CONSTRAINT user_fact_progress_pkey PRIMARY KEY (user_id, fact_id);
+
+-- 11. Rollback ANSWER_RESULTS table
+ALTER TABLE answer_results
+    ADD COLUMN old_user_id BIGINT,
+    ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+UPDATE answer_results ar
+SET old_user_id = m.bigint_id,
+    created_at = COALESCE(uuid_extract_timestamp(ar.id), CURRENT_TIMESTAMP)
+FROM _user_rollback_map m
+WHERE ar.user_id = m.uuid_id;
+
+ALTER TABLE answer_results
+    DROP COLUMN user_id;
+
+ALTER TABLE answer_results
+    RENAME COLUMN old_user_id TO user_id;
+
+ALTER TABLE answer_results
+    ALTER COLUMN user_id SET NOT NULL,
+    ALTER COLUMN id SET DEFAULT gen_random_uuid();
+
+-- 12. Recreate foreign key constraints
+ALTER TABLE sets
+    ADD CONSTRAINT sets_author_id_fkey FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE;
+
+ALTER TABLE user_sets
+    ADD CONSTRAINT user_sets_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    ADD CONSTRAINT user_sets_set_id_fkey FOREIGN KEY (set_id) REFERENCES sets(id) ON DELETE CASCADE;
+
+ALTER TABLE facts
+    ADD CONSTRAINT facts_set_id_fkey FOREIGN KEY (set_id) REFERENCES sets(id) ON DELETE CASCADE,
+    ADD CONSTRAINT facts_topic_id_fkey FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE SET NULL;
+
+ALTER TABLE cards
+    ADD CONSTRAINT cards_fact_id_fkey FOREIGN KEY (fact_id) REFERENCES facts(id) ON DELETE CASCADE;
+
+ALTER TABLE card_options
+    ADD CONSTRAINT card_options_card_id_fkey FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE;
+
+ALTER TABLE card_table_columns
+    ADD CONSTRAINT card_table_columns_card_id_fkey FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE;
+
+ALTER TABLE card_table_items
+    ADD CONSTRAINT card_table_items_card_id_fkey FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE;
+
+ALTER TABLE user_fact_progress
+    ADD CONSTRAINT user_fact_progress_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    ADD CONSTRAINT user_fact_progress_fact_id_fkey FOREIGN KEY (fact_id) REFERENCES facts(id) ON DELETE CASCADE;
+
+ALTER TABLE answer_results
+    ADD CONSTRAINT answer_results_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    ADD CONSTRAINT answer_results_card_id_fkey FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE;
+
+-- 13. Recreate Indexes
+DROP INDEX IF EXISTS idx_sets_author_id;
+CREATE INDEX idx_sets_author_id ON sets(author_id);
+
+DROP INDEX IF EXISTS idx_facts_set_id;
+CREATE INDEX idx_facts_set_id ON facts(set_id);
+
+DROP INDEX IF EXISTS idx_facts_topic_id;
+CREATE INDEX idx_facts_topic_id ON facts(topic_id);
+
+DROP INDEX IF EXISTS idx_cards_fact_id;
+CREATE INDEX idx_cards_fact_id ON cards(fact_id);
+
+DROP INDEX IF EXISTS idx_card_options_card_id;
+CREATE INDEX idx_card_options_card_id ON card_options(card_id);
+
+DROP INDEX IF EXISTS idx_card_table_columns_card_id;
+CREATE INDEX idx_card_table_columns_card_id ON card_table_columns(card_id);
+
+DROP INDEX IF EXISTS idx_card_table_items_card_id;
+CREATE INDEX idx_card_table_items_card_id ON card_table_items(card_id);
+
+DROP INDEX IF EXISTS idx_user_fact_progress_due;
+CREATE INDEX idx_user_fact_progress_due ON user_fact_progress(user_id, next_review_at);
+
+DROP INDEX IF EXISTS idx_answer_results_user;
+CREATE INDEX idx_answer_results_user ON answer_results(user_id, answered_at);
+
+DROP TABLE IF EXISTS _user_rollback_map;

@@ -352,8 +352,8 @@ export interface components {
             topic?: string;
         };
         User: {
-            /** Format: int64 */
-            id: number;
+            /** Format: uuid */
+            id: string;
             firstName: string;
             lastName?: string;
             username?: string;

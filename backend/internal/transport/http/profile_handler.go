@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/google/uuid"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
@@ -23,7 +24,7 @@ func (h *APIHandler) GetProfile(ctx context.Context) (contracts.GetProfileRes, e
 	if account, ok := accountFromContext(ctx); ok {
 		return profileResponse(account), nil
 	}
-	return profileResponse(usecase.Account{User: contracts.User{ID: 0, FirstName: "Browser Test User"}, ProfileComplete: true}), nil
+	return profileResponse(usecase.Account{User: contracts.User{ID: uuid.Nil, FirstName: "Browser Test User"}, ProfileComplete: true}), nil
 }
 
 // PutProfile is restricted to verified Telegram accounts.

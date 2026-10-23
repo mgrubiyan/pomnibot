@@ -1784,14 +1784,14 @@ func (s *UpdateCardRequest) SetTopic(val OptString) {
 
 // Ref: #/components/schemas/User
 type User struct {
-	ID        int64     `json:"id"`
+	ID        uuid.UUID `json:"id"`
 	FirstName string    `json:"firstName"`
 	LastName  OptString `json:"lastName"`
 	Username  OptString `json:"username"`
 }
 
 // GetID returns the value of ID.
-func (s *User) GetID() int64 {
+func (s *User) GetID() uuid.UUID {
 	return s.ID
 }
 
@@ -1811,7 +1811,7 @@ func (s *User) GetUsername() OptString {
 }
 
 // SetID sets the value of ID.
-func (s *User) SetID(val int64) {
+func (s *User) SetID(val uuid.UUID) {
 	s.ID = val
 }
 

@@ -9,8 +9,8 @@ import (
 
 type mockQuerier struct {
 	db.Querier
-	countTotalDueCardsForUserFunc  func(ctx context.Context, userID int64) (int32, error)
-	getNextReviewDateForUserFunc   func(ctx context.Context, userID int64) (pgtype.Timestamptz, error)
+	countTotalDueCardsForUserFunc  func(ctx context.Context, userID pgtype.UUID) (int32, error)
+	getNextReviewDateForUserFunc   func(ctx context.Context, userID pgtype.UUID) (pgtype.Timestamptz, error)
 	createCardFunc                 func(ctx context.Context, arg db.CreateCardParams) (db.Card, error)
 	createCardOptionFunc           func(ctx context.Context, arg db.CreateCardOptionParams) (db.CardOption, error)
 	createFactFunc                 func(ctx context.Context, arg db.CreateFactParams) (db.Fact, error)
@@ -30,39 +30,39 @@ type mockQuerier struct {
 	getCardTableItemsFunc          func(ctx context.Context, cardID pgtype.UUID) ([]db.CardTableItem, error)
 	getCardsBySetIDFunc            func(ctx context.Context, arg db.GetCardsBySetIDParams) ([]db.GetCardsBySetIDRow, error)
 	leaveSetFunc                   func(ctx context.Context, arg db.LeaveSetParams) (int64, error)
-	getFeedCardsForUserFunc        func(ctx context.Context, userID int64) ([]db.GetFeedCardsForUserRow, error)
+	getFeedCardsForUserFunc        func(ctx context.Context, userID pgtype.UUID) ([]db.GetFeedCardsForUserRow, error)
 	getSetByIDFunc                 func(ctx context.Context, arg db.GetSetByIDParams) (db.GetSetByIDRow, error)
-	getSetByShareCodeFunc          func(ctx context.Context, arg db.GetSetByShareCodeParams) (db.GetSetByShareCodeRow, error)
+	getSetByShareCodeFunc          func(ctx context.Context, shareCode string) (db.GetSetByShareCodeRow, error)
 	getSetPlanFunc                 func(ctx context.Context, arg db.GetSetPlanParams) ([]db.GetSetPlanRow, error)
-	getUserByIDFunc                func(ctx context.Context, id int64) (db.User, error)
-	getUserSetsFunc                func(ctx context.Context, userID int64) ([]db.GetUserSetsRow, error)
+	getUserByIDFunc                func(ctx context.Context, id pgtype.UUID) (db.User, error)
+	getUserSetsFunc                func(ctx context.Context, userID pgtype.UUID) ([]db.GetUserSetsRow, error)
 	initUserFactProgressFunc       func(ctx context.Context, arg db.InitUserFactProgressParams) error
 	isSetAuthorFunc                func(ctx context.Context, arg db.IsSetAuthorParams) (bool, error)
 	joinSetFunc                    func(ctx context.Context, arg db.JoinSetParams) (db.UserSet, error)
 	recordAnswerResultFunc         func(ctx context.Context, arg db.RecordAnswerResultParams) (db.AnswerResult, error)
-	updateCardFunc                 func(ctx context.Context, arg db.UpdateCardParams) (db.Card, error)
+	updateCardFunc                 func(ctx context.Context, arg db.UpdateCardParams) (db.UpdateCardRow, error)
 	updateFactProgressOnAnswerFunc func(ctx context.Context, arg db.UpdateFactProgressOnAnswerParams) (db.UserFactProgress, error)
-	ensureUserFunc                 func(ctx context.Context, id int64) (db.User, error)
+	ensureUserFunc                 func(ctx context.Context, id pgtype.UUID) (db.User, error)
 	getSetLeaderboardFunc          func(ctx context.Context, setID pgtype.UUID) ([]db.GetSetLeaderboardRow, error)
 	getUserSetRatingFunc           func(ctx context.Context, arg db.GetUserSetRatingParams) (db.GetUserSetRatingRow, error)
-	getUsersWithDueFactsFunc       func(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]int64, error)
+	getUsersWithDueFactsFunc       func(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]pgtype.UUID, error)
 }
 
-func (m *mockQuerier) GetUsersWithDueFacts(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]int64, error) {
+func (m *mockQuerier) GetUsersWithDueFacts(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]pgtype.UUID, error) {
 	if m.getUsersWithDueFactsFunc != nil {
 		return m.getUsersWithDueFactsFunc(ctx, arg)
 	}
 	return nil, nil
 }
 
-func (m *mockQuerier) CountTotalDueCardsForUser(ctx context.Context, userID int64) (int32, error) {
+func (m *mockQuerier) CountTotalDueCardsForUser(ctx context.Context, userID pgtype.UUID) (int32, error) {
 	if m.countTotalDueCardsForUserFunc != nil {
 		return m.countTotalDueCardsForUserFunc(ctx, userID)
 	}
 	return 0, nil
 }
 
-func (m *mockQuerier) GetNextReviewDateForUser(ctx context.Context, userID int64) (pgtype.Timestamptz, error) {
+func (m *mockQuerier) GetNextReviewDateForUser(ctx context.Context, userID pgtype.UUID) (pgtype.Timestamptz, error) {
 	if m.getNextReviewDateForUserFunc != nil {
 		return m.getNextReviewDateForUserFunc(ctx, userID)
 	}
@@ -197,7 +197,7 @@ func (m *mockQuerier) GetCardsBySetID(ctx context.Context, arg db.GetCardsBySetI
 	return nil, nil
 }
 
-func (m *mockQuerier) GetFeedCardsForUser(ctx context.Context, userID int64) ([]db.GetFeedCardsForUserRow, error) {
+func (m *mockQuerier) GetFeedCardsForUser(ctx context.Context, userID pgtype.UUID) ([]db.GetFeedCardsForUserRow, error) {
 	if m.getFeedCardsForUserFunc != nil {
 		return m.getFeedCardsForUserFunc(ctx, userID)
 	}
@@ -211,9 +211,9 @@ func (m *mockQuerier) GetSetByID(ctx context.Context, arg db.GetSetByIDParams) (
 	return db.GetSetByIDRow{}, nil
 }
 
-func (m *mockQuerier) GetSetByShareCode(ctx context.Context, arg db.GetSetByShareCodeParams) (db.GetSetByShareCodeRow, error) {
+func (m *mockQuerier) GetSetByShareCode(ctx context.Context, shareCode string) (db.GetSetByShareCodeRow, error) {
 	if m.getSetByShareCodeFunc != nil {
-		return m.getSetByShareCodeFunc(ctx, arg)
+		return m.getSetByShareCodeFunc(ctx, shareCode)
 	}
 	return db.GetSetByShareCodeRow{}, nil
 }
@@ -225,14 +225,14 @@ func (m *mockQuerier) GetSetPlan(ctx context.Context, arg db.GetSetPlanParams) (
 	return nil, nil
 }
 
-func (m *mockQuerier) GetUserByID(ctx context.Context, id int64) (db.User, error) {
+func (m *mockQuerier) GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error) {
 	if m.getUserByIDFunc != nil {
 		return m.getUserByIDFunc(ctx, id)
 	}
 	return db.User{}, nil
 }
 
-func (m *mockQuerier) GetUserSets(ctx context.Context, userID int64) ([]db.GetUserSetsRow, error) {
+func (m *mockQuerier) GetUserSets(ctx context.Context, userID pgtype.UUID) ([]db.GetUserSetsRow, error) {
 	if m.getUserSetsFunc != nil {
 		return m.getUserSetsFunc(ctx, userID)
 	}
@@ -274,11 +274,11 @@ func (m *mockQuerier) RecordAnswerResult(ctx context.Context, arg db.RecordAnswe
 	return db.AnswerResult{}, nil
 }
 
-func (m *mockQuerier) UpdateCard(ctx context.Context, arg db.UpdateCardParams) (db.Card, error) {
+func (m *mockQuerier) UpdateCard(ctx context.Context, arg db.UpdateCardParams) (db.UpdateCardRow, error) {
 	if m.updateCardFunc != nil {
 		return m.updateCardFunc(ctx, arg)
 	}
-	return db.Card{}, nil
+	return db.UpdateCardRow{}, nil
 }
 
 func (m *mockQuerier) UpdateFactProgressOnAnswer(ctx context.Context, arg db.UpdateFactProgressOnAnswerParams) (db.UserFactProgress, error) {
@@ -288,7 +288,7 @@ func (m *mockQuerier) UpdateFactProgressOnAnswer(ctx context.Context, arg db.Upd
 	return db.UserFactProgress{}, nil
 }
 
-func (m *mockQuerier) EnsureUser(ctx context.Context, id int64) (db.User, error) {
+func (m *mockQuerier) EnsureUser(ctx context.Context, id pgtype.UUID) (db.User, error) {
 	if m.ensureUserFunc != nil {
 		return m.ensureUserFunc(ctx, id)
 	}

@@ -14,11 +14,11 @@ import (
 const createFact = `-- name: CreateFact :one
 INSERT INTO facts (id, set_id, topic_id, name)
 VALUES ($1, $2, $3, $4)
-RETURNING id, set_id, topic_id, name, created_at
+RETURNING name, id, set_id, topic_id
 `
 
 type CreateFactParams struct {
-	ID      string      `json:"id"`
+	ID      pgtype.UUID `json:"id"`
 	SetID   pgtype.UUID `json:"set_id"`
 	TopicID pgtype.UUID `json:"topic_id"`
 	Name    string      `json:"name"`
@@ -33,29 +33,27 @@ func (q *Queries) CreateFact(ctx context.Context, arg CreateFactParams) (Fact, e
 	)
 	var i Fact
 	err := row.Scan(
+		&i.Name,
 		&i.ID,
 		&i.SetID,
 		&i.TopicID,
-		&i.Name,
-		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getFactsBySetID = `-- name: GetFactsBySetID :many
-SELECT f.id, f.set_id, f.name, f.created_at, COALESCE(t.name, '') AS topic_name
+SELECT f.id, f.set_id, f.name, COALESCE(t.name, '') AS topic_name
 FROM facts f
 LEFT JOIN topics t ON f.topic_id = t.id
 WHERE f.set_id = $1
-ORDER BY f.created_at ASC
+ORDER BY f.id ASC
 `
 
 type GetFactsBySetIDRow struct {
-	ID        string             `json:"id"`
-	SetID     pgtype.UUID        `json:"set_id"`
-	Name      string             `json:"name"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	TopicName string             `json:"topic_name"`
+	ID        pgtype.UUID `json:"id"`
+	SetID     pgtype.UUID `json:"set_id"`
+	Name      string      `json:"name"`
+	TopicName string      `json:"topic_name"`
 }
 
 func (q *Queries) GetFactsBySetID(ctx context.Context, setID pgtype.UUID) ([]GetFactsBySetIDRow, error) {
@@ -71,7 +69,6 @@ func (q *Queries) GetFactsBySetID(ctx context.Context, setID pgtype.UUID) ([]Get
 			&i.ID,
 			&i.SetID,
 			&i.Name,
-			&i.CreatedAt,
 			&i.TopicName,
 		); err != nil {
 			return nil, err
@@ -101,7 +98,7 @@ ORDER BY COALESCE(ufp.next_review_at, CURRENT_TIMESTAMP) ASC
 
 type GetSetPlanParams struct {
 	SetID  pgtype.UUID `json:"set_id"`
-	UserID int64       `json:"user_id"`
+	UserID pgtype.UUID `json:"user_id"`
 }
 
 type GetSetPlanRow struct {
@@ -130,21 +127,19 @@ func (q *Queries) GetSetPlan(ctx context.Context, arg GetSetPlanParams) ([]GetSe
 }
 
 const getUserFactProgress = `-- name: GetUserFactProgress :one
-SELECT user_id, fact_id, elo, ceiling_found, consecutive_correct, consecutive_incorrect, interval_days, ease_factor, next_review_at, last_reviewed_at FROM user_fact_progress
+SELECT elo, ceiling_found, consecutive_correct, consecutive_incorrect, interval_days, ease_factor, next_review_at, last_reviewed_at, user_id, fact_id FROM user_fact_progress
 WHERE user_id = $1 AND fact_id = $2
 `
 
 type GetUserFactProgressParams struct {
-	UserID int64  `json:"user_id"`
-	FactID string `json:"fact_id"`
+	UserID pgtype.UUID `json:"user_id"`
+	FactID pgtype.UUID `json:"fact_id"`
 }
 
 func (q *Queries) GetUserFactProgress(ctx context.Context, arg GetUserFactProgressParams) (UserFactProgress, error) {
 	row := q.db.QueryRow(ctx, getUserFactProgress, arg.UserID, arg.FactID)
 	var i UserFactProgress
 	err := row.Scan(
-		&i.UserID,
-		&i.FactID,
 		&i.Elo,
 		&i.CeilingFound,
 		&i.ConsecutiveCorrect,
@@ -153,6 +148,8 @@ func (q *Queries) GetUserFactProgress(ctx context.Context, arg GetUserFactProgre
 		&i.EaseFactor,
 		&i.NextReviewAt,
 		&i.LastReviewedAt,
+		&i.UserID,
+		&i.FactID,
 	)
 	return i, err
 }
@@ -166,7 +163,7 @@ ON CONFLICT (user_id, fact_id) DO NOTHING
 `
 
 type InitUserFactProgressParams struct {
-	UserID int64       `json:"user_id"`
+	UserID pgtype.UUID `json:"user_id"`
 	SetID  pgtype.UUID `json:"set_id"`
 }
 
@@ -179,12 +176,12 @@ const upsertTopic = `-- name: UpsertTopic :one
 INSERT INTO topics (name)
 VALUES ($1)
 ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-RETURNING id, name, created_at
+RETURNING name, id
 `
 
 func (q *Queries) UpsertTopic(ctx context.Context, name string) (Topic, error) {
 	row := q.db.QueryRow(ctx, upsertTopic, name)
 	var i Topic
-	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
+	err := row.Scan(&i.Name, &i.ID)
 	return i, err
 }

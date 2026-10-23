@@ -25,27 +25,28 @@ func NewHomescreenService(querier db.Querier, userService UserService) Homescree
 	}
 }
 
-func (s *homescreenServiceImpl) GetToday(ctx context.Context, userID int64) (*contracts.TodayData, error) {
+func (s *homescreenServiceImpl) GetToday(ctx context.Context, userID uuid.UUID) (*contracts.TodayData, error) {
 	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return nil, err
 	}
 
-	user, err := s.querier.GetUserByID(ctx, userID)
+	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
+	user, err := s.querier.GetUserByID(ctx, pgUserID)
 	if err != nil {
 		return nil, fmt.Errorf("get user by id: %w", err)
 	}
 
-	dueCount, err := s.querier.CountTotalDueCardsForUser(ctx, userID)
+	dueCount, err := s.querier.CountTotalDueCardsForUser(ctx, pgUserID)
 	if err != nil {
 		return nil, fmt.Errorf("count due cards: %w", err)
 	}
 
-	nextReviewAt, err := s.querier.GetNextReviewDateForUser(ctx, userID)
+	nextReviewAt, err := s.querier.GetNextReviewDateForUser(ctx, pgUserID)
 	if err != nil {
 		return nil, fmt.Errorf("get next review date: %w", err)
 	}
 
-	setRows, err := s.querier.GetUserSets(ctx, userID)
+	setRows, err := s.querier.GetUserSets(ctx, pgUserID)
 	if err != nil {
 		return nil, fmt.Errorf("get user sets: %w", err)
 	}
@@ -89,12 +90,13 @@ func (s *homescreenServiceImpl) GetToday(ctx context.Context, userID int64) (*co
 	}, nil
 }
 
-func (s *homescreenServiceImpl) GetFeedQuestions(ctx context.Context, userID int64) ([]contracts.Card, error) {
+func (s *homescreenServiceImpl) GetFeedQuestions(ctx context.Context, userID uuid.UUID) ([]contracts.Card, error) {
 	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return nil, err
 	}
 
-	rows, err := s.querier.GetFeedCardsForUser(ctx, userID)
+	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
+	rows, err := s.querier.GetFeedCardsForUser(ctx, pgUserID)
 	if err != nil {
 		return nil, fmt.Errorf("get feed cards for user: %w", err)
 	}
@@ -127,11 +129,12 @@ func (s *homescreenServiceImpl) GetFeedQuestions(ctx context.Context, userID int
 	return cards, nil
 }
 
-func (s *homescreenServiceImpl) SendResults(ctx context.Context, userID int64, results []contracts.AnswerResult) error {
+func (s *homescreenServiceImpl) SendResults(ctx context.Context, userID uuid.UUID, results []contracts.AnswerResult) error {
 	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return err
 	}
 
+	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
 	for _, res := range results {
 		var pgCardID pgtype.UUID
 		if err := pgCardID.Scan(res.CardId.String()); err != nil {
@@ -140,7 +143,7 @@ func (s *homescreenServiceImpl) SendResults(ctx context.Context, userID int64, r
 
 		card, err := s.querier.GetCardByID(ctx, db.GetCardByIDParams{
 			ID:     pgCardID,
-			UserID: userID,
+			UserID: pgUserID,
 		})
 		if err != nil {
 			return fmt.Errorf("card %s not found: %w", res.CardId, ErrNotFound)
@@ -150,7 +153,7 @@ func (s *homescreenServiceImpl) SendResults(ctx context.Context, userID int64, r
 		_ = answeredAt.Scan(res.AnsweredAt)
 
 		_, err = s.querier.RecordAnswerResult(ctx, db.RecordAnswerResultParams{
-			UserID:     userID,
+			UserID:     pgUserID,
 			CardID:     pgCardID,
 			Correct:    res.Correct,
 			AnsweredAt: answeredAt,
@@ -160,7 +163,7 @@ func (s *homescreenServiceImpl) SendResults(ctx context.Context, userID int64, r
 		}
 
 		_, err = s.querier.UpdateFactProgressOnAnswer(ctx, db.UpdateFactProgressOnAnswerParams{
-			UserID:  userID,
+			UserID:  pgUserID,
 			FactID:  card.FactID,
 			Column3: res.Correct,
 		})

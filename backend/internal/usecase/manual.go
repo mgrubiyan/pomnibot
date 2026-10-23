@@ -13,8 +13,8 @@ import (
 
 // ManualWriter saves complete manual cards atomically.
 type ManualWriter interface {
-	CreateSet(context.Context, int64, string, *contracts.CreateCardRequest) (uuid.UUID, error)
-	CreateCard(context.Context, int64, uuid.UUID, *contracts.CreateCardRequest) (uuid.UUID, error)
+	CreateSet(context.Context, uuid.UUID, string, *contracts.CreateCardRequest) (uuid.UUID, error)
+	CreateCard(context.Context, uuid.UUID, uuid.UUID, *contracts.CreateCardRequest) (uuid.UUID, error)
 }
 
 func validateCreateCard(req *contracts.CreateCardRequest) error {
@@ -89,7 +89,7 @@ func validateCreateCard(req *contracts.CreateCardRequest) error {
 	return nil
 }
 
-func (s *setServiceImpl) CreateSet(ctx context.Context, userID int64, req *contracts.CreateSetRequest) (*contracts.CardSet, error) {
+func (s *setServiceImpl) CreateSet(ctx context.Context, userID uuid.UUID, req *contracts.CreateSetRequest) (*contracts.CardSet, error) {
 	if req == nil || strings.TrimSpace(req.Title) == "" {
 		return nil, fmt.Errorf("%w: title is required", ErrValidation)
 	}
@@ -109,7 +109,7 @@ func (s *setServiceImpl) CreateSet(ctx context.Context, userID int64, req *contr
 	return s.GetSet(ctx, userID, id)
 }
 
-func (s *cardServiceImpl) CreateCard(ctx context.Context, userID int64, setID uuid.UUID, req *contracts.CreateCardRequest) (*contracts.Card, error) {
+func (s *cardServiceImpl) CreateCard(ctx context.Context, userID uuid.UUID, setID uuid.UUID, req *contracts.CreateCardRequest) (*contracts.Card, error) {
 	if err := validateCreateCard(req); err != nil {
 		return nil, err
 	}

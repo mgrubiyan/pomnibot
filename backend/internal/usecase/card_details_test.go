@@ -70,7 +70,8 @@ func TestCardListsBatchDetails(t *testing.T) {
 				}
 				return rows, nil
 			}
-			q.getFeedCardsForUserFunc = func(ctx context.Context, _ int64) ([]db.GetFeedCardsForUserRow, error) {
+			testUserID := uuid.New()
+			q.getFeedCardsForUserFunc = func(ctx context.Context, _ pgtype.UUID) ([]db.GetFeedCardsForUserRow, error) {
 				source, _ := q.getCardsBySetIDFunc(ctx, db.GetCardsBySetIDParams{})
 				rows := []db.GetFeedCardsForUserRow{}
 				for _, r := range source {
@@ -81,7 +82,7 @@ func TestCardListsBatchDetails(t *testing.T) {
 			users := usecase.NewUserService(q)
 			var count int
 			if feed {
-				cards, err := usecase.NewHomescreenService(q, users).GetFeedQuestions(context.Background(), 22)
+				cards, err := usecase.NewHomescreenService(q, users).GetFeedQuestions(context.Background(), testUserID)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -95,7 +96,7 @@ func TestCardListsBatchDetails(t *testing.T) {
 					}
 				}
 			} else {
-				cards, err := usecase.NewSetService(q, users).GetCardsBySetID(context.Background(), 22, uuid.UUID(set.Bytes))
+				cards, err := usecase.NewSetService(q, users).GetCardsBySetID(context.Background(), testUserID, uuid.UUID(set.Bytes))
 				if err != nil {
 					t.Fatal(err)
 				}

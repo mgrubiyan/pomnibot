@@ -31,7 +31,6 @@ SELECT
     c.source_quote,
     c.source_ref,
     COALESCE(t.name, '') AS topic,
-    c.created_at,
     c.updated_at
 FROM cards c
 JOIN facts f ON c.fact_id = f.id
@@ -57,7 +56,6 @@ SELECT
     c.source_quote,
     c.source_ref,
     COALESCE(t.name, '') AS topic,
-    c.created_at,
     c.updated_at
 FROM cards c
 JOIN facts f ON c.fact_id = f.id
@@ -79,7 +77,6 @@ SELECT
     c.source_quote,
     c.source_ref,
     COALESCE(t.name, '') AS topic,
-    c.created_at,
     c.updated_at
 FROM cards c
 JOIN facts f ON c.fact_id = f.id
@@ -91,22 +88,22 @@ WHERE f.set_id = $1
       WHERE s.id = $1
         AND (s.author_id = @user_id OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = @user_id))
   )
-ORDER BY c.created_at ASC;
+ORDER BY c.id ASC;
 
 -- name: GetCardOptions :many
-SELECT id, card_id, position, text, is_correct
+SELECT *
 FROM card_options
 WHERE card_id = $1
 ORDER BY position ASC;
 
 -- name: GetCardTableColumns :many
-SELECT id, card_id, position, name
+SELECT *
 FROM card_table_columns
 WHERE card_id = $1
 ORDER BY position ASC;
 
 -- name: GetCardTableItems :many
-SELECT id, card_id, item_text, column_name, position
+SELECT *
 FROM card_table_items
 WHERE card_id = $1
 ORDER BY position, id;
@@ -126,7 +123,7 @@ JOIN sets s ON f.set_id = s.id
 WHERE cards.id = $1
   AND cards.fact_id = f.id
   AND s.author_id = $8
-RETURNING cards.id, cards.fact_id, cards.kind, cards.question, cards.answer_text, cards.explanation, cards.source_quote, cards.source_ref, cards.created_at, cards.updated_at;
+RETURNING cards.id, cards.fact_id, cards.kind, cards.question, cards.answer_text, cards.explanation, cards.source_quote, cards.source_ref, cards.updated_at;
 
 -- name: DeleteCard :one
 WITH removed AS (
@@ -184,11 +181,10 @@ ranked_cards AS (
         c.source_quote,
         c.source_ref,
         udf.topic,
-        c.created_at,
         c.updated_at,
         ROW_NUMBER() OVER (
             PARTITION BY c.fact_id
-            ORDER BY ABS(ck.difficulty_level - udf.target_difficulty) ASC, c.created_at ASC
+            ORDER BY ABS(ck.difficulty_level - udf.target_difficulty) ASC, c.id ASC
         ) AS rank
     FROM cards c
     JOIN user_due_facts udf ON c.fact_id = udf.fact_id
@@ -206,7 +202,6 @@ SELECT
     source_quote,
     source_ref,
     topic,
-    created_at,
     updated_at
 FROM ranked_cards
 WHERE rank = 1;

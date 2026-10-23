@@ -14,12 +14,12 @@ import (
 const createCard = `-- name: CreateCard :one
 INSERT INTO cards (id, fact_id, kind, question, answer_text, explanation, source_quote, source_ref)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, fact_id, kind, question, answer_text, explanation, source_quote, source_ref, created_at, updated_at
+RETURNING kind, question, answer_text, explanation, source_quote, source_ref, updated_at, id, fact_id
 `
 
 type CreateCardParams struct {
 	ID          pgtype.UUID `json:"id"`
-	FactID      string      `json:"fact_id"`
+	FactID      pgtype.UUID `json:"fact_id"`
 	Kind        string      `json:"kind"`
 	Question    string      `json:"question"`
 	AnswerText  pgtype.Text `json:"answer_text"`
@@ -41,16 +41,15 @@ func (q *Queries) CreateCard(ctx context.Context, arg CreateCardParams) (Card, e
 	)
 	var i Card
 	err := row.Scan(
-		&i.ID,
-		&i.FactID,
 		&i.Kind,
 		&i.Question,
 		&i.AnswerText,
 		&i.Explanation,
 		&i.SourceQuote,
 		&i.SourceRef,
-		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ID,
+		&i.FactID,
 	)
 	return i, err
 }
@@ -58,7 +57,7 @@ func (q *Queries) CreateCard(ctx context.Context, arg CreateCardParams) (Card, e
 const createCardOption = `-- name: CreateCardOption :one
 INSERT INTO card_options (card_id, position, text, is_correct)
 VALUES ($1, $2, $3, $4)
-RETURNING id, card_id, position, text, is_correct
+RETURNING id, position, text, is_correct, card_id
 `
 
 type CreateCardOptionParams struct {
@@ -78,10 +77,10 @@ func (q *Queries) CreateCardOption(ctx context.Context, arg CreateCardOptionPara
 	var i CardOption
 	err := row.Scan(
 		&i.ID,
-		&i.CardID,
 		&i.Position,
 		&i.Text,
 		&i.IsCorrect,
+		&i.CardID,
 	)
 	return i, err
 }
@@ -89,7 +88,7 @@ func (q *Queries) CreateCardOption(ctx context.Context, arg CreateCardOptionPara
 const createCardTableColumn = `-- name: CreateCardTableColumn :one
 INSERT INTO card_table_columns (card_id, position, name)
 VALUES ($1, $2, $3)
-RETURNING id, card_id, position, name
+RETURNING id, position, name, card_id
 `
 
 type CreateCardTableColumnParams struct {
@@ -103,9 +102,9 @@ func (q *Queries) CreateCardTableColumn(ctx context.Context, arg CreateCardTable
 	var i CardTableColumn
 	err := row.Scan(
 		&i.ID,
-		&i.CardID,
 		&i.Position,
 		&i.Name,
+		&i.CardID,
 	)
 	return i, err
 }
@@ -113,7 +112,7 @@ func (q *Queries) CreateCardTableColumn(ctx context.Context, arg CreateCardTable
 const createCardTableItem = `-- name: CreateCardTableItem :one
 INSERT INTO card_table_items (card_id, item_text, column_name, position)
 VALUES ($1, $2, $3, $4)
-RETURNING id, card_id, item_text, column_name, position
+RETURNING id, item_text, column_name, position, card_id
 `
 
 type CreateCardTableItemParams struct {
@@ -133,10 +132,10 @@ func (q *Queries) CreateCardTableItem(ctx context.Context, arg CreateCardTableIt
 	var i CardTableItem
 	err := row.Scan(
 		&i.ID,
-		&i.CardID,
 		&i.ItemText,
 		&i.ColumnName,
 		&i.Position,
+		&i.CardID,
 	)
 	return i, err
 }
@@ -157,7 +156,7 @@ SELECT COUNT(*) FROM removed
 
 type DeleteCardParams struct {
 	ID       pgtype.UUID `json:"id"`
-	AuthorID int64       `json:"author_id"`
+	AuthorID pgtype.UUID `json:"author_id"`
 }
 
 func (q *Queries) DeleteCard(ctx context.Context, arg DeleteCardParams) (int64, error) {
@@ -207,7 +206,6 @@ SELECT
     c.source_quote,
     c.source_ref,
     COALESCE(t.name, '') AS topic,
-    c.created_at,
     c.updated_at
 FROM cards c
 JOIN facts f ON c.fact_id = f.id
@@ -223,13 +221,13 @@ WHERE c.id = $1
 
 type GetCardByIDParams struct {
 	ID     pgtype.UUID `json:"id"`
-	UserID int64       `json:"user_id"`
+	UserID pgtype.UUID `json:"user_id"`
 }
 
 type GetCardByIDRow struct {
 	ID              pgtype.UUID        `json:"id"`
 	SetID           pgtype.UUID        `json:"set_id"`
-	FactID          string             `json:"fact_id"`
+	FactID          pgtype.UUID        `json:"fact_id"`
 	Kind            string             `json:"kind"`
 	DifficultyLevel int16              `json:"difficulty_level"`
 	Question        string             `json:"question"`
@@ -238,7 +236,6 @@ type GetCardByIDRow struct {
 	SourceQuote     string             `json:"source_quote"`
 	SourceRef       pgtype.Text        `json:"source_ref"`
 	Topic           string             `json:"topic"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
@@ -257,7 +254,6 @@ func (q *Queries) GetCardByID(ctx context.Context, arg GetCardByIDParams) (GetCa
 		&i.SourceQuote,
 		&i.SourceRef,
 		&i.Topic,
-		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
@@ -276,7 +272,6 @@ SELECT
     c.source_quote,
     c.source_ref,
     COALESCE(t.name, '') AS topic,
-    c.created_at,
     c.updated_at
 FROM cards c
 JOIN facts f ON c.fact_id = f.id
@@ -288,13 +283,13 @@ WHERE c.id = $1 AND s.author_id = $2
 
 type GetCardByIDForAuthorParams struct {
 	ID       pgtype.UUID `json:"id"`
-	AuthorID int64       `json:"author_id"`
+	AuthorID pgtype.UUID `json:"author_id"`
 }
 
 type GetCardByIDForAuthorRow struct {
 	ID              pgtype.UUID        `json:"id"`
 	SetID           pgtype.UUID        `json:"set_id"`
-	FactID          string             `json:"fact_id"`
+	FactID          pgtype.UUID        `json:"fact_id"`
 	Kind            string             `json:"kind"`
 	DifficultyLevel int16              `json:"difficulty_level"`
 	Question        string             `json:"question"`
@@ -303,7 +298,6 @@ type GetCardByIDForAuthorRow struct {
 	SourceQuote     string             `json:"source_quote"`
 	SourceRef       pgtype.Text        `json:"source_ref"`
 	Topic           string             `json:"topic"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
@@ -322,14 +316,13 @@ func (q *Queries) GetCardByIDForAuthor(ctx context.Context, arg GetCardByIDForAu
 		&i.SourceQuote,
 		&i.SourceRef,
 		&i.Topic,
-		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getCardOptions = `-- name: GetCardOptions :many
-SELECT id, card_id, position, text, is_correct
+SELECT id, position, text, is_correct, card_id
 FROM card_options
 WHERE card_id = $1
 ORDER BY position ASC
@@ -346,10 +339,10 @@ func (q *Queries) GetCardOptions(ctx context.Context, cardID pgtype.UUID) ([]Car
 		var i CardOption
 		if err := rows.Scan(
 			&i.ID,
-			&i.CardID,
 			&i.Position,
 			&i.Text,
 			&i.IsCorrect,
+			&i.CardID,
 		); err != nil {
 			return nil, err
 		}
@@ -362,7 +355,7 @@ func (q *Queries) GetCardOptions(ctx context.Context, cardID pgtype.UUID) ([]Car
 }
 
 const getCardOptionsBatch = `-- name: GetCardOptionsBatch :many
-SELECT id, card_id, position, text, is_correct FROM card_options
+SELECT id, position, text, is_correct, card_id FROM card_options
 WHERE card_id = ANY($1::UUID[])
 ORDER BY card_id, position
 `
@@ -378,10 +371,10 @@ func (q *Queries) GetCardOptionsBatch(ctx context.Context, cardIds []pgtype.UUID
 		var i CardOption
 		if err := rows.Scan(
 			&i.ID,
-			&i.CardID,
 			&i.Position,
 			&i.Text,
 			&i.IsCorrect,
+			&i.CardID,
 		); err != nil {
 			return nil, err
 		}
@@ -394,7 +387,7 @@ func (q *Queries) GetCardOptionsBatch(ctx context.Context, cardIds []pgtype.UUID
 }
 
 const getCardTableColumns = `-- name: GetCardTableColumns :many
-SELECT id, card_id, position, name
+SELECT id, position, name, card_id
 FROM card_table_columns
 WHERE card_id = $1
 ORDER BY position ASC
@@ -411,9 +404,9 @@ func (q *Queries) GetCardTableColumns(ctx context.Context, cardID pgtype.UUID) (
 		var i CardTableColumn
 		if err := rows.Scan(
 			&i.ID,
-			&i.CardID,
 			&i.Position,
 			&i.Name,
+			&i.CardID,
 		); err != nil {
 			return nil, err
 		}
@@ -426,7 +419,7 @@ func (q *Queries) GetCardTableColumns(ctx context.Context, cardID pgtype.UUID) (
 }
 
 const getCardTableColumnsBatch = `-- name: GetCardTableColumnsBatch :many
-SELECT id, card_id, position, name FROM card_table_columns
+SELECT id, position, name, card_id FROM card_table_columns
 WHERE card_id = ANY($1::UUID[])
 ORDER BY card_id, position
 `
@@ -442,9 +435,9 @@ func (q *Queries) GetCardTableColumnsBatch(ctx context.Context, cardIds []pgtype
 		var i CardTableColumn
 		if err := rows.Scan(
 			&i.ID,
-			&i.CardID,
 			&i.Position,
 			&i.Name,
+			&i.CardID,
 		); err != nil {
 			return nil, err
 		}
@@ -457,7 +450,7 @@ func (q *Queries) GetCardTableColumnsBatch(ctx context.Context, cardIds []pgtype
 }
 
 const getCardTableItems = `-- name: GetCardTableItems :many
-SELECT id, card_id, item_text, column_name, position
+SELECT id, item_text, column_name, position, card_id
 FROM card_table_items
 WHERE card_id = $1
 ORDER BY position, id
@@ -474,10 +467,10 @@ func (q *Queries) GetCardTableItems(ctx context.Context, cardID pgtype.UUID) ([]
 		var i CardTableItem
 		if err := rows.Scan(
 			&i.ID,
-			&i.CardID,
 			&i.ItemText,
 			&i.ColumnName,
 			&i.Position,
+			&i.CardID,
 		); err != nil {
 			return nil, err
 		}
@@ -490,7 +483,7 @@ func (q *Queries) GetCardTableItems(ctx context.Context, cardID pgtype.UUID) ([]
 }
 
 const getCardTableItemsBatch = `-- name: GetCardTableItemsBatch :many
-SELECT id, card_id, item_text, column_name, position FROM card_table_items
+SELECT id, item_text, column_name, position, card_id FROM card_table_items
 WHERE card_id = ANY($1::UUID[])
 ORDER BY card_id, position, id
 `
@@ -506,10 +499,10 @@ func (q *Queries) GetCardTableItemsBatch(ctx context.Context, cardIds []pgtype.U
 		var i CardTableItem
 		if err := rows.Scan(
 			&i.ID,
-			&i.CardID,
 			&i.ItemText,
 			&i.ColumnName,
 			&i.Position,
+			&i.CardID,
 		); err != nil {
 			return nil, err
 		}
@@ -534,7 +527,6 @@ SELECT
     c.source_quote,
     c.source_ref,
     COALESCE(t.name, '') AS topic,
-    c.created_at,
     c.updated_at
 FROM cards c
 JOIN facts f ON c.fact_id = f.id
@@ -546,18 +538,18 @@ WHERE f.set_id = $1
       WHERE s.id = $1
         AND (s.author_id = $2 OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = $2))
   )
-ORDER BY c.created_at ASC
+ORDER BY c.id ASC
 `
 
 type GetCardsBySetIDParams struct {
 	SetID  pgtype.UUID `json:"set_id"`
-	UserID int64       `json:"user_id"`
+	UserID pgtype.UUID `json:"user_id"`
 }
 
 type GetCardsBySetIDRow struct {
 	ID              pgtype.UUID        `json:"id"`
 	SetID           pgtype.UUID        `json:"set_id"`
-	FactID          string             `json:"fact_id"`
+	FactID          pgtype.UUID        `json:"fact_id"`
 	Kind            string             `json:"kind"`
 	DifficultyLevel int16              `json:"difficulty_level"`
 	Question        string             `json:"question"`
@@ -566,7 +558,6 @@ type GetCardsBySetIDRow struct {
 	SourceQuote     string             `json:"source_quote"`
 	SourceRef       pgtype.Text        `json:"source_ref"`
 	Topic           string             `json:"topic"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
@@ -591,7 +582,6 @@ func (q *Queries) GetCardsBySetID(ctx context.Context, arg GetCardsBySetIDParams
 			&i.SourceQuote,
 			&i.SourceRef,
 			&i.Topic,
-			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -638,11 +628,10 @@ ranked_cards AS (
         c.source_quote,
         c.source_ref,
         udf.topic,
-        c.created_at,
         c.updated_at,
         ROW_NUMBER() OVER (
             PARTITION BY c.fact_id
-            ORDER BY ABS(ck.difficulty_level - udf.target_difficulty) ASC, c.created_at ASC
+            ORDER BY ABS(ck.difficulty_level - udf.target_difficulty) ASC, c.id ASC
         ) AS rank
     FROM cards c
     JOIN user_due_facts udf ON c.fact_id = udf.fact_id
@@ -660,7 +649,6 @@ SELECT
     source_quote,
     source_ref,
     topic,
-    created_at,
     updated_at
 FROM ranked_cards
 WHERE rank = 1
@@ -669,7 +657,7 @@ WHERE rank = 1
 type GetFeedCardsForUserRow struct {
 	ID              pgtype.UUID        `json:"id"`
 	SetID           pgtype.UUID        `json:"set_id"`
-	FactID          string             `json:"fact_id"`
+	FactID          pgtype.UUID        `json:"fact_id"`
 	Kind            string             `json:"kind"`
 	DifficultyLevel int16              `json:"difficulty_level"`
 	Question        string             `json:"question"`
@@ -678,11 +666,10 @@ type GetFeedCardsForUserRow struct {
 	SourceQuote     string             `json:"source_quote"`
 	SourceRef       pgtype.Text        `json:"source_ref"`
 	Topic           string             `json:"topic"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
-func (q *Queries) GetFeedCardsForUser(ctx context.Context, userID int64) ([]GetFeedCardsForUserRow, error) {
+func (q *Queries) GetFeedCardsForUser(ctx context.Context, userID pgtype.UUID) ([]GetFeedCardsForUserRow, error) {
 	rows, err := q.db.Query(ctx, getFeedCardsForUser, userID)
 	if err != nil {
 		return nil, err
@@ -703,7 +690,6 @@ func (q *Queries) GetFeedCardsForUser(ctx context.Context, userID int64) ([]GetF
 			&i.SourceQuote,
 			&i.SourceRef,
 			&i.Topic,
-			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -731,7 +717,7 @@ JOIN sets s ON f.set_id = s.id
 WHERE cards.id = $1
   AND cards.fact_id = f.id
   AND s.author_id = $8
-RETURNING cards.id, cards.fact_id, cards.kind, cards.question, cards.answer_text, cards.explanation, cards.source_quote, cards.source_ref, cards.created_at, cards.updated_at
+RETURNING cards.id, cards.fact_id, cards.kind, cards.question, cards.answer_text, cards.explanation, cards.source_quote, cards.source_ref, cards.updated_at
 `
 
 type UpdateCardParams struct {
@@ -742,10 +728,22 @@ type UpdateCardParams struct {
 	Explanation string      `json:"explanation"`
 	SourceQuote string      `json:"source_quote"`
 	SourceRef   pgtype.Text `json:"source_ref"`
-	AuthorID    int64       `json:"author_id"`
+	AuthorID    pgtype.UUID `json:"author_id"`
 }
 
-func (q *Queries) UpdateCard(ctx context.Context, arg UpdateCardParams) (Card, error) {
+type UpdateCardRow struct {
+	ID          pgtype.UUID        `json:"id"`
+	FactID      pgtype.UUID        `json:"fact_id"`
+	Kind        string             `json:"kind"`
+	Question    string             `json:"question"`
+	AnswerText  pgtype.Text        `json:"answer_text"`
+	Explanation string             `json:"explanation"`
+	SourceQuote string             `json:"source_quote"`
+	SourceRef   pgtype.Text        `json:"source_ref"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) UpdateCard(ctx context.Context, arg UpdateCardParams) (UpdateCardRow, error) {
 	row := q.db.QueryRow(ctx, updateCard,
 		arg.ID,
 		arg.Kind,
@@ -756,7 +754,7 @@ func (q *Queries) UpdateCard(ctx context.Context, arg UpdateCardParams) (Card, e
 		arg.SourceRef,
 		arg.AuthorID,
 	)
-	var i Card
+	var i UpdateCardRow
 	err := row.Scan(
 		&i.ID,
 		&i.FactID,
@@ -766,7 +764,6 @@ func (q *Queries) UpdateCard(ctx context.Context, arg UpdateCardParams) (Card, e
 		&i.Explanation,
 		&i.SourceQuote,
 		&i.SourceRef,
-		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err

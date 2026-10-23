@@ -9,25 +9,23 @@ import (
 )
 
 type AnswerResult struct {
-	ID         pgtype.UUID        `json:"id"`
-	UserID     int64              `json:"user_id"`
-	CardID     pgtype.UUID        `json:"card_id"`
 	Correct    bool               `json:"correct"`
 	AnsweredAt pgtype.Timestamptz `json:"answered_at"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	ID         pgtype.UUID        `json:"id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	CardID     pgtype.UUID        `json:"card_id"`
 }
 
 type Card struct {
-	ID          pgtype.UUID        `json:"id"`
-	FactID      string             `json:"fact_id"`
 	Kind        string             `json:"kind"`
 	Question    string             `json:"question"`
 	AnswerText  pgtype.Text        `json:"answer_text"`
 	Explanation string             `json:"explanation"`
 	SourceQuote string             `json:"source_quote"`
 	SourceRef   pgtype.Text        `json:"source_ref"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	ID          pgtype.UUID        `json:"id"`
+	FactID      pgtype.UUID        `json:"fact_id"`
 }
 
 type CardKind struct {
@@ -37,53 +35,48 @@ type CardKind struct {
 
 type CardOption struct {
 	ID        pgtype.UUID `json:"id"`
-	CardID    pgtype.UUID `json:"card_id"`
 	Position  int32       `json:"position"`
 	Text      string      `json:"text"`
 	IsCorrect bool        `json:"is_correct"`
+	CardID    pgtype.UUID `json:"card_id"`
 }
 
 type CardTableColumn struct {
 	ID       pgtype.UUID `json:"id"`
-	CardID   pgtype.UUID `json:"card_id"`
 	Position int32       `json:"position"`
 	Name     string      `json:"name"`
+	CardID   pgtype.UUID `json:"card_id"`
 }
 
 type CardTableItem struct {
 	ID         pgtype.UUID `json:"id"`
-	CardID     pgtype.UUID `json:"card_id"`
 	ItemText   string      `json:"item_text"`
 	ColumnName string      `json:"column_name"`
 	Position   int32       `json:"position"`
+	CardID     pgtype.UUID `json:"card_id"`
 }
 
 type Fact struct {
-	ID        string             `json:"id"`
-	SetID     pgtype.UUID        `json:"set_id"`
-	TopicID   pgtype.UUID        `json:"topic_id"`
-	Name      string             `json:"name"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	Name    string      `json:"name"`
+	ID      pgtype.UUID `json:"id"`
+	SetID   pgtype.UUID `json:"set_id"`
+	TopicID pgtype.UUID `json:"topic_id"`
 }
 
 type Set struct {
-	ID        pgtype.UUID        `json:"id"`
 	Title     string             `json:"title"`
-	AuthorID  int64              `json:"author_id"`
 	ShareCode string             `json:"share_code"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID        pgtype.UUID        `json:"id"`
+	AuthorID  pgtype.UUID        `json:"author_id"`
 }
 
 type Topic struct {
-	ID        pgtype.UUID        `json:"id"`
-	Name      string             `json:"name"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	Name string      `json:"name"`
+	ID   pgtype.UUID `json:"id"`
 }
 
 type User struct {
-	ID              int64              `json:"id"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	LastActiveAt    pgtype.Timestamptz `json:"last_active_at"`
 	FirstName       string             `json:"first_name"`
 	LastName        pgtype.Text        `json:"last_name"`
@@ -95,11 +88,10 @@ type User struct {
 	ProfileStep     string             `json:"profile_step"`
 	PendingLastName string             `json:"pending_last_name"`
 	TgBotStarted    bool               `json:"tg_bot_started"`
+	ID              pgtype.UUID        `json:"id"`
 }
 
 type UserFactProgress struct {
-	UserID               int64              `json:"user_id"`
-	FactID               string             `json:"fact_id"`
 	Elo                  int32              `json:"elo"`
 	CeilingFound         bool               `json:"ceiling_found"`
 	ConsecutiveCorrect   int32              `json:"consecutive_correct"`
@@ -108,10 +100,12 @@ type UserFactProgress struct {
 	EaseFactor           pgtype.Numeric     `json:"ease_factor"`
 	NextReviewAt         pgtype.Timestamptz `json:"next_review_at"`
 	LastReviewedAt       pgtype.Timestamptz `json:"last_reviewed_at"`
+	UserID               pgtype.UUID        `json:"user_id"`
+	FactID               pgtype.UUID        `json:"fact_id"`
 }
 
 type UserSet struct {
-	UserID   int64              `json:"user_id"`
-	SetID    pgtype.UUID        `json:"set_id"`
 	JoinedAt pgtype.Timestamptz `json:"joined_at"`
+	UserID   pgtype.UUID        `json:"user_id"`
+	SetID    pgtype.UUID        `json:"set_id"`
 }

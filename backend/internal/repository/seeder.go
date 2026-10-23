@@ -17,7 +17,7 @@ import (
 )
 
 // SaveGeneratedSet saves a generator.Result into the database as a new card set for the given user.
-func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title string, genResult generator.Result) (*db.Set, int, error) {
+func SaveGeneratedSet(ctx context.Context, q db.Querier, userID uuid.UUID, title string, genResult generator.Result) (*db.Set, int, error) {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		title = "Новый конспект"
@@ -28,9 +28,10 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title str
 		return nil, 0, fmt.Errorf("generate unique share code: %w", err)
 	}
 
+	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
 	newSet, err := q.CreateSet(ctx, db.CreateSetParams{
 		Title:     title,
-		AuthorID:  userID,
+		AuthorID:  pgUserID,
 		ShareCode: shareCode,
 	})
 	if err != nil {
@@ -38,13 +39,14 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title str
 	}
 
 	if _, err := q.JoinSet(ctx, db.JoinSetParams{
-		UserID: userID,
+		UserID: pgUserID,
 		SetID:  newSet.ID,
 	}); err != nil {
 		return nil, 0, fmt.Errorf("enroll user in set: %w", err)
 	}
 
 	topicCache := make(map[string]pgtype.UUID)
+	factIDMap := make(map[string]pgtype.UUID)
 	factsInserted := 0
 	cardsInserted := 0
 
@@ -72,8 +74,12 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title str
 			name = "Факт"
 		}
 
+		factUUID := uuid.Must(uuid.NewV7())
+		pgFactID := pgtype.UUID{Bytes: factUUID, Valid: true}
+		factIDMap[f.ID] = pgFactID
+
 		_, err := q.CreateFact(ctx, db.CreateFactParams{
-			ID:      f.ID,
+			ID:      pgFactID,
 			SetID:   newSet.ID,
 			TopicID: topicID,
 			Name:    name,
@@ -86,13 +92,20 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title str
 	}
 
 	for _, c := range genResult.Cards {
-		cardUUID := uuid.New()
+		cardUUID := uuid.Must(uuid.NewV7())
 		var cardID pgtype.UUID
 		_ = cardID.Scan(cardUUID.String())
 
+		pgFactID, ok := factIDMap[c.FactID]
+		if !ok {
+			factUUID := uuid.Must(uuid.NewV7())
+			pgFactID = pgtype.UUID{Bytes: factUUID, Valid: true}
+			factIDMap[c.FactID] = pgFactID
+		}
+
 		createdCard, err := q.CreateCard(ctx, db.CreateCardParams{
 			ID:       cardID,
-			FactID:   c.FactID,
+			FactID:   pgFactID,
 			Kind:     string(c.Kind),
 			Question: c.Question,
 			AnswerText: pgtype.Text{
@@ -151,7 +164,7 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title str
 	}
 
 	if err := q.InitUserFactProgress(ctx, db.InitUserFactProgressParams{
-		UserID: userID,
+		UserID: pgUserID,
 		SetID:  newSet.ID,
 	}); err != nil {
 		slog.WarnContext(ctx, "failed to initialize user fact progress", "error", err, "userID", userID)
@@ -182,10 +195,7 @@ func generateUniqueShareCode(ctx context.Context, q db.Querier) (string, error) 
 			continue
 		}
 
-		_, err = q.GetSetByShareCode(ctx, db.GetSetByShareCodeParams{
-			ShareCode: code,
-			UserID:    0,
-		})
+		_, err = q.GetSetByShareCode(ctx, code)
 		if err != nil {
 			// Not found means it is available
 			return code, nil

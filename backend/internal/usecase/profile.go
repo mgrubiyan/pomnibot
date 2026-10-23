@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 )
@@ -19,7 +20,7 @@ func CleanProfileName(value string) (string, error) {
 	return value, nil
 }
 
-func (s *userServiceImpl) SaveProfile(ctx context.Context, id int64, first, last string) (Account, error) {
+func (s *userServiceImpl) SaveProfile(ctx context.Context, id uuid.UUID, first, last string) (Account, error) {
 	first, err := CleanProfileName(first)
 	if err != nil {
 		return Account{}, err
@@ -28,14 +29,16 @@ func (s *userServiceImpl) SaveProfile(ctx context.Context, id int64, first, last
 	if err != nil {
 		return Account{}, err
 	}
-	row, err := s.querier.SaveTelegramProfile(ctx, db.SaveTelegramProfileParams{ID: id, FirstName: first, LastName: pgtype.Text{String: last, Valid: true}})
+	var pgID pgtype.UUID
+	_ = pgID.Scan(id.String())
+	row, err := s.querier.SaveTelegramProfile(ctx, db.SaveTelegramProfileParams{ID: pgID, FirstName: first, LastName: pgtype.Text{String: last, Valid: true}})
 	if err != nil {
 		return Account{}, fmt.Errorf("save profile: %w", err)
 	}
 	return accountFromUser(row), nil
 }
 
-func (s *userServiceImpl) ProfileInput(ctx context.Context, id int64, text string, restart bool) (Account, error) {
+func (s *userServiceImpl) ProfileInput(ctx context.Context, id uuid.UUID, text string, restart bool) (Account, error) {
 	if text != "" {
 		var err error
 		text, err = CleanProfileName(text)
@@ -43,7 +46,9 @@ func (s *userServiceImpl) ProfileInput(ctx context.Context, id int64, text strin
 			return Account{}, err
 		}
 	}
-	row, err := s.querier.TelegramProfileInput(ctx, db.TelegramProfileInputParams{ID: id, Input: text, Restart: restart})
+	var pgID pgtype.UUID
+	_ = pgID.Scan(id.String())
+	row, err := s.querier.TelegramProfileInput(ctx, db.TelegramProfileInputParams{ID: pgID, Input: text, Restart: restart})
 	if err != nil {
 		return Account{}, fmt.Errorf("profile input: %w", err)
 	}

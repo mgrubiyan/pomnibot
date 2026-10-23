@@ -28,7 +28,7 @@ type testQuerier struct {
 	createdItems          []db.CreateCardTableItemParams
 	initProgressCalls     []db.InitUserFactProgressParams
 	upsertTopicCalls      []string
-	getSetByShareCodeFunc func(ctx context.Context, arg db.GetSetByShareCodeParams) (db.GetSetByShareCodeRow, error)
+	getSetByShareCodeFunc func(ctx context.Context, shareCode string) (db.GetSetByShareCodeRow, error)
 	createSetFunc         func(ctx context.Context, arg db.CreateSetParams) (db.Set, error)
 }
 
@@ -38,13 +38,13 @@ func newTestQuerier() *testQuerier {
 	}
 }
 
-func (q *testQuerier) GetSetByShareCode(ctx context.Context, arg db.GetSetByShareCodeParams) (db.GetSetByShareCodeRow, error) {
+func (q *testQuerier) GetSetByShareCode(ctx context.Context, shareCode string) (db.GetSetByShareCodeRow, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if q.getSetByShareCodeFunc != nil {
-		return q.getSetByShareCodeFunc(ctx, arg)
+		return q.getSetByShareCodeFunc(ctx, shareCode)
 	}
-	if row, ok := q.setsByShareCode[arg.ShareCode]; ok {
+	if row, ok := q.setsByShareCode[shareCode]; ok {
 		return row, nil
 	}
 	return db.GetSetByShareCodeRow{}, pgx.ErrNoRows
@@ -148,7 +148,7 @@ func (q *testQuerier) InitUserFactProgress(_ context.Context, arg db.InitUserFac
 func TestSaveGeneratedSet_Success(t *testing.T) {
 	ctx := context.Background()
 	tq := newTestQuerier()
-	const userID int64 = 999
+	var userID = uuid.MustParse("00000000-0000-0000-0000-000000000999")
 	const title = "Generated Set"
 
 	genResult := generator.Result{
@@ -187,8 +187,8 @@ func TestSaveGeneratedSet_Success(t *testing.T) {
 	if set.Title != title {
 		t.Errorf("expected title %q, got %q", title, set.Title)
 	}
-	if set.AuthorID != userID {
-		t.Errorf("expected authorID %d, got %d", userID, set.AuthorID)
+	if set.AuthorID.Bytes != userID {
+		t.Errorf("expected authorID %s, got %s", userID, uuid.UUID(set.AuthorID.Bytes))
 	}
 	if cardCount != 2 {
 		t.Errorf("expected 2 cards, got %d", cardCount)
@@ -223,7 +223,7 @@ func TestSaveGeneratedSet_TableCard(t *testing.T) {
 		}},
 	}
 
-	if _, n, err := repository.SaveGeneratedSet(context.Background(), tq, 1, "Клетка", genResult); err != nil || n != 1 {
+	if _, n, err := repository.SaveGeneratedSet(context.Background(), tq, uuid.MustParse("00000000-0000-0000-0000-000000000001"), "Клетка", genResult); err != nil || n != 1 {
 		t.Fatalf("SaveGeneratedSet = %d cards, err %v", n, err)
 	}
 	if len(tq.createdColumns) != 2 || tq.createdColumns[1].Name != "Эукариоты" || tq.createdColumns[1].Position != 1 {

@@ -19,7 +19,7 @@ LEFT JOIN user_fact_progress ufp ON ufp.fact_id = f.id AND ufp.user_id = $1
 WHERE ufp.next_review_at IS NULL OR ufp.next_review_at <= NOW()
 `
 
-func (q *Queries) CountTotalDueCardsForUser(ctx context.Context, userID int64) (int32, error) {
+func (q *Queries) CountTotalDueCardsForUser(ctx context.Context, userID pgtype.UUID) (int32, error) {
 	row := q.db.QueryRow(ctx, countTotalDueCardsForUser, userID)
 	var due_count int32
 	err := row.Scan(&due_count)
@@ -29,25 +29,24 @@ func (q *Queries) CountTotalDueCardsForUser(ctx context.Context, userID int64) (
 const createSet = `-- name: CreateSet :one
 INSERT INTO sets (title, author_id, share_code)
 VALUES ($1, $2, $3)
-RETURNING id, title, author_id, share_code, created_at, updated_at
+RETURNING title, share_code, updated_at, id, author_id
 `
 
 type CreateSetParams struct {
-	Title     string `json:"title"`
-	AuthorID  int64  `json:"author_id"`
-	ShareCode string `json:"share_code"`
+	Title     string      `json:"title"`
+	AuthorID  pgtype.UUID `json:"author_id"`
+	ShareCode string      `json:"share_code"`
 }
 
 func (q *Queries) CreateSet(ctx context.Context, arg CreateSetParams) (Set, error) {
 	row := q.db.QueryRow(ctx, createSet, arg.Title, arg.AuthorID, arg.ShareCode)
 	var i Set
 	err := row.Scan(
-		&i.ID,
 		&i.Title,
-		&i.AuthorID,
 		&i.ShareCode,
-		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ID,
+		&i.AuthorID,
 	)
 	return i, err
 }
@@ -58,7 +57,7 @@ DELETE FROM sets WHERE id = $1 AND author_id = $2
 
 type DeleteSetParams struct {
 	ID       pgtype.UUID `json:"id"`
-	AuthorID int64       `json:"author_id"`
+	AuthorID pgtype.UUID `json:"author_id"`
 }
 
 func (q *Queries) DeleteSet(ctx context.Context, arg DeleteSetParams) (int64, error) {
@@ -77,7 +76,7 @@ JOIN user_fact_progress ufp ON ufp.fact_id = f.id AND ufp.user_id = $1
 WHERE ufp.next_review_at > NOW()
 `
 
-func (q *Queries) GetNextReviewDateForUser(ctx context.Context, userID int64) (pgtype.Timestamptz, error) {
+func (q *Queries) GetNextReviewDateForUser(ctx context.Context, userID pgtype.UUID) (pgtype.Timestamptz, error) {
 	row := q.db.QueryRow(ctx, getNextReviewDateForUser, userID)
 	var next_review_at pgtype.Timestamptz
 	err := row.Scan(&next_review_at)
@@ -93,7 +92,6 @@ SELECT
     u.last_name AS author_last_name,
     u.username AS author_username,
     s.share_code,
-    s.created_at,
     s.updated_at,
     (SELECT COUNT(*)::INT FROM cards c JOIN facts f ON c.fact_id = f.id WHERE f.set_id = s.id) AS cards_total,
     (SELECT COUNT(*)::INT
@@ -109,18 +107,17 @@ WHERE s.id = $1
 
 type GetSetByIDParams struct {
 	ID     pgtype.UUID `json:"id"`
-	UserID int64       `json:"user_id"`
+	UserID pgtype.UUID `json:"user_id"`
 }
 
 type GetSetByIDRow struct {
 	ID              pgtype.UUID        `json:"id"`
 	Title           string             `json:"title"`
-	AuthorID        int64              `json:"author_id"`
+	AuthorID        pgtype.UUID        `json:"author_id"`
 	AuthorFirstName string             `json:"author_first_name"`
 	AuthorLastName  pgtype.Text        `json:"author_last_name"`
 	AuthorUsername  pgtype.Text        `json:"author_username"`
 	ShareCode       string             `json:"share_code"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 	CardsTotal      int32              `json:"cards_total"`
 	CardsDue        int32              `json:"cards_due"`
@@ -137,7 +134,6 @@ func (q *Queries) GetSetByID(ctx context.Context, arg GetSetByIDParams) (GetSetB
 		&i.AuthorLastName,
 		&i.AuthorUsername,
 		&i.ShareCode,
-		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CardsTotal,
 		&i.CardsDue,
@@ -154,40 +150,27 @@ SELECT
     u.last_name AS author_last_name,
     u.username AS author_username,
     s.share_code,
-    s.created_at,
     s.updated_at,
-    (SELECT COUNT(*)::INT FROM cards c JOIN facts f ON c.fact_id = f.id WHERE f.set_id = s.id) AS cards_total,
-    (SELECT COUNT(*)::INT
-     FROM facts f
-     LEFT JOIN user_fact_progress ufp ON ufp.fact_id = f.id AND ufp.user_id = $2
-     WHERE f.set_id = s.id
-       AND (ufp.next_review_at IS NULL OR ufp.next_review_at <= NOW())) AS cards_due
+    (SELECT COUNT(*)::INT FROM cards c JOIN facts f ON c.fact_id = f.id WHERE f.set_id = s.id) AS cards_total
 FROM sets s
 JOIN users u ON s.author_id = u.id
 WHERE s.share_code = $1
 `
 
-type GetSetByShareCodeParams struct {
-	ShareCode string `json:"share_code"`
-	UserID    int64  `json:"user_id"`
-}
-
 type GetSetByShareCodeRow struct {
 	ID              pgtype.UUID        `json:"id"`
 	Title           string             `json:"title"`
-	AuthorID        int64              `json:"author_id"`
+	AuthorID        pgtype.UUID        `json:"author_id"`
 	AuthorFirstName string             `json:"author_first_name"`
 	AuthorLastName  pgtype.Text        `json:"author_last_name"`
 	AuthorUsername  pgtype.Text        `json:"author_username"`
 	ShareCode       string             `json:"share_code"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 	CardsTotal      int32              `json:"cards_total"`
-	CardsDue        int32              `json:"cards_due"`
 }
 
-func (q *Queries) GetSetByShareCode(ctx context.Context, arg GetSetByShareCodeParams) (GetSetByShareCodeRow, error) {
-	row := q.db.QueryRow(ctx, getSetByShareCode, arg.ShareCode, arg.UserID)
+func (q *Queries) GetSetByShareCode(ctx context.Context, shareCode string) (GetSetByShareCodeRow, error) {
+	row := q.db.QueryRow(ctx, getSetByShareCode, shareCode)
 	var i GetSetByShareCodeRow
 	err := row.Scan(
 		&i.ID,
@@ -197,10 +180,8 @@ func (q *Queries) GetSetByShareCode(ctx context.Context, arg GetSetByShareCodePa
 		&i.AuthorLastName,
 		&i.AuthorUsername,
 		&i.ShareCode,
-		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CardsTotal,
-		&i.CardsDue,
 	)
 	return i, err
 }
@@ -257,7 +238,7 @@ ORDER BY rank ASC, user_id ASC
 `
 
 type GetSetLeaderboardRow struct {
-	UserID     int64       `json:"user_id"`
+	UserID     pgtype.UUID `json:"user_id"`
 	FirstName  string      `json:"first_name"`
 	LastName   pgtype.Text `json:"last_name"`
 	Username   pgtype.Text `json:"username"`
@@ -306,7 +287,7 @@ participants AS (
     UNION
     SELECT s.author_id AS user_id FROM sets s WHERE s.id = $2::UUID
     UNION
-    SELECT $1::BIGINT AS user_id
+    SELECT $1::UUID AS user_id
 ),
 progress_by_user AS (
     SELECT ufp.user_id, SUM(ufp.elo::BIGINT - 700)::FLOAT AS elo_delta
@@ -341,11 +322,11 @@ ranked AS (
 )
 SELECT percentile, rank
 FROM ranked
-WHERE user_id = $1::BIGINT
+WHERE user_id = $1::UUID
 `
 
 type GetUserSetRatingParams struct {
-	UserID int64       `json:"user_id"`
+	UserID pgtype.UUID `json:"user_id"`
 	SetID  pgtype.UUID `json:"set_id"`
 }
 
@@ -372,7 +353,6 @@ SELECT
     u.last_name AS author_last_name,
     u.username AS author_username,
     s.share_code,
-    s.created_at,
     s.updated_at,
     (SELECT COUNT(*)::INT FROM cards c JOIN facts f ON c.fact_id = f.id WHERE f.set_id = s.id) AS cards_total,
     (SELECT COUNT(*)::INT
@@ -390,18 +370,17 @@ ORDER BY us.joined_at DESC
 type GetUserSetsRow struct {
 	ID              pgtype.UUID        `json:"id"`
 	Title           string             `json:"title"`
-	AuthorID        int64              `json:"author_id"`
+	AuthorID        pgtype.UUID        `json:"author_id"`
 	AuthorFirstName string             `json:"author_first_name"`
 	AuthorLastName  pgtype.Text        `json:"author_last_name"`
 	AuthorUsername  pgtype.Text        `json:"author_username"`
 	ShareCode       string             `json:"share_code"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 	CardsTotal      int32              `json:"cards_total"`
 	CardsDue        int32              `json:"cards_due"`
 }
 
-func (q *Queries) GetUserSets(ctx context.Context, userID int64) ([]GetUserSetsRow, error) {
+func (q *Queries) GetUserSets(ctx context.Context, userID pgtype.UUID) ([]GetUserSetsRow, error) {
 	rows, err := q.db.Query(ctx, getUserSets, userID)
 	if err != nil {
 		return nil, err
@@ -418,7 +397,6 @@ func (q *Queries) GetUserSets(ctx context.Context, userID int64) ([]GetUserSetsR
 			&i.AuthorLastName,
 			&i.AuthorUsername,
 			&i.ShareCode,
-			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CardsTotal,
 			&i.CardsDue,
@@ -441,7 +419,7 @@ SELECT EXISTS(
 
 type IsSetAuthorParams struct {
 	ID       pgtype.UUID `json:"id"`
-	AuthorID int64       `json:"author_id"`
+	AuthorID pgtype.UUID `json:"author_id"`
 }
 
 func (q *Queries) IsSetAuthor(ctx context.Context, arg IsSetAuthorParams) (bool, error) {
@@ -455,18 +433,18 @@ const joinSet = `-- name: JoinSet :one
 INSERT INTO user_sets (user_id, set_id)
 VALUES ($1, $2)
 ON CONFLICT (user_id, set_id) DO UPDATE SET joined_at = user_sets.joined_at
-RETURNING user_id, set_id, joined_at
+RETURNING joined_at, user_id, set_id
 `
 
 type JoinSetParams struct {
-	UserID int64       `json:"user_id"`
+	UserID pgtype.UUID `json:"user_id"`
 	SetID  pgtype.UUID `json:"set_id"`
 }
 
 func (q *Queries) JoinSet(ctx context.Context, arg JoinSetParams) (UserSet, error) {
 	row := q.db.QueryRow(ctx, joinSet, arg.UserID, arg.SetID)
 	var i UserSet
-	err := row.Scan(&i.UserID, &i.SetID, &i.JoinedAt)
+	err := row.Scan(&i.JoinedAt, &i.UserID, &i.SetID)
 	return i, err
 }
 
@@ -476,7 +454,7 @@ DELETE FROM user_sets WHERE set_id = $1 AND user_id = $2
 
 type LeaveSetParams struct {
 	SetID  pgtype.UUID `json:"set_id"`
-	UserID int64       `json:"user_id"`
+	UserID pgtype.UUID `json:"user_id"`
 }
 
 func (q *Queries) LeaveSet(ctx context.Context, arg LeaveSetParams) (int64, error) {
@@ -493,7 +471,7 @@ SELECT id FROM sets WHERE id = $1 AND author_id = $2 FOR UPDATE
 
 type LockSetForAuthorParams struct {
 	ID       pgtype.UUID `json:"id"`
-	AuthorID int64       `json:"author_id"`
+	AuthorID pgtype.UUID `json:"author_id"`
 }
 
 func (q *Queries) LockSetForAuthor(ctx context.Context, arg LockSetForAuthorParams) (pgtype.UUID, error) {

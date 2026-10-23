@@ -11,7 +11,7 @@ import (
 )
 
 type Querier interface {
-	CountTotalDueCardsForUser(ctx context.Context, userID int64) (int32, error)
+	CountTotalDueCardsForUser(ctx context.Context, userID pgtype.UUID) (int32, error)
 	CreateCard(ctx context.Context, arg CreateCardParams) (Card, error)
 	CreateCardOption(ctx context.Context, arg CreateCardOptionParams) (CardOption, error)
 	CreateCardTableColumn(ctx context.Context, arg CreateCardTableColumnParams) (CardTableColumn, error)
@@ -23,7 +23,7 @@ type Querier interface {
 	DeleteCardTableColumns(ctx context.Context, cardID pgtype.UUID) error
 	DeleteCardTableItems(ctx context.Context, cardID pgtype.UUID) error
 	DeleteSet(ctx context.Context, arg DeleteSetParams) (int64, error)
-	EnsureUser(ctx context.Context, id int64) (User, error)
+	EnsureUser(ctx context.Context, id pgtype.UUID) (User, error)
 	GetCardByID(ctx context.Context, arg GetCardByIDParams) (GetCardByIDRow, error)
 	GetCardByIDForAuthor(ctx context.Context, arg GetCardByIDForAuthorParams) (GetCardByIDForAuthorRow, error)
 	GetCardOptions(ctx context.Context, cardID pgtype.UUID) ([]CardOption, error)
@@ -34,21 +34,21 @@ type Querier interface {
 	GetCardTableItemsBatch(ctx context.Context, cardIds []pgtype.UUID) ([]CardTableItem, error)
 	GetCardsBySetID(ctx context.Context, arg GetCardsBySetIDParams) ([]GetCardsBySetIDRow, error)
 	GetFactsBySetID(ctx context.Context, setID pgtype.UUID) ([]GetFactsBySetIDRow, error)
-	GetFeedCardsForUser(ctx context.Context, userID int64) ([]GetFeedCardsForUserRow, error)
-	GetNextReviewDateForUser(ctx context.Context, userID int64) (pgtype.Timestamptz, error)
+	GetFeedCardsForUser(ctx context.Context, userID pgtype.UUID) ([]GetFeedCardsForUserRow, error)
+	GetNextReviewDateForUser(ctx context.Context, userID pgtype.UUID) (pgtype.Timestamptz, error)
 	GetSetByID(ctx context.Context, arg GetSetByIDParams) (GetSetByIDRow, error)
-	GetSetByShareCode(ctx context.Context, arg GetSetByShareCodeParams) (GetSetByShareCodeRow, error)
+	GetSetByShareCode(ctx context.Context, shareCode string) (GetSetByShareCodeRow, error)
 	// Aggregate only existing progress before joining participants. Missing facts
 	// contribute the default 700 without expanding every participant into every fact.
 	GetSetLeaderboard(ctx context.Context, setID pgtype.UUID) ([]GetSetLeaderboardRow, error)
 	GetSetPlan(ctx context.Context, arg GetSetPlanParams) ([]GetSetPlanRow, error)
-	GetUserByID(ctx context.Context, id int64) (User, error)
+	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 	GetUserFactProgress(ctx context.Context, arg GetUserFactProgressParams) (UserFactProgress, error)
 	// Aggregate only existing progress before joining participants. Missing facts
 	// contribute the default 700 without expanding every participant into every fact.
 	GetUserSetRating(ctx context.Context, arg GetUserSetRatingParams) (GetUserSetRatingRow, error)
-	GetUserSets(ctx context.Context, userID int64) ([]GetUserSetsRow, error)
-	GetUsersWithDueFacts(ctx context.Context, arg GetUsersWithDueFactsParams) ([]int64, error)
+	GetUserSets(ctx context.Context, userID pgtype.UUID) ([]GetUserSetsRow, error)
+	GetUsersWithDueFacts(ctx context.Context, arg GetUsersWithDueFactsParams) ([]pgtype.UUID, error)
 	InitUserFactProgress(ctx context.Context, arg InitUserFactProgressParams) error
 	IsSetAuthor(ctx context.Context, arg IsSetAuthorParams) (bool, error)
 	JoinSet(ctx context.Context, arg JoinSetParams) (UserSet, error)
@@ -57,7 +57,7 @@ type Querier interface {
 	RecordAnswerResult(ctx context.Context, arg RecordAnswerResultParams) (AnswerResult, error)
 	SaveTelegramProfile(ctx context.Context, arg SaveTelegramProfileParams) (User, error)
 	TelegramProfileInput(ctx context.Context, arg TelegramProfileInputParams) (User, error)
-	UpdateCard(ctx context.Context, arg UpdateCardParams) (Card, error)
+	UpdateCard(ctx context.Context, arg UpdateCardParams) (UpdateCardRow, error)
 	UpdateFactProgressOnAnswer(ctx context.Context, arg UpdateFactProgressOnAnswerParams) (UserFactProgress, error)
 	UpsertMAXUser(ctx context.Context, arg UpsertMAXUserParams) (User, error)
 	UpsertTelegramUser(ctx context.Context, arg UpsertTelegramUserParams) (User, error)
