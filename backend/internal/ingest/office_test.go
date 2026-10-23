@@ -90,6 +90,38 @@ func TestExtractPresentation(t *testing.T) {
 	}
 }
 
+func TestPresentationPreservesInlineBreaksAndTabs(t *testing.T) {
+	paragraphs := `<a:p><a:r><a:t>SELECT</a:t></a:r><a:tab/><a:r><a:t>id</a:t></a:r><a:br/><a:r><a:t>FROM</a:t><a:tab/><a:t>students;</a:t></a:r></a:p><a:p><a:r><a:t>Next paragraph</a:t></a:r></a:p>`
+	want := "SELECT\tid\nFROM\tstudents;\nNext paragraph"
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{name: "shape", body: `<p:spTree><p:sp><p:txBody>` + paragraphs + `</p:txBody></p:sp></p:spTree>`},
+		{name: "table cell", body: `<p:spTree><p:graphicFrame><a:tbl><a:tr><a:tc><a:txBody>` + paragraphs + `</a:txBody></a:tc></a:tr></a:tbl></p:graphicFrame></p:spTree>`},
+		{name: "fallback", body: paragraphs},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := zipOf(t, map[string]string{
+				"ppt/slides/slide1.xml": `<p:sld xmlns:p="p" xmlns:a="a"><p:cSld>` + tc.body + `</p:cSld></p:sld>`,
+			})
+			res, err := newExtractor(t, &fakePDF{}).Extract(context.Background(), []File{{Name: "query.pptx", Data: data}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.Text != want {
+				t.Errorf("text = %q, want %q", res.Text, want)
+			}
+			if len(res.Document.Blocks) != 1 || res.Document.Blocks[0].Text != want {
+				t.Fatalf("source block separators lost: %+v", res.Document.Blocks)
+			}
+			if tc.name == "table cell" && res.Document.Blocks[0].Cells[0][0] != want {
+				t.Errorf("table cell = %q, want %q", res.Document.Blocks[0].Cells[0][0], want)
+			}
+		})
+	}
+}
+
 func TestExtractRejectsOtherArchives(t *testing.T) {
 	data := zipOf(t, map[string]string{"photos/1.jpg": "x"})
 	ex := newExtractor(t, &fakePDF{})

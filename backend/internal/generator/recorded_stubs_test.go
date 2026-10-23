@@ -20,9 +20,14 @@ type replayTransport func(*http.Request) (*http.Response, error)
 
 func (f replayTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
-// These are complete, unmodified SSE bodies from the paid audit, compressed
-// only for storage. Compare the actual transport output with the separately
-// recorded JSON before exercising the DTO and publication boundary.
+// These complete SSE bodies were recorded on 2026-10-22 from OpenRouter
+// (anthropic/claude-haiku-5.5, Azure endpoint, reasoning high). The .sse.gz files
+// retain the original bytes, compressed only for storage; the .json files were
+// assembled independently at the transport boundary. Source blocks are in
+// source.json. No credentials or authorization headers are included.
+// Each response finished with stop but contained unusable cards. Compare the
+// transport output with the recorded JSON before checking rejection without
+// repair; these fixtures do not measure model reliability or coverage.
 func TestRecordedStubsSurviveTransportAndAreRejectedWithoutRepair(t *testing.T) {
 	for _, attempt := range []int{4, 6, 8} {
 		t.Run(fmt.Sprint(attempt), func(t *testing.T) {

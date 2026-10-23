@@ -30,9 +30,6 @@ func buildDocument(res Result) material.Document {
 		}
 		for j, b := range blocks {
 			b.ID, b.Page, b.Order = fmt.Sprintf("p%d-b%d", p.Number, j+1), p.Number, j
-			if len(b.Issues) == 0 {
-				b.Issues = append([]string(nil), p.Issues...)
-			}
 			if b.Observations == "" && j == 0 {
 				b.Observations = p.Observations
 			}

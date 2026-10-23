@@ -52,14 +52,26 @@ func (n officeNode) text() string {
 	var lines []string
 	for _, p := range n.find("p") {
 		var line strings.Builder
-		for _, t := range p.find("t") {
-			line.WriteString(t.Text)
-		}
+		p.writeText(&line)
 		if line.Len() > 0 {
 			lines = append(lines, line.String())
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+func (n officeNode) writeText(b *strings.Builder) {
+	switch n.Name.Local {
+	case "t":
+		b.WriteString(n.Text)
+	case "br", "cr":
+		b.WriteByte('\n')
+	case "tab":
+		b.WriteByte('\t')
+	default:
+		for _, child := range n.Children {
+			child.writeText(b)
+		}
+	}
 }
 func readOfficeNode(f *zip.File) (officeNode, error) {
 	r, err := f.Open()
