@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	CountCardsByFactID(ctx context.Context, factID pgtype.UUID) (int32, error)
 	CountTotalDueCardsForUser(ctx context.Context, userID pgtype.UUID) (int32, error)
 	CreateCard(ctx context.Context, arg CreateCardParams) (Card, error)
 	CreateCardOption(ctx context.Context, arg CreateCardOptionParams) (CardOption, error)
@@ -38,14 +39,10 @@ type Querier interface {
 	GetNextReviewDateForUser(ctx context.Context, userID pgtype.UUID) (pgtype.Timestamptz, error)
 	GetSetByID(ctx context.Context, arg GetSetByIDParams) (GetSetByIDRow, error)
 	GetSetByShareCode(ctx context.Context, shareCode string) (GetSetByShareCodeRow, error)
-	// Aggregate only existing progress before joining participants. Missing facts
-	// contribute the default 700 without expanding every participant into every fact.
 	GetSetLeaderboard(ctx context.Context, setID pgtype.UUID) ([]GetSetLeaderboardRow, error)
 	GetSetPlan(ctx context.Context, arg GetSetPlanParams) ([]GetSetPlanRow, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 	GetUserFactProgress(ctx context.Context, arg GetUserFactProgressParams) (UserFactProgress, error)
-	// Aggregate only existing progress before joining participants. Missing facts
-	// contribute the default 700 without expanding every participant into every fact.
 	GetUserSetRating(ctx context.Context, arg GetUserSetRatingParams) (GetUserSetRatingRow, error)
 	GetUserSets(ctx context.Context, userID pgtype.UUID) ([]GetUserSetsRow, error)
 	GetUsersWithDueFacts(ctx context.Context, arg GetUsersWithDueFactsParams) ([]pgtype.UUID, error)
@@ -58,7 +55,7 @@ type Querier interface {
 	SaveTelegramProfile(ctx context.Context, arg SaveTelegramProfileParams) (User, error)
 	TelegramProfileInput(ctx context.Context, arg TelegramProfileInputParams) (User, error)
 	UpdateCard(ctx context.Context, arg UpdateCardParams) (UpdateCardRow, error)
-	UpdateFactProgressOnAnswer(ctx context.Context, arg UpdateFactProgressOnAnswerParams) (UserFactProgress, error)
+	UpsertFactProgress(ctx context.Context, arg UpsertFactProgressParams) (UserFactProgress, error)
 	UpsertMAXUser(ctx context.Context, arg UpsertMAXUserParams) (User, error)
 	UpsertTelegramUser(ctx context.Context, arg UpsertTelegramUserParams) (User, error)
 }

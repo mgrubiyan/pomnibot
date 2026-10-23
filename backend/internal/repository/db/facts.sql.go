@@ -109,7 +109,7 @@ func (q *Queries) GetSetPlan(ctx context.Context, arg GetSetPlanParams) ([]GetSe
 }
 
 const getUserFactProgress = `-- name: GetUserFactProgress :one
-SELECT elo, ceiling_found, consecutive_correct, consecutive_incorrect, interval_days, ease_factor, next_review_at, last_reviewed_at, user_id, fact_id FROM user_fact_progress
+SELECT next_review_at, last_reviewed_at, user_id, fact_id, step, stability, difficulty, reps, lapses, state FROM user_fact_progress
 WHERE user_id = $1 AND fact_id = $2
 `
 
@@ -122,23 +122,23 @@ func (q *Queries) GetUserFactProgress(ctx context.Context, arg GetUserFactProgre
 	row := q.db.QueryRow(ctx, getUserFactProgress, arg.UserID, arg.FactID)
 	var i UserFactProgress
 	err := row.Scan(
-		&i.Elo,
-		&i.CeilingFound,
-		&i.ConsecutiveCorrect,
-		&i.ConsecutiveIncorrect,
-		&i.IntervalDays,
-		&i.EaseFactor,
 		&i.NextReviewAt,
 		&i.LastReviewedAt,
 		&i.UserID,
 		&i.FactID,
+		&i.Step,
+		&i.Stability,
+		&i.Difficulty,
+		&i.Reps,
+		&i.Lapses,
+		&i.State,
 	)
 	return i, err
 }
 
 const initUserFactProgress = `-- name: InitUserFactProgress :exec
-INSERT INTO user_fact_progress (user_id, fact_id, elo, ceiling_found, next_review_at)
-SELECT $1, f.id, 700, FALSE, CURRENT_TIMESTAMP
+INSERT INTO user_fact_progress (user_id, fact_id, step, stability, difficulty, next_review_at)
+SELECT $1, f.id, 0, 0.0, 0.0, CURRENT_TIMESTAMP
 FROM facts f
 WHERE f.set_id = $2
 ON CONFLICT (user_id, fact_id) DO NOTHING

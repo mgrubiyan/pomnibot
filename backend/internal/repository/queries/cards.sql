@@ -25,7 +25,6 @@ SELECT
     c.fact_id,
     f.name AS fact_name,
     c.kind,
-    ck.difficulty_level,
     c.question,
     c.answer_text,
     c.explanation,
@@ -34,7 +33,6 @@ SELECT
     c.updated_at
 FROM cards c
 JOIN facts f ON c.fact_id = f.id
-JOIN card_kinds ck ON c.kind = ck.kind
 WHERE c.id = $1
   AND EXISTS (
       SELECT 1 FROM sets s
@@ -49,7 +47,6 @@ SELECT
     c.fact_id,
     f.name AS fact_name,
     c.kind,
-    ck.difficulty_level,
     c.question,
     c.answer_text,
     c.explanation,
@@ -58,7 +55,6 @@ SELECT
     c.updated_at
 FROM cards c
 JOIN facts f ON c.fact_id = f.id
-JOIN card_kinds ck ON c.kind = ck.kind
 JOIN sets s ON f.set_id = s.id
 WHERE c.id = $1 AND s.author_id = $2;
 
@@ -69,7 +65,6 @@ SELECT
     c.fact_id,
     f.name AS fact_name,
     c.kind,
-    ck.difficulty_level,
     c.question,
     c.answer_text,
     c.explanation,
@@ -78,11 +73,10 @@ SELECT
     c.updated_at
 FROM cards c
 JOIN facts f ON c.fact_id = f.id
-JOIN card_kinds ck ON c.kind = ck.kind
 WHERE f.set_id = $1
   AND EXISTS (
       SELECT 1 FROM sets s
-      WHERE s.id = $1
+      WHERE s.id = f.set_id
         AND (s.author_id = @user_id OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = @user_id))
   )
 ORDER BY f.id ASC, c.id ASC;
@@ -150,14 +144,8 @@ WITH user_due_facts AS (
         f.id AS fact_id,
         f.set_id,
         f.name AS fact_name,
-        COALESCE(ufp.elo, 700) AS elo,
-        CASE
-            WHEN COALESCE(ufp.elo, 700) < 800 THEN 0
-            WHEN COALESCE(ufp.elo, 700) < 1000 THEN 1
-            WHEN COALESCE(ufp.elo, 700) < 1200 THEN 2
-            WHEN COALESCE(ufp.elo, 700) < 1400 THEN 3
-            ELSE 4
-        END AS target_difficulty
+        COALESCE(ufp.step, 0) AS step,
+        COALESCE(ufp.next_review_at, '1970-01-01'::timestamptz) AS due_time
     FROM user_sets us
     JOIN facts f ON us.set_id = f.set_id
     LEFT JOIN user_fact_progress ufp ON ufp.fact_id = f.id AND ufp.user_id = us.user_id
@@ -171,20 +159,21 @@ ranked_cards AS (
         c.fact_id,
         udf.fact_name,
         c.kind,
-        ck.difficulty_level,
         c.question,
         c.answer_text,
         c.explanation,
         c.source_quote,
         c.source_ref,
         c.updated_at,
+        udf.due_time,
+        udf.step,
         ROW_NUMBER() OVER (
             PARTITION BY c.fact_id
-            ORDER BY ABS(ck.difficulty_level - udf.target_difficulty) ASC, c.id ASC
-        ) AS rank
+            ORDER BY c.id ASC
+        ) - 1 AS card_idx,
+        COUNT(*) OVER (PARTITION BY c.fact_id) AS total_cards
     FROM cards c
     JOIN user_due_facts udf ON c.fact_id = udf.fact_id
-    JOIN card_kinds ck ON c.kind = ck.kind
 )
 SELECT
     id,
@@ -192,7 +181,6 @@ SELECT
     fact_id,
     fact_name,
     kind,
-    difficulty_level,
     question,
     answer_text,
     explanation,
@@ -200,7 +188,12 @@ SELECT
     source_ref,
     updated_at
 FROM ranked_cards
-WHERE rank = 1;
+WHERE card_idx = LEAST(step, total_cards - 1)
+ORDER BY due_time ASC
+LIMIT 20;
+
+-- name: CountCardsByFactID :one
+SELECT COUNT(*)::INT FROM cards WHERE fact_id = $1;
 
 -- name: GetCardOptionsBatch :many
 SELECT * FROM card_options

@@ -112,7 +112,18 @@ func TestManualCardsPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oldProgress, err := q.UpdateFactProgressOnAnswer(ctx, db.UpdateFactProgressOnAnswerParams{UserID: pgtype.UUID{Bytes: user22, Valid: true}, FactID: existing[0].ID, Column3: false})
+	oldProgress, err := q.UpsertFactProgress(ctx, db.UpsertFactProgressParams{
+		UserID:         pgtype.UUID{Bytes: user22, Valid: true},
+		FactID:         existing[0].ID,
+		Step:           1,
+		Stability:      2.0,
+		Difficulty:     3.0,
+		Reps:           1,
+		Lapses:         0,
+		State:          1,
+		LastReviewedAt: pgtype.Timestamptz{Time: time.Now().Truncate(time.Microsecond), Valid: true},
+		NextReviewAt:   pgtype.Timestamptz{Time: time.Now().Add(24 * time.Hour).Truncate(time.Microsecond), Valid: true},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

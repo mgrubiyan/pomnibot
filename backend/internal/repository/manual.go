@@ -107,7 +107,7 @@ func insertManualCard(ctx context.Context, q db.Querier, setID pgtype.UUID, req 
 	if req.Kind == contracts.CardKindBoolean {
 		answer = strconv.FormatBool(req.Answer.Bool)
 	}
-	if _, err := q.CreateCard(ctx, db.CreateCardParams{ID: pgID, FactID: pgFactID, Kind: string(req.Kind), Question: req.Question, AnswerText: pgtype.Text{String: answer, Valid: true}, Explanation: req.Explanation.Value}); err != nil {
+	if _, err := q.CreateCard(ctx, db.CreateCardParams{ID: pgID, FactID: pgFactID, Kind: db.CardKind(req.Kind), Question: req.Question, AnswerText: pgtype.Text{String: answer, Valid: true}, Explanation: req.Explanation.Value}); err != nil {
 		return uuid.Nil, err
 	}
 	if req.Kind == contracts.CardKindChoice {

@@ -89,7 +89,7 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID uuid.UUID, title
 		createdCard, err := q.CreateCard(ctx, db.CreateCardParams{
 			ID:       cardID,
 			FactID:   pgFactID,
-			Kind:     string(c.Kind),
+			Kind:     db.CardKind(c.Kind),
 			Question: c.Question,
 			AnswerText: pgtype.Text{
 				String: c.Answer,

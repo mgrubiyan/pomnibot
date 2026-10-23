@@ -277,7 +277,7 @@ func TestCardService_AnswerQuestion(t *testing.T) {
 			}
 			return db.Answer{}, nil
 		},
-		updateFactProgressOnAnswerFunc: func(_ context.Context, _ db.UpdateFactProgressOnAnswerParams) (db.UserFactProgress, error) {
+		upsertFactProgressFunc: func(_ context.Context, _ db.UpsertFactProgressParams) (db.UserFactProgress, error) {
 			progressUpdated = true
 			return db.UserFactProgress{}, nil
 		},
@@ -442,7 +442,7 @@ func TestHomescreenService_SendResults(t *testing.T) {
 			count++
 			return db.Answer{}, nil
 		},
-		updateFactProgressOnAnswerFunc: func(_ context.Context, _ db.UpdateFactProgressOnAnswerParams) (db.UserFactProgress, error) {
+		upsertFactProgressFunc: func(_ context.Context, _ db.UpsertFactProgressParams) (db.UserFactProgress, error) {
 			return db.UserFactProgress{}, nil
 		},
 	}
@@ -665,13 +665,13 @@ func TestCardService_UpdateCard_FieldsAndKinds(t *testing.T) {
 	})
 
 	t.Run("Update card kind to choice with options", func(t *testing.T) {
-		var updatedKind string
+		var updatedKind db.CardKind
 		mock := &mockQuerier{
 			getCardByIDForAuthorFunc: func(_ context.Context, _ db.GetCardByIDForAuthorParams) (db.GetCardByIDForAuthorRow, error) {
 				return db.GetCardByIDForAuthorRow{
 					ID:         pgUUID,
 					SetID:      pgSetUUID,
-					Kind:       "input",
+					Kind:       db.CardKindInput,
 					Question:   "Initial question",
 					AnswerText: pgtype.Text{String: "Option 1", Valid: true},
 				}, nil

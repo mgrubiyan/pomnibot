@@ -79,7 +79,7 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID uuid.UUID, card
 		AuthorID:    pgUserID,
 	}
 	if req.Kind.IsSet() {
-		arg.Kind = string(req.Kind.Value)
+		arg.Kind = db.CardKind(req.Kind.Value)
 	}
 	if req.Question.IsSet() {
 		arg.Question = req.Question.Value
@@ -264,13 +264,8 @@ func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID uuid.UUID, 
 		return nil, fmt.Errorf("record answer: %w", err)
 	}
 
-	_, err = s.querier.UpdateFactProgressOnAnswer(ctx, db.UpdateFactProgressOnAnswerParams{
-		UserID:  pgUserID,
-		FactID:  card.FactID,
-		Column3: isCorrect,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("update fact progress on answer: %w", err)
+	if err := processFactAnswer(ctx, s.querier, pgUserID, card.FactID, isCorrect); err != nil {
+		return nil, fmt.Errorf("process fact answer: %w", err)
 	}
 
 	return &contracts.AnswerQuestionResponse{

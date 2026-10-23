@@ -5,8 +5,56 @@
 package db
 
 import (
+	"database/sql/driver"
+	"fmt"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type CardKind string
+
+const (
+	CardKindFlip    CardKind = "flip"
+	CardKindBoolean CardKind = "boolean"
+	CardKindChoice  CardKind = "choice"
+	CardKindTable   CardKind = "table"
+	CardKindInput   CardKind = "input"
+)
+
+func (e *CardKind) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CardKind(s)
+	case string:
+		*e = CardKind(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CardKind: %T", src)
+	}
+	return nil
+}
+
+type NullCardKind struct {
+	CardKind CardKind `json:"card_kind"`
+	Valid    bool     `json:"valid"` // Valid is true if CardKind is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCardKind) Scan(value interface{}) error {
+	if value == nil {
+		ns.CardKind, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CardKind.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCardKind) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CardKind), nil
+}
 
 type Answer struct {
 	Correct bool        `json:"correct"`
@@ -16,7 +64,7 @@ type Answer struct {
 }
 
 type Card struct {
-	Kind        string             `json:"kind"`
+	Kind        CardKind           `json:"kind"`
 	Question    string             `json:"question"`
 	AnswerText  pgtype.Text        `json:"answer_text"`
 	Explanation string             `json:"explanation"`
@@ -25,11 +73,6 @@ type Card struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	ID          pgtype.UUID        `json:"id"`
 	FactID      pgtype.UUID        `json:"fact_id"`
-}
-
-type CardKind struct {
-	Kind            string `json:"kind"`
-	DifficultyLevel int16  `json:"difficulty_level"`
 }
 
 type CardOption struct {
@@ -85,16 +128,16 @@ type User struct {
 }
 
 type UserFactProgress struct {
-	Elo                  int32              `json:"elo"`
-	CeilingFound         bool               `json:"ceiling_found"`
-	ConsecutiveCorrect   int32              `json:"consecutive_correct"`
-	ConsecutiveIncorrect int32              `json:"consecutive_incorrect"`
-	IntervalDays         int32              `json:"interval_days"`
-	EaseFactor           pgtype.Numeric     `json:"ease_factor"`
-	NextReviewAt         pgtype.Timestamptz `json:"next_review_at"`
-	LastReviewedAt       pgtype.Timestamptz `json:"last_reviewed_at"`
-	UserID               pgtype.UUID        `json:"user_id"`
-	FactID               pgtype.UUID        `json:"fact_id"`
+	NextReviewAt   pgtype.Timestamptz `json:"next_review_at"`
+	LastReviewedAt pgtype.Timestamptz `json:"last_reviewed_at"`
+	UserID         pgtype.UUID        `json:"user_id"`
+	FactID         pgtype.UUID        `json:"fact_id"`
+	Step           int32              `json:"step"`
+	Stability      float64            `json:"stability"`
+	Difficulty     float64            `json:"difficulty"`
+	Reps           int32              `json:"reps"`
+	Lapses         int32              `json:"lapses"`
+	State          int16              `json:"state"`
 }
 
 type UserSet struct {

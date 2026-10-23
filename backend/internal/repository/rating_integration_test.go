@@ -10,7 +10,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 )
 
-// Scores must include the default 700 for missing facts, exclude other sets,
+// Scores must calculate FSRS-6 mastery index correctly, exclude other sets,
 // include authors without membership rows, and preserve ties and empty sets.
 func TestSetRatingPostgres(t *testing.T) {
 	pool := manualTestPool(t)
@@ -35,7 +35,19 @@ func TestSetRatingPostgres(t *testing.T) {
 		fmt.Sprintf(`INSERT INTO sets(id,title,author_id,share_code) VALUES('%s','Shared','%s','123456'),('%s','Empty','%s','234567'),('%s','Other','%s','345678')`, s1, u11, s2, u11, s3, u11),
 		fmt.Sprintf(`INSERT INTO user_sets(user_id,set_id) SELECT id,'%s'::uuid FROM users WHERE id IN ('%s','%s','%s','%s')`, s1, u22, u33, u44, u66),
 		fmt.Sprintf(`INSERT INTO facts(id,set_id,name) VALUES('%s','%s','A'),('%s','%s','B'),('%s','%s','Other')`, fa, s1, fb, s1, fo, s3),
-		fmt.Sprintf(`INSERT INTO user_fact_progress(user_id,fact_id,elo) VALUES('%s','%s',1200),('%s','%s',9999),('%s','%s',1000),('%s','%s',1000),('%s','%s',1200),('%s','%s',1400),('%s','%s',1400),('%s','%s',400)`,
+		fmt.Sprintf(`INSERT INTO cards(id,fact_id,kind,question,answer_text,explanation,source_quote) VALUES
+			(uuidv7(),'%s','choice','QA','AA','EA','QA'),
+			(uuidv7(),'%s','choice','QB','AB','EB','QB'),
+			(uuidv7(),'%s','choice','QO','AO','EO','QO')`, fa, fb, fo),
+		fmt.Sprintf(`INSERT INTO user_fact_progress(user_id,fact_id,step,stability,difficulty,last_reviewed_at) VALUES
+			('%s','%s',1,10.0,5.0,NOW()),
+			('%s','%s',1,10.0,5.0,NOW()),
+			('%s','%s',1,10.0,5.0,NOW()),
+			('%s','%s',1,10.0,5.0,NOW()),
+			('%s','%s',1,10.0,5.0,NOW()),
+			('%s','%s',1,10.0,5.0,NOW()),
+			('%s','%s',1,10.0,5.0,NOW()),
+			('%s','%s',0,1.0,7.0,NOW())`,
 			u22, fa, u22, fo, u33, fa, u33, fb, u44, fa, u55, fa, u55, fb, u66, fa),
 	} {
 		if _, err := pool.Exec(ctx, sql); err != nil {
@@ -51,7 +63,7 @@ func TestSetRatingPostgres(t *testing.T) {
 	expected := []struct {
 		id               uuid.UUID
 		rank, percentile int32
-	}{{u33, 1, 33}, {u22, 2, 25}, {u44, 2, 25}, {u11, 4, 0}, {u66, 5, 0}}
+	}{{u33, 1, 100}, {u22, 2, 50}, {u44, 2, 50}, {u11, 4, 0}, {u66, 4, 0}}
 	if len(board) != len(expected) {
 		t.Fatalf("participants: %+v", board)
 	}

@@ -35,90 +35,70 @@ func (q *Queries) RecordAnswer(ctx context.Context, arg RecordAnswerParams) (Ans
 	return i, err
 }
 
-const updateFactProgressOnAnswer = `-- name: UpdateFactProgressOnAnswer :one
+const upsertFactProgress = `-- name: UpsertFactProgress :one
 INSERT INTO user_fact_progress (
     user_id,
     fact_id,
-    elo,
-    ceiling_found,
-    consecutive_correct,
-    consecutive_incorrect,
-    interval_days,
-    ease_factor,
-    next_review_at,
-    last_reviewed_at
+    step,
+    stability,
+    difficulty,
+    reps,
+    lapses,
+    state,
+    last_reviewed_at,
+    next_review_at
 )
-VALUES (
-    $1,
-    $2,
-    CASE WHEN $3::BOOLEAN THEN 700 + 201 ELSE GREATEST(400, 700 - 201) END,
-    CASE WHEN NOT $3::BOOLEAN THEN TRUE ELSE FALSE END,
-    CASE WHEN $3::BOOLEAN THEN 1 ELSE 0 END,
-    CASE WHEN NOT $3::BOOLEAN THEN 1 ELSE 0 END,
-    0,
-    2.50,
-    CASE WHEN NOT $3::BOOLEAN THEN CURRENT_TIMESTAMP + INTERVAL '1 day' ELSE CURRENT_TIMESTAMP END,
-    CURRENT_TIMESTAMP
-)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (user_id, fact_id) DO UPDATE SET
-    elo = CASE
-        WHEN $3::BOOLEAN THEN user_fact_progress.elo + 201
-        ELSE GREATEST(400, user_fact_progress.elo - 201)
-    END,
-    ceiling_found = CASE
-        WHEN NOT $3::BOOLEAN OR user_fact_progress.ceiling_found OR (user_fact_progress.elo + 201 >= 1400) THEN TRUE
-        ELSE FALSE
-    END,
-    consecutive_correct = CASE
-        WHEN $3::BOOLEAN THEN user_fact_progress.consecutive_correct + 1
-        ELSE 0
-    END,
-    consecutive_incorrect = CASE
-        WHEN NOT $3::BOOLEAN THEN user_fact_progress.consecutive_incorrect + 1
-        ELSE 0
-    END,
-    ease_factor = CASE
-        WHEN NOT $3::BOOLEAN THEN GREATEST(1.30, user_fact_progress.ease_factor - 0.20)
-        ELSE LEAST(2.50, user_fact_progress.ease_factor + 0.20)
-    END,
-    interval_days = CASE
-        WHEN $3::BOOLEAN AND NOT (NOT $3::BOOLEAN OR user_fact_progress.ceiling_found OR (user_fact_progress.elo + 201 >= 1400)) THEN 0
-        WHEN NOT $3::BOOLEAN THEN 1
-        WHEN user_fact_progress.interval_days = 0 THEN 1
-        WHEN user_fact_progress.interval_days = 1 THEN 3
-        ELSE LEAST(30, (user_fact_progress.interval_days * user_fact_progress.ease_factor)::INT)
-    END,
-    next_review_at = CASE
-        WHEN $3::BOOLEAN AND NOT (NOT $3::BOOLEAN OR user_fact_progress.ceiling_found OR (user_fact_progress.elo + 201 >= 1400)) THEN CURRENT_TIMESTAMP
-        WHEN NOT $3::BOOLEAN THEN CURRENT_TIMESTAMP + INTERVAL '1 day'
-        WHEN user_fact_progress.interval_days = 0 THEN CURRENT_TIMESTAMP + INTERVAL '1 day'
-        WHEN user_fact_progress.interval_days = 1 THEN CURRENT_TIMESTAMP + INTERVAL '3 days'
-        ELSE CURRENT_TIMESTAMP + (LEAST(30, (user_fact_progress.interval_days * user_fact_progress.ease_factor)::INT) || ' days')::INTERVAL
-    END,
-    last_reviewed_at = CURRENT_TIMESTAMP
-RETURNING elo, ceiling_found, consecutive_correct, consecutive_incorrect, interval_days, ease_factor, next_review_at, last_reviewed_at, user_id, fact_id
+    step = EXCLUDED.step,
+    stability = EXCLUDED.stability,
+    difficulty = EXCLUDED.difficulty,
+    reps = EXCLUDED.reps,
+    lapses = EXCLUDED.lapses,
+    state = EXCLUDED.state,
+    last_reviewed_at = EXCLUDED.last_reviewed_at,
+    next_review_at = EXCLUDED.next_review_at
+RETURNING next_review_at, last_reviewed_at, user_id, fact_id, step, stability, difficulty, reps, lapses, state
 `
 
-type UpdateFactProgressOnAnswerParams struct {
-	UserID  pgtype.UUID `json:"user_id"`
-	FactID  pgtype.UUID `json:"fact_id"`
-	Column3 bool        `json:"column_3"`
+type UpsertFactProgressParams struct {
+	UserID         pgtype.UUID        `json:"user_id"`
+	FactID         pgtype.UUID        `json:"fact_id"`
+	Step           int32              `json:"step"`
+	Stability      float64            `json:"stability"`
+	Difficulty     float64            `json:"difficulty"`
+	Reps           int32              `json:"reps"`
+	Lapses         int32              `json:"lapses"`
+	State          int16              `json:"state"`
+	LastReviewedAt pgtype.Timestamptz `json:"last_reviewed_at"`
+	NextReviewAt   pgtype.Timestamptz `json:"next_review_at"`
 }
 
-func (q *Queries) UpdateFactProgressOnAnswer(ctx context.Context, arg UpdateFactProgressOnAnswerParams) (UserFactProgress, error) {
-	row := q.db.QueryRow(ctx, updateFactProgressOnAnswer, arg.UserID, arg.FactID, arg.Column3)
+func (q *Queries) UpsertFactProgress(ctx context.Context, arg UpsertFactProgressParams) (UserFactProgress, error) {
+	row := q.db.QueryRow(ctx, upsertFactProgress,
+		arg.UserID,
+		arg.FactID,
+		arg.Step,
+		arg.Stability,
+		arg.Difficulty,
+		arg.Reps,
+		arg.Lapses,
+		arg.State,
+		arg.LastReviewedAt,
+		arg.NextReviewAt,
+	)
 	var i UserFactProgress
 	err := row.Scan(
-		&i.Elo,
-		&i.CeilingFound,
-		&i.ConsecutiveCorrect,
-		&i.ConsecutiveIncorrect,
-		&i.IntervalDays,
-		&i.EaseFactor,
 		&i.NextReviewAt,
 		&i.LastReviewedAt,
 		&i.UserID,
 		&i.FactID,
+		&i.Step,
+		&i.Stability,
+		&i.Difficulty,
+		&i.Reps,
+		&i.Lapses,
+		&i.State,
 	)
 	return i, err
 }

@@ -45,7 +45,7 @@ func verify(ctx context.Context, pool *pgxpool.Pool, w *workload) error {
 		var bad int
 		// Independent expected progress from persisted answers, checked per fact.
 		if err := pool.QueryRow(ctx, `WITH expected AS (SELECT c.fact_id,count(*) n FROM answers a JOIN cards c ON c.id=a.card_id WHERE a.user_id=$1 GROUP BY c.fact_id)
- SELECT count(*) FROM expected e LEFT JOIN user_fact_progress p ON p.user_id=$1 AND p.fact_id=e.fact_id WHERE p.fact_id IS NULL OR p.elo<>700+201*e.n OR p.consecutive_correct<>e.n OR p.last_reviewed_at IS NULL OR p.consecutive_incorrect<>0`, a.id).Scan(&bad); err != nil {
+ SELECT count(*) FROM expected e LEFT JOIN user_fact_progress p ON p.user_id=$1 AND p.fact_id=e.fact_id WHERE p.fact_id IS NULL OR p.last_reviewed_at IS NULL`, a.id).Scan(&bad); err != nil {
 			return err
 		}
 		if bad != 0 {
@@ -68,7 +68,7 @@ func verify(ctx context.Context, pool *pgxpool.Pool, w *workload) error {
 	}
 	// Independent score calculation, sort/rank in Go rather than the ranking SQL.
 	scores := map[int64]float64{}
-	rows, err := pool.Query(ctx, `SELECT us.user_id,COALESCE(sum(p.elo),0)+(50-count(p.fact_id))*700 FROM user_sets us LEFT JOIN user_fact_progress p ON p.user_id=us.user_id AND p.fact_id IN (SELECT id FROM facts WHERE set_id=$1) WHERE us.set_id=$1 GROUP BY us.user_id`, setID(1))
+	rows, err := pool.Query(ctx, `SELECT us.user_id, COALESCE(sum(p.step::float / 5.0 * fsrs6_retrievability(p.last_reviewed_at, p.stability)), 0) FROM user_sets us LEFT JOIN user_fact_progress p ON p.user_id=us.user_id AND p.fact_id IN (SELECT id FROM facts WHERE set_id=$1) WHERE us.set_id=$1 GROUP BY us.user_id`, setID(1))
 	if err != nil {
 		return err
 	}
@@ -97,7 +97,7 @@ func verify(ctx context.Context, pool *pgxpool.Pool, w *workload) error {
 				rank++
 			}
 		}
-		percentile := int(math.Round((avg - 800) / 6))
+		percentile := int(math.Round(avg * 100))
 		percentile = max(0, min(100, percentile))
 		if item.Rank != rank || item.Percentile != percentile {
 			return fmt.Errorf("leaderboard user %d got rank=%d percentile=%d want %d/%d", item.User.ID, item.Rank, item.Percentile, rank, percentile)

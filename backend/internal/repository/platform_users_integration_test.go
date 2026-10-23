@@ -43,9 +43,9 @@ func TestPlatformUsersMigrationAndSharedLearning(t *testing.T) {
 	if err = pool.QueryRow(ctx, "SELECT count(*) FROM users WHERE id = '00000000-0000-0000-0000-000000000000' AND (max_id IS NOT NULL OR tg_id IS NOT NULL)").Scan(&count); err != nil || count != 0 {
 		t.Fatalf("demo platform IDs: %d %v", count, err)
 	}
-	var elo int
-	if err = pool.QueryRow(ctx, "SELECT elo FROM user_fact_progress WHERE user_id=$1", maxAccount.User.ID).Scan(&elo); err != nil || elo != 900 {
-		t.Fatalf("progress: %d %v", elo, err)
+	var step int
+	if err = pool.QueryRow(ctx, "SELECT step FROM user_fact_progress WHERE user_id=$1", maxAccount.User.ID).Scan(&step); err != nil || step != 1 {
+		t.Fatalf("progress step: %d %v", step, err)
 	}
 	var owner uuid.UUID
 	if err = pool.QueryRow(ctx, "SELECT author_id FROM sets WHERE share_code='111111'").Scan(&owner); err != nil || owner != maxAccount.User.ID {

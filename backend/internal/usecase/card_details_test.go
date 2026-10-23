@@ -66,7 +66,7 @@ func TestCardListsBatchDetails(t *testing.T) {
 					if i%2 == 1 {
 						kind = "table"
 					}
-					rows = append(rows, db.GetCardsBySetIDRow{ID: pgtype.UUID{Bytes: [16]byte{15: byte(i + 2)}, Valid: true}, SetID: set, Kind: kind, AnswerText: pgtype.Text{String: "Answer", Valid: true}})
+					rows = append(rows, db.GetCardsBySetIDRow{ID: pgtype.UUID{Bytes: [16]byte{15: byte(i + 2)}, Valid: true}, SetID: set, Kind: db.CardKind(kind), AnswerText: pgtype.Text{String: "Answer", Valid: true}})
 				}
 				return rows, nil
 			}

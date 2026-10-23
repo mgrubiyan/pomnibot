@@ -162,7 +162,7 @@ func (s *setServiceImpl) GetCardsBySetID(ctx context.Context, userID uuid.UUID, 
 
 	cards := make([]contracts.Card, 0, len(rows))
 	for _, r := range rows {
-		c, err := builder.buildCard(ctx, r.ID, r.SetID, r.FactID, r.FactName, r.Kind, r.Question, r.AnswerText, r.Explanation, r.SourceQuote, r.SourceRef)
+		c, err := builder.buildCard(ctx, r.ID, r.SetID, r.FactID, r.FactName, string(r.Kind), r.Question, r.AnswerText, r.Explanation, r.SourceQuote, r.SourceRef)
 		if err != nil {
 			return nil, err
 		}

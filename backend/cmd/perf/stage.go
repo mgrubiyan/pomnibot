@@ -137,7 +137,7 @@ func runStage(ctx context.Context, cfg options, name string, n, rate int, d time
 		if _, err = pool.Exec(ctx, `INSERT INTO user_sets(user_id,set_id) SELECT $1,id FROM sets WHERE id<>$2::uuid ON CONFLICT DO NOTHING`, a.id, setID(1)); err != nil {
 			return result, err
 		}
-		if _, err = pool.Exec(ctx, `INSERT INTO user_fact_progress(user_id,fact_id,elo,next_review_at) SELECT $1,id,800,'2020-01-01' FROM facts WHERE set_id<>$2::uuid`, a.id, setID(1)); err != nil {
+		if _, err = pool.Exec(ctx, `INSERT INTO user_fact_progress(user_id,fact_id,step,stability,difficulty,next_review_at) SELECT $1,id,1,2.3065,5.0,'2020-01-01' FROM facts WHERE set_id<>$2::uuid`, a.id, setID(1)); err != nil {
 			return result, err
 		}
 	}

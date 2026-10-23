@@ -158,13 +158,8 @@ func (s *homescreenServiceImpl) SendResults(ctx context.Context, userID uuid.UUI
 			return fmt.Errorf("record answer: %w", err)
 		}
 
-		_, err = s.querier.UpdateFactProgressOnAnswer(ctx, db.UpdateFactProgressOnAnswerParams{
-			UserID:  pgUserID,
-			FactID:  card.FactID,
-			Column3: res.Correct,
-		})
-		if err != nil {
-			return fmt.Errorf("update fact progress on answer: %w", err)
+		if err := processFactAnswer(ctx, s.querier, pgUserID, card.FactID, res.Correct); err != nil {
+			return fmt.Errorf("process fact answer: %w", err)
 		}
 	}
 

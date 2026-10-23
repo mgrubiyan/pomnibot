@@ -24,8 +24,8 @@ WHERE f.set_id = $1
 ORDER BY COALESCE(ufp.next_review_at, CURRENT_TIMESTAMP) ASC;
 
 -- name: InitUserFactProgress :exec
-INSERT INTO user_fact_progress (user_id, fact_id, elo, ceiling_found, next_review_at)
-SELECT $1, f.id, 700, FALSE, CURRENT_TIMESTAMP
+INSERT INTO user_fact_progress (user_id, fact_id, step, stability, difficulty, next_review_at)
+SELECT $1, f.id, 0, 0.0, 0.0, CURRENT_TIMESTAMP
 FROM facts f
 WHERE f.set_id = $2
 ON CONFLICT (user_id, fact_id) DO NOTHING;
