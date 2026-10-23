@@ -30,7 +30,7 @@ SELECT
 FROM card
 JOIN saved ON saved.card_id = card.id;
 
--- name: GetOpenCardIssuesBySet :many
+-- name: GetSetIssues :many
 -- Open complaints of the author's set: made after the card's last edit and
 -- not dismissed. Complaints about deleted cards are not listed.
 SELECT
@@ -50,7 +50,7 @@ WHERE f.set_id = @set_id
 GROUP BY i.card_id, i.reason
 ORDER BY last_reported_at DESC, i.card_id, i.reason;
 
--- name: ResolveCardIssues :one
+-- name: CloseCardIssues :one
 -- Dismisses the open complaints of a card; false when the user is not the
 -- author of its set or the card is gone.
 WITH card AS (

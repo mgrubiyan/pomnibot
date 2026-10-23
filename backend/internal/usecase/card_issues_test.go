@@ -75,7 +75,7 @@ func TestCardService_GetSetIssues(t *testing.T) {
 	setID, cardID := uuid.New(), uuid.New()
 	at := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
 	errDB := errors.New("connection reset")
-	rows := []db.GetOpenCardIssuesBySetRow{{
+	rows := []db.GetSetIssuesRow{{
 		CardID:         pgtype.UUID{Bytes: cardID, Valid: true},
 		Reason:         db.CardIssueReasonNotInNotes,
 		Count:          3,
@@ -101,7 +101,7 @@ func TestCardService_GetSetIssues(t *testing.T) {
 					}
 					return tt.author, nil
 				},
-				getOpenCardIssuesBySetFunc: func(_ context.Context, arg db.GetOpenCardIssuesBySetParams) ([]db.GetOpenCardIssuesBySetRow, error) {
+				getSetIssuesFunc: func(_ context.Context, arg db.GetSetIssuesParams) ([]db.GetSetIssuesRow, error) {
 					if uuid.UUID(arg.SetID.Bytes) != setID || arg.UserID != 7 {
 						t.Fatalf("params = %+v", arg)
 					}
@@ -135,7 +135,7 @@ func TestCardService_ResolveCardIssues(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := &mockQuerier{resolveCardIssuesFunc: func(_ context.Context, arg db.ResolveCardIssuesParams) (bool, error) {
+			m := &mockQuerier{closeCardIssuesFunc: func(_ context.Context, arg db.CloseCardIssuesParams) (bool, error) {
 				if uuid.UUID(arg.CardID.Bytes) != cardID || arg.UserID != 7 {
 					t.Fatalf("params = %+v", arg)
 				}

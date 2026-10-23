@@ -11,6 +11,9 @@ import (
 )
 
 type Querier interface {
+	// Dismisses the open complaints of a card; false when the user is not the
+	// author of its set or the card is gone.
+	CloseCardIssues(ctx context.Context, arg CloseCardIssuesParams) (bool, error)
 	CountTotalDueCardsForUser(ctx context.Context, userID int64) (int32, error)
 	CreateCard(ctx context.Context, arg CreateCardParams) (Card, error)
 	// Saves the complaint with a copy of the card; no row when the card is gone
@@ -41,11 +44,11 @@ type Querier interface {
 	GetFactsBySetID(ctx context.Context, setID pgtype.UUID) ([]GetFactsBySetIDRow, error)
 	GetFeedCardsForUser(ctx context.Context, userID int64) ([]GetFeedCardsForUserRow, error)
 	GetNextReviewDateForUser(ctx context.Context, userID int64) (pgtype.Timestamptz, error)
-	// Open complaints of the author's set: made after the card's last edit and
-	// not dismissed. Complaints about deleted cards are not listed.
-	GetOpenCardIssuesBySet(ctx context.Context, arg GetOpenCardIssuesBySetParams) ([]GetOpenCardIssuesBySetRow, error)
 	GetSetByID(ctx context.Context, arg GetSetByIDParams) (GetSetByIDRow, error)
 	GetSetByShareCode(ctx context.Context, arg GetSetByShareCodeParams) (GetSetByShareCodeRow, error)
+	// Open complaints of the author's set: made after the card's last edit and
+	// not dismissed. Complaints about deleted cards are not listed.
+	GetSetIssues(ctx context.Context, arg GetSetIssuesParams) ([]GetSetIssuesRow, error)
 	// Aggregate only existing progress before joining participants. Missing facts
 	// contribute the default 700 without expanding every participant into every fact.
 	GetSetLeaderboard(ctx context.Context, setID pgtype.UUID) ([]GetSetLeaderboardRow, error)
@@ -68,9 +71,6 @@ type Querier interface {
 	ListCardIssues(ctx context.Context) ([]ListCardIssuesRow, error)
 	LockSetForAuthor(ctx context.Context, arg LockSetForAuthorParams) (pgtype.UUID, error)
 	RecordAnswerResult(ctx context.Context, arg RecordAnswerResultParams) (AnswerResult, error)
-	// Dismisses the open complaints of a card; false when the user is not the
-	// author of its set or the card is gone.
-	ResolveCardIssues(ctx context.Context, arg ResolveCardIssuesParams) (bool, error)
 	SaveTelegramProfile(ctx context.Context, arg SaveTelegramProfileParams) (User, error)
 	TelegramProfileInput(ctx context.Context, arg TelegramProfileInputParams) (User, error)
 	UpdateCard(ctx context.Context, arg UpdateCardParams) (Card, error)

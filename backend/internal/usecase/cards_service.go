@@ -265,7 +265,7 @@ func (s *cardServiceImpl) GetSetIssues(ctx context.Context, userID int64, setID 
 	if !isAuthor {
 		return nil, ErrNotFound
 	}
-	rows, err := s.querier.GetOpenCardIssuesBySet(ctx, db.GetOpenCardIssuesBySetParams{SetID: pgSetID, UserID: userID})
+	rows, err := s.querier.GetSetIssues(ctx, db.GetSetIssuesParams{SetID: pgSetID, UserID: userID})
 	if err != nil {
 		return nil, fmt.Errorf("get open card issues: %w", err)
 	}
@@ -284,7 +284,7 @@ func (s *cardServiceImpl) GetSetIssues(ctx context.Context, userID int64, setID 
 // ResolveCardIssues closes the open complaints of a card the author keeps
 // as it is. The complaints themselves stay.
 func (s *cardServiceImpl) ResolveCardIssues(ctx context.Context, userID int64, cardID uuid.UUID) error {
-	found, err := s.querier.ResolveCardIssues(ctx, db.ResolveCardIssuesParams{
+	found, err := s.querier.CloseCardIssues(ctx, db.CloseCardIssuesParams{
 		CardID: pgtype.UUID{Bytes: cardID, Valid: true},
 		UserID: userID,
 	})

@@ -11,6 +11,35 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const closeCardIssues = `-- name: CloseCardIssues :one
+WITH card AS (
+    SELECT c.id
+    FROM cards c
+    JOIN facts f ON f.id = c.fact_id
+    JOIN sets s ON s.id = f.set_id
+    WHERE c.id = $1 AND s.author_id = $2
+), resolved AS (
+    UPDATE card_issues
+    SET resolved_at = CURRENT_TIMESTAMP
+    WHERE card_id IN (SELECT id FROM card) AND resolved_at IS NULL
+)
+SELECT EXISTS (SELECT 1 FROM card) AS found
+`
+
+type CloseCardIssuesParams struct {
+	CardID pgtype.UUID `json:"card_id"`
+	UserID int64       `json:"user_id"`
+}
+
+// Dismisses the open complaints of a card; false when the user is not the
+// author of its set or the card is gone.
+func (q *Queries) CloseCardIssues(ctx context.Context, arg CloseCardIssuesParams) (bool, error) {
+	row := q.db.QueryRow(ctx, closeCardIssues, arg.CardID, arg.UserID)
+	var found bool
+	err := row.Scan(&found)
+	return found, err
+}
+
 const createCardIssue = `-- name: CreateCardIssue :one
 WITH card AS (
     SELECT c.id, c.kind, c.question, c.answer_text, c.explanation, c.source_quote, c.updated_at,
@@ -63,7 +92,7 @@ func (q *Queries) CreateCardIssue(ctx context.Context, arg CreateCardIssueParams
 	return i, err
 }
 
-const getOpenCardIssuesBySet = `-- name: GetOpenCardIssuesBySet :many
+const getSetIssues = `-- name: GetSetIssues :many
 SELECT
     i.card_id,
     i.reason,
@@ -82,12 +111,12 @@ GROUP BY i.card_id, i.reason
 ORDER BY last_reported_at DESC, i.card_id, i.reason
 `
 
-type GetOpenCardIssuesBySetParams struct {
+type GetSetIssuesParams struct {
 	SetID  pgtype.UUID `json:"set_id"`
 	UserID int64       `json:"user_id"`
 }
 
-type GetOpenCardIssuesBySetRow struct {
+type GetSetIssuesRow struct {
 	CardID         pgtype.UUID        `json:"card_id"`
 	Reason         CardIssueReason    `json:"reason"`
 	Count          int32              `json:"count"`
@@ -96,15 +125,15 @@ type GetOpenCardIssuesBySetRow struct {
 
 // Open complaints of the author's set: made after the card's last edit and
 // not dismissed. Complaints about deleted cards are not listed.
-func (q *Queries) GetOpenCardIssuesBySet(ctx context.Context, arg GetOpenCardIssuesBySetParams) ([]GetOpenCardIssuesBySetRow, error) {
-	rows, err := q.db.Query(ctx, getOpenCardIssuesBySet, arg.SetID, arg.UserID)
+func (q *Queries) GetSetIssues(ctx context.Context, arg GetSetIssuesParams) ([]GetSetIssuesRow, error) {
+	rows, err := q.db.Query(ctx, getSetIssues, arg.SetID, arg.UserID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetOpenCardIssuesBySetRow
+	var items []GetSetIssuesRow
 	for rows.Next() {
-		var i GetOpenCardIssuesBySetRow
+		var i GetSetIssuesRow
 		if err := rows.Scan(
 			&i.CardID,
 			&i.Reason,
@@ -204,33 +233,4 @@ func (q *Queries) ListCardIssues(ctx context.Context) ([]ListCardIssuesRow, erro
 		return nil, err
 	}
 	return items, nil
-}
-
-const resolveCardIssues = `-- name: ResolveCardIssues :one
-WITH card AS (
-    SELECT c.id
-    FROM cards c
-    JOIN facts f ON f.id = c.fact_id
-    JOIN sets s ON s.id = f.set_id
-    WHERE c.id = $1 AND s.author_id = $2
-), resolved AS (
-    UPDATE card_issues
-    SET resolved_at = CURRENT_TIMESTAMP
-    WHERE card_id IN (SELECT id FROM card) AND resolved_at IS NULL
-)
-SELECT EXISTS (SELECT 1 FROM card) AS found
-`
-
-type ResolveCardIssuesParams struct {
-	CardID pgtype.UUID `json:"card_id"`
-	UserID int64       `json:"user_id"`
-}
-
-// Dismisses the open complaints of a card; false when the user is not the
-// author of its set or the card is gone.
-func (q *Queries) ResolveCardIssues(ctx context.Context, arg ResolveCardIssuesParams) (bool, error) {
-	row := q.db.QueryRow(ctx, resolveCardIssues, arg.CardID, arg.UserID)
-	var found bool
-	err := row.Scan(&found)
-	return found, err
 }
