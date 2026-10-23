@@ -647,6 +647,15 @@ ranked_cards AS (
     FROM cards c
     JOIN user_due_facts udf ON c.fact_id = udf.fact_id
     JOIN card_kinds ck ON c.kind = ck.kind
+    -- A card the user complained about waits for the author to edit it or
+    -- keep it; the fact goes on with its other cards.
+    WHERE NOT EXISTS (
+        SELECT 1 FROM card_issues i
+        WHERE i.card_id = c.id
+          AND i.user_id = $1
+          AND i.resolved_at IS NULL
+          AND i.created_at > c.updated_at
+    )
 )
 SELECT
     id,

@@ -71,7 +71,7 @@ export function CardIssue({ card, setTitle, isOwner = false, onBack, onEdit, onR
                 <Typography.Text variant="description" color="secondary" className={s.note}>
                     {isOwner
                         ? 'Причина сохранится, даже если карточку исправить или удалить: по ней мы делаем карточки точнее.'
-                        : 'Мы сохраним причину, чтобы делать карточки точнее. Эта карточка больше не попадётся в этой тренировке.'}
+                        : 'Мы передадим причину автору набора. Пока автор не проверит карточку, она вам не попадётся.'}
                 </Typography.Text>
             </Flex>
 

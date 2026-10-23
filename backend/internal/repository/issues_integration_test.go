@@ -3,6 +3,7 @@ package repository_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/google/uuid"
@@ -182,6 +183,9 @@ func TestOpenCardIssuesPostgres(t *testing.T) {
 	report(22, first, contracts.CardIssueReasonAnswer)
 	report(33, first, contracts.CardIssueReasonAnswer)
 	report(22, second, contracts.CardIssueReasonWording)
+	// The card comes back in the next session, and the same reader may
+	// complain again: the count is of people.
+	report(22, second, contracts.CardIssueReasonWording)
 	sameIssues("reported", open{first, contracts.CardIssueReasonAnswer, 2}, open{second, contracts.CardIssueReasonWording, 1})
 
 	for _, id := range []int64{22, 33} {
@@ -213,7 +217,85 @@ func TestOpenCardIssuesPostgres(t *testing.T) {
 	}
 
 	var stored int
-	if err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM card_issues").Scan(&stored); err != nil || stored != 4 {
+	if err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM card_issues").Scan(&stored); err != nil || stored != 5 {
 		t.Fatalf("stored complaints = %d, %v; closing must not delete them", stored, err)
 	}
+}
+
+// A reader does not get a card they complained about until the author
+// answers the complaint; the fact goes on with its other cards.
+func TestFeedSkipsReportedCardPostgres(t *testing.T) {
+	pool := manualTestPool(t)
+	ctx := context.Background()
+	q := db.New(pool)
+	users := usecase.NewUserService(q)
+	writer := repository.NewManualStore(pool)
+	sets := usecase.NewSetService(q, users, writer)
+	svc := usecase.NewCardService(q, users, usecase.WithManualCards(writer))
+	for _, id := range []int64{11, 22, 33} {
+		if err := users.EnsureUser(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	generated, _, err := repository.SaveGeneratedSet(ctx, q, 11, "Set", generator.Result{
+		Facts: []cards.Fact{{ID: "f1", Name: "F1"}, {ID: "f2", Name: "F2"}},
+		Cards: []cards.Card{
+			{FactID: "f1", Kind: cards.KindFlip, Question: "Flip", Answer: "A1"},
+			{FactID: "f1", Kind: cards.KindInput, Question: "Input", Answer: "A1"},
+			{FactID: "f2", Kind: cards.KindFlip, Question: "Only", Answer: "A2"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []int64{22, 33} {
+		if _, err = sets.JoinSetByShareCode(ctx, id, generated.ShareCode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setID := uuid.UUID(generated.ID.Bytes)
+	byQuestion := map[string]uuid.UUID{}
+	all, err := sets.GetCardsBySetID(ctx, 11, setID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range all {
+		byQuestion[c.Question] = c.ID
+	}
+	feed := func(user int64) []string {
+		t.Helper()
+		rows, err := q.GetFeedCardsForUser(ctx, user)
+		if err != nil {
+			t.Fatal(err)
+		}
+		questions := []string{}
+		for _, r := range rows {
+			questions = append(questions, r.Question)
+		}
+		slices.Sort(questions)
+		return questions
+	}
+	sameFeed := func(step string, user int64, want ...string) {
+		t.Helper()
+		if got := feed(user); !slices.Equal(got, want) {
+			t.Fatalf("%s: feed of %d = %v, want %v", step, user, got, want)
+		}
+	}
+
+	sameFeed("start", 22, "Flip", "Only")
+	for _, question := range []string{"Flip", "Only"} {
+		if err = svc.ReportCardIssue(ctx, 22, byQuestion[question], contracts.CardIssueReasonAnswer); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sameFeed("reported", 22, "Input")
+	sameFeed("someone else", 33, "Flip", "Only")
+
+	if _, err = svc.UpdateCard(ctx, 11, byQuestion["Flip"], &contracts.UpdateCardRequest{Explanation: contracts.NewOptString("Fixed")}); err != nil {
+		t.Fatal(err)
+	}
+	if err = svc.ResolveCardIssues(ctx, 11, byQuestion["Only"]); err != nil {
+		t.Fatal(err)
+	}
+	sameFeed("answered", 22, "Flip", "Only")
 }

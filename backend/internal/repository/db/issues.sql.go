@@ -43,7 +43,8 @@ const getOpenCardIssuesBySet = `-- name: GetOpenCardIssuesBySet :many
 SELECT
     i.card_id,
     i.reason,
-    COUNT(*)::int AS count,
+    -- People, not complaints: a reader may complain again in a later session.
+    COUNT(DISTINCT i.user_id)::int AS count,
     MAX(i.created_at)::timestamptz AS last_reported_at
 FROM card_issues i
 JOIN cards c ON c.id = i.card_id
