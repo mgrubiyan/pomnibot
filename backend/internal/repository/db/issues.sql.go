@@ -13,7 +13,7 @@ import (
 
 const closeCardIssues = `-- name: CloseCardIssues :one
 WITH card AS (
-    SELECT c.id
+    SELECT c.id, c.updated_at
     FROM cards c
     JOIN facts f ON f.id = c.fact_id
     JOIN sets s ON s.id = f.set_id
@@ -21,7 +21,10 @@ WITH card AS (
 ), resolved AS (
     UPDATE card_issues
     SET resolved_at = CURRENT_TIMESTAMP
-    WHERE card_id IN (SELECT id FROM card) AND resolved_at IS NULL
+    FROM card
+    WHERE card_issues.card_id = card.id
+      AND card_issues.resolved_at IS NULL
+      AND card_issues.created_at > card.updated_at
 )
 SELECT EXISTS (SELECT 1 FROM card) AS found
 `
@@ -32,7 +35,8 @@ type CloseCardIssuesParams struct {
 }
 
 // Dismisses the open complaints of a card; false when the user is not the
-// author of its set or the card is gone.
+// author of its set or the card is gone. Complaints an edit already answered
+// stay as they are, so the admin still sees them fixed.
 func (q *Queries) CloseCardIssues(ctx context.Context, arg CloseCardIssuesParams) (bool, error) {
 	row := q.db.QueryRow(ctx, closeCardIssues, arg.CardID, arg.UserID)
 	var found bool

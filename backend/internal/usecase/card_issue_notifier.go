@@ -47,11 +47,14 @@ func (r CardIssueReport) Text() string {
 
 // ChatIssueNotifier sends complaints to the author in every chat app they
 // use. Sending runs in the background, so a slow chat API never holds up the
-// complaint; Wait joins the messages still going out.
+// complaint; Close joins the messages still going out.
 type ChatIssueNotifier struct {
 	accounts   AccountGetter
 	messengers []Messenger
 	sending    sync.WaitGroup
+
+	mu     sync.Mutex
+	closed bool // a request outliving the server's shutdown sends nothing
 }
 
 // NewChatIssueNotifier sends through messengers; with none it sends nothing.
@@ -63,6 +66,12 @@ func NewChatIssueNotifier(accounts AccountGetter, messengers ...Messenger) *Chat
 // complaint is saved, and the author still sees it in the mini app.
 func (n *ChatIssueNotifier) CardIssueReported(ctx context.Context, report CardIssueReport) {
 	if len(n.messengers) == 0 {
+		return
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.closed {
+		slog.WarnContext(ctx, "card issue not sent to the author: shutting down", "author_id", report.AuthorID)
 		return
 	}
 	// The request that saved the complaint is over by the time this runs.
@@ -83,5 +92,10 @@ func (n *ChatIssueNotifier) CardIssueReported(ctx context.Context, report CardIs
 	})
 }
 
-// Wait joins the messages still going out.
-func (n *ChatIssueNotifier) Wait() { n.sending.Wait() }
+// Close stops new messages and joins the ones still going out.
+func (n *ChatIssueNotifier) Close() {
+	n.mu.Lock()
+	n.closed = true
+	n.mu.Unlock()
+	n.sending.Wait()
+}

@@ -292,6 +292,11 @@ func TestFeedSkipsReportedCardPostgres(t *testing.T) {
 	}
 	sameFeed("reported", 22, "Input")
 	sameFeed("someone else", 33, "Flip", "Only")
+	// The author's own complaint waits in «Жалобы»; the card stays theirs.
+	if err = svc.ReportCardIssue(ctx, 11, byQuestion["Flip"], contracts.CardIssueReasonWording); err != nil {
+		t.Fatal(err)
+	}
+	sameFeed("author", 11, "Flip", "Only")
 
 	if _, err = svc.UpdateCard(ctx, 11, byQuestion["Flip"], &contracts.UpdateCardRequest{Explanation: contracts.NewOptString("Fixed")}); err != nil {
 		t.Fatal(err)
@@ -388,7 +393,7 @@ func TestListCardIssuesPostgres(t *testing.T) {
 	if _, err := pool.Exec(ctx, "UPDATE users SET first_name = 'Анна', last_name = 'Иванова' WHERE id = 22"); err != nil {
 		t.Fatal(err)
 	}
-	questions := []string{"open", "fixed", "kept", "kept-then-edited", "fixed-then-kept", "deleted"}
+	questions := []string{"open", "fixed", "kept", "kept-then-edited", "fixed-then-kept", "fixed-kept-edited", "deleted"}
 	result := generator.Result{Facts: []cards.Fact{{ID: "f", Name: "F"}}}
 	for _, question := range questions {
 		result.Cards = append(result.Cards, cards.Card{FactID: "f", Kind: cards.KindFlip, Question: question, Answer: "A"})
@@ -446,6 +451,12 @@ func TestListCardIssuesPostgres(t *testing.T) {
 	edit("fixed-then-kept")
 	report(33, "fixed-then-kept")
 	must(svc.ResolveCardIssues(ctx, 11, card["fixed-then-kept"]))
+	// «Всё верно» answers only the complaint after the edit: the first one
+	// stays fixed even after another edit.
+	edit("fixed-kept-edited")
+	report(33, "fixed-kept-edited")
+	must(svc.ResolveCardIssues(ctx, 11, card["fixed-kept-edited"]))
+	edit("fixed-kept-edited")
 	must(svc.DeleteCard(ctx, 11, card["deleted"]))
 	must(sets.DeleteSet(ctx, 11, uuid.UUID(gone.ID.Bytes)))
 
@@ -457,9 +468,11 @@ func TestListCardIssuesPostgres(t *testing.T) {
 		got = append(got, issue{r.Question, r.Status, r.SetTitle.String})
 	}
 	want := []issue{
+		{"fixed-kept-edited", "kept", "Биология"},
 		{"fixed-then-kept", "kept", "Биология"},
 		{"set-deleted", "deleted", ""},
 		{"deleted", "deleted", "Биология"},
+		{"fixed-kept-edited", "fixed", "Биология"},
 		{"fixed-then-kept", "fixed", "Биология"},
 		{"kept-then-edited", "kept", "Биология"},
 		{"kept", "kept", "Биология"},
@@ -473,7 +486,9 @@ func TestListCardIssuesPostgres(t *testing.T) {
 	if last.ReporterID != 22 || last.ReporterFirstName != "Анна" || last.ReporterLastName.String != "Иванова" || last.Kind != "flip" || last.AnswerText.String != "A" {
 		t.Errorf("row = %+v", last)
 	}
-	if r := rows[1]; r.Explanation != "E" || r.SourceQuote != "Quote" || r.SetTitle.Valid {
-		t.Errorf("copy of the deleted set's card = %+v", r)
+	for _, r := range rows {
+		if r.Question == "set-deleted" && (r.Explanation != "E" || r.SourceQuote != "Quote" || r.SetTitle.Valid) {
+			t.Errorf("copy of the deleted set's card = %+v", r)
+		}
 	}
 }

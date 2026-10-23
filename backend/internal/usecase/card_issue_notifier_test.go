@@ -25,7 +25,7 @@ func TestChatIssueNotifier(t *testing.T) {
 	n.CardIssueReported(ctx, usecase.CardIssueReport{AuthorID: 11, SetTitle: "Биология"})
 	// The request is over by the time the message goes out.
 	cancel()
-	n.Wait()
+	n.Close()
 
 	for _, m := range []*messengerSpy{failing, working} {
 		if len(m.sent) != 1 || m.sent[0].account != account {
@@ -46,7 +46,7 @@ func TestChatIssueNotifier_NoAccount(t *testing.T) {
 		return usecase.Account{}, errors.New("db down")
 	}), m)
 	n.CardIssueReported(context.Background(), usecase.CardIssueReport{AuthorID: 11})
-	n.Wait()
+	n.Close()
 	if len(m.sent) != 0 {
 		t.Fatalf("sent = %+v", m.sent)
 	}
@@ -76,4 +76,19 @@ func (m *messengerSpy) SendToUser(ctx context.Context, account usecase.Account, 
 	m.sent = append(m.sent, sentMessage{account, text})
 	m.ctxErr = ctx.Err()
 	return m.err
+}
+
+// A complaint saved while the server stops is kept, but no message starts
+// once Close has begun waiting.
+func TestChatIssueNotifier_AfterClose(t *testing.T) {
+	m := &messengerSpy{}
+	n := usecase.NewChatIssueNotifier(accountsFunc(func(context.Context, int64) (usecase.Account, error) {
+		return usecase.Account{MaxID: 5}, nil
+	}), m)
+	n.Close()
+	n.CardIssueReported(context.Background(), usecase.CardIssueReport{AuthorID: 11})
+	n.Close()
+	if len(m.sent) != 0 {
+		t.Fatalf("sent after Close: %+v", m.sent)
+	}
 }

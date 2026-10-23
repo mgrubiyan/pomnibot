@@ -12,7 +12,8 @@ import (
 
 type Querier interface {
 	// Dismisses the open complaints of a card; false when the user is not the
-	// author of its set or the card is gone.
+	// author of its set or the card is gone. Complaints an edit already answered
+	// stay as they are, so the admin still sees them fixed.
 	CloseCardIssues(ctx context.Context, arg CloseCardIssuesParams) (bool, error)
 	CountTotalDueCardsForUser(ctx context.Context, userID int64) (int32, error)
 	CreateCard(ctx context.Context, arg CreateCardParams) (Card, error)
@@ -42,6 +43,8 @@ type Querier interface {
 	GetCardTableItemsBatch(ctx context.Context, cardIds []pgtype.UUID) ([]CardTableItem, error)
 	GetCardsBySetID(ctx context.Context, arg GetCardsBySetIDParams) ([]GetCardsBySetIDRow, error)
 	GetFactsBySetID(ctx context.Context, setID pgtype.UUID) ([]GetFactsBySetIDRow, error)
+	// A steady order: the feed comes back at the same index after a complaint
+	// or an edit, and a reported card's fact keeps its place.
 	GetFeedCardsForUser(ctx context.Context, userID int64) ([]GetFeedCardsForUserRow, error)
 	GetNextReviewDateForUser(ctx context.Context, userID int64) (pgtype.Timestamptz, error)
 	GetSetByID(ctx context.Context, arg GetSetByIDParams) (GetSetByIDRow, error)
