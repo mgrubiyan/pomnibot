@@ -566,7 +566,7 @@ export function Feed({
                             <IconChevronLeft size={20} />
                         </IconButton>
                         <Typography.Text variant="label" color="secondary">
-                            {card.topic}
+                            {card.factName}
                         </Typography.Text>
                     </Flex>
                     <Typography.Text variant="label" color="secondary" style={{ flexShrink: 0 }}>

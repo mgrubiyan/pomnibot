@@ -56,10 +56,9 @@ type CardTableItem struct {
 }
 
 type Fact struct {
-	Name    string      `json:"name"`
-	ID      pgtype.UUID `json:"id"`
-	SetID   pgtype.UUID `json:"set_id"`
-	TopicID pgtype.UUID `json:"topic_id"`
+	Name  string      `json:"name"`
+	ID    pgtype.UUID `json:"id"`
+	SetID pgtype.UUID `json:"set_id"`
 }
 
 type Set struct {
@@ -68,11 +67,6 @@ type Set struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 	ID        pgtype.UUID        `json:"id"`
 	AuthorID  pgtype.UUID        `json:"author_id"`
-}
-
-type Topic struct {
-	Name string      `json:"name"`
-	ID   pgtype.UUID `json:"id"`
 }
 
 type User struct {

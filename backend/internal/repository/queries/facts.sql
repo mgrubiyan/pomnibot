@@ -1,18 +1,11 @@
--- name: UpsertTopic :one
-INSERT INTO topics (name)
-VALUES ($1)
-ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-RETURNING *;
-
 -- name: CreateFact :one
-INSERT INTO facts (id, set_id, topic_id, name)
-VALUES ($1, $2, $3, $4)
+INSERT INTO facts (id, set_id, name)
+VALUES ($1, $2, $3)
 RETURNING *;
 
 -- name: GetFactsBySetID :many
-SELECT f.id, f.set_id, f.name, COALESCE(t.name, '') AS topic_name
+SELECT f.id, f.set_id, f.name
 FROM facts f
-LEFT JOIN topics t ON f.topic_id = t.id
 WHERE f.set_id = $1
 ORDER BY f.id ASC;
 

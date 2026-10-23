@@ -45,27 +45,11 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID uuid.UUID, title
 		return nil, 0, fmt.Errorf("enroll user in set: %w", err)
 	}
 
-	topicCache := make(map[string]pgtype.UUID)
 	factIDMap := make(map[string]pgtype.UUID)
 	factsInserted := 0
 	cardsInserted := 0
 
 	for _, f := range genResult.Facts {
-		var topicID pgtype.UUID
-		if f.Topic != "" {
-			if tid, ok := topicCache[f.Topic]; ok {
-				topicID = tid
-			} else {
-				t, err := q.UpsertTopic(ctx, f.Topic)
-				if err != nil {
-					slog.ErrorContext(ctx, "failed to upsert topic", "topic", f.Topic, "error", err)
-				} else {
-					topicID = t.ID
-					topicCache[f.Topic] = topicID
-				}
-			}
-		}
-
 		name := f.Name
 		if strings.TrimSpace(name) == "" {
 			name = f.Topic
@@ -79,10 +63,9 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID uuid.UUID, title
 		factIDMap[f.ID] = pgFactID
 
 		_, err := q.CreateFact(ctx, db.CreateFactParams{
-			ID:      pgFactID,
-			SetID:   newSet.ID,
-			TopicID: topicID,
-			Name:    name,
+			ID:    pgFactID,
+			SetID: newSet.ID,
+			Name:  name,
 		})
 		if err == nil {
 			factsInserted++

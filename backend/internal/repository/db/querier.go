@@ -61,7 +61,6 @@ type Querier interface {
 	UpdateFactProgressOnAnswer(ctx context.Context, arg UpdateFactProgressOnAnswerParams) (UserFactProgress, error)
 	UpsertMAXUser(ctx context.Context, arg UpsertMAXUserParams) (User, error)
 	UpsertTelegramUser(ctx context.Context, arg UpsertTelegramUserParams) (User, error)
-	UpsertTopic(ctx context.Context, name string) (Topic, error)
 }
 
 var _ Querier = (*Queries)(nil)

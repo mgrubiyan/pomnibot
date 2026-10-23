@@ -308,6 +308,9 @@ export interface components {
             id: string;
             /** Format: uuid */
             setId: string;
+            /** Format: uuid */
+            factId: string;
+            factName: string;
             kind: components["schemas"]["CardKind"];
             question: string;
             /** @description choice only */
@@ -320,8 +323,6 @@ export interface components {
             sourceQuote: string;
             /** @description where the quote is from: «Лекция 3, стр. 2» */
             sourceRef?: string;
-            /** @description topic, used for stats */
-            topic: string;
         };
         CreateSetRequest: {
             title: string;
@@ -348,8 +349,6 @@ export interface components {
             sourceQuote?: string;
             /** @description where the quote is from: «Лекция 3, стр. 2» */
             sourceRef?: string;
-            /** @description topic, used for stats */
-            topic?: string;
         };
         User: {
             /** Format: uuid */

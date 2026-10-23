@@ -208,20 +208,23 @@ func TestHomescreenHandler_GetToday(t *testing.T) {
 }
 
 func TestHomescreenHandler_GetFeedQuestions(t *testing.T) {
+	factUUID := uuid.New()
 	card1 := contracts.Card{
 		ID:       uuid.New(),
 		SetId:    uuid.New(),
+		FactId:   factUUID,
+		FactName: "Go",
 		Kind:     contracts.CardKindInput,
 		Question: "What is a goroutine?",
-		Topic:    "Go",
 	}
 	card2 := contracts.Card{
 		ID:       uuid.New(),
 		SetId:    uuid.New(),
+		FactId:   factUUID,
+		FactName: "Go",
 		Kind:     contracts.CardKindChoice,
 		Question: "Which channel operation blocks?",
 		Options:  []string{"Send to unbuffered", "Read from buffered with items"},
-		Topic:    "Go",
 	}
 
 	tests := []struct {

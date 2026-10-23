@@ -181,15 +181,21 @@ func (s *homescreenServiceImpl) buildFeedCard(ctx context.Context, r db.GetFeedC
 		return contracts.Card{}, fmt.Errorf("parse set uuid: %w", err)
 	}
 
+	factUUID, err := uuid.FromBytes(r.FactID.Bytes[:])
+	if err != nil {
+		return contracts.Card{}, fmt.Errorf("parse fact uuid: %w", err)
+	}
+
 	cardKind := contracts.CardKind(r.Kind)
 	card := contracts.Card{
 		ID:          cardUUID,
 		SetId:       setUUID,
+		FactId:      factUUID,
+		FactName:    r.FactName,
 		Kind:        cardKind,
 		Question:    r.Question,
 		Explanation: r.Explanation,
 		SourceQuote: r.SourceQuote,
-		Topic:       r.Topic,
 	}
 
 	if r.SourceRef.Valid && r.SourceRef.String != "" {

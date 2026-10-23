@@ -542,10 +542,11 @@ func TestCardService_UpdateCard_FieldsAndKinds(t *testing.T) {
 				return db.GetCardByIDForAuthorRow{
 					ID:         pgUUID,
 					SetID:      pgSetUUID,
+					FactID:     pgUUID,
+					FactName:   "Initial Fact",
 					Kind:       "boolean",
 					Question:   "Initial question",
 					AnswerText: pgtype.Text{String: "false", Valid: true},
-					Topic:      "Initial Topic",
 				}, nil
 			},
 			updateCardFunc: func(_ context.Context, arg db.UpdateCardParams) (db.UpdateCardRow, error) {
@@ -567,7 +568,6 @@ func TestCardService_UpdateCard_FieldsAndKinds(t *testing.T) {
 		req := &contracts.UpdateCardRequest{
 			Question:    contracts.NewOptString("Is preprocessor first?"),
 			Explanation: contracts.NewOptString("Yes, it is the first stage."),
-			Topic:       contracts.NewOptString("Compilation"),
 			Answer: contracts.NewOptCardAnswer(contracts.CardAnswer{
 				Type: contracts.BoolCardAnswer,
 				Bool: true,
@@ -581,8 +581,8 @@ func TestCardService_UpdateCard_FieldsAndKinds(t *testing.T) {
 		if res.Question != "Is preprocessor first?" {
 			t.Errorf("expected updated question, got %s", res.Question)
 		}
-		if res.Topic != "Compilation" {
-			t.Errorf("expected topic Compilation, got %s", res.Topic)
+		if res.FactName != "Initial Fact" {
+			t.Errorf("expected fact name Initial Fact, got %s", res.FactName)
 		}
 		if res.Explanation != "Yes, it is the first stage." {
 			t.Errorf("expected updated explanation, got %s", res.Explanation)
@@ -843,9 +843,6 @@ func TestSetService_SaveGeneratedSet(t *testing.T) {
 		},
 		joinSetFunc: func(_ context.Context, arg db.JoinSetParams) (db.UserSet, error) {
 			return db.UserSet{UserID: arg.UserID, SetID: arg.SetID}, nil
-		},
-		upsertTopicFunc: func(_ context.Context, name string) (db.Topic, error) {
-			return db.Topic{Name: name}, nil
 		},
 		createFactFunc: func(_ context.Context, arg db.CreateFactParams) (db.Fact, error) {
 			return db.Fact{ID: arg.ID, SetID: arg.SetID, Name: arg.Name}, nil

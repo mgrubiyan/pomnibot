@@ -198,6 +198,7 @@ SELECT
     c.id,
     f.set_id,
     c.fact_id,
+    f.name AS fact_name,
     c.kind,
     ck.difficulty_level,
     c.question,
@@ -205,12 +206,10 @@ SELECT
     c.explanation,
     c.source_quote,
     c.source_ref,
-    COALESCE(t.name, '') AS topic,
     c.updated_at
 FROM cards c
 JOIN facts f ON c.fact_id = f.id
 JOIN card_kinds ck ON c.kind = ck.kind
-LEFT JOIN topics t ON f.topic_id = t.id
 WHERE c.id = $1
   AND EXISTS (
       SELECT 1 FROM sets s
@@ -228,6 +227,7 @@ type GetCardByIDRow struct {
 	ID              pgtype.UUID        `json:"id"`
 	SetID           pgtype.UUID        `json:"set_id"`
 	FactID          pgtype.UUID        `json:"fact_id"`
+	FactName        string             `json:"fact_name"`
 	Kind            string             `json:"kind"`
 	DifficultyLevel int16              `json:"difficulty_level"`
 	Question        string             `json:"question"`
@@ -235,7 +235,6 @@ type GetCardByIDRow struct {
 	Explanation     string             `json:"explanation"`
 	SourceQuote     string             `json:"source_quote"`
 	SourceRef       pgtype.Text        `json:"source_ref"`
-	Topic           string             `json:"topic"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
@@ -246,6 +245,7 @@ func (q *Queries) GetCardByID(ctx context.Context, arg GetCardByIDParams) (GetCa
 		&i.ID,
 		&i.SetID,
 		&i.FactID,
+		&i.FactName,
 		&i.Kind,
 		&i.DifficultyLevel,
 		&i.Question,
@@ -253,7 +253,6 @@ func (q *Queries) GetCardByID(ctx context.Context, arg GetCardByIDParams) (GetCa
 		&i.Explanation,
 		&i.SourceQuote,
 		&i.SourceRef,
-		&i.Topic,
 		&i.UpdatedAt,
 	)
 	return i, err
@@ -264,6 +263,7 @@ SELECT
     c.id,
     f.set_id,
     c.fact_id,
+    f.name AS fact_name,
     c.kind,
     ck.difficulty_level,
     c.question,
@@ -271,12 +271,10 @@ SELECT
     c.explanation,
     c.source_quote,
     c.source_ref,
-    COALESCE(t.name, '') AS topic,
     c.updated_at
 FROM cards c
 JOIN facts f ON c.fact_id = f.id
 JOIN card_kinds ck ON c.kind = ck.kind
-LEFT JOIN topics t ON f.topic_id = t.id
 JOIN sets s ON f.set_id = s.id
 WHERE c.id = $1 AND s.author_id = $2
 `
@@ -290,6 +288,7 @@ type GetCardByIDForAuthorRow struct {
 	ID              pgtype.UUID        `json:"id"`
 	SetID           pgtype.UUID        `json:"set_id"`
 	FactID          pgtype.UUID        `json:"fact_id"`
+	FactName        string             `json:"fact_name"`
 	Kind            string             `json:"kind"`
 	DifficultyLevel int16              `json:"difficulty_level"`
 	Question        string             `json:"question"`
@@ -297,7 +296,6 @@ type GetCardByIDForAuthorRow struct {
 	Explanation     string             `json:"explanation"`
 	SourceQuote     string             `json:"source_quote"`
 	SourceRef       pgtype.Text        `json:"source_ref"`
-	Topic           string             `json:"topic"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
@@ -308,6 +306,7 @@ func (q *Queries) GetCardByIDForAuthor(ctx context.Context, arg GetCardByIDForAu
 		&i.ID,
 		&i.SetID,
 		&i.FactID,
+		&i.FactName,
 		&i.Kind,
 		&i.DifficultyLevel,
 		&i.Question,
@@ -315,7 +314,6 @@ func (q *Queries) GetCardByIDForAuthor(ctx context.Context, arg GetCardByIDForAu
 		&i.Explanation,
 		&i.SourceQuote,
 		&i.SourceRef,
-		&i.Topic,
 		&i.UpdatedAt,
 	)
 	return i, err
@@ -519,6 +517,7 @@ SELECT
     c.id,
     f.set_id,
     c.fact_id,
+    f.name AS fact_name,
     c.kind,
     ck.difficulty_level,
     c.question,
@@ -526,19 +525,17 @@ SELECT
     c.explanation,
     c.source_quote,
     c.source_ref,
-    COALESCE(t.name, '') AS topic,
     c.updated_at
 FROM cards c
 JOIN facts f ON c.fact_id = f.id
 JOIN card_kinds ck ON c.kind = ck.kind
-LEFT JOIN topics t ON f.topic_id = t.id
 WHERE f.set_id = $1
   AND EXISTS (
       SELECT 1 FROM sets s
       WHERE s.id = $1
         AND (s.author_id = $2 OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = $2))
   )
-ORDER BY c.id ASC
+ORDER BY f.id ASC, c.id ASC
 `
 
 type GetCardsBySetIDParams struct {
@@ -550,6 +547,7 @@ type GetCardsBySetIDRow struct {
 	ID              pgtype.UUID        `json:"id"`
 	SetID           pgtype.UUID        `json:"set_id"`
 	FactID          pgtype.UUID        `json:"fact_id"`
+	FactName        string             `json:"fact_name"`
 	Kind            string             `json:"kind"`
 	DifficultyLevel int16              `json:"difficulty_level"`
 	Question        string             `json:"question"`
@@ -557,7 +555,6 @@ type GetCardsBySetIDRow struct {
 	Explanation     string             `json:"explanation"`
 	SourceQuote     string             `json:"source_quote"`
 	SourceRef       pgtype.Text        `json:"source_ref"`
-	Topic           string             `json:"topic"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
@@ -574,6 +571,7 @@ func (q *Queries) GetCardsBySetID(ctx context.Context, arg GetCardsBySetIDParams
 			&i.ID,
 			&i.SetID,
 			&i.FactID,
+			&i.FactName,
 			&i.Kind,
 			&i.DifficultyLevel,
 			&i.Question,
@@ -581,7 +579,6 @@ func (q *Queries) GetCardsBySetID(ctx context.Context, arg GetCardsBySetIDParams
 			&i.Explanation,
 			&i.SourceQuote,
 			&i.SourceRef,
-			&i.Topic,
 			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -599,7 +596,7 @@ WITH user_due_facts AS (
     SELECT
         f.id AS fact_id,
         f.set_id,
-        COALESCE(t.name, '') AS topic,
+        f.name AS fact_name,
         COALESCE(ufp.elo, 700) AS elo,
         CASE
             WHEN COALESCE(ufp.elo, 700) < 800 THEN 0
@@ -610,7 +607,6 @@ WITH user_due_facts AS (
         END AS target_difficulty
     FROM user_sets us
     JOIN facts f ON us.set_id = f.set_id
-    LEFT JOIN topics t ON f.topic_id = t.id
     LEFT JOIN user_fact_progress ufp ON ufp.fact_id = f.id AND ufp.user_id = us.user_id
     WHERE us.user_id = $1
       AND (ufp.next_review_at IS NULL OR ufp.next_review_at <= NOW())
@@ -620,6 +616,7 @@ ranked_cards AS (
         c.id,
         udf.set_id,
         c.fact_id,
+        udf.fact_name,
         c.kind,
         ck.difficulty_level,
         c.question,
@@ -627,7 +624,6 @@ ranked_cards AS (
         c.explanation,
         c.source_quote,
         c.source_ref,
-        udf.topic,
         c.updated_at,
         ROW_NUMBER() OVER (
             PARTITION BY c.fact_id
@@ -641,6 +637,7 @@ SELECT
     id,
     set_id,
     fact_id,
+    fact_name,
     kind,
     difficulty_level,
     question,
@@ -648,7 +645,6 @@ SELECT
     explanation,
     source_quote,
     source_ref,
-    topic,
     updated_at
 FROM ranked_cards
 WHERE rank = 1
@@ -658,6 +654,7 @@ type GetFeedCardsForUserRow struct {
 	ID              pgtype.UUID        `json:"id"`
 	SetID           pgtype.UUID        `json:"set_id"`
 	FactID          pgtype.UUID        `json:"fact_id"`
+	FactName        string             `json:"fact_name"`
 	Kind            string             `json:"kind"`
 	DifficultyLevel int16              `json:"difficulty_level"`
 	Question        string             `json:"question"`
@@ -665,7 +662,6 @@ type GetFeedCardsForUserRow struct {
 	Explanation     string             `json:"explanation"`
 	SourceQuote     string             `json:"source_quote"`
 	SourceRef       pgtype.Text        `json:"source_ref"`
-	Topic           string             `json:"topic"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
@@ -682,6 +678,7 @@ func (q *Queries) GetFeedCardsForUser(ctx context.Context, userID pgtype.UUID) (
 			&i.ID,
 			&i.SetID,
 			&i.FactID,
+			&i.FactName,
 			&i.Kind,
 			&i.DifficultyLevel,
 			&i.Question,
@@ -689,7 +686,6 @@ func (q *Queries) GetFeedCardsForUser(ctx context.Context, userID pgtype.UUID) (
 			&i.Explanation,
 			&i.SourceQuote,
 			&i.SourceRef,
-			&i.Topic,
 			&i.UpdatedAt,
 		); err != nil {
 			return nil, err

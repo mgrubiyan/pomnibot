@@ -145,12 +145,13 @@ checks:
         required:
         - id
         - setId
+        - factId
+        - factName
         - kind
         - question
         - answer
         - explanation
         - sourceQuote
-        - topic
         properties:
           id:
             type: string
@@ -158,6 +159,11 @@ checks:
           setId:
             type: string
             format: uuid
+          factId:
+            type: string
+            format: uuid
+          factName:
+            type: string
           kind:
             type: string
             enum:
@@ -236,9 +242,6 @@ checks:
           sourceRef:
             type: string
             description: 'where the quote is from: «Лекция 3, стр. 2»'
-          topic:
-            type: string
-            description: topic, used for stats
   timeoutMs: 5000
   repeatable: true
 - id: GetProfile
@@ -494,23 +497,25 @@ checks:
     requiredFields:
     - answer
     - explanation
+    - factId
+    - factName
     - id
     - kind
     - question
     - setId
     - sourceQuote
-    - topic
     bodySchema:
       type: object
       required:
       - id
       - setId
+      - factId
+      - factName
       - kind
       - question
       - answer
       - explanation
       - sourceQuote
-      - topic
       properties:
         id:
           type: string
@@ -518,6 +523,11 @@ checks:
         setId:
           type: string
           format: uuid
+        factId:
+          type: string
+          format: uuid
+        factName:
+          type: string
         kind:
           type: string
           enum:
@@ -596,9 +606,6 @@ checks:
         sourceRef:
           type: string
           description: 'where the quote is from: «Лекция 3, стр. 2»'
-        topic:
-          type: string
-          description: topic, used for stats
   timeoutMs: 5000
   repeatable: false
 - id: AnswerQuestion
@@ -757,12 +764,13 @@ checks:
         required:
         - id
         - setId
+        - factId
+        - factName
         - kind
         - question
         - answer
         - explanation
         - sourceQuote
-        - topic
         properties:
           id:
             type: string
@@ -770,6 +778,11 @@ checks:
           setId:
             type: string
             format: uuid
+          factId:
+            type: string
+            format: uuid
+          factName:
+            type: string
           kind:
             type: string
             enum:
@@ -848,9 +861,6 @@ checks:
           sourceRef:
             type: string
             description: 'where the quote is from: «Лекция 3, стр. 2»'
-          topic:
-            type: string
-            description: topic, used for stats
   timeoutMs: 5000
   repeatable: true
 - id: CreateCard
@@ -870,23 +880,25 @@ checks:
     requiredFields:
     - answer
     - explanation
+    - factId
+    - factName
     - id
     - kind
     - question
     - setId
     - sourceQuote
-    - topic
     bodySchema:
       type: object
       required:
       - id
       - setId
+      - factId
+      - factName
       - kind
       - question
       - answer
       - explanation
       - sourceQuote
-      - topic
       properties:
         id:
           type: string
@@ -894,6 +906,11 @@ checks:
         setId:
           type: string
           format: uuid
+        factId:
+          type: string
+          format: uuid
+        factName:
+          type: string
         kind:
           type: string
           enum:
@@ -972,9 +989,6 @@ checks:
         sourceRef:
           type: string
           description: 'where the quote is from: «Лекция 3, стр. 2»'
-        topic:
-          type: string
-          description: topic, used for stats
   timeoutMs: 5000
   repeatable: false
 - id: GetSetLeaderboard

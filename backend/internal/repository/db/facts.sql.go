@@ -12,48 +12,35 @@ import (
 )
 
 const createFact = `-- name: CreateFact :one
-INSERT INTO facts (id, set_id, topic_id, name)
-VALUES ($1, $2, $3, $4)
-RETURNING name, id, set_id, topic_id
+INSERT INTO facts (id, set_id, name)
+VALUES ($1, $2, $3)
+RETURNING name, id, set_id
 `
 
 type CreateFactParams struct {
-	ID      pgtype.UUID `json:"id"`
-	SetID   pgtype.UUID `json:"set_id"`
-	TopicID pgtype.UUID `json:"topic_id"`
-	Name    string      `json:"name"`
+	ID    pgtype.UUID `json:"id"`
+	SetID pgtype.UUID `json:"set_id"`
+	Name  string      `json:"name"`
 }
 
 func (q *Queries) CreateFact(ctx context.Context, arg CreateFactParams) (Fact, error) {
-	row := q.db.QueryRow(ctx, createFact,
-		arg.ID,
-		arg.SetID,
-		arg.TopicID,
-		arg.Name,
-	)
+	row := q.db.QueryRow(ctx, createFact, arg.ID, arg.SetID, arg.Name)
 	var i Fact
-	err := row.Scan(
-		&i.Name,
-		&i.ID,
-		&i.SetID,
-		&i.TopicID,
-	)
+	err := row.Scan(&i.Name, &i.ID, &i.SetID)
 	return i, err
 }
 
 const getFactsBySetID = `-- name: GetFactsBySetID :many
-SELECT f.id, f.set_id, f.name, COALESCE(t.name, '') AS topic_name
+SELECT f.id, f.set_id, f.name
 FROM facts f
-LEFT JOIN topics t ON f.topic_id = t.id
 WHERE f.set_id = $1
 ORDER BY f.id ASC
 `
 
 type GetFactsBySetIDRow struct {
-	ID        pgtype.UUID `json:"id"`
-	SetID     pgtype.UUID `json:"set_id"`
-	Name      string      `json:"name"`
-	TopicName string      `json:"topic_name"`
+	ID    pgtype.UUID `json:"id"`
+	SetID pgtype.UUID `json:"set_id"`
+	Name  string      `json:"name"`
 }
 
 func (q *Queries) GetFactsBySetID(ctx context.Context, setID pgtype.UUID) ([]GetFactsBySetIDRow, error) {
@@ -65,12 +52,7 @@ func (q *Queries) GetFactsBySetID(ctx context.Context, setID pgtype.UUID) ([]Get
 	var items []GetFactsBySetIDRow
 	for rows.Next() {
 		var i GetFactsBySetIDRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.SetID,
-			&i.Name,
-			&i.TopicName,
-		); err != nil {
+		if err := rows.Scan(&i.ID, &i.SetID, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -170,18 +152,4 @@ type InitUserFactProgressParams struct {
 func (q *Queries) InitUserFactProgress(ctx context.Context, arg InitUserFactProgressParams) error {
 	_, err := q.db.Exec(ctx, initUserFactProgress, arg.UserID, arg.SetID)
 	return err
-}
-
-const upsertTopic = `-- name: UpsertTopic :one
-INSERT INTO topics (name)
-VALUES ($1)
-ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-RETURNING name, id
-`
-
-func (q *Queries) UpsertTopic(ctx context.Context, name string) (Topic, error) {
-	row := q.db.QueryRow(ctx, upsertTopic, name)
-	var i Topic
-	err := row.Scan(&i.Name, &i.ID)
-	return i, err
 }

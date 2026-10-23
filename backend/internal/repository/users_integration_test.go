@@ -92,7 +92,23 @@ func TestMigration00009UpDown(t *testing.T) {
 	upSQL := parts[0]
 	downSQL := parts[1]
 
-	// 0. Roll back 00010 first so 00009 operates on answer_results
+	// 0. Roll back 00011 first so topics exists for 00009 Down
+	m11Data, err := repository.MigrationsFS.ReadFile("migrations/00011_drop_topics.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m11Parts := strings.Split(string(m11Data), "-- +goose Down")
+	if len(m11Parts) != 2 {
+		t.Fatalf("expected 2 parts for 00011, got %d", len(m11Parts))
+	}
+	m11Up := m11Parts[0]
+	m11Down := m11Parts[1]
+
+	if _, err := pool.Exec(ctx, m11Down); err != nil {
+		t.Fatalf("failed to run 00011 Down: %v", err)
+	}
+
+	// 0b. Roll back 00010 so 00009 operates on answer_results
 	m10Data, err := repository.MigrationsFS.ReadFile("migrations/00010_rename_answer_results_to_answers.sql")
 	if err != nil {
 		t.Fatal(err)
@@ -143,10 +159,19 @@ func TestMigration00009UpDown(t *testing.T) {
 
 	// 4. Re-run 00010 Up and verify answers table exists and answered_at is dropped
 	if _, err := pool.Exec(ctx, m10Up); err != nil {
-		t.Fatalf("failed to re-run 00010 Up after 00009 Up: %v", err)
+		t.Fatalf("failed to run 00010 Up after 00009 Up: %v", err)
 	}
 	var hasAnsweredAt bool
 	if err := pool.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='answers' AND column_name='answered_at')").Scan(&hasAnsweredAt); err != nil || hasAnsweredAt {
 		t.Fatalf("expected answers.answered_at to NOT exist after 00010 Up, err: %v", err)
+	}
+
+	// 5. Re-run 00011 Up and verify topics is dropped
+	if _, err := pool.Exec(ctx, m11Up); err != nil {
+		t.Fatalf("failed to re-run 00011 Up: %v", err)
+	}
+	var hasTopics bool
+	if err := pool.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='topics')").Scan(&hasTopics); err != nil || hasTopics {
+		t.Fatalf("expected topics table to NOT exist after 00011 Up, err: %v", err)
 	}
 }

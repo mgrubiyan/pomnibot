@@ -27,7 +27,6 @@ type testQuerier struct {
 	createdColumns        []db.CreateCardTableColumnParams
 	createdItems          []db.CreateCardTableItemParams
 	initProgressCalls     []db.InitUserFactProgressParams
-	upsertTopicCalls      []string
 	getSetByShareCodeFunc func(ctx context.Context, shareCode string) (db.GetSetByShareCodeRow, error)
 	createSetFunc         func(ctx context.Context, arg db.CreateSetParams) (db.Set, error)
 }
@@ -77,27 +76,14 @@ func (q *testQuerier) JoinSet(_ context.Context, arg db.JoinSetParams) (db.UserS
 	}, nil
 }
 
-func (q *testQuerier) UpsertTopic(_ context.Context, name string) (db.Topic, error) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	q.upsertTopicCalls = append(q.upsertTopicCalls, name)
-	var topicUUID pgtype.UUID
-	_ = topicUUID.Scan(uuid.New().String())
-	return db.Topic{
-		ID:   topicUUID,
-		Name: name,
-	}, nil
-}
-
 func (q *testQuerier) CreateFact(_ context.Context, arg db.CreateFactParams) (db.Fact, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.createdFacts = append(q.createdFacts, arg)
 	return db.Fact{
-		ID:      arg.ID,
-		SetID:   arg.SetID,
-		TopicID: arg.TopicID,
-		Name:    arg.Name,
+		ID:    arg.ID,
+		SetID: arg.SetID,
+		Name:  arg.Name,
 	}, nil
 }
 

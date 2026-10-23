@@ -58,7 +58,8 @@ func TestCardsHandler_UpdateCard(t *testing.T) {
 		Question:    "Updated question?",
 		Options:     []string{"A", "B"},
 		Explanation: "Updated explanation",
-		Topic:       "General",
+		FactId:      uuid.New(),
+		FactName:    "General",
 	}
 
 	tests := []struct {

@@ -129,7 +129,7 @@ func TestManualCardsPostgres(t *testing.T) {
 		t.Fatalf("cards: %d", len(got))
 	}
 	for i, card := range got {
-		if card.Kind != requests[i].Kind || card.Question != requests[i].Question || !reflect.DeepEqual(card.Answer, requests[i].Answer) || card.Topic != "" || card.SourceQuote != "" || card.Explanation != "" {
+		if card.Kind != requests[i].Kind || card.Question != requests[i].Question || !reflect.DeepEqual(card.Answer, requests[i].Answer) || card.FactId == uuid.Nil || card.FactName == "" || card.SourceQuote != "" || card.Explanation != "" {
 			t.Fatalf("roundtrip %d: %+v", i, card)
 		}
 		if i == 3 && !reflect.DeepEqual(card.Options, requests[i].Options) {

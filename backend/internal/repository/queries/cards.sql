@@ -23,6 +23,7 @@ SELECT
     c.id,
     f.set_id,
     c.fact_id,
+    f.name AS fact_name,
     c.kind,
     ck.difficulty_level,
     c.question,
@@ -30,12 +31,10 @@ SELECT
     c.explanation,
     c.source_quote,
     c.source_ref,
-    COALESCE(t.name, '') AS topic,
     c.updated_at
 FROM cards c
 JOIN facts f ON c.fact_id = f.id
 JOIN card_kinds ck ON c.kind = ck.kind
-LEFT JOIN topics t ON f.topic_id = t.id
 WHERE c.id = $1
   AND EXISTS (
       SELECT 1 FROM sets s
@@ -48,6 +47,7 @@ SELECT
     c.id,
     f.set_id,
     c.fact_id,
+    f.name AS fact_name,
     c.kind,
     ck.difficulty_level,
     c.question,
@@ -55,12 +55,10 @@ SELECT
     c.explanation,
     c.source_quote,
     c.source_ref,
-    COALESCE(t.name, '') AS topic,
     c.updated_at
 FROM cards c
 JOIN facts f ON c.fact_id = f.id
 JOIN card_kinds ck ON c.kind = ck.kind
-LEFT JOIN topics t ON f.topic_id = t.id
 JOIN sets s ON f.set_id = s.id
 WHERE c.id = $1 AND s.author_id = $2;
 
@@ -69,6 +67,7 @@ SELECT
     c.id,
     f.set_id,
     c.fact_id,
+    f.name AS fact_name,
     c.kind,
     ck.difficulty_level,
     c.question,
@@ -76,19 +75,17 @@ SELECT
     c.explanation,
     c.source_quote,
     c.source_ref,
-    COALESCE(t.name, '') AS topic,
     c.updated_at
 FROM cards c
 JOIN facts f ON c.fact_id = f.id
 JOIN card_kinds ck ON c.kind = ck.kind
-LEFT JOIN topics t ON f.topic_id = t.id
 WHERE f.set_id = $1
   AND EXISTS (
       SELECT 1 FROM sets s
       WHERE s.id = $1
         AND (s.author_id = @user_id OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = @user_id))
   )
-ORDER BY c.id ASC;
+ORDER BY f.id ASC, c.id ASC;
 
 -- name: GetCardOptions :many
 SELECT *
@@ -152,7 +149,7 @@ WITH user_due_facts AS (
     SELECT
         f.id AS fact_id,
         f.set_id,
-        COALESCE(t.name, '') AS topic,
+        f.name AS fact_name,
         COALESCE(ufp.elo, 700) AS elo,
         CASE
             WHEN COALESCE(ufp.elo, 700) < 800 THEN 0
@@ -163,7 +160,6 @@ WITH user_due_facts AS (
         END AS target_difficulty
     FROM user_sets us
     JOIN facts f ON us.set_id = f.set_id
-    LEFT JOIN topics t ON f.topic_id = t.id
     LEFT JOIN user_fact_progress ufp ON ufp.fact_id = f.id AND ufp.user_id = us.user_id
     WHERE us.user_id = $1
       AND (ufp.next_review_at IS NULL OR ufp.next_review_at <= NOW())
@@ -173,6 +169,7 @@ ranked_cards AS (
         c.id,
         udf.set_id,
         c.fact_id,
+        udf.fact_name,
         c.kind,
         ck.difficulty_level,
         c.question,
@@ -180,7 +177,6 @@ ranked_cards AS (
         c.explanation,
         c.source_quote,
         c.source_ref,
-        udf.topic,
         c.updated_at,
         ROW_NUMBER() OVER (
             PARTITION BY c.fact_id
@@ -194,6 +190,7 @@ SELECT
     id,
     set_id,
     fact_id,
+    fact_name,
     kind,
     difficulty_level,
     question,
@@ -201,7 +198,6 @@ SELECT
     explanation,
     source_quote,
     source_ref,
-    topic,
     updated_at
 FROM ranked_cards
 WHERE rank = 1;

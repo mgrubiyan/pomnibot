@@ -162,7 +162,7 @@ func (s *setServiceImpl) GetCardsBySetID(ctx context.Context, userID uuid.UUID, 
 
 	cards := make([]contracts.Card, 0, len(rows))
 	for _, r := range rows {
-		c, err := builder.buildCard(ctx, r.ID, r.SetID, r.Kind, r.Question, r.AnswerText, r.Explanation, r.SourceQuote, r.SourceRef, r.Topic)
+		c, err := builder.buildCard(ctx, r.ID, r.SetID, r.FactID, r.FactName, r.Kind, r.Question, r.AnswerText, r.Explanation, r.SourceQuote, r.SourceRef)
 		if err != nil {
 			return nil, err
 		}
@@ -332,13 +332,14 @@ func (s *setServiceImpl) buildCard(
 	ctx context.Context,
 	id pgtype.UUID,
 	setID pgtype.UUID,
+	factID pgtype.UUID,
+	factName string,
 	kind string,
 	question string,
 	answerText pgtype.Text,
 	explanation string,
 	sourceQuote string,
 	sourceRef pgtype.Text,
-	topic string,
 ) (contracts.Card, error) {
 	cardUUID, err := uuid.FromBytes(id.Bytes[:])
 	if err != nil {
@@ -348,16 +349,21 @@ func (s *setServiceImpl) buildCard(
 	if err != nil {
 		return contracts.Card{}, fmt.Errorf("parse set uuid: %w", err)
 	}
+	factUUID, err := uuid.FromBytes(factID.Bytes[:])
+	if err != nil {
+		return contracts.Card{}, fmt.Errorf("parse fact uuid: %w", err)
+	}
 
 	cardKind := contracts.CardKind(kind)
 	card := contracts.Card{
 		ID:          cardUUID,
 		SetId:       setUUID,
+		FactId:      factUUID,
+		FactName:    factName,
 		Kind:        cardKind,
 		Question:    question,
 		Explanation: explanation,
 		SourceQuote: sourceQuote,
-		Topic:       topic,
 	}
 
 	if sourceRef.Valid && sourceRef.String != "" {

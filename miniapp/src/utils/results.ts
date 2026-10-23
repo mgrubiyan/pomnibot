@@ -1,28 +1,29 @@
 import type { Answer, Card } from '../types';
 
-/** How a topic went in a run: errors out of the cards answered on it. */
-export interface TopicScore {
-    topic: string;
+/** How a fact went in a run: errors out of the cards answered on it. */
+export interface FactScore {
+    factId: string;
+    factName: string;
     wrong: number;
     total: number;
 }
 
-/** Topics of a finished run, the weakest first. */
-export function scoreByTopic(cards: Card[], results: Answer[]): TopicScore[] {
-    const topicOf = new Map(cards.map((card) => [card.id, card.topic]));
-    const scores = new Map<string, TopicScore>();
+/** Facts of a finished run, the weakest first. */
+export function scoreByFact(cards: Card[], results: Answer[]): FactScore[] {
+    const factOf = new Map(cards.map((card) => [card.id, { factId: card.factId, factName: card.factName }]));
+    const scores = new Map<string, FactScore>();
 
     for (const result of results) {
-        const topic = topicOf.get(result.cardId);
-        if (!topic) {
+        const fact = factOf.get(result.cardId);
+        if (!fact || !fact.factId) {
             continue;
         }
-        const score = scores.get(topic) ?? { topic, wrong: 0, total: 0 };
+        const score = scores.get(fact.factId) ?? { factId: fact.factId, factName: fact.factName, wrong: 0, total: 0 };
         score.total += 1;
         if (!result.correct) {
             score.wrong += 1;
         }
-        scores.set(topic, score);
+        scores.set(fact.factId, score);
     }
 
     // The share of errors sets the order; on a tie more errors go first,
@@ -32,14 +33,18 @@ export function scoreByTopic(cards: Card[], results: Answer[]): TopicScore[] {
     );
 }
 
-/** Topics of a finished run that had an error, the weakest first: a topic
+/** Facts of a finished run that had an error, the weakest first: a fact
  *  answered without a mistake has nothing to show. */
-export function topicsWithErrors(cards: Card[], results: Answer[]): TopicScore[] {
-    return scoreByTopic(cards, results).filter((topic) => topic.wrong > 0);
+export function factsWithErrors(cards: Card[], results: Answer[]): FactScore[] {
+    return scoreByFact(cards, results).filter((fact) => fact.wrong > 0);
 }
 
-/** A run without a single error. Judged by the answers, not the topics: a
-    card without a topic is left out of them, and its error would read as none. */
+/** A run without a single error. Judged by the answers, not the facts: a
+    card without a fact is left out of them, and its error would read as none. */
 export function allCorrect(results: Answer[]): boolean {
     return results.length > 0 && results.every((result) => result.correct);
 }
+
+// Backwards compatibility aliases
+export { factsWithErrors as topicsWithErrors, scoreByFact as scoreByTopic };
+export type { FactScore as TopicScore };

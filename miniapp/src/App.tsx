@@ -153,7 +153,6 @@ function App() {
                     options: patch.options,
                     table: patch.table,
                     explanation: patch.explanation,
-                    topic: patch.topic,
                     sourceQuote: patch.sourceQuote,
                     sourceRef: patch.sourceRef,
                 },

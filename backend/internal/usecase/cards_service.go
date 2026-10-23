@@ -166,20 +166,18 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID uuid.UUID, card
 	}
 
 	setUUID, _ := uuid.FromBytes(existing.SetID.Bytes[:])
+	factUUID, _ := uuid.FromBytes(existing.FactID.Bytes[:])
 	cardKind := contracts.CardKind(updated.Kind)
-	topic := existing.Topic
-	if req.Topic.IsSet() {
-		topic = req.Topic.Value
-	}
 
 	res := &contracts.Card{
 		ID:          cardID,
 		SetId:       setUUID,
+		FactId:      factUUID,
+		FactName:    existing.FactName,
 		Kind:        cardKind,
 		Question:    updated.Question,
 		Explanation: updated.Explanation,
 		SourceQuote: updated.SourceQuote,
-		Topic:       topic,
 	}
 
 	if updated.SourceRef.Valid && updated.SourceRef.String != "" {
