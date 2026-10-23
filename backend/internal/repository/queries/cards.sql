@@ -203,8 +203,7 @@ SELECT
     updated_at
 FROM ranked_cards
 WHERE card_idx = LEAST(step, total_cards - 1)
-ORDER BY due_time ASC, fact_id ASC
-LIMIT 20;
+ORDER BY due_time ASC, fact_id ASC;
 
 -- name: CountCardsByFactID :one
 SELECT COUNT(*)::INT FROM cards WHERE fact_id = $1;
