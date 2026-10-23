@@ -26,7 +26,7 @@ export function Result({ setTitle, cards, results, onExit, onShare }: ResultProp
         <Screen>
             <Flex direction="column" align="stretch" gap={16} className={s.body}>
                 <Flex direction="column" align="stretch" gap={4} className={s.summary}>
-                    <Typography.Text variant="label" color="secondary">
+                    <Typography.Text variant="label" color="secondary" className={s.title}>
                         {setTitle ? `${setTitle} · набор пройден` : 'На сегодня · всё повторено'}
                     </Typography.Text>
                     <Typography.Text variant="hero" asChild>
@@ -74,13 +74,13 @@ export function Result({ setTitle, cards, results, onExit, onShare }: ResultProp
                     </Flex>
                 ) : null}
 
-                {/* The date is a placeholder until the backend returns the
-                    review schedule; with no errors there is nothing to return to. */}
+                {/* A wrong answer is due again the next day (reviews.sql);
+                    with no errors there is nothing to return to. */}
                 {correct < results.length ? (
                     <Flex align="center" gap={8} className={s.note}>
                         <IconCalendar size={20} tone="muted" />
                         <Typography.Text variant="body" color="secondary">
-                            Вернёмся к сложным через 2 дня
+                            Вернёмся к сложным завтра
                         </Typography.Text>
                     </Flex>
                 ) : null}

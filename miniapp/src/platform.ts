@@ -5,6 +5,12 @@ export interface TelegramApp {
     contentSafeAreaInset?: Partial<Record<'top' | 'right' | 'bottom' | 'left', number>>;
     ready: () => void;
     expand: () => void;
+    /** Bot API 7.7+. */
+    disableVerticalSwipes?: () => void;
+    /** Bot API 6.1+ (bottom bar 7.10+); colors as #RRGGBB. */
+    setHeaderColor?: (color: string) => void;
+    setBackgroundColor?: (color: string) => void;
+    setBottomBarColor?: (color: string) => void;
     onEvent: (event: string, callback: () => void) => void;
     offEvent: (event: string, callback: () => void) => void;
 }

@@ -122,7 +122,11 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
     };
 
     const handleColumnAdd = () => {
-        const newColName = `Столбец ${tableColumns.length + 1}`;
+        // Terms are tied to columns by name, so the new name must be free:
+        // after a removal, «Столбец 3» may still be taken.
+        let number = tableColumns.length + 1;
+        while (tableColumns.includes(`Столбец ${number}`)) number++;
+        const newColName = `Столбец ${number}`;
         setTableColumns((current) => [...current, newColName]);
     };
 

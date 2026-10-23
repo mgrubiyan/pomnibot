@@ -39,7 +39,7 @@ const BOOLEAN_OPTIONS: Option[] = [
 ];
 
 /** Matches the transform duration in Feed.module.css. */
-const FLIP_MS = 350;
+const FLIP_MS = 300;
 /** Matches the cardOut animation in Feed.module.css. */
 const CARD_OUT_MS = 150;
 
@@ -540,7 +540,7 @@ export function Feed({
             <StatusScreen
                 icon={<IconCheck size={48} tone="muted" />}
                 title="На сегодня всё"
-                text="Сложные карточки вернутся через 2 дня"
+                text="Карточки вернутся, когда подойдёт срок повторения"
                 action={
                     <Button size="medium" variant="secondary" stretched onClick={handleExit}>
                         {setId ? 'К набору' : 'На главную'}
@@ -575,7 +575,7 @@ export function Feed({
                         >
                             <IconChevronLeft size={20} />
                         </IconButton>
-                        <Typography.Text variant="label" color="secondary">
+                        <Typography.Text variant="label" color="secondary" className={s.topic}>
                             {card.topic}
                         </Typography.Text>
                     </Flex>
@@ -599,7 +599,7 @@ export function Feed({
                     <Flex
                         direction="column"
                         align="stretch"
-                        justify={check ? 'space-between' : 'center'}
+                        justify={check ? 'space-between' : 'start'}
                         gap={24}
                         inert={showAnswer || flipping}
                         aria-hidden={showAnswer}
@@ -695,11 +695,11 @@ export function Feed({
 
                         <Flex direction="column" align="stretch" gap={12}>
                             {!layout && hasGiven ? (
-                                <Flex align="center" gap={12} className={s.answerRow}>
+                                <Flex align="flex-start" gap={12} className={s.answerRow}>
                                     {verdict === 'correct' ? (
-                                        <IconCheck tone="positive" />
+                                        <IconCheck tone="positive" className={s.answerIcon} />
                                     ) : (
-                                        <IconCross tone="negative" />
+                                        <IconCross tone="negative" className={s.answerIcon} />
                                     )}
                                     <Flex direction="column">
                                         <Typography.Text variant="label" color="tertiary">
@@ -713,8 +713,8 @@ export function Feed({
                             ) : null}
 
                             {!layout && showRightAnswer ? (
-                                <Flex align="center" gap={12} className={s.answerRow}>
-                                    <IconCheck tone="positive" />
+                                <Flex align="flex-start" gap={12} className={s.answerRow}>
+                                    <IconCheck tone="positive" className={s.answerIcon} />
                                     <Flex direction="column">
                                         <Typography.Text variant="label" color="tertiary">
                                             Верный ответ
@@ -856,7 +856,14 @@ export function Feed({
                                 size="large"
                                 value={draft}
                                 placeholder="Ваш ответ"
+                                enterKeyHint="send"
+                                autoCorrect="off"
                                 onChange={(event) => setDraft(event.target.value)}
+                                onKeyDown={(event) => {
+                                    // A held key repeats, and Enter also ends an IME composition.
+                                    if (event.key !== 'Enter' || event.repeat || event.nativeEvent.isComposing) return;
+                                    if (draft.trim().length > 0) submit(draft);
+                                }}
                             />
                             <Button
                                 size="medium"

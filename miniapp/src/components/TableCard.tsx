@@ -60,7 +60,9 @@ export function TableColumns({
     const allPlaced = placedCount(placement) === layout.items.length;
 
     return (
-        <Grid cols={2} gapX={0} gapY={12}>
+        // Up to three side by side, as the generator makes them; a wider
+        // hand-made table wraps rather than squeezing the terms.
+        <Grid cols={Math.min(layout.columns.length, 3)} gapX={0} gapY={12}>
             {layout.columns.map((column) => (
                 <Flex key={column} direction="column" align="stretch" gap={8} className={s.column}>
                     <Typography.Text variant="description-strong" color="secondary" className={s.columnTitle}>
@@ -70,7 +72,7 @@ export function TableColumns({
                     {layout.items.map((item, index) =>
                         placement[index] === column ? (
                             <Chip
-                                key={item.text}
+                                key={index}
                                 text={item.text}
                                 placed
                                 verdict={
@@ -127,7 +129,7 @@ export function TablePool({ layout, placement, selected, onSelect }: TablePoolPr
                     {layout.items.map((item, index) =>
                         placement[index] === null ? (
                             <Chip
-                                key={item.text}
+                                key={index}
                                 text={item.text}
                                 selected={selected === index}
                                 onClick={() => onSelect(index)}

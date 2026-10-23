@@ -38,4 +38,20 @@
     border-radius: 12px;
     background: var(--text-primary);
     color: var(--background-card);
+    animation: noticeIn 0.2s var(--ease-out);
+}
+
+@keyframes noticeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    @keyframes noticeIn {
+        from {
+            opacity: 0;
+        }
+    }
 }

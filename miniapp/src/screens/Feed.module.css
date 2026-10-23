@@ -21,7 +21,7 @@
     /* The bar fills by scaling, not by width: the card change should
        move it on the compositor, same as everything else here. */
     transform-origin: left;
-    transition: transform 0.2s ease-out;
+    transition: transform 0.2s var(--ease-out);
 }
 
 /* Moving on to the next card: the current one slides up and dissolves,
@@ -54,14 +54,14 @@
        instead of stretching the screen. */
     min-height: 0;
     perspective: 1000px;
-    animation: cardIn 0.2s ease-out;
+    animation: cardIn 0.2s var(--ease-out);
 }
 
 /* Leaving is short on purpose: nothing to look at while the card is gone.
    The duration is mirrored in Feed.tsx (CARD_OUT_MS), which holds the
    index back until the card is out of the way. */
 .leaving {
-    animation: cardOut 0.15s ease-in forwards;
+    animation: cardOut 0.15s var(--ease-out) forwards;
 }
 
 .flipInner {
@@ -70,7 +70,7 @@
     transform-style: preserve-3d;
     /* The duration is mirrored in Feed.tsx (FLIP_MS): the buttons
        stay disabled for exactly as long. */
-    transition: transform 0.35s ease-out;
+    transition: transform 0.3s var(--ease-out);
 }
 
 .flipped {
@@ -103,6 +103,9 @@
        the card itself does not grow. */
     overflow-y: auto;
     overscroll-behavior: contain;
+    /* One unbroken word (a long chemical name, an answer quoted back)
+       must wrap instead of scrolling the card sideways. */
+    overflow-wrap: anywhere;
 }
 
 /* A flip card has no options to choose from, so the whole side opens the
@@ -111,11 +114,21 @@
 .tappable {
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+    /* A long press reveals the answer too, not a text selection. */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
 }
 
-/* The question sits in the middle of the card, the breakdown at the top. */
-.cardCentered {
-    justify-content: center;
+/* The question sits in the middle of the card, the breakdown at the top.
+   Centred by margins, not justify-content: a question taller than the card
+   then starts at the top and scrolls instead of losing its first lines. */
+.cardCentered > :first-child {
+    margin-top: auto;
+}
+
+.cardCentered > :last-child {
+    margin-bottom: auto;
 }
 
 /* Verdict border. A transparent border is there in the normal state
@@ -153,7 +166,15 @@
     -webkit-tap-highlight-color: transparent;
     /* Springs back slower than it goes down, so the press reads as
        a squeeze rather than a jump. */
-    transition: transform 0.12s ease-out;
+    transition:
+        transform 0.12s var(--ease-out),
+        opacity 0.12s var(--ease-out);
+}
+
+/* Lets a long word in the label wrap inside the button. */
+.option > * {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .option:active {
@@ -167,6 +188,14 @@
 }
 
 
+/* One line, so a long topic does not move the card from one card to the next. */
+.topic {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Answer breakdown */
 
 .divider {
@@ -178,6 +207,12 @@
 .answerRow {
     /* The verdict icon must not shrink next to a long answer. */
     min-width: 0;
+}
+
+/* Level with the answer's first line, under the «Ваш ответ» label. */
+.answerIcon {
+    flex-shrink: 0;
+    margin-top: 16px;
 }
 
 .answerText {
@@ -204,10 +239,20 @@
     text-wrap: pretty;
 }
 
-/* Reduced motion: no turn, the sides simply replace one another. */
+/* Reduced motion: no turn, the sides simply replace one another
+   and the next card fades in where it stands. */
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+}
 
 @media (prefers-reduced-motion: reduce) {
-    .flip,
+    .flip {
+        animation: fadeIn 0.15s var(--ease-out);
+    }
+
     .leaving {
         animation: none;
     }

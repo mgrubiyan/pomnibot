@@ -9,12 +9,49 @@
     overscroll-behavior: contain;
 }
 
+/* The finale of a run: the blocks rise in one after another. The bars
+   inside do not move on their own — they are data to read. */
+.body > * {
+    animation: rise 0.3s var(--ease-out) both;
+}
+
+.body > :nth-child(2) {
+    animation-delay: 0.06s;
+}
+
+.body > :nth-child(3) {
+    animation-delay: 0.12s;
+}
+
+.body > :nth-child(4) {
+    animation-delay: 0.18s;
+}
+
+@keyframes rise {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    @keyframes rise {
+        from {
+            opacity: 0;
+        }
+    }
+}
+
 /* Score */
 
 .summary {
     padding: 20px;
     border-radius: 16px;
     background: var(--background-card);
+}
+
+.title {
+    overflow-wrap: anywhere;
 }
 
 .score {

@@ -33,6 +33,10 @@
     -webkit-tap-highlight-color: transparent;
 }
 
+.tappable:active {
+    opacity: 0.6;
+}
+
 .subtitle {
     overflow-wrap: anywhere;
 }
