@@ -37,9 +37,7 @@ func RunMigrations(ctx context.Context, dbURL string) error {
 	}
 
 	slog.InfoContext(ctx, "running database migrations via goose...")
-	// Pull requests add migrations side by side, so a higher version can be
-	// deployed before a lower one; the lower one still applies when it comes.
-	if err := goose.UpContext(ctx, db, "migrations", goose.WithAllowMissing()); err != nil {
+	if err := goose.UpContext(ctx, db, "migrations"); err != nil {
 		return fmt.Errorf("apply goose migrations: %w", err)
 	}
 

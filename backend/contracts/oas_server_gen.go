@@ -46,13 +46,6 @@ type Handler interface {
 	//
 	// DELETE /sets/{setId}
 	DeleteSet(ctx context.Context, params DeleteSetParams) (DeleteSetRes, error)
-	// GetAdminIssues implements GetAdminIssues operation.
-	//
-	// All complaints across all sets, newest first, each with the copy of the card as it was reported and
-	// who reported it. Anyone but an admin gets an empty list.
-	//
-	// GET /admin/issues
-	GetAdminIssues(ctx context.Context) (GetAdminIssuesRes, error)
 	// GetCardsBySetID implements GetCardsBySetID operation.
 	//
 	// Get cards.
@@ -83,13 +76,6 @@ type Handler interface {
 	//
 	// GET /sets/{setId}
 	GetSet(ctx context.Context, params GetSetParams) (GetSetRes, error)
-	// GetSetIssues implements GetSetIssues operation.
-	//
-	// Grouped by card and reason. A complaint is open until the card is edited after it or the author
-	// keeps the card as it is.
-	//
-	// GET /sets/{setId}/issues
-	GetSetIssues(ctx context.Context, params GetSetIssuesParams) (GetSetIssuesRes, error)
 	// GetSetLeaderboard implements GetSetLeaderboard operation.
 	//
 	// Get set leaderboard for author.
@@ -126,19 +112,6 @@ type Handler interface {
 	//
 	// PUT /profile
 	PutProfile(ctx context.Context, req *ProfileRequest) (PutProfileRes, error)
-	// ReportCardIssue implements ReportCardIssue operation.
-	//
-	// Saves the complaint with a copy of the card as it was reported, so it outlives later edits and the
-	// card's deletion.
-	//
-	// POST /cards/{cardId}/issue
-	ReportCardIssue(ctx context.Context, req *ReportCardIssueRequest, params ReportCardIssueParams) (ReportCardIssueRes, error)
-	// ResolveCardIssues implements ResolveCardIssues operation.
-	//
-	// Keep a card as it is and close its complaints.
-	//
-	// POST /cards/{cardId}/issue/resolve
-	ResolveCardIssues(ctx context.Context, params ResolveCardIssuesParams) (ResolveCardIssuesRes, error)
 	// SendResults implements SendResults operation.
 	//
 	// Send set/feed results.
