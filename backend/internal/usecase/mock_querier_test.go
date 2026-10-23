@@ -9,60 +9,61 @@ import (
 
 type mockQuerier struct {
 	db.Querier
-	countTotalDueCardsForUserFunc  func(ctx context.Context, userID int64) (int32, error)
-	getNextReviewDateForUserFunc   func(ctx context.Context, userID int64) (pgtype.Timestamptz, error)
-	createCardFunc                 func(ctx context.Context, arg db.CreateCardParams) (db.Card, error)
-	createCardOptionFunc           func(ctx context.Context, arg db.CreateCardOptionParams) (db.CardOption, error)
-	createFactFunc                 func(ctx context.Context, arg db.CreateFactParams) (db.Fact, error)
-	upsertTopicFunc                func(ctx context.Context, name string) (db.Topic, error)
-	createCardTableColumnFunc      func(ctx context.Context, arg db.CreateCardTableColumnParams) (db.CardTableColumn, error)
-	createCardTableItemFunc        func(ctx context.Context, arg db.CreateCardTableItemParams) (db.CardTableItem, error)
-	createSetFunc                  func(ctx context.Context, arg db.CreateSetParams) (db.Set, error)
-	deleteCardFunc                 func(ctx context.Context, arg db.DeleteCardParams) (int64, error)
-	deleteCardOptionsFunc          func(ctx context.Context, cardID pgtype.UUID) error
-	deleteCardTableColumnsFunc     func(ctx context.Context, cardID pgtype.UUID) error
-	deleteCardTableItemsFunc       func(ctx context.Context, cardID pgtype.UUID) error
-	deleteSetFunc                  func(ctx context.Context, arg db.DeleteSetParams) (int64, error)
-	getCardByIDFunc                func(ctx context.Context, arg db.GetCardByIDParams) (db.GetCardByIDRow, error)
-	getCardByIDForAuthorFunc       func(ctx context.Context, arg db.GetCardByIDForAuthorParams) (db.GetCardByIDForAuthorRow, error)
-	getCardOptionsFunc             func(ctx context.Context, cardID pgtype.UUID) ([]db.CardOption, error)
-	getCardTableColumnsFunc        func(ctx context.Context, cardID pgtype.UUID) ([]db.CardTableColumn, error)
-	getCardTableItemsFunc          func(ctx context.Context, cardID pgtype.UUID) ([]db.CardTableItem, error)
-	getCardsBySetIDFunc            func(ctx context.Context, arg db.GetCardsBySetIDParams) ([]db.GetCardsBySetIDRow, error)
-	leaveSetFunc                   func(ctx context.Context, arg db.LeaveSetParams) (int64, error)
-	getFeedCardsForUserFunc        func(ctx context.Context, userID int64) ([]db.GetFeedCardsForUserRow, error)
-	getSetByIDFunc                 func(ctx context.Context, arg db.GetSetByIDParams) (db.GetSetByIDRow, error)
-	getSetByShareCodeFunc          func(ctx context.Context, arg db.GetSetByShareCodeParams) (db.GetSetByShareCodeRow, error)
-	getSetPlanFunc                 func(ctx context.Context, arg db.GetSetPlanParams) ([]db.GetSetPlanRow, error)
-	getUserByIDFunc                func(ctx context.Context, id int64) (db.User, error)
-	getUserSetsFunc                func(ctx context.Context, userID int64) ([]db.GetUserSetsRow, error)
-	initUserFactProgressFunc       func(ctx context.Context, arg db.InitUserFactProgressParams) error
-	isSetAuthorFunc                func(ctx context.Context, arg db.IsSetAuthorParams) (bool, error)
-	joinSetFunc                    func(ctx context.Context, arg db.JoinSetParams) (db.UserSet, error)
-	recordAnswerResultFunc         func(ctx context.Context, arg db.RecordAnswerResultParams) (db.AnswerResult, error)
-	updateCardFunc                 func(ctx context.Context, arg db.UpdateCardParams) (db.Card, error)
-	updateFactProgressOnAnswerFunc func(ctx context.Context, arg db.UpdateFactProgressOnAnswerParams) (db.UserFactProgress, error)
-	ensureUserFunc                 func(ctx context.Context, id int64) (db.User, error)
-	getSetLeaderboardFunc          func(ctx context.Context, setID pgtype.UUID) ([]db.GetSetLeaderboardRow, error)
-	getUserSetRatingFunc           func(ctx context.Context, arg db.GetUserSetRatingParams) (db.GetUserSetRatingRow, error)
-	getUsersWithDueFactsFunc       func(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]int64, error)
+	countTotalDueCardsForUserFunc func(ctx context.Context, userID pgtype.UUID) (int32, error)
+	getNextReviewDateForUserFunc  func(ctx context.Context, userID pgtype.UUID) (pgtype.Timestamptz, error)
+	createCardFunc                func(ctx context.Context, arg db.CreateCardParams) (db.Card, error)
+	createCardOptionFunc          func(ctx context.Context, arg db.CreateCardOptionParams) (db.CardOption, error)
+	createFactFunc                func(ctx context.Context, arg db.CreateFactParams) (db.Fact, error)
+	createCardTableColumnFunc     func(ctx context.Context, arg db.CreateCardTableColumnParams) (db.CardTableColumn, error)
+	createCardTableItemFunc       func(ctx context.Context, arg db.CreateCardTableItemParams) (db.CardTableItem, error)
+	createSetFunc                 func(ctx context.Context, arg db.CreateSetParams) (db.Set, error)
+	deleteCardFunc                func(ctx context.Context, arg db.DeleteCardParams) (int64, error)
+	deleteCardOptionsFunc         func(ctx context.Context, cardID pgtype.UUID) error
+	deleteCardTableColumnsFunc    func(ctx context.Context, cardID pgtype.UUID) error
+	deleteCardTableItemsFunc      func(ctx context.Context, cardID pgtype.UUID) error
+	deleteSetFunc                 func(ctx context.Context, arg db.DeleteSetParams) (int64, error)
+	getCardByIDFunc               func(ctx context.Context, arg db.GetCardByIDParams) (db.GetCardByIDRow, error)
+	getCardByIDForAuthorFunc      func(ctx context.Context, arg db.GetCardByIDForAuthorParams) (db.GetCardByIDForAuthorRow, error)
+	getCardOptionsFunc            func(ctx context.Context, cardID pgtype.UUID) ([]db.CardOption, error)
+	getCardTableColumnsFunc       func(ctx context.Context, cardID pgtype.UUID) ([]db.CardTableColumn, error)
+	getCardTableItemsFunc         func(ctx context.Context, cardID pgtype.UUID) ([]db.CardTableItem, error)
+	getCardsBySetIDFunc           func(ctx context.Context, arg db.GetCardsBySetIDParams) ([]db.GetCardsBySetIDRow, error)
+	leaveSetFunc                  func(ctx context.Context, arg db.LeaveSetParams) (int64, error)
+	getFeedCardsForUserFunc       func(ctx context.Context, userID pgtype.UUID) ([]db.GetFeedCardsForUserRow, error)
+	getSetByIDFunc                func(ctx context.Context, arg db.GetSetByIDParams) (db.GetSetByIDRow, error)
+	getSetByShareCodeFunc         func(ctx context.Context, shareCode string) (db.GetSetByShareCodeRow, error)
+	getSetPlanFunc                func(ctx context.Context, arg db.GetSetPlanParams) ([]db.GetSetPlanRow, error)
+	getUserByIDFunc               func(ctx context.Context, id pgtype.UUID) (db.User, error)
+	getUserSetsFunc               func(ctx context.Context, userID pgtype.UUID) ([]db.GetUserSetsRow, error)
+	initUserFactProgressFunc      func(ctx context.Context, arg db.InitUserFactProgressParams) error
+	isSetAuthorFunc               func(ctx context.Context, arg db.IsSetAuthorParams) (bool, error)
+	joinSetFunc                   func(ctx context.Context, arg db.JoinSetParams) (db.UserSet, error)
+	recordAnswerFunc              func(ctx context.Context, arg db.RecordAnswerParams) (db.Answer, error)
+	updateCardFunc                func(ctx context.Context, arg db.UpdateCardParams) (db.UpdateCardRow, error)
+	countCardsByFactIDFunc        func(ctx context.Context, factID pgtype.UUID) (int32, error)
+	getUserFactProgressFunc       func(ctx context.Context, arg db.GetUserFactProgressParams) (db.UserFactProgress, error)
+	upsertFactProgressFunc        func(ctx context.Context, arg db.UpsertFactProgressParams) (db.UserFactProgress, error)
+	ensureUserFunc                func(ctx context.Context, id pgtype.UUID) (db.User, error)
+	getSetLeaderboardFunc         func(ctx context.Context, setID pgtype.UUID) ([]db.GetSetLeaderboardRow, error)
+	getUserSetRatingFunc          func(ctx context.Context, arg db.GetUserSetRatingParams) (db.GetUserSetRatingRow, error)
+	getUsersWithDueFactsFunc      func(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]pgtype.UUID, error)
 }
 
-func (m *mockQuerier) GetUsersWithDueFacts(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]int64, error) {
+func (m *mockQuerier) GetUsersWithDueFacts(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]pgtype.UUID, error) {
 	if m.getUsersWithDueFactsFunc != nil {
 		return m.getUsersWithDueFactsFunc(ctx, arg)
 	}
 	return nil, nil
 }
 
-func (m *mockQuerier) CountTotalDueCardsForUser(ctx context.Context, userID int64) (int32, error) {
+func (m *mockQuerier) CountTotalDueCardsForUser(ctx context.Context, userID pgtype.UUID) (int32, error) {
 	if m.countTotalDueCardsForUserFunc != nil {
 		return m.countTotalDueCardsForUserFunc(ctx, userID)
 	}
 	return 0, nil
 }
 
-func (m *mockQuerier) GetNextReviewDateForUser(ctx context.Context, userID int64) (pgtype.Timestamptz, error) {
+func (m *mockQuerier) GetNextReviewDateForUser(ctx context.Context, userID pgtype.UUID) (pgtype.Timestamptz, error) {
 	if m.getNextReviewDateForUserFunc != nil {
 		return m.getNextReviewDateForUserFunc(ctx, userID)
 	}
@@ -87,16 +88,7 @@ func (m *mockQuerier) CreateFact(ctx context.Context, arg db.CreateFactParams) (
 	if m.createFactFunc != nil {
 		return m.createFactFunc(ctx, arg)
 	}
-	return db.Fact{ID: arg.ID, SetID: arg.SetID, TopicID: arg.TopicID, Name: arg.Name}, nil
-}
-
-func (m *mockQuerier) UpsertTopic(ctx context.Context, name string) (db.Topic, error) {
-	if m.upsertTopicFunc != nil {
-		return m.upsertTopicFunc(ctx, name)
-	}
-	var topicUUID pgtype.UUID
-	_ = topicUUID.Scan("00000000-0000-0000-0000-000000000001")
-	return db.Topic{ID: topicUUID, Name: name}, nil
+	return db.Fact{ID: arg.ID, SetID: arg.SetID, Name: arg.Name}, nil
 }
 
 func (m *mockQuerier) CreateCardTableColumn(ctx context.Context, arg db.CreateCardTableColumnParams) (db.CardTableColumn, error) {
@@ -197,7 +189,7 @@ func (m *mockQuerier) GetCardsBySetID(ctx context.Context, arg db.GetCardsBySetI
 	return nil, nil
 }
 
-func (m *mockQuerier) GetFeedCardsForUser(ctx context.Context, userID int64) ([]db.GetFeedCardsForUserRow, error) {
+func (m *mockQuerier) GetFeedCardsForUser(ctx context.Context, userID pgtype.UUID) ([]db.GetFeedCardsForUserRow, error) {
 	if m.getFeedCardsForUserFunc != nil {
 		return m.getFeedCardsForUserFunc(ctx, userID)
 	}
@@ -211,9 +203,9 @@ func (m *mockQuerier) GetSetByID(ctx context.Context, arg db.GetSetByIDParams) (
 	return db.GetSetByIDRow{}, nil
 }
 
-func (m *mockQuerier) GetSetByShareCode(ctx context.Context, arg db.GetSetByShareCodeParams) (db.GetSetByShareCodeRow, error) {
+func (m *mockQuerier) GetSetByShareCode(ctx context.Context, shareCode string) (db.GetSetByShareCodeRow, error) {
 	if m.getSetByShareCodeFunc != nil {
-		return m.getSetByShareCodeFunc(ctx, arg)
+		return m.getSetByShareCodeFunc(ctx, shareCode)
 	}
 	return db.GetSetByShareCodeRow{}, nil
 }
@@ -225,14 +217,14 @@ func (m *mockQuerier) GetSetPlan(ctx context.Context, arg db.GetSetPlanParams) (
 	return nil, nil
 }
 
-func (m *mockQuerier) GetUserByID(ctx context.Context, id int64) (db.User, error) {
+func (m *mockQuerier) GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error) {
 	if m.getUserByIDFunc != nil {
 		return m.getUserByIDFunc(ctx, id)
 	}
 	return db.User{}, nil
 }
 
-func (m *mockQuerier) GetUserSets(ctx context.Context, userID int64) ([]db.GetUserSetsRow, error) {
+func (m *mockQuerier) GetUserSets(ctx context.Context, userID pgtype.UUID) ([]db.GetUserSetsRow, error) {
 	if m.getUserSetsFunc != nil {
 		return m.getUserSetsFunc(ctx, userID)
 	}
@@ -267,28 +259,42 @@ func (m *mockQuerier) LeaveSet(ctx context.Context, arg db.LeaveSetParams) (int6
 	return 1, nil
 }
 
-func (m *mockQuerier) RecordAnswerResult(ctx context.Context, arg db.RecordAnswerResultParams) (db.AnswerResult, error) {
-	if m.recordAnswerResultFunc != nil {
-		return m.recordAnswerResultFunc(ctx, arg)
+func (m *mockQuerier) RecordAnswer(ctx context.Context, arg db.RecordAnswerParams) (db.Answer, error) {
+	if m.recordAnswerFunc != nil {
+		return m.recordAnswerFunc(ctx, arg)
 	}
-	return db.AnswerResult{}, nil
+	return db.Answer{}, nil
 }
 
-func (m *mockQuerier) UpdateCard(ctx context.Context, arg db.UpdateCardParams) (db.Card, error) {
+func (m *mockQuerier) UpdateCard(ctx context.Context, arg db.UpdateCardParams) (db.UpdateCardRow, error) {
 	if m.updateCardFunc != nil {
 		return m.updateCardFunc(ctx, arg)
 	}
-	return db.Card{}, nil
+	return db.UpdateCardRow{}, nil
 }
 
-func (m *mockQuerier) UpdateFactProgressOnAnswer(ctx context.Context, arg db.UpdateFactProgressOnAnswerParams) (db.UserFactProgress, error) {
-	if m.updateFactProgressOnAnswerFunc != nil {
-		return m.updateFactProgressOnAnswerFunc(ctx, arg)
+func (m *mockQuerier) CountCardsByFactID(ctx context.Context, factID pgtype.UUID) (int32, error) {
+	if m.countCardsByFactIDFunc != nil {
+		return m.countCardsByFactIDFunc(ctx, factID)
+	}
+	return 1, nil
+}
+
+func (m *mockQuerier) GetUserFactProgress(ctx context.Context, arg db.GetUserFactProgressParams) (db.UserFactProgress, error) {
+	if m.getUserFactProgressFunc != nil {
+		return m.getUserFactProgressFunc(ctx, arg)
 	}
 	return db.UserFactProgress{}, nil
 }
 
-func (m *mockQuerier) EnsureUser(ctx context.Context, id int64) (db.User, error) {
+func (m *mockQuerier) UpsertFactProgress(ctx context.Context, arg db.UpsertFactProgressParams) (db.UserFactProgress, error) {
+	if m.upsertFactProgressFunc != nil {
+		return m.upsertFactProgressFunc(ctx, arg)
+	}
+	return db.UserFactProgress{}, nil
+}
+
+func (m *mockQuerier) EnsureUser(ctx context.Context, id pgtype.UUID) (db.User, error) {
 	if m.ensureUserFunc != nil {
 		return m.ensureUserFunc(ctx, id)
 	}

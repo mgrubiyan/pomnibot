@@ -640,12 +640,13 @@ components:
       required:
         - id
         - setId
+        - factId
+        - factName
         - kind
         - question
         - answer
         - explanation
         - sourceQuote
-        - topic
       properties:
         id:
           type: string
@@ -653,6 +654,11 @@ components:
         setId:
           type: string
           format: uuid
+        factId:
+          type: string
+          format: uuid
+        factName:
+          type: string
         kind:
           $ref: '#/components/schemas/CardKind'
         question:
@@ -675,9 +681,6 @@ components:
         sourceRef:
           type: string
           description: "where the quote is from: «Лекция 3, стр. 2»"
-        topic:
-          type: string
-          description: topic, used for stats
 
     CreateSetRequest:
       type: object
@@ -732,9 +735,6 @@ components:
         sourceRef:
           type: string
           description: "where the quote is from: «Лекция 3, стр. 2»"
-        topic:
-          type: string
-          description: topic, used for stats
 
     User:
       type: object
@@ -743,8 +743,8 @@ components:
         - firstName
       properties:
         id:
-          type: integer
-          format: int64
+          type: string
+          format: uuid
         firstName:
           type: string
         lastName:
@@ -869,26 +869,22 @@ components:
           items:
             $ref: '#/components/schemas/CardSet'
 
-    AnswerResult:
+    Answer:
       type: object
       required:
         - cardId
         - correct
-        - answeredAt
       properties:
         cardId:
           type: string
           format: uuid
         correct:
           type: boolean
-        answeredAt:
-          type: string
-          format: date-time
 
     SendResultsRequest:
       type: array
       items:
-        $ref: '#/components/schemas/AnswerResult'
+        $ref: '#/components/schemas/Answer'
 
     AnswerQuestionRequest:
       type: object

@@ -1,6 +1,10 @@
 package http
 
-import "context"
+import (
+	"context"
+
+	"github.com/google/uuid"
+)
 
 type contextKey string
 
@@ -10,13 +14,13 @@ const (
 )
 
 // WithUserID injects the given user ID into the context.
-func WithUserID(ctx context.Context, userID int64) context.Context {
+func WithUserID(ctx context.Context, userID uuid.UUID) context.Context {
 	return context.WithValue(ctx, userIDContextKey, userID)
 }
 
 // UserIDFromContext retrieves the user ID from the context if present.
-func UserIDFromContext(ctx context.Context) (int64, bool) {
-	val, ok := ctx.Value(userIDContextKey).(int64)
+func UserIDFromContext(ctx context.Context) (uuid.UUID, bool) {
+	val, ok := ctx.Value(userIDContextKey).(uuid.UUID)
 	return val, ok
 }
 

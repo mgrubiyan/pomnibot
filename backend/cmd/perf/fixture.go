@@ -26,16 +26,16 @@ func seed(ctx context.Context, pool *pgxpool.Pool) error {
 		`INSERT INTO facts(id,set_id,name) SELECT i::text,('00000000-0000-0000-0000-'||lpad(((i-1)/50+1)::text,12,'0'))::uuid,'Fact '||i FROM generate_series(1,150) i`,
 		`INSERT INTO cards(id,fact_id,kind,question,answer_text,explanation,source_quote)
  SELECT ('00000000-0000-0000-0001-'||lpad((i*5+k)::text,12,'0'))::uuid,i::text,
- (ARRAY['flip','boolean','choice','table','input'])[k+1], 'Question '||i,
+ ((ARRAY['flip','boolean','choice','table','input'])[k+1])::card_kind, 'Question '||i,
  CASE WHEN k=1 THEN 'true' ELSE 'Answer' END,'Explanation','Source' FROM generate_series(1,150) i CROSS JOIN generate_series(0,4) k`,
 		`INSERT INTO card_options(card_id,position,text,is_correct) SELECT id,p,CASE WHEN p=0 THEN 'Answer' ELSE 'Other' END,p=0 FROM cards CROSS JOIN generate_series(0,1) p WHERE kind='choice'`,
 		`INSERT INTO card_table_columns(card_id,position,name) SELECT id,p,CASE WHEN p=0 THEN 'A' ELSE 'B' END FROM cards CROSS JOIN generate_series(0,1) p WHERE kind='table'`,
 		`INSERT INTO card_table_items(card_id,item_text,column_name) SELECT id,'Item','A' FROM cards WHERE kind='table'`,
-		`INSERT INTO user_fact_progress(user_id,fact_id,elo,next_review_at) SELECT u.id,f.id,800,'2020-01-01' FROM users u CROSS JOIN facts f`,
-		`INSERT INTO answer_results(id,user_id,card_id,correct,answered_at,created_at)
+		`INSERT INTO user_fact_progress(user_id,fact_id,step,stability,difficulty,next_review_at) SELECT u.id,f.id,1,2.3065,5.0,'2020-01-01' FROM users u CROSS JOIN facts f`,
+		`INSERT INTO answers(id,user_id,card_id,correct)
  SELECT ('00000000-0000-0000-0002-'||lpad(i::text,12,'0'))::uuid, (i-1)%1000+1,
  ('00000000-0000-0000-0001-'||lpad((((i-1)%150+1)*5+(i-1)%5)::text,12,'0'))::uuid,
- i%4<>0,'2020-01-01'::timestamptz+i*interval '1 second','2020-01-01' FROM generate_series(1,100000) i`,
+ i%4<>0 FROM generate_series(1,100000) i`,
 		`ANALYZE`,
 	}
 	for _, statement := range statements {

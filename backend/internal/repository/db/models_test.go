@@ -4,51 +4,66 @@ import (
 	"testing"
 )
 
-// TestDifficultyBrackets verifies the business logic specification:
-// 0: flip (< 800)
-// 1: boolean (800-999)
-// 2: choice (1000-1199)
-// 3: table (1200-1399)
-// 4: input (>= 1400)
-func TestDifficultyBrackets(t *testing.T) {
-	mapEloToDifficulty := func(elo int32) (int16, string) {
+func TestCardKindValues(t *testing.T) {
+	kinds := []CardKind{
+		CardKindFlip,
+		CardKindBoolean,
+		CardKindChoice,
+		CardKindTable,
+		CardKindInput,
+	}
+
+	expected := []string{"flip", "boolean", "choice", "table", "input"}
+	for i, k := range kinds {
+		if string(k) != expected[i] {
+			t.Errorf("kind %d = %s, want %s", i, k, expected[i])
+		}
+	}
+}
+
+// TestEloToStepMigration verifies how legacy elo values map into initial FSRS steps:
+// < 800: step 0 (flip)
+// 800-999: step 1 (boolean)
+// 1000-1199: step 2 (choice)
+// 1200-1399: step 3 (table)
+// >= 1400: step 4 (input)
+func TestEloToStepMigration(t *testing.T) {
+	mapEloToStep := func(elo int32) int {
 		switch {
 		case elo < 800:
-			return 0, "flip"
+			return 0
 		case elo < 1000:
-			return 1, "boolean"
+			return 1
 		case elo < 1200:
-			return 2, "choice"
+			return 2
 		case elo < 1400:
-			return 3, "table"
+			return 3
 		default:
-			return 4, "input"
+			return 4
 		}
 	}
 
 	cases := []struct {
-		elo          int32
-		wantLevel    int16
-		wantCardKind string
+		elo      int32
+		wantStep int
 	}{
-		{elo: 650, wantLevel: 0, wantCardKind: "flip"},
-		{elo: 700, wantLevel: 0, wantCardKind: "flip"}, // default initial Elo
-		{elo: 799, wantLevel: 0, wantCardKind: "flip"},
-		{elo: 800, wantLevel: 1, wantCardKind: "boolean"},
-		{elo: 999, wantLevel: 1, wantCardKind: "boolean"},
-		{elo: 1000, wantLevel: 2, wantCardKind: "choice"},
-		{elo: 1199, wantLevel: 2, wantCardKind: "choice"},
-		{elo: 1200, wantLevel: 3, wantCardKind: "table"},
-		{elo: 1399, wantLevel: 3, wantCardKind: "table"},
-		{elo: 1400, wantLevel: 4, wantCardKind: "input"},
-		{elo: 1600, wantLevel: 4, wantCardKind: "input"},
+		{elo: 650, wantStep: 0},
+		{elo: 700, wantStep: 0},
+		{elo: 799, wantStep: 0},
+		{elo: 800, wantStep: 1},
+		{elo: 999, wantStep: 1},
+		{elo: 1000, wantStep: 2},
+		{elo: 1199, wantStep: 2},
+		{elo: 1200, wantStep: 3},
+		{elo: 1399, wantStep: 3},
+		{elo: 1400, wantStep: 4},
+		{elo: 1600, wantStep: 4},
 	}
 
 	for _, tc := range cases {
-		gotLevel, gotKind := mapEloToDifficulty(tc.elo)
-		if gotLevel != tc.wantLevel || gotKind != tc.wantCardKind {
-			t.Errorf("mapEloToDifficulty(%d) = (%d, %s), want (%d, %s)",
-				tc.elo, gotLevel, gotKind, tc.wantLevel, tc.wantCardKind)
+		got := mapEloToStep(tc.elo)
+		if got != tc.wantStep {
+			t.Errorf("mapEloToStep(%d) = %d, want %d", tc.elo, got, tc.wantStep)
 		}
 	}
 }

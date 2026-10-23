@@ -308,6 +308,9 @@ export interface components {
             id: string;
             /** Format: uuid */
             setId: string;
+            /** Format: uuid */
+            factId: string;
+            factName: string;
             kind: components["schemas"]["CardKind"];
             question: string;
             /** @description choice only */
@@ -320,8 +323,6 @@ export interface components {
             sourceQuote: string;
             /** @description where the quote is from: «Лекция 3, стр. 2» */
             sourceRef?: string;
-            /** @description topic, used for stats */
-            topic: string;
         };
         CreateSetRequest: {
             title: string;
@@ -348,12 +349,10 @@ export interface components {
             sourceQuote?: string;
             /** @description where the quote is from: «Лекция 3, стр. 2» */
             sourceRef?: string;
-            /** @description topic, used for stats */
-            topic?: string;
         };
         User: {
-            /** Format: int64 */
-            id: number;
+            /** Format: uuid */
+            id: string;
             firstName: string;
             lastName?: string;
             username?: string;
@@ -416,14 +415,12 @@ export interface components {
             nextReviewAt?: string | null;
             sets: components["schemas"]["CardSet"][];
         };
-        AnswerResult: {
+        Answer: {
             /** Format: uuid */
             cardId: string;
             correct: boolean;
-            /** Format: date-time */
-            answeredAt: string;
         };
-        SendResultsRequest: components["schemas"]["AnswerResult"][];
+        SendResultsRequest: components["schemas"]["Answer"][];
         AnswerQuestionRequest: {
             answer: string;
         };

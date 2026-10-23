@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Flex, IconButton, Input, Spinner, Typography } from '@maxhub/max-ui';
-import type { AnswerResult, Card } from '../types';
+import type { Answer, Card } from '../types';
 import { api } from '../api';
 import { TableColumns, TablePool } from '../components/TableCard';
 import { visibleCards, type CardPatch } from '../utils/cards';
@@ -152,7 +152,7 @@ export interface FeedProps {
     removedCardIds: string[];
     cardPatches: Record<string, CardPatch>;
     initialIndex?: number;
-    initialResults?: AnswerResult[];
+    initialResults?: Answer[];
     onExit: () => void;
     onBack?: () => void;
     /** Opens sharing from the result screen; absent for the daily mix. */
@@ -173,7 +173,7 @@ export function Feed({
     const [status, setStatus] = useState<Status>('loading');
     const [cards, setCards] = useState<Card[]>([]);
     const [index, setIndex] = useState(initialIndex);
-    const [results, setResults] = useState<AnswerResult[]>(initialResults);
+    const [results, setResults] = useState<Answer[]>(initialResults);
 
     const [given, setGiven] = useState<string | null>(null);
     const [verdict, setVerdict] = useState<Verdict | null>(null);
@@ -379,10 +379,9 @@ export function Feed({
 
     const goNext = () => {
         if (card && verdict) {
-            const result: AnswerResult = {
+            const result: Answer = {
                 cardId: card.id,
                 correct: verdict === 'correct',
-                answeredAt: new Date().toISOString(),
             };
             setResults((current) => [...current, result]);
         }
@@ -410,7 +409,7 @@ export function Feed({
     const [isLeaving, setIsLeaving] = useState(false);
 
     const submitResults = useCallback(
-        async (currentResults: AnswerResult[]): Promise<void> => {
+        async (currentResults: Answer[]): Promise<void> => {
             if (inFlightRef.current) {
                 try {
                     await inFlightRef.current;
@@ -567,7 +566,7 @@ export function Feed({
                             <IconChevronLeft size={20} />
                         </IconButton>
                         <Typography.Text variant="label" color="secondary">
-                            {card.topic}
+                            {card.factName}
                         </Typography.Text>
                     </Flex>
                     <Typography.Text variant="label" color="secondary" style={{ flexShrink: 0 }}>

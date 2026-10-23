@@ -12,75 +12,88 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
+var (
+	testSetsUserID    = uuid.MustParse("00000000-0000-0000-0000-000000012345")
+	testSetsUser99999 = uuid.MustParse("00000000-0000-0000-0000-000000099999")
+	testSetsUser88888 = uuid.MustParse("00000000-0000-0000-0000-000000088888")
+	testSetsUser42    = uuid.MustParse("00000000-0000-0000-0000-000000000042")
+	testSetsUser777   = uuid.MustParse("00000000-0000-0000-0000-000000000777")
+	testSetsUser100   = uuid.MustParse("00000000-0000-0000-0000-000000000100")
+	testSetsUser555   = uuid.MustParse("00000000-0000-0000-0000-000000000555")
+	testSetsUser123   = uuid.MustParse("00000000-0000-0000-0000-000000000123")
+	testSetsUser456   = uuid.MustParse("00000000-0000-0000-0000-000000000456")
+	testSetsUser999   = uuid.MustParse("00000000-0000-0000-0000-000000000999")
+)
+
 type mockSetService struct {
 	usecase.SetService
-	getSetFunc             func(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.CardSet, error)
-	deleteSetFunc          func(ctx context.Context, userID int64, setID uuid.UUID) error
-	getCardsBySetIDFunc    func(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.Card, error)
-	getSetShareCodeFunc    func(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.CardSet, error)
-	getSetPlanFunc         func(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.SetPlanItem, error)
-	joinSetByShareCodeFunc func(ctx context.Context, userID int64, code string) (*contracts.CardSet, error)
-	getSetLeaderboardFunc  func(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error)
-	generateMockSetFunc    func(ctx context.Context, userID int64, title string) (*contracts.CardSet, error)
+	getSetFunc             func(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.CardSet, error)
+	deleteSetFunc          func(ctx context.Context, userID uuid.UUID, setID uuid.UUID) error
+	getCardsBySetIDFunc    func(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.Card, error)
+	getSetShareCodeFunc    func(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.CardSet, error)
+	getSetPlanFunc         func(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.SetPlanItem, error)
+	joinSetByShareCodeFunc func(ctx context.Context, userID uuid.UUID, code string) (*contracts.CardSet, error)
+	getSetLeaderboardFunc  func(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error)
+	generateMockSetFunc    func(ctx context.Context, userID uuid.UUID, title string) (*contracts.CardSet, error)
 }
 
-func (m *mockSetService) GetSet(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.CardSet, error) {
+func (m *mockSetService) GetSet(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.CardSet, error) {
 	if m.getSetFunc != nil {
 		return m.getSetFunc(ctx, userID, setID)
 	}
 	return nil, nil
 }
 
-func (m *mockSetService) DeleteSet(ctx context.Context, userID int64, setID uuid.UUID) error {
+func (m *mockSetService) DeleteSet(ctx context.Context, userID uuid.UUID, setID uuid.UUID) error {
 	if m.deleteSetFunc != nil {
 		return m.deleteSetFunc(ctx, userID, setID)
 	}
 	return nil
 }
 
-func (m *mockSetService) GetCardsBySetID(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.Card, error) {
+func (m *mockSetService) GetCardsBySetID(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.Card, error) {
 	if m.getCardsBySetIDFunc != nil {
 		return m.getCardsBySetIDFunc(ctx, userID, setID)
 	}
 	return nil, nil
 }
 
-func (m *mockSetService) GetSetShareCode(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.CardSet, error) {
+func (m *mockSetService) GetSetShareCode(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.CardSet, error) {
 	if m.getSetShareCodeFunc != nil {
 		return m.getSetShareCodeFunc(ctx, userID, setID)
 	}
 	return nil, nil
 }
 
-func (m *mockSetService) GetSetPlan(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.SetPlanItem, error) {
+func (m *mockSetService) GetSetPlan(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.SetPlanItem, error) {
 	if m.getSetPlanFunc != nil {
 		return m.getSetPlanFunc(ctx, userID, setID)
 	}
 	return nil, nil
 }
 
-func (m *mockSetService) JoinSetByShareCode(ctx context.Context, userID int64, code string) (*contracts.CardSet, error) {
+func (m *mockSetService) JoinSetByShareCode(ctx context.Context, userID uuid.UUID, code string) (*contracts.CardSet, error) {
 	if m.joinSetByShareCodeFunc != nil {
 		return m.joinSetByShareCodeFunc(ctx, userID, code)
 	}
 	return nil, nil
 }
 
-func (m *mockSetService) GetSetLeaderboard(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
+func (m *mockSetService) GetSetLeaderboard(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
 	if m.getSetLeaderboardFunc != nil {
 		return m.getSetLeaderboardFunc(ctx, userID, setID)
 	}
 	return nil, nil
 }
 
-func (m *mockSetService) GenerateMockSet(ctx context.Context, userID int64, title string) (*contracts.CardSet, error) {
+func (m *mockSetService) GenerateMockSet(ctx context.Context, userID uuid.UUID, title string) (*contracts.CardSet, error) {
 	if m.generateMockSetFunc != nil {
 		return m.generateMockSetFunc(ctx, userID, title)
 	}
 	return nil, nil
 }
 
-func (m *mockSetService) SaveGeneratedSet(_ context.Context, _ int64, _ string, _ generator.Result) (*contracts.CardSet, error) {
+func (m *mockSetService) SaveGeneratedSet(_ context.Context, _ uuid.UUID, _ string, _ generator.Result) (*contracts.CardSet, error) {
 	return nil, nil
 }
 
@@ -92,7 +105,7 @@ func TestSetsHandler_GetSet(t *testing.T) {
 		CardsTotal: 10,
 		CardsDue:   3,
 		Author: contracts.User{
-			ID:        12345,
+			ID:        testSetsUserID,
 			FirstName: "Author",
 		},
 	}
@@ -107,13 +120,13 @@ func TestSetsHandler_GetSet(t *testing.T) {
 	}{
 		{
 			name:  "Success returns CardSet and propagates userID",
-			ctx:   WithUserID(context.Background(), 12345),
+			ctx:   WithUserID(context.Background(), testSetsUserID),
 			setID: setID,
 			mockSetup: func(t *testing.T) *mockSetService {
 				return &mockSetService{
-					getSetFunc: func(_ context.Context, userID int64, id uuid.UUID) (*contracts.CardSet, error) {
-						if userID != 12345 {
-							t.Fatalf("expected userID 12345, got %d", userID)
+					getSetFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID) (*contracts.CardSet, error) {
+						if userID != testSetsUserID {
+							t.Fatalf("unexpected userID: %s", userID)
 						}
 						if id != setID {
 							t.Fatalf("expected setID %s, got %s", setID, id)
@@ -139,8 +152,8 @@ func TestSetsHandler_GetSet(t *testing.T) {
 			setID: setID,
 			mockSetup: func(t *testing.T) *mockSetService {
 				return &mockSetService{
-					getSetFunc: func(_ context.Context, userID int64, _ uuid.UUID) (*contracts.CardSet, error) {
-						if userID != 0 {
+					getSetFunc: func(_ context.Context, userID uuid.UUID, _ uuid.UUID) (*contracts.CardSet, error) {
+						if userID != uuid.Nil {
 							t.Fatalf("expected fallback userID 0, got %d", userID)
 						}
 						return expectedSet, nil
@@ -155,7 +168,7 @@ func TestSetsHandler_GetSet(t *testing.T) {
 			setID: setID,
 			mockSetup: func(_ *testing.T) *mockSetService {
 				return &mockSetService{
-					getSetFunc: func(_ context.Context, _ int64, _ uuid.UUID) (*contracts.CardSet, error) {
+					getSetFunc: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*contracts.CardSet, error) {
 						return nil, usecase.ErrNotFound
 					},
 				}
@@ -164,11 +177,11 @@ func TestSetsHandler_GetSet(t *testing.T) {
 		},
 		{
 			name:  "Forbidden error maps to GetSetNotFound to avoid leaking resource existence",
-			ctx:   WithUserID(context.Background(), 99999),
+			ctx:   WithUserID(context.Background(), testSetsUser99999),
 			setID: setID,
 			mockSetup: func(_ *testing.T) *mockSetService {
 				return &mockSetService{
-					getSetFunc: func(_ context.Context, _ int64, _ uuid.UUID) (*contracts.CardSet, error) {
+					getSetFunc: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*contracts.CardSet, error) {
 						return nil, usecase.ErrForbidden
 					},
 				}
@@ -181,7 +194,7 @@ func TestSetsHandler_GetSet(t *testing.T) {
 			setID: setID,
 			mockSetup: func(_ *testing.T) *mockSetService {
 				return &mockSetService{
-					getSetFunc: func(_ context.Context, _ int64, _ uuid.UUID) (*contracts.CardSet, error) {
+					getSetFunc: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*contracts.CardSet, error) {
 						return nil, errors.New("database connection failed")
 					},
 				}
@@ -233,13 +246,13 @@ func TestSetsHandler_DeleteSet(t *testing.T) {
 	}{
 		{
 			name:  "Success returns DeleteSetNoContent",
-			ctx:   WithUserID(context.Background(), 12345),
+			ctx:   WithUserID(context.Background(), testSetsUserID),
 			setID: setID,
 			mockSetup: func(t *testing.T) *mockSetService {
 				return &mockSetService{
-					deleteSetFunc: func(_ context.Context, userID int64, id uuid.UUID) error {
-						if userID != 12345 {
-							t.Fatalf("expected userID 12345, got %d", userID)
+					deleteSetFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID) error {
+						if userID != testSetsUserID {
+							t.Fatalf("unexpected userID: %s", userID)
 						}
 						if id != setID {
 							t.Fatalf("expected setID %s, got %s", setID, id)
@@ -256,7 +269,7 @@ func TestSetsHandler_DeleteSet(t *testing.T) {
 			setID: setID,
 			mockSetup: func(_ *testing.T) *mockSetService {
 				return &mockSetService{
-					deleteSetFunc: func(_ context.Context, _ int64, _ uuid.UUID) error {
+					deleteSetFunc: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) error {
 						return usecase.ErrNotFound
 					},
 				}
@@ -265,11 +278,11 @@ func TestSetsHandler_DeleteSet(t *testing.T) {
 		},
 		{
 			name:  "Forbidden returns DeleteSetNotFound to prevent information leakage",
-			ctx:   WithUserID(context.Background(), 88888),
+			ctx:   WithUserID(context.Background(), testSetsUser88888),
 			setID: setID,
 			mockSetup: func(_ *testing.T) *mockSetService {
 				return &mockSetService{
-					deleteSetFunc: func(_ context.Context, _ int64, _ uuid.UUID) error {
+					deleteSetFunc: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) error {
 						return usecase.ErrForbidden
 					},
 				}
@@ -282,7 +295,7 @@ func TestSetsHandler_DeleteSet(t *testing.T) {
 			setID: setID,
 			mockSetup: func(_ *testing.T) *mockSetService {
 				return &mockSetService{
-					deleteSetFunc: func(_ context.Context, _ int64, _ uuid.UUID) error {
+					deleteSetFunc: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) error {
 						return errors.New("sql execution failed")
 					},
 				}
@@ -332,8 +345,8 @@ func TestSetsHandler_GetCardsBySetID(t *testing.T) {
 
 	t.Run("Success returns cards for requested set", func(t *testing.T) {
 		svc := &mockSetService{
-			getCardsBySetIDFunc: func(_ context.Context, userID int64, setID uuid.UUID) ([]contracts.Card, error) {
-				if userID != 42 {
+			getCardsBySetIDFunc: func(_ context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.Card, error) {
+				if userID != testSetsUser42 {
 					t.Fatalf("expected userID 42, got %d", userID)
 				}
 				if setID != targetSetID {
@@ -343,7 +356,7 @@ func TestSetsHandler_GetCardsBySetID(t *testing.T) {
 			},
 		}
 		h := NewSetsHandler(svc)
-		res, err := h.GetCardsBySetID(WithUserID(context.Background(), 42), contracts.GetCardsBySetIDParams{SetId: targetSetID})
+		res, err := h.GetCardsBySetID(WithUserID(context.Background(), testSetsUser42), contracts.GetCardsBySetIDParams{SetId: targetSetID})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -358,7 +371,7 @@ func TestSetsHandler_GetCardsBySetID(t *testing.T) {
 
 	t.Run("Relational boundary: query for other set never leaks target set cards", func(t *testing.T) {
 		svc := &mockSetService{
-			getCardsBySetIDFunc: func(_ context.Context, _ int64, setID uuid.UUID) ([]contracts.Card, error) {
+			getCardsBySetIDFunc: func(_ context.Context, _ uuid.UUID, setID uuid.UUID) ([]contracts.Card, error) {
 				if setID != targetSetID {
 					return nil, usecase.ErrNotFound
 				}
@@ -377,7 +390,7 @@ func TestSetsHandler_GetCardsBySetID(t *testing.T) {
 
 	t.Run("Forbidden access maps to Not Found", func(t *testing.T) {
 		svc := &mockSetService{
-			getCardsBySetIDFunc: func(_ context.Context, _ int64, _ uuid.UUID) ([]contracts.Card, error) {
+			getCardsBySetIDFunc: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) ([]contracts.Card, error) {
 				return nil, usecase.ErrForbidden
 			},
 		}
@@ -393,7 +406,7 @@ func TestSetsHandler_GetCardsBySetID(t *testing.T) {
 
 	t.Run("Internal error returns 500", func(t *testing.T) {
 		svc := &mockSetService{
-			getCardsBySetIDFunc: func(_ context.Context, _ int64, _ uuid.UUID) ([]contracts.Card, error) {
+			getCardsBySetIDFunc: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) ([]contracts.Card, error) {
 				return nil, errors.New("db error")
 			},
 		}
@@ -414,7 +427,7 @@ func TestSetsHandler_GetSetShareCode(t *testing.T) {
 		ID:    setID,
 		Title: "Shared Set",
 		Author: contracts.User{
-			ID:        777,
+			ID:        testSetsUser777,
 			FirstName: "Author",
 		},
 		ShareCode: contracts.NewOptString("XYZ123"),
@@ -422,8 +435,8 @@ func TestSetsHandler_GetSetShareCode(t *testing.T) {
 
 	t.Run("Success returns CardSet with shareCode", func(t *testing.T) {
 		svc := &mockSetService{
-			getSetShareCodeFunc: func(_ context.Context, userID int64, id uuid.UUID) (*contracts.CardSet, error) {
-				if userID != 777 {
+			getSetShareCodeFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID) (*contracts.CardSet, error) {
+				if userID != testSetsUser777 {
 					t.Fatalf("expected userID 777, got %d", userID)
 				}
 				if id != setID {
@@ -433,7 +446,7 @@ func TestSetsHandler_GetSetShareCode(t *testing.T) {
 			},
 		}
 		h := NewSetsHandler(svc)
-		res, err := h.GetSetShareCode(WithUserID(context.Background(), 777), contracts.GetSetShareCodeParams{SetId: setID})
+		res, err := h.GetSetShareCode(WithUserID(context.Background(), testSetsUser777), contracts.GetSetShareCodeParams{SetId: setID})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -448,7 +461,7 @@ func TestSetsHandler_GetSetShareCode(t *testing.T) {
 
 	t.Run("Not Found returns GetSetShareCodeNotFound", func(t *testing.T) {
 		svc := &mockSetService{
-			getSetShareCodeFunc: func(_ context.Context, _ int64, _ uuid.UUID) (*contracts.CardSet, error) {
+			getSetShareCodeFunc: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*contracts.CardSet, error) {
 				return nil, usecase.ErrNotFound
 			},
 		}
@@ -464,7 +477,7 @@ func TestSetsHandler_GetSetShareCode(t *testing.T) {
 
 	t.Run("Forbidden returns GetSetShareCodeNotFound for relational isolation", func(t *testing.T) {
 		svc := &mockSetService{
-			getSetShareCodeFunc: func(_ context.Context, _ int64, _ uuid.UUID) (*contracts.CardSet, error) {
+			getSetShareCodeFunc: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*contracts.CardSet, error) {
 				return nil, usecase.ErrForbidden
 			},
 		}
@@ -480,7 +493,7 @@ func TestSetsHandler_GetSetShareCode(t *testing.T) {
 
 	t.Run("Internal error returns GetSetShareCodeInternalServerError", func(t *testing.T) {
 		svc := &mockSetService{
-			getSetShareCodeFunc: func(_ context.Context, _ int64, _ uuid.UUID) (*contracts.CardSet, error) {
+			getSetShareCodeFunc: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*contracts.CardSet, error) {
 				return nil, errors.New("crypto failure")
 			},
 		}
@@ -507,8 +520,8 @@ func TestSetsHandler_GetSetPlan(t *testing.T) {
 
 	t.Run("Success returns SetPlanResponse", func(t *testing.T) {
 		svc := &mockSetService{
-			getSetPlanFunc: func(_ context.Context, userID int64, setID uuid.UUID) ([]contracts.SetPlanItem, error) {
-				if userID != 100 {
+			getSetPlanFunc: func(_ context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.SetPlanItem, error) {
+				if userID != testSetsUser100 {
 					t.Fatalf("expected userID 100, got %d", userID)
 				}
 				if setID != targetSetID {
@@ -518,7 +531,7 @@ func TestSetsHandler_GetSetPlan(t *testing.T) {
 			},
 		}
 		h := NewSetsHandler(svc)
-		res, err := h.GetSetPlan(WithUserID(context.Background(), 100), contracts.GetSetPlanParams{SetId: targetSetID})
+		res, err := h.GetSetPlan(WithUserID(context.Background(), testSetsUser100), contracts.GetSetPlanParams{SetId: targetSetID})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -533,7 +546,7 @@ func TestSetsHandler_GetSetPlan(t *testing.T) {
 
 	t.Run("Relational integrity: plan strictly scoped to set", func(t *testing.T) {
 		svc := &mockSetService{
-			getSetPlanFunc: func(_ context.Context, _ int64, setID uuid.UUID) ([]contracts.SetPlanItem, error) {
+			getSetPlanFunc: func(_ context.Context, _ uuid.UUID, setID uuid.UUID) ([]contracts.SetPlanItem, error) {
 				if setID != targetSetID {
 					return nil, usecase.ErrNotFound
 				}
@@ -552,7 +565,7 @@ func TestSetsHandler_GetSetPlan(t *testing.T) {
 
 	t.Run("Forbidden access maps to Not Found", func(t *testing.T) {
 		svc := &mockSetService{
-			getSetPlanFunc: func(_ context.Context, _ int64, _ uuid.UUID) ([]contracts.SetPlanItem, error) {
+			getSetPlanFunc: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) ([]contracts.SetPlanItem, error) {
 				return nil, usecase.ErrForbidden
 			},
 		}
@@ -568,7 +581,7 @@ func TestSetsHandler_GetSetPlan(t *testing.T) {
 
 	t.Run("Internal error returns 500", func(t *testing.T) {
 		svc := &mockSetService{
-			getSetPlanFunc: func(_ context.Context, _ int64, _ uuid.UUID) ([]contracts.SetPlanItem, error) {
+			getSetPlanFunc: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) ([]contracts.SetPlanItem, error) {
 				return nil, errors.New("query failed")
 			},
 		}
@@ -590,16 +603,16 @@ func TestSetsHandler_JoinSetByShareCode(t *testing.T) {
 		CardsTotal: 15,
 		CardsDue:   5,
 		Author: contracts.User{
-			ID:        555,
+			ID:        testSetsUser555,
 			FirstName: "Author",
 		},
 	}
 
 	t.Run("Success joins set with code", func(t *testing.T) {
 		svc := &mockSetService{
-			joinSetByShareCodeFunc: func(_ context.Context, userID int64, code string) (*contracts.CardSet, error) {
-				if userID != 555 {
-					t.Fatalf("expected userID 555, got %d", userID)
+			joinSetByShareCodeFunc: func(_ context.Context, userID uuid.UUID, code string) (*contracts.CardSet, error) {
+				if userID != testSetsUser555 {
+					t.Fatalf("unexpected userID: %s", userID)
 				}
 				if code != "ABCDEF" {
 					t.Fatalf("expected code ABCDEF, got %s", code)
@@ -609,7 +622,7 @@ func TestSetsHandler_JoinSetByShareCode(t *testing.T) {
 		}
 		h := NewSetsHandler(svc)
 		res, err := h.JoinSetByShareCode(
-			WithUserID(context.Background(), 555),
+			WithUserID(context.Background(), testSetsUser555),
 			&contracts.JoinSetRequest{Code: "ABCDEF"},
 		)
 		if err != nil {
@@ -648,7 +661,7 @@ func TestSetsHandler_JoinSetByShareCode(t *testing.T) {
 
 	t.Run("Validation error from service maps to JoinSetByShareCodeBadRequest", func(t *testing.T) {
 		svc := &mockSetService{
-			joinSetByShareCodeFunc: func(_ context.Context, _ int64, _ string) (*contracts.CardSet, error) {
+			joinSetByShareCodeFunc: func(_ context.Context, _ uuid.UUID, _ string) (*contracts.CardSet, error) {
 				return nil, usecase.ErrValidation
 			},
 		}
@@ -664,7 +677,7 @@ func TestSetsHandler_JoinSetByShareCode(t *testing.T) {
 
 	t.Run("Not Found error maps to JoinSetByShareCodeNotFound", func(t *testing.T) {
 		svc := &mockSetService{
-			joinSetByShareCodeFunc: func(_ context.Context, _ int64, _ string) (*contracts.CardSet, error) {
+			joinSetByShareCodeFunc: func(_ context.Context, _ uuid.UUID, _ string) (*contracts.CardSet, error) {
 				return nil, usecase.ErrNotFound
 			},
 		}
@@ -680,7 +693,7 @@ func TestSetsHandler_JoinSetByShareCode(t *testing.T) {
 
 	t.Run("Internal error maps to JoinSetByShareCodeInternalServerError", func(t *testing.T) {
 		svc := &mockSetService{
-			joinSetByShareCodeFunc: func(_ context.Context, _ int64, _ string) (*contracts.CardSet, error) {
+			joinSetByShareCodeFunc: func(_ context.Context, _ uuid.UUID, _ string) (*contracts.CardSet, error) {
 				return nil, errors.New("server crashed")
 			},
 		}
@@ -702,7 +715,7 @@ func TestSetsHandler_GetSetLeaderboard(t *testing.T) {
 		Items: []contracts.LeaderboardEntry{
 			{
 				User: contracts.User{
-					ID:        123,
+					ID:        testSetsUser123,
 					FirstName: "Alice",
 				},
 				Rank:       1,
@@ -710,7 +723,7 @@ func TestSetsHandler_GetSetLeaderboard(t *testing.T) {
 			},
 			{
 				User: contracts.User{
-					ID:        456,
+					ID:        testSetsUser456,
 					FirstName: "Bob",
 				},
 				Rank:       2,
@@ -721,15 +734,15 @@ func TestSetsHandler_GetSetLeaderboard(t *testing.T) {
 
 	t.Run("Success returns SetLeaderboardResponse for set owner", func(t *testing.T) {
 		svc := &mockSetService{
-			getSetLeaderboardFunc: func(_ context.Context, userID int64, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
-				if userID != 123 || setID != targetSetID {
+			getSetLeaderboardFunc: func(_ context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
+				if userID != testSetsUser123 || setID != targetSetID {
 					t.Fatalf("unexpected call args: userID=%d, setID=%s", userID, setID)
 				}
 				return expectedLeaderboard, nil
 			},
 		}
 		h := NewSetsHandler(svc)
-		res, err := h.GetSetLeaderboard(WithUserID(context.Background(), 123), contracts.GetSetLeaderboardParams{SetId: targetSetID})
+		res, err := h.GetSetLeaderboard(WithUserID(context.Background(), testSetsUser123), contracts.GetSetLeaderboardParams{SetId: targetSetID})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -744,12 +757,12 @@ func TestSetsHandler_GetSetLeaderboard(t *testing.T) {
 
 	t.Run("Forbidden returns GetSetLeaderboardForbidden for non-owners", func(t *testing.T) {
 		svc := &mockSetService{
-			getSetLeaderboardFunc: func(_ context.Context, _ int64, _ uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
+			getSetLeaderboardFunc: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
 				return nil, usecase.ErrForbidden
 			},
 		}
 		h := NewSetsHandler(svc)
-		res, err := h.GetSetLeaderboard(WithUserID(context.Background(), 999), contracts.GetSetLeaderboardParams{SetId: targetSetID})
+		res, err := h.GetSetLeaderboard(WithUserID(context.Background(), testSetsUser999), contracts.GetSetLeaderboardParams{SetId: targetSetID})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -760,7 +773,7 @@ func TestSetsHandler_GetSetLeaderboard(t *testing.T) {
 
 	t.Run("Not Found returns GetSetLeaderboardNotFound", func(t *testing.T) {
 		svc := &mockSetService{
-			getSetLeaderboardFunc: func(_ context.Context, _ int64, _ uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
+			getSetLeaderboardFunc: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
 				return nil, usecase.ErrNotFound
 			},
 		}
@@ -776,7 +789,7 @@ func TestSetsHandler_GetSetLeaderboard(t *testing.T) {
 
 	t.Run("Internal error returns 500", func(t *testing.T) {
 		svc := &mockSetService{
-			getSetLeaderboardFunc: func(_ context.Context, _ int64, _ uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
+			getSetLeaderboardFunc: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
 				return nil, errors.New("db error")
 			},
 		}
