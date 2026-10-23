@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/material"
+	"github.com/mgrubiyan/pomnibot/backend/internal/prompts"
 )
 
 // buildDocument retains raw page readings, including pages with no usable text.
@@ -43,5 +44,5 @@ func buildDocument(res Result) material.Document {
 
 // ProcessingIdentity changes with both schema and reading instructions.
 func ProcessingIdentity() string {
-	return material.Digest([]byte("native-pdf-v1" + material.Version + fullPageSystem + string(pageSchema)))
+	return material.Digest([]byte("native-pdf-v1" + material.Version + prompts.FullPageSystem + string(pageSchema)))
 }

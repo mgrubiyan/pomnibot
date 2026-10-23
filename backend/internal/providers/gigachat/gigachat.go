@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mgrubiyan/pomnibot/backend/internal/prompts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 	"github.com/mgrubiyan/pomnibot/backend/internal/tlsroot"
 )
@@ -425,8 +426,6 @@ type chatResponse struct {
 	} `json:"usage"`
 }
 
-const schemaPromptNote = "\n\nОтвет — только JSON, соответствующий этой JSON Schema:\n"
-
 func (c *Client) call(ctx context.Context, model string, req providers.Request, strict bool, fileIDs []string) (result providers.Response, callErr error) {
 	system := req.System
 	var format *responseFormat
@@ -434,7 +433,7 @@ func (c *Client) call(ctx context.Context, model string, req providers.Request, 
 	case strict:
 		format = &responseFormat{Type: "json_schema", Schema: req.Schema, Strict: true}
 	case len(req.Schema) > 0:
-		system += schemaPromptNote + string(req.Schema)
+		system += prompts.SchemaNote + string(req.Schema)
 	}
 	user := chatMessage{Role: "user", Content: req.User}
 	if len(fileIDs) > 0 {

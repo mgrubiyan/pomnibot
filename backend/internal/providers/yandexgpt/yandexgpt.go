@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mgrubiyan/pomnibot/backend/internal/prompts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 	"github.com/mgrubiyan/pomnibot/backend/internal/tlsroot"
 )
@@ -281,8 +282,6 @@ type completionResponse struct {
 	Result *completion `json:"result"`
 }
 
-const schemaPromptNote = "\n\nОтвет — только JSON, соответствующий этой JSON Schema:\n"
-
 func (c *Client) call(ctx context.Context, req providers.Request, withSchema bool) (result providers.Response, callErr error) {
 	system := req.System
 	var schema *jsonSchema
@@ -290,7 +289,7 @@ func (c *Client) call(ctx context.Context, req providers.Request, withSchema boo
 	case withSchema:
 		schema = &jsonSchema{Schema: req.Schema}
 	case len(req.Schema) > 0:
-		system += schemaPromptNote + string(req.Schema)
+		system += prompts.SchemaNote + string(req.Schema)
 	}
 
 	body, err := json.Marshal(completionRequest{
