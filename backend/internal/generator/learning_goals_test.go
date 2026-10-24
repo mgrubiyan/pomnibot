@@ -9,7 +9,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
-const testFact = `{"name":"Удаление","pages":[1],"cards":[{"kind":"flip","question":"Как удалить запись?","answer":"Удалить запись индекса; записать блок; пометить данные.","source":"Удаление индекса","sourceQuote":""},{"kind":"input","question":"Назовите этапы удаления","answer":"Удалить индекс, записать блок, пометить данные","source":"Этапы удаления","sourceQuote":""}]}`
+const testFact = `{"name":"Удаление","pages":[1],"recall":{"question":"Как удалить запись?","answer":"Удалить запись индекса; записать блок; пометить данные.","source":"Удаление индекса","sourceQuote":""},"extraCards":[]}`
 
 func pdfDocument() Document {
 	return Document{PDFs: []providers.PDF{{Name: "lecture.pdf", Data: []byte("%PDF-test"), Pages: 1}}}
@@ -56,7 +56,7 @@ func TestDirectGenerationRejectsInvalidResponse(t *testing.T) {
 		"duplicate fact": func(string) string { return `{"issues":[],"facts":[` + testFact + `,` + testFact + `]}` },
 		"missing name":   func(s string) string { return strings.Replace(s, `"name":"Удаление",`, "", 1) },
 		"missing pages":  func(s string) string { return strings.Replace(s, `"pages":[1],`, "", 1) },
-		"missing kind":   func(s string) string { return strings.Replace(s, `"kind":"flip",`, "", 1) },
+		"missing recall": func(s string) string { return strings.Replace(s, `"recall":`, `"other":`, 1) },
 		"blank question": func(s string) string {
 			return strings.Replace(s, `"question":"Как удалить запись?"`, `"question":" "`, 1)
 		},
@@ -78,8 +78,10 @@ func TestDirectGenerationRejectsInvalidResponse(t *testing.T) {
 		"non-string quote": func(s string) string { return strings.Replace(s, `"sourceQuote":""`, `"sourceQuote":42`, 1) },
 		"null quote":       func(s string) string { return strings.Replace(s, `"sourceQuote":""`, `"sourceQuote":null`, 1) },
 		"old format":       func(string) string { return `{"issues":[],"goals":[],"cards":[]}` },
-		"unknown kind":     func(s string) string { return strings.Replace(s, `"kind":"flip"`, `"kind":"other"`, 1) },
-		"null card":        func(s string) string { return strings.Replace(s, `"cards":[`, `"cards":[null,`, 1) },
+		"unknown kind": func(s string) string {
+			return strings.Replace(s, `"extraCards":[]`, `"extraCards":[{"kind":"other"}]`, 1)
+		},
+		"null card": func(s string) string { return strings.Replace(s, `"extraCards":[]`, `"extraCards":[null]`, 1) },
 	} {
 		t.Run(defect, func(t *testing.T) {
 			b := mutate(directReply())
@@ -156,5 +158,19 @@ func TestInvalidLastFactRejectsWholeResponse(t *testing.T) {
 	r, err := NewGenerator(stageFixture(a, b), Options{OnBatch: func(Batch) { t.Fatal("published before validating all facts") }}).Generate(t.Context(), Document{Text: "A and B"})
 	if err == nil || len(r.Facts) != 0 || r.Stats.InvalidResponses != 1 {
 		t.Fatalf("%+v %v", r, err)
+	}
+}
+
+func TestInvalidLastRecallReportsOriginalPath(t *testing.T) {
+	raw := `{"issues":[],"facts":[` + testFact + `,` + strings.Replace(strings.Replace(testFact, `"name":"Удаление"`, `"name":"Другой факт"`, 1), `"answer":"Удалить запись индекса; записать блок; пометить данные."`, `"answer":" "`, 1) + `]}`
+	p := providerFunc(func(context.Context, providers.Request) (providers.Response, error) {
+		return providers.Response{Content: []byte(raw)}, nil
+	})
+	r, err := NewGenerator(p, Options{OnBatch: func(Batch) { t.Fatal("published partial set") }}).Generate(t.Context(), Document{Text: "source"})
+	if err == nil || len(r.Facts) != 0 || len(r.Artifact.Facts) != 0 {
+		t.Fatalf("%+v %v", r, err)
+	}
+	if fields := diagnosticFields(t, err); fields["path"] != "facts[1].recall.answer" {
+		t.Fatalf("%v", fields)
 	}
 }

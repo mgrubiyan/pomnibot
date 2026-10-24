@@ -25,7 +25,7 @@ func tableColumnsSchema(s any) map[string]any {
 
 func factSchema() map[string]any {
 	// Use the structured-output subset supported by Claude through OpenRouter.
-	// Local DTO and publication validation require both flip and input per fact;
+	// Each recall expands into flip/input during local publication validation;
 	// validateCard enforces nonempty values, unique answers/rows and table categories.
 	s := map[string]any{"type": "string", "description": "Nonempty text."}
 	nonempty := func(v any) map[string]any { a := schemaArray(v); a["minItems"] = 1; return a }
@@ -37,18 +37,21 @@ func factSchema() map[string]any {
 		return schemaObject(fields)
 	}
 	variants := []any{
-		variant("flip", map[string]any{"answer": s}),
+		variant("recall", map[string]any{"answer": s}),
 		variant("boolean", map[string]any{"answer": map[string]any{"type": "boolean"}}),
 		variant("choice", map[string]any{"rightAnswers": nonempty(s), "wrongAnswers": nonempty(s)}),
 		variant("table", map[string]any{"columns": tableColumnsSchema(s)}),
-		variant("input", map[string]any{"answer": s}),
 	}
 	// Distinct kind constants make the variants mutually exclusive under anyOf.
-	cs := nonempty(map[string]any{"anyOf": variants})
-	cs["description"] = "At least one flip card and one input card are required in every fact."
+	cs := schemaArray(map[string]any{"anyOf": variants})
+	cs["description"] = "Optional additional recall pairs or boolean, choice and table cards; may be empty."
+	recall := variant("recall", map[string]any{"answer": s}).(map[string]any)
+	props := recall["properties"].(map[string]any)
+	delete(props, "kind")
+	recall = schemaObject(props)
 	pages := nonempty(map[string]any{"type": "integer"})
 	pages["description"] = "Source pages for this fact, numbered from 1 across all files."
-	return schemaObject(map[string]any{"name": s, "pages": pages, "cards": cs})
+	return schemaObject(map[string]any{"name": s, "pages": pages, "recall": recall, "extraCards": cs})
 }
 func stageSchema() json.RawMessage {
 	facts := schemaArray(factSchema())

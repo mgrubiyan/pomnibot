@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-func TestAIResponseDecodesAllKindsAndPreservesWithinKindOrder(t *testing.T) {
-	var r AIResponse
+func TestStoredFactDecodesAllKindsAndPreservesWithinKindOrder(t *testing.T) {
+	var r Result
 	err := json.Unmarshal([]byte(`{"issues":[],"facts":[{"name":"Fact","pages":[1],"cards":[{"kind":"input","source":"source","sourceQuote":"","question":"hard","answer":"A"},{"kind":"choice","source":"source","sourceQuote":"","question":"choose","rightAnswers":["A","B"],"wrongAnswers":["C"]},{"kind":"flip","source":"source","sourceQuote":"","question":"easy","answer":"A"},{"kind":"boolean","source":"source","sourceQuote":"","question":"true?","answer":false},{"kind":"table","source":"source","sourceQuote":"","question":"sort","columns":[{"name":"category","rows":["row"]}]},{"kind":"flip","source":"source","sourceQuote":"","question":"harder","answer":"B"}]}]}`), &r)
 	if err != nil {
 		t.Fatal(err)
@@ -29,8 +29,8 @@ func TestAIResponseDecodesAllKindsAndPreservesWithinKindOrder(t *testing.T) {
 
 func TestAIResponseRejectsInvalidKindsAndFields(t *testing.T) {
 	for _, payload := range []string{
-		strings.Replace(directReply(), `"kind":"flip"`, `"kind":"unknown"`, 1),
-		strings.Replace(directReply(), `"kind":"flip"`, `"kind":"boolean"`, 1),
+		strings.Replace(directReply(), `"extraCards":[]`, `"extraCards":[{"kind":"unknown"}]`, 1),
+		strings.Replace(directReply(), `"extraCards":[]`, `"extraCards":[{"kind":"boolean","answer":"A"}]`, 1),
 		strings.Replace(directReply(), `"pages":[1]`, `"pages":[1],"topic":"metadata"`, 1),
 	} {
 		var r AIResponse
@@ -40,7 +40,7 @@ func TestAIResponseRejectsInvalidKindsAndFields(t *testing.T) {
 	}
 }
 
-func TestAIResponseRoundTripRetainsAllCardSourcesAndKinds(t *testing.T) {
+func TestStoredFactsRoundTripRetainsAllCardSourcesAndKinds(t *testing.T) {
 	f := requiredFormatsFixture()
 	for i, c := range f.Cards {
 		switch v := c.(type) {
@@ -54,11 +54,17 @@ func TestAIResponseRoundTripRetainsAllCardSourcesAndKinds(t *testing.T) {
 			f.Cards[i] = v
 		}
 	}
-	b, err := json.Marshal(AIResponse{Facts: []Fact{f}, Issues: []string{}})
+	b, err := json.Marshal(struct {
+		Facts  []Fact   `json:"facts"`
+		Issues []string `json:"issues"`
+	}{[]Fact{f}, []string{}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var got AIResponse
+	var got struct {
+		Facts  []Fact   `json:"facts"`
+		Issues []string `json:"issues"`
+	}
 	if err = json.Unmarshal(b, &got); err != nil {
 		t.Fatal(err)
 	}

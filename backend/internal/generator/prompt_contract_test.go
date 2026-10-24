@@ -11,18 +11,18 @@ import (
 
 func TestPromptsAndSchemaUseNestedFacts(t *testing.T) {
 	for name, prompt := range map[string]string{"system": prompts.GeneratorSystem, "task": prompts.GenerateGoals} {
-		for _, old := range []string{"goals", "goalId", "topic", "создаёт из них", "создаст сервер"} {
+		for _, old := range []string{"goals", "goalId", "topic"} {
 			if strings.Contains(prompt, old) {
 				t.Errorf("%s contains legacy instruction %q", name, old)
 			}
 		}
-		for _, field := range []string{"facts", "cards", "name", "pages", "source", "sourceQuote", "flip", "input", "issues"} {
+		for _, field := range []string{"facts", "recall", "extraCards", "name", "pages", "source", "sourceQuote", "flip", "input", "issues"} {
 			if !strings.Contains(prompt, field) {
 				t.Errorf("%s omits %s", name, field)
 			}
 		}
 	}
-	if !strings.Contains(prompts.GeneratorSystem, "одинаковые question и answer") {
+	if !strings.Contains(prompts.GeneratorSystem, "одинаковыми question, answer, source и sourceQuote") {
 		t.Fatal("system prompt must request a matching mandatory pair")
 	}
 	var root map[string]any
@@ -44,12 +44,17 @@ func TestPromptsAndSchemaUseNestedFacts(t *testing.T) {
 		return props
 	}
 	props := object(root, "facts", "issues")
-	fact := object(props["facts"].(map[string]any)["items"].(map[string]any), "name", "pages", "cards")
-	variants := fact["cards"].(map[string]any)["items"].(map[string]any)["anyOf"].([]any)
-	if len(variants) != 5 {
+	fact := object(props["facts"].(map[string]any)["items"].(map[string]any), "name", "pages", "recall", "extraCards")
+	object(fact["recall"].(map[string]any), "question", "answer", "source", "sourceQuote")
+	variants := fact["extraCards"].(map[string]any)["items"].(map[string]any)["anyOf"].([]any)
+	if len(variants) != 4 {
 		t.Fatal("missing card formats")
 	}
 	for i, v := range variants {
+		kind := v.(map[string]any)["properties"].(map[string]any)["kind"].(map[string]any)["const"]
+		if kind != []string{"recall", "boolean", "choice", "table"}[i] {
+			t.Fatalf("unexpected kind %v", kind)
+		}
 		fields := []string{"kind", "question", "source", "sourceQuote"}
 		switch i {
 		case 2:

@@ -67,11 +67,11 @@ func (facts *responseFacts) UnmarshalJSON(b []byte) error {
 	}
 	decoded := make(responseFacts, 0, len(raw))
 	for i, item := range raw {
-		var fact Fact
-		if err := json.Unmarshal(item, &fact); err != nil {
+		var model modelFact
+		if err := json.Unmarshal(item, &model); err != nil {
 			return atPath(fmt.Sprintf("facts[%d]", i), err)
 		}
-		decoded = append(decoded, fact)
+		decoded = append(decoded, model.expand())
 	}
 	*facts = decoded
 	return nil
@@ -88,12 +88,17 @@ func safeDecodeProblem(err error) error {
 	if errors.As(err, &mismatch) {
 		path := ""
 		for _, field := range strings.Split(mismatch.Field, ".") {
+			// Go 1.26 includes this embedded Go type in promoted field paths.
+			// CardBase has no JSON nesting; Go 1.27 already omits this segment.
+			if field == "CardBase" {
+				continue
+			}
 			if index, e := strconv.Atoi(field); e == nil && index >= 0 {
 				path += fmt.Sprintf("[%d]", index)
 				continue
 			}
 			name := "<unknown>"
-			for _, known := range []string{"facts", "issues", "name", "pages", "cards", "kind", "question", "source", "sourceQuote", "answer", "rightAnswers", "wrongAnswers", "columns", "rows"} {
+			for _, known := range []string{"facts", "issues", "name", "pages", "cards", "recall", "extraCards", "kind", "question", "source", "sourceQuote", "answer", "rightAnswers", "wrongAnswers", "columns", "rows"} {
 				if strings.EqualFold(field, known) {
 					name = known
 					break

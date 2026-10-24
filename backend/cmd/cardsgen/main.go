@@ -435,6 +435,7 @@ func formatStats(s generator.Stats) string {
 	fmt.Fprintf(&w, "Токены:                prompt %d, completion %d\n", s.PromptTokens, s.CompletionTokens)
 	fmt.Fprintf(&w, "Стоимость по API:      $%.7f\n", s.CostUSD)
 	fmt.Fprintf(&w, "Карточек от модели:    %d\n", s.CardsFromModel)
+	fmt.Fprintf(&w, "Синтезировано flip/input: %d\n", s.CardsSynthesized)
 	fmt.Fprintf(&w, "Цитата не найдена:     %d (%s)\n", s.DroppedQuote, pct(s.DroppedQuote))
 	fmt.Fprintf(&w, "Неверная структура:    %d\n", s.DroppedInvalid)
 	fmt.Fprintf(&w, "Точные повторы:        %d\n", s.DroppedDuplicate)

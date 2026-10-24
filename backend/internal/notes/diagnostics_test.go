@@ -18,13 +18,13 @@ import (
 
 func TestMakeLogsSelfContainedSafeGenerationFailure(t *testing.T) {
 	const private = "PRIVATE_DOCUMENT_MODEL_TEXT"
-	content := `{"issues":[],"facts":[{"name":"` + private + `","pages":[1],"cards":[{"kind":"input","question":"` + private + `","source":"` + private + `","sourceQuote":"` + private + `","answer":"` + private + `"}]}]}`
+	content := `{"issues":[],"facts":[{"name":"` + private + `","pages":[1],"recall":{"question":"` + private + `","source":"` + private + `","sourceQuote":"` + private + `","answer":"` + private + `"},"extraCards":[]}]}`
 	for _, tc := range []struct {
 		name, content, category, path, reason, userText string
 		cause                                           error
 	}{
-		{"required flip", content, "validation", "facts[0].cards", "missing required flip card", TextTryLater, nil},
-		{"empty answer", strings.Replace(content, `}]}]}`, `},{"kind":"flip","question":"Q","answer":" ","source":"S","sourceQuote":""}]}]}`, 1), "validation", "facts[0].cards[1].answer", "answer is empty", TextTryLater, nil},
+		{"missing recall", strings.Replace(content, `"recall":`, `"other":`, 1), "missing_field", "facts[0].recall", "required field is missing", TextTryLater, nil},
+		{"empty answer", strings.Replace(content, `"answer":"`+private+`"`, `"answer":" "`, 1), "validation", "facts[0].recall.answer", "answer is empty", TextTryLater, nil},
 		{"truncated", content, "truncated", "", "response was truncated", TextTryLater, nil},
 		{"unknown key", `{"issues":[],"facts":[],"` + private + `":1}`, "invalid_structure", "<unknown>", "unknown field", TextTryLater, nil},
 		{"broken JSON", `{"` + private + `":!}`, "invalid_json", "", "invalid JSON", TextTryLater, nil},
