@@ -171,6 +171,13 @@
         opacity 0.12s var(--ease-out);
 }
 
+/* A picked option in a multiple choice, outlined like a picked table term.
+   An inner outline, not a border: the label must not move when it appears. */
+.option[aria-pressed='true'] {
+    outline: 2px solid var(--text-primary);
+    outline-offset: -2px;
+}
+
 /* Lets a long word in the label wrap inside the button. */
 .option > * {
     min-width: 0;
