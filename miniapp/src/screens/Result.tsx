@@ -74,13 +74,13 @@ export function Result({ setTitle, cards, results, onExit, onShare }: ResultProp
                     </Flex>
                 ) : null}
 
-                {/* A wrong answer is due again the next day (reviews.sql);
-                    with no errors there is nothing to return to. */}
+                {/* FSRS brings a wrong answer back within minutes
+                    (usecase/fsrs_progress.go); with no errors there is nothing to return to. */}
                 {correct < results.length ? (
                     <Flex align="center" gap={8} className={s.note}>
                         <IconCalendar size={20} tone="muted" />
                         <Typography.Text variant="body" color="secondary">
-                            Вернёмся к сложным завтра
+                            Вернёмся к сложным сегодня
                         </Typography.Text>
                     </Flex>
                 ) : null}
