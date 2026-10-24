@@ -9,6 +9,7 @@ import { IconCheck, IconOffline, IconShare, IconTrash } from '../components/Icon
 import { loadCards, loadSet, loadSetIssues } from '../utils/sets';
 import { cardsLabel } from '../utils/plural';
 import { formatAuthorName } from '../utils/user';
+import { classifyError } from '../utils/errors';
 import { cx } from '../utils/cx';
 import { useMoreBelow } from '../utils/useMoreBelow';
 import s from './SetScreen.module.css';
@@ -55,6 +56,7 @@ export function SetScreen({
     const [set, setSet] = useState<CardSet | null>(null);
     const [cards, setCards] = useState<Card[]>([]);
     const [feedCards, setFeedCards] = useState<FeedCard[]>([]);
+    const [loadError, setLoadError] = useState<unknown>(null);
     const [attempt, setAttempt] = useState(0);
     const [confirmingRemove, setConfirmingRemove] = useState(false);
     // Cards with open complaints. Only the author can see them, and the set
@@ -65,18 +67,23 @@ export function SetScreen({
     useEffect(() => {
         let cancelled = false;
 
-        Promise.all([loadSet(setId), loadCards(setId), loadFeed()])
-            .then(([nextSet, nextCards, nextFeed]) => {
-                if (cancelled) {
-                    return;
-                }
+        loadSet(setId)
+            .then(async (nextSet) => {
+                if (cancelled) return;
                 setSet(nextSet);
+                const owner = Boolean(currentUser && nextSet.author && nextSet.author.id === currentUser.id);
+                const [nextCards, nextFeed] = await Promise.all([
+                    owner ? loadCards(setId).catch(() => []) : Promise.resolve([]),
+                    loadFeed().catch(() => []),
+                ]);
+                if (cancelled) return;
                 setCards(nextCards);
                 setFeedCards(nextFeed.filter((c) => c.setId === setId));
                 setStatus('ready');
             })
-            .catch(() => {
+            .catch((err) => {
                 if (!cancelled) {
+                    setLoadError(err);
                     setStatus('error');
                 }
             });
@@ -84,7 +91,7 @@ export function SetScreen({
         return () => {
             cancelled = true;
         };
-    }, [attempt, setId]);
+    }, [attempt, currentUser, setId]);
 
     // Only the author can manage the set and its cards; members have shared access.
     const isOwner = Boolean(currentUser && set?.author && set.author.id === currentUser.id);
@@ -124,16 +131,19 @@ export function SetScreen({
     }
 
     if (status === 'error' || !set) {
+        const errorInfo = classifyError(loadError);
         return (
             <StatusScreen
-                icon={<IconOffline size={48} tone="muted" />}
-                title="Нет соединения"
-                text="Проверьте интернет и попробуйте ещё раз"
+                icon={errorInfo.kind === 'offline' ? <IconOffline size={48} tone="muted" /> : undefined}
+                title={errorInfo.title}
+                text={errorInfo.text}
                 action={
                     <Flex direction="column" align="stretch" gap={8}>
-                        <Button size="medium" variant="primary" stretched onClick={retry}>
-                            Повторить
-                        </Button>
+                        {errorInfo.canRetry && (
+                            <Button size="medium" variant="primary" stretched onClick={retry}>
+                                Повторить
+                            </Button>
+                        )}
                         <Button size="medium" variant="ghost" stretched onClick={onBack}>
                             На главную
                         </Button>
@@ -143,6 +153,7 @@ export function SetScreen({
         );
     }
 
+    const totalCards = isOwner && cards.length > 0 ? cards.length : (set.cardsTotal ?? cards.length);
     const dueCount = feedCards.length;
     const hasDue = dueCount > 0;
     const shared = !isOwner;
@@ -155,7 +166,7 @@ export function SetScreen({
             <ScreenHeader
                 title={set.title}
                 subtitle={<>
-                    {cardsLabel(cards.length)}
+                    {cardsLabel(totalCards)}
                     {hasDue ? ` · ${dueCount} на повтор` : ''}
                     {shared && set.author ? ` · автор: ${formatAuthorName(set.author)}` : ''}
                 </>}
@@ -218,14 +229,16 @@ export function SetScreen({
                             subtitle="Рейтинг участников"
                         />
                     ) : null}
-                    <CellSimple
-                        as="button"
-                        showChevron
-                        separator={showIssues || showWarnings || showLeaderboard}
-                        onClick={() => onOpenCards(set.id)}
-                        title={`Карточки · ${cards.length}`}
-                        subtitle={isOwner ? 'Просмотр и правка' : 'Просмотр'}
-                    />
+                    {isOwner ? (
+                        <CellSimple
+                            as="button"
+                            showChevron
+                            separator={showIssues || showWarnings || showLeaderboard}
+                            onClick={() => onOpenCards(set.id)}
+                            title={`Карточки · ${totalCards}`}
+                            subtitle="Просмотр и правка"
+                        />
+                    ) : null}
                 </CellList>
             </Flex>
 
