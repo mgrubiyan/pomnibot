@@ -66,7 +66,11 @@ Content-Type: application/json
 
 { "code": "12ab" }
 
-### ---------- Answer (input-карточки) ----------
+### ---------- Answer ----------
+# Засчитывается только карточка, которая сейчас в ленте; повторный ответ
+# возвращает записанный вердикт. input — текст, choice — JSON-массив
+# выбранных вариантов, boolean и flip — true/false, table — JSON-массив
+# {text, column}.
 # d6b86b0d… «Республика»
 ### верно
 POST {{host}}/cards/d6b86b0d-e286-4396-93f2-93aaa55816af/answer
@@ -98,64 +102,11 @@ Content-Type: application/json
 
 { "answer": "x" }
 
-### ---------- Check (по смыслу, без записи) ----------
-# ab6c395f… «225»
-### method=local
-POST {{host}}/cards/ab6c395f-0bcd-4d54-b3b9-83c888ed51df/check
-Content-Type: application/json
+### ---------- Reveal (только flip, до самооценки) ----------
+POST {{host}}/cards/2a89de89-0bcb-47d8-adb1-b9a09e3e4991/reveal
 
-{ "answer": "225" }
-
-### method=model: другими словами
-POST {{host}}/cards/ab6c395f-0bcd-4d54-b3b9-83c888ed51df/check
-Content-Type: application/json
-
-{ "answer": "двести двадцать пять" }
-
-### неверно
-POST {{host}}/cards/ab6c395f-0bcd-4d54-b3b9-83c888ed51df/check
-Content-Type: application/json
-
-{ "answer": "450" }
-
-### f0c747ee… «арбитражные суды», ответ по смыслу
-POST {{host}}/cards/f0c747ee-acae-421d-89f6-bc69ec2733c0/check
-Content-Type: application/json
-
-{ "answer": "суды арбитража" }
-
-### ---------- Results ----------
-### 204: смесь верных/неверных (choice, boolean, flip, input)
-POST {{host}}/results
-Content-Type: application/json
-
-[
-  { "cardId": "2a89de89-0bcb-47d8-adb1-b9a09e3e4991", "correct": true,  "answeredAt": "2026-09-30T10:00:00Z" },
-  { "cardId": "400b2482-20b4-4b4d-92f7-aea8a05d565d", "correct": true,  "answeredAt": "2026-09-30T10:00:10Z" },
-  { "cardId": "7da1fdda-33e6-4b1b-aab0-e1d7f8e9d411", "correct": false, "answeredAt": "2026-09-30T10:00:20Z" },
-  { "cardId": "d6b86b0d-e286-4396-93f2-93aaa55816af", "correct": true,  "answeredAt": "2026-09-30T10:00:30Z" },
-  { "cardId": "756fe215-acbe-4d8f-8c0d-dc220f9abcc9", "correct": false, "answeredAt": "2026-09-30T10:00:40Z" }
-]
-
-### после /results: перепроверь GET /, /plan и userRank/userPercentile у наборов
-
-### 400 пустой массив
-POST {{host}}/results
-Content-Type: application/json
-
-[]
-
-### 400: битый uuid
-POST {{host}}/results
-Content-Type: application/json
-
-[ { "cardId": "not-a-uuid", "correct": true, "answeredAt": "2026-09-30T10:00:00Z" } ]
-
-### 400: нет поля correct
-POST {{host}}/results
-Content-Type: application/json
-
-[ { "cardId": "2a89de89-0bcb-47d8-adb1-b9a09e3e4991", "answeredAt": "2026-09-30T10:00:00Z" } ]
+### 400: не flip
+POST {{host}}/cards/d6b86b0d-e286-4396-93f2-93aaa55816af/reveal
 
 ### ---------- Update card ----------
 ### 200: поменять объяснение
