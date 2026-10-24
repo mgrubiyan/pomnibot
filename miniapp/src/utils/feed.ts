@@ -59,14 +59,16 @@ export function rejoinedFeed(
  * their columns until the answer, in the columns the backend revealed after.
  */
 export function layoutOf(table: FeedTable, revealed?: CardAnswer): TableLayout {
-    const columnOf = new Map(
-        typeof revealed === 'object' && !Array.isArray(revealed)
-            ? revealed.items.map((item) => [item.text, item.column])
-            : [],
-    );
+    // A term may repeat: each copy takes the next of its columns.
+    const columnsOf = new Map<string, string[]>();
+    if (typeof revealed === 'object' && !Array.isArray(revealed)) {
+        for (const item of revealed.items) {
+            columnsOf.set(item.text, [...(columnsOf.get(item.text) ?? []), item.column]);
+        }
+    }
     return {
         columns: table.columns,
-        items: table.items.map((text) => ({ text, column: columnOf.get(text) ?? '' })),
+        items: table.items.map((text) => ({ text, column: columnsOf.get(text)?.shift() ?? '' })),
     };
 }
 

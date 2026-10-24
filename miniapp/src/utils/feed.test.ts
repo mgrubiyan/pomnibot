@@ -35,6 +35,19 @@ describe('layoutOf', () => {
             { text: 'дуб', column: 'Растения' },
         ]);
     });
+
+    it('gives each copy of a repeated term its own column', () => {
+        const repeated = { columns: ['Чётные', 'Простые'], items: ['2', '4', '2'] };
+        const revealed = {
+            columns: repeated.columns,
+            items: [
+                { text: '2', column: 'Чётные' },
+                { text: '4', column: 'Чётные' },
+                { text: '2', column: 'Простые' },
+            ],
+        };
+        expect(layoutOf(repeated, revealed).items.map((item) => item.column)).toEqual(['Чётные', 'Чётные', 'Простые']);
+    });
 });
 
 describe('patchFeedCard', () => {

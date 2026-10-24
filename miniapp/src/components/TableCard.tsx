@@ -70,7 +70,7 @@ export function TableColumns({
                     {layout.items.map((item, index) =>
                         placement[index] === column ? (
                             <Chip
-                                key={item.text}
+                                key={index}
                                 text={item.text}
                                 placed
                                 verdict={
@@ -127,7 +127,7 @@ export function TablePool({ layout, placement, selected, onSelect }: TablePoolPr
                     {layout.items.map((item, index) =>
                         placement[index] === null ? (
                             <Chip
-                                key={item.text}
+                                key={index}
                                 text={item.text}
                                 selected={selected === index}
                                 onClick={() => onSelect(index)}

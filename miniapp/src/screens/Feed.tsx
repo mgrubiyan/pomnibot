@@ -52,6 +52,8 @@ const CHECK_LONGER_MS = 8_000;
 const CHECK_ALMOST_MS = 12_000;
 /** A lost request or a silent model: ask again after this pause. */
 const CHECK_RETRY_MS = 2_000;
+/** Requests lost in a row before the run stops on the error screen. */
+const CHECK_LOST_LIMIT = 3;
 
 interface Checked {
     correct: boolean;
@@ -70,6 +72,9 @@ const FAILED = 'failed';
 
 type Refusal = typeof GONE | typeof FAILED;
 
+/** No answer from the backend: the request was lost or the backend failed. */
+const LOST = 'lost';
+
 function refusalOf(status: number): Refusal | null {
     if (status === 409) {
         return GONE;
@@ -81,10 +86,10 @@ function refusalOf(status: number): Refusal | null {
  * Every answer goes to the backend, which grades and records it: the feed
  * holds no answers. A typed one need not match word for word — the backend
  * forgives word forms and typos and asks a model about the meaning. Null
- * when there is no verdict yet: the request was lost, or the backend gave
- * up on the model (fallback) — the reader keeps waiting for a real one.
+ * when the backend gave up on the model (fallback): the reader keeps waiting
+ * for a real verdict.
  */
-async function sendAnswer(cardId: string, answer: string): Promise<Checked | Refusal | null> {
+async function sendAnswer(cardId: string, answer: string): Promise<Checked | Refusal | typeof LOST | null> {
     try {
         const { data, response } = await api.POST('/cards/{cardId}/answer', {
             params: { path: { cardId } },
@@ -94,17 +99,20 @@ async function sendAnswer(cardId: string, answer: string): Promise<Checked | Ref
         if (refusal) {
             return refusal;
         }
-        if (!data || data.method === 'fallback' || !data.reveal) {
+        if (!data) {
+            return LOST;
+        }
+        if (data.method === 'fallback' || !data.reveal) {
             return null;
         }
         return { correct: data.isCorrect, reason: data.reason ?? null, reveal: data.reveal };
     } catch {
-        return null;
+        return LOST;
     }
 }
 
 /** The answer of a flip card, which the reader then grades themselves. */
-async function fetchReveal(cardId: string): Promise<CardReveal | Refusal | null> {
+async function fetchReveal(cardId: string): Promise<CardReveal | Refusal | typeof LOST> {
     try {
         const { data, response } = await api.POST('/cards/{cardId}/reveal', {
             params: { path: { cardId } },
@@ -113,19 +121,10 @@ async function fetchReveal(cardId: string): Promise<CardReveal | Refusal | null>
         if (refusal) {
             return refusal;
         }
-        return data ?? null;
+        return data ?? LOST;
     } catch {
-        return null;
+        return LOST;
     }
-}
-
-function shuffle<T>(items: readonly T[]): T[] {
-    const next = [...items];
-    for (let i = next.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [next[i], next[j]] = [next[j], next[i]];
-    }
-    return next;
 }
 
 /** What the card asks of the reader, said above the question. */
@@ -142,9 +141,8 @@ function optionsOf(card: FeedCard): Option[] {
         return BOOLEAN_OPTIONS;
     }
     if (card.kind === 'choice') {
-        return shuffle(
-            (card.options ?? []).map((option) => ({ label: option, value: option })),
-        );
+        // In the order the backend shuffled them.
+        return (card.options ?? []).map((option) => ({ label: option, value: option }));
     }
     return [];
 }
@@ -288,6 +286,9 @@ export function Feed({
 
     const retry = () => {
         passedRef.current = cards.slice(0, index);
+        // The reloaded feed shuffles the terms anew, so a layout kept by
+        // their places would put them in columns the reader never chose.
+        setPlacements({});
         setStatus('loading');
         setAttempt((current) => current + 1);
     };
@@ -331,7 +332,8 @@ export function Feed({
 
     /**
      * Sends the answer and waits for the verdict, asking again while there is
-     * none. A card the feed no longer asks is skipped without a result.
+     * none. A card the feed no longer asks is skipped without a result; a
+     * backend that keeps failing stops the run.
      */
     const ask = useCallback(
         (cardId: string, answer: string, typed: string | null, onVerdict: (result: Checked) => void) => {
@@ -340,6 +342,7 @@ export function Feed({
             setCheck({ stage: 'checking', typed });
             setCheckRun(run);
 
+            let lost = 0;
             const attempt = () => {
                 if (checkRunRef.current !== run) {
                     return; // the reader moved on
@@ -348,7 +351,12 @@ export function Feed({
                     if (checkRunRef.current !== run) {
                         return;
                     }
-                    if (!result) {
+                    lost = result === LOST ? lost + 1 : 0;
+                    if (lost >= CHECK_LOST_LIMIT) {
+                        stop();
+                        return;
+                    }
+                    if (!result || result === LOST) {
                         // No verdict yet: the reader keeps waiting, we ask again.
                         window.setTimeout(attempt, CHECK_RETRY_MS);
                         return;
@@ -449,6 +457,7 @@ export function Feed({
         checkRunRef.current = run;
         setOpening(true);
 
+        let lost = 0;
         const attempt = () => {
             if (checkRunRef.current !== run) {
                 return;
@@ -457,8 +466,13 @@ export function Feed({
                 if (checkRunRef.current !== run) {
                     return;
                 }
-                if (!result) {
-                    window.setTimeout(attempt, CHECK_RETRY_MS);
+                if (result === LOST) {
+                    lost += 1;
+                    if (lost >= CHECK_LOST_LIMIT) {
+                        stop();
+                    } else {
+                        window.setTimeout(attempt, CHECK_RETRY_MS);
+                    }
                     return;
                 }
                 setOpening(false);
