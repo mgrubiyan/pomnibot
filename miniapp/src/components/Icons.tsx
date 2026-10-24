@@ -51,6 +51,14 @@ export const IconCross = (props: IconProps) => (
 );
 
 
+/** Time ran out: an expired sign-in, not a failure. */
+export const IconClock = (props: IconProps) => (
+    <Icon {...props}>
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 7v5l3 2" />
+    </Icon>
+);
+
 /** The drag handle of a reorderable row: the «≡» the set editor's hint names. */
 export const IconGrip = (props: IconProps) => (
     <Icon {...props}>
