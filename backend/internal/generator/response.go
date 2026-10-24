@@ -33,9 +33,11 @@ type Card interface {
 
 // CardBase holds the question and source specific to one card.
 type CardBase struct {
-	Question    string `json:"question"`
-	Source      string `json:"source"`
-	SourceQuote string `json:"sourceQuote"`
+	QuestionSvg    string `json:"questionSvg,omitempty"`
+	ExplanationSvg string `json:"explanationSvg,omitempty"`
+	Question       string `json:"question"`
+	Source         string `json:"source"`
+	SourceQuote    string `json:"sourceQuote"`
 }
 
 // FlipCard presents an answer for self assessment.
@@ -209,7 +211,7 @@ func decodeCard(raw json.RawMessage) (Card, error) {
 
 func knownCardField(key string) bool {
 	switch key {
-	case "question", "source", "sourceQuote", "answer", "rightAnswers", "wrongAnswers", "columns":
+	case "questionSvg", "explanationSvg", "question", "source", "sourceQuote", "answer", "rightAnswers", "wrongAnswers", "columns":
 		return true
 	default:
 		return false

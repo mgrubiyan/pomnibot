@@ -53,6 +53,14 @@ func NewFallback(cooldown time.Duration, backends ...Backend) *Fallback {
 // When every backend fails, the error joins theirs, so errors.Is sees
 // ErrRefused or ErrUnavailable from any of them.
 func (f *Fallback) Complete(ctx context.Context, req Request) (Response, error) {
+	if req.Backend != "" {
+		for _, b := range f.backends {
+			if b.Name == req.Backend {
+				return f.call(ctx, b, req)
+			}
+		}
+		return Response{}, ErrCapability
+	}
 	if len(req.PDFs) > 0 {
 		for _, b := range f.backends {
 			if b.Name == "openrouter" {
@@ -124,6 +132,12 @@ func (f *Fallback) Complete(ctx context.Context, req Request) (Response, error) 
 // the caller's deadline means the backend hangs: it counts as unavailable,
 // unless the request was still waiting for a slot (ErrBusy).
 func (f *Fallback) call(ctx context.Context, b Backend, req Request) (Response, error) {
+	resp, err := f.callBackend(ctx, b, req)
+	resp.Backend = b.Name
+	return resp, err
+}
+
+func (f *Fallback) callBackend(ctx context.Context, b Backend, req Request) (Response, error) {
 	if b.Timeout <= 0 {
 		return b.Provider.Complete(ctx, req)
 	}

@@ -186,6 +186,20 @@ func TestCheckAsksModelWhenUnsure(t *testing.T) {
 	}
 }
 
+func TestCheckPassesLaTeXToExistingModel(t *testing.T) {
+	model := &fakeModel{answer: `{"correct":true,"reason":"Equivalent formula"}`}
+	in := Input{Question: `Вычислите $\int_0^1 x\,dx$`, Expected: `$$\frac{1}{2}$$`, Quote: "Интеграл равен 0,5.", Given: "0.5"}
+	got := (&Grader{Model: model}).Check(t.Context(), in)
+	if !got.Correct || got.Method != MethodModel || len(model.reqs) != 1 {
+		t.Fatalf("grading: %+v", got)
+	}
+	for _, part := range []string{in.Question, in.Expected, in.Quote, in.Given} {
+		if !strings.Contains(model.reqs[0].User, part) {
+			t.Fatalf("changed grading input: %q", model.reqs[0].User)
+		}
+	}
+}
+
 func TestCheckLeavesModelOutWhenLocalDecides(t *testing.T) {
 	model := &fakeModel{answer: `{"correct": true, "reason": ""}`}
 	g := &Grader{Model: model}

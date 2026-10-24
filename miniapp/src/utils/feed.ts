@@ -22,6 +22,7 @@ export function patchFeedCard(card: FeedCard, patch?: CardPatch): FeedCard {
         ...card,
         kind: patch.kind ?? card.kind,
         question: patch.question ?? card.question,
+        questionSvg: undefined,
         options: patch.options ?? card.options,
         table: patch.table
             ? { columns: patch.table.columns, items: patch.table.items.map((item) => item.text) }

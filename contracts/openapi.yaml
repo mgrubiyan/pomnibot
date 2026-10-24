@@ -906,7 +906,7 @@ components:
 
     TableItem:
       type: object
-      description: A term of the table and the column it belongs to.
+      description: A sorting item and its category. Both strings support GFM + math.
       required:
         - text
         - column
@@ -918,7 +918,7 @@ components:
 
     TableLayout:
       type: object
-      description: "Sorting card: lay the terms out across the columns."
+      description: "Sorting card: lay terms out across categories. Category names and items support GFM + math, including Markdown tables. This task type is independent of Markdown table formatting."
       required:
         - columns
         - items
@@ -943,8 +943,8 @@ components:
 
     CardAnswer:
       description: "
-      choice - string[] (all correct option texts); legacy string/integer supported
-      input - string
+      choice - GFM + math string[] (all correct option texts); legacy string/integer supported
+      input/flip - GFM + math string ($...$ inline LaTeX, $$...$$ display LaTeX)
       boolean - boolean
       table - #/components/schemas/TableLayout
       "
@@ -962,8 +962,13 @@ components:
     Card:
       type: object
       description: >-
-        answer, explanation and sourceQuote are absent only in a set member's
+        answer, explanation, explanationSvg and sourceQuote are absent in a set member's
         list of the set's cards.
+        New generated cards use GFM + math in question, string answers, explanation,
+        choice options and sorting content. Inline LaTeX uses $...$ and display
+        LaTeX uses $$...$$; backslashes are escaped in JSON. Content is stored as
+        source text, without HTML conversion. Existing cards retain their text.
+        factName is plain text; sourceQuote is verbatim and never reformatted.
       required:
         - id
         - setId
@@ -987,21 +992,28 @@ components:
           $ref: '#/components/schemas/CardKind'
         question:
           type: string
+          description: GFM + math; inline LaTeX $...$ and display LaTeX $$...$$.
         options:
           type: array
           items:
             type: string
-          description: choice only
+          description: Choice options as GFM + math.
         table:
           $ref: '#/components/schemas/TableLayout'
         answer:
           $ref: '#/components/schemas/CardAnswer'
         explanation:
           type: string
-          description: 2-3 sentences
+          description: Explanation as GFM + math, including Markdown tables and LaTeX formulas.
+        questionSvg:
+          type: string
+          description: Optional raw static self-contained SVG for the question with viewBox, at most 128 KiB. Omitted when absent. Does not reveal the answer.
+        explanationSvg:
+          type: string
+          description: Optional raw static self-contained SVG for the explanation with viewBox, at most 128 KiB. Omitted when absent.
         sourceQuote:
           type: string
-          description: quote from the notes
+          description: Verbatim quote from the notes; preserve all original characters without Markdown or LaTeX conversion.
         sourceRef:
           type: string
           description: "where the quote is from: «Лекция 3, стр. 2»"
@@ -1083,13 +1095,17 @@ components:
           type: string
         kind:
           $ref: '#/components/schemas/CardKind'
+        questionSvg:
+          type: string
+          description: Optional raw static self-contained SVG for the question with viewBox, at most 128 KiB. Omitted when absent. Does not reveal the answer.
         question:
           type: string
+          description: GFM + math; inline LaTeX $...$ and display LaTeX $$...$$.
         options:
           type: array
           items:
             type: string
-          description: choice only
+          description: Choice options as GFM + math.
         table:
           $ref: '#/components/schemas/FeedTable'
 
@@ -1121,6 +1137,10 @@ components:
           $ref: '#/components/schemas/CardAnswer'
         explanation:
           type: string
+          description: Explanation as GFM + math, including Markdown tables and LaTeX formulas.
+        explanationSvg:
+          type: string
+          description: Optional raw static self-contained SVG for the explanation with viewBox, at most 128 KiB. Omitted when absent.
         sourceQuote:
           type: string
         sourceRef:
@@ -1143,6 +1163,7 @@ components:
           $ref: '#/components/schemas/CardKind'
         question:
           type: string
+          description: GFM + math; inline LaTeX $...$ and display LaTeX $$...$$.
         answer:
           $ref: '#/components/schemas/CardAnswer'
         options:
@@ -1156,26 +1177,28 @@ components:
 
     UpdateCardRequest:
       type: object
+      description: Editing card content clears both generated SVG illustrations. SVG editing is not supported.
       properties:
         kind:
           $ref: '#/components/schemas/CardKind'
         question:
           type: string
+          description: GFM + math; inline LaTeX $...$ and display LaTeX $$...$$.
         options:
           type: array
           items:
             type: string
-          description: choice only
+          description: Choice options as GFM + math.
         table:
           $ref: '#/components/schemas/TableLayout'
         answer:
           $ref: '#/components/schemas/CardAnswer'
         explanation:
           type: string
-          description: 2-3 sentences
+          description: Explanation as GFM + math, including Markdown tables and LaTeX formulas.
         sourceQuote:
           type: string
-          description: quote from the notes
+          description: Verbatim quote from the notes; preserve all original characters without Markdown or LaTeX conversion.
         sourceRef:
           type: string
           description: "where the quote is from: «Лекция 3, стр. 2»"
@@ -1236,6 +1259,7 @@ components:
           $ref: '#/components/schemas/CardKind'
         question:
           type: string
+          description: GFM + math; inline LaTeX $...$ and display LaTeX $$...$$.
         answer:
           type: string
           description: The answer as stored with the card; absent for tables

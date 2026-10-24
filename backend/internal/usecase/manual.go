@@ -22,13 +22,11 @@ func validateCreateCard(req *contracts.CreateCardRequest) error {
 	if req == nil || strings.TrimSpace(req.Question) == "" {
 		return invalid()
 	}
-	req.Question = strings.TrimSpace(req.Question)
 	switch req.Kind {
 	case contracts.CardKindFlip, contracts.CardKindInput:
 		if req.Answer.Type != contracts.StringCardAnswer || strings.TrimSpace(req.Answer.String) == "" {
 			return invalid()
 		}
-		req.Answer.String = strings.TrimSpace(req.Answer.String)
 	case contracts.CardKindBoolean:
 		if req.Answer.Type != contracts.BoolCardAnswer {
 			return invalid()
@@ -37,14 +35,13 @@ func validateCreateCard(req *contracts.CreateCardRequest) error {
 		if (req.Answer.Type != contracts.StringCardAnswer && req.Answer.Type != contracts.StringArrayCardAnswer) || len(req.Options) < 2 {
 			return invalid()
 		}
-		seen := map[string]bool{}
-		for i, v := range req.Options {
-			v = strings.TrimSpace(v)
-			if v == "" || seen[v] {
+		seen := map[string]string{}
+		for _, v := range req.Options {
+			key := strings.TrimSpace(v)
+			if _, exists := seen[key]; exists || key == "" {
 				return invalid()
 			}
-			seen[v] = true
-			req.Options[i] = v
+			seen[key] = v
 		}
 
 		answers := req.Answer.StringArray
@@ -57,11 +54,11 @@ func validateCreateCard(req *contracts.CreateCardRequest) error {
 		selected := map[string]bool{}
 		for i, a := range answers {
 			a = strings.TrimSpace(a)
-			if !seen[a] || selected[a] {
+			if _, exists := seen[a]; !exists || selected[a] {
 				return invalid()
 			}
 			selected[a] = true
-			answers[i] = a
+			answers[i] = seen[a]
 		}
 		if req.Answer.Type == contracts.StringCardAnswer {
 			req.Answer.String = answers[0]
@@ -78,21 +75,22 @@ func validateCreateCard(req *contracts.CreateCardRequest) error {
 			return invalid()
 		}
 		counts := map[string]int{}
-		for i, v := range table.Columns {
-			v = strings.TrimSpace(v)
-			if _, ok := counts[v]; ok || v == "" {
+		columnNames := map[string]string{}
+		for _, v := range table.Columns {
+			key := strings.TrimSpace(v)
+			if _, ok := counts[key]; ok || key == "" {
 				return invalid()
 			}
-			counts[v] = 0
-			table.Columns[i] = v
+			counts[key] = 0
+			columnNames[key] = v
 		}
 		for i, v := range table.Items {
-			v.Text = strings.TrimSpace(v.Text)
-			v.Column = strings.TrimSpace(v.Column)
-			if _, ok := counts[v.Column]; !ok || v.Text == "" {
+			key := strings.TrimSpace(v.Column)
+			if _, ok := counts[key]; !ok || strings.TrimSpace(v.Text) == "" {
 				return invalid()
 			}
-			counts[v.Column]++
+			counts[key]++
+			v.Column = columnNames[key]
 			table.Items[i] = v
 		}
 		for _, n := range counts {

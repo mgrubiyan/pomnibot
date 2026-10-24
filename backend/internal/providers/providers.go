@@ -20,6 +20,7 @@ var ErrRefused = errors.New("refused by the content filter")
 // MaxTokens and ReasoningEffort can override provider defaults for staged tasks.
 // Empty ReasoningEffort inherits the default; "none" explicitly disables thinking.
 type Request struct {
+	Backend         string // optional backend pinned by an earlier stage of the same task
 	Source          string
 	NoFallback      bool
 	PDFs            []PDF
@@ -66,7 +67,8 @@ type Usage struct {
 // Response is the raw model answer. Content may be wrapped in markdown or
 // surrounded by prose: providers do not clean it up.
 type Response struct {
-	Cached  bool // a reused private processing artifact, no new API billing
+	Backend string // selected fallback-chain backend, retained for subsequent stages
+	Cached  bool   // a reused private processing artifact, no new API billing
 	Content []byte
 	Usage   Usage
 	Model   string // model that actually answered, may be a fallback

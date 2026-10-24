@@ -76,3 +76,31 @@ func TestPromptsAndSchemaUseNestedFacts(t *testing.T) {
 		object(v.(map[string]any), fields...)
 	}
 }
+
+func TestGenerationPromptsRequestGFMAndLaTeX(t *testing.T) {
+	for name, prompt := range map[string]string{"system": prompts.GeneratorSystem, "task": prompts.GenerateGoals} {
+		for _, text := range []string{"GFM + math", "$...$", "$$...$$", "Markdown", "sourceQuote"} {
+			if !strings.Contains(prompt, text) {
+				t.Errorf("%s lacks %q", name, text)
+			}
+		}
+		for _, obsolete := range []string{"не используй LaTeX", "Интерфейс показывает обычный текст", "Формулы оформляй обычным текстом"} {
+			if strings.Contains(prompt, obsolete) {
+				t.Errorf("%s contains conflicting rule", name)
+			}
+		}
+		for _, line := range strings.Split(prompt, "\n") {
+			if !strings.HasPrefix(line, `{"facts":`) {
+				continue
+			}
+			var reply AIResponse
+			if err := json.Unmarshal([]byte(line), &reply); err != nil {
+				t.Fatalf("invalid example: %v", err)
+			}
+			answer := reply.Facts[0].Cards[0].(FlipCard).Answer
+			if !strings.Contains(answer, `\cdot`) || !strings.Contains(answer, "$") {
+				t.Fatalf("example loses LaTeX: %q", answer)
+			}
+		}
+	}
+}

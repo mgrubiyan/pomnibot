@@ -3,6 +3,7 @@ import type { TableLayout } from '../types';
 import { cx } from '../utils/cx';
 import { placedCount, type Placement } from '../utils/table';
 import { IconCheck, IconCross } from './Icons';
+import { StudyContent } from './StudyContent';
 import s from './TableCard.module.css';
 
 interface ChipProps {
@@ -31,8 +32,8 @@ function Chip({ text, placed, selected, verdict, disabled, onClick }: ChipProps)
         >
             {verdict === 'correct' ? <IconCheck size={18} tone="positive" /> : null}
             {verdict === 'wrong' ? <IconCross size={18} tone="negative" /> : null}
-            <Typography.Text variant="body" className={s.chipText}>
-                {text}
+            <Typography.Text variant="body" asChild>
+                <StudyContent className={s.chipText} text={text} inControl />
             </Typography.Text>
         </button>
     );
@@ -63,8 +64,8 @@ export function TableColumns({
         <Grid cols={2} gapX={0} gapY={12}>
             {layout.columns.map((column) => (
                 <Flex key={column} direction="column" align="stretch" gap={8} className={s.column}>
-                    <Typography.Text variant="description-strong" color="secondary" className={s.columnTitle}>
-                        {column}
+                    <Typography.Text variant="description-strong" color="secondary" asChild>
+                        <StudyContent className={s.columnTitle} text={column} />
                     </Typography.Text>
 
                     {layout.items.map((item, index) =>

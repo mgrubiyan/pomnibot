@@ -17,7 +17,8 @@ type AdminCardIssue struct {
 	// Absent when the set is deleted.
 	SetTitle OptString `json:"setTitle"`
 	Kind     CardKind  `json:"kind"`
-	Question string    `json:"question"`
+	// GFM + math; inline LaTeX $...$ and display LaTeX $$...$$.
+	Question string `json:"question"`
 	// The answer as stored with the card; absent for tables.
 	Answer      OptString `json:"answer"`
 	Explanation string    `json:"explanation"`
@@ -278,7 +279,11 @@ func (s *AnswerQuestionResponseMethod) UnmarshalText(data []byte) error {
 	}
 }
 
-// Answer, explanation and sourceQuote are absent only in a set member's list of the set's cards.
+// Answer, explanation, explanationSvg and sourceQuote are absent in a set member's list of the set's
+// cards. New generated cards use GFM + math in question, string answers, explanation, choice options
+// and sorting content. Inline LaTeX uses $...$ and display LaTeX uses $$...$$; backslashes are escaped
+// in JSON. Content is stored as source text, without HTML conversion. Existing cards retain their
+// text. factName is plain text; sourceQuote is verbatim and never reformatted.
 // Ref: #/components/schemas/Card
 type Card struct {
 	ID       uuid.UUID `json:"id"`
@@ -286,14 +291,22 @@ type Card struct {
 	FactId   uuid.UUID `json:"factId"`
 	FactName string    `json:"factName"`
 	Kind     CardKind  `json:"kind"`
-	Question string    `json:"question"`
-	// Choice only.
+	// GFM + math; inline LaTeX $...$ and display LaTeX $$...$$.
+	Question string `json:"question"`
+	// Choice options as GFM + math.
 	Options []string       `json:"options"`
 	Table   OptTableLayout `json:"table"`
 	Answer  OptCardAnswer  `json:"answer"`
-	// 2-3 sentences.
+	// Explanation as GFM + math, including Markdown tables and LaTeX formulas.
 	Explanation OptString `json:"explanation"`
-	// Quote from the notes.
+	// Optional raw static self-contained SVG for the question with viewBox, at most 128 KiB. Omitted when
+	// absent. Does not reveal the answer.
+	QuestionSvg OptString `json:"questionSvg"`
+	// Optional raw static self-contained SVG for the explanation with viewBox, at most 128 KiB. Omitted
+	// when absent.
+	ExplanationSvg OptString `json:"explanationSvg"`
+	// Verbatim quote from the notes; preserve all original characters without Markdown or LaTeX
+	// conversion.
 	SourceQuote OptString `json:"sourceQuote"`
 	// Where the quote is from: «Лекция 3, стр. 2».
 	SourceRef OptString `json:"sourceRef"`
@@ -348,6 +361,16 @@ func (s *Card) GetAnswer() OptCardAnswer {
 // GetExplanation returns the value of Explanation.
 func (s *Card) GetExplanation() OptString {
 	return s.Explanation
+}
+
+// GetQuestionSvg returns the value of QuestionSvg.
+func (s *Card) GetQuestionSvg() OptString {
+	return s.QuestionSvg
+}
+
+// GetExplanationSvg returns the value of ExplanationSvg.
+func (s *Card) GetExplanationSvg() OptString {
+	return s.ExplanationSvg
 }
 
 // GetSourceQuote returns the value of SourceQuote.
@@ -415,6 +438,16 @@ func (s *Card) SetExplanation(val OptString) {
 	s.Explanation = val
 }
 
+// SetQuestionSvg sets the value of QuestionSvg.
+func (s *Card) SetQuestionSvg(val OptString) {
+	s.QuestionSvg = val
+}
+
+// SetExplanationSvg sets the value of ExplanationSvg.
+func (s *Card) SetExplanationSvg(val OptString) {
+	s.ExplanationSvg = val
+}
+
 // SetSourceQuote sets the value of SourceQuote.
 func (s *Card) SetSourceQuote(val OptString) {
 	s.SourceQuote = val
@@ -434,8 +467,9 @@ func (*Card) createCardInFactRes() {}
 func (*Card) createCardRes()       {}
 func (*Card) updateCardRes()       {}
 
-// Choice - string[] (all correct option texts); legacy string/integer supported input - string boolean
-// - boolean table - #/components/schemas/TableLayout.
+// Choice - GFM + math string[] (all correct option texts); legacy string/integer supported input/flip
+// - GFM + math string ($...$ inline LaTeX, $$...$$ display LaTeX) boolean - boolean table -
+// #/components/schemas/TableLayout.
 // Ref: #/components/schemas/CardAnswer
 // CardAnswer represents sum type.
 type CardAnswer struct {
@@ -761,10 +795,14 @@ func (s *CardKind) UnmarshalText(data []byte) error {
 // What a feed card hides until it is answered.
 // Ref: #/components/schemas/CardReveal
 type CardReveal struct {
-	Answer      CardAnswer `json:"answer"`
-	Explanation string     `json:"explanation"`
-	SourceQuote string     `json:"sourceQuote"`
-	SourceRef   OptString  `json:"sourceRef"`
+	Answer CardAnswer `json:"answer"`
+	// Explanation as GFM + math, including Markdown tables and LaTeX formulas.
+	Explanation string `json:"explanation"`
+	// Optional raw static self-contained SVG for the explanation with viewBox, at most 128 KiB. Omitted
+	// when absent.
+	ExplanationSvg OptString `json:"explanationSvg"`
+	SourceQuote    string    `json:"sourceQuote"`
+	SourceRef      OptString `json:"sourceRef"`
 }
 
 // GetAnswer returns the value of Answer.
@@ -775,6 +813,11 @@ func (s *CardReveal) GetAnswer() CardAnswer {
 // GetExplanation returns the value of Explanation.
 func (s *CardReveal) GetExplanation() string {
 	return s.Explanation
+}
+
+// GetExplanationSvg returns the value of ExplanationSvg.
+func (s *CardReveal) GetExplanationSvg() OptString {
+	return s.ExplanationSvg
 }
 
 // GetSourceQuote returns the value of SourceQuote.
@@ -795,6 +838,11 @@ func (s *CardReveal) SetAnswer(val CardAnswer) {
 // SetExplanation sets the value of Explanation.
 func (s *CardReveal) SetExplanation(val string) {
 	s.Explanation = val
+}
+
+// SetExplanationSvg sets the value of ExplanationSvg.
+func (s *CardReveal) SetExplanationSvg(val OptString) {
+	s.ExplanationSvg = val
 }
 
 // SetSourceQuote sets the value of SourceQuote.
@@ -956,7 +1004,8 @@ func (*CreateCardNotFound) createCardRes() {}
 
 // Ref: #/components/schemas/CreateCardRequest
 type CreateCardRequest struct {
-	Kind        CardKind       `json:"kind"`
+	Kind CardKind `json:"kind"`
+	// GFM + math; inline LaTeX $...$ and display LaTeX $$...$$.
 	Question    string         `json:"question"`
 	Answer      CardAnswer     `json:"answer"`
 	Options     []string       `json:"options"`
@@ -1221,8 +1270,12 @@ type FeedCard struct {
 	FactId   uuid.UUID `json:"factId"`
 	FactName string    `json:"factName"`
 	Kind     CardKind  `json:"kind"`
-	Question string    `json:"question"`
-	// Choice only.
+	// Optional raw static self-contained SVG for the question with viewBox, at most 128 KiB. Omitted when
+	// absent. Does not reveal the answer.
+	QuestionSvg OptString `json:"questionSvg"`
+	// GFM + math; inline LaTeX $...$ and display LaTeX $$...$$.
+	Question string `json:"question"`
+	// Choice options as GFM + math.
 	Options []string     `json:"options"`
 	Table   OptFeedTable `json:"table"`
 }
@@ -1250,6 +1303,11 @@ func (s *FeedCard) GetFactName() string {
 // GetKind returns the value of Kind.
 func (s *FeedCard) GetKind() CardKind {
 	return s.Kind
+}
+
+// GetQuestionSvg returns the value of QuestionSvg.
+func (s *FeedCard) GetQuestionSvg() OptString {
+	return s.QuestionSvg
 }
 
 // GetQuestion returns the value of Question.
@@ -1290,6 +1348,11 @@ func (s *FeedCard) SetFactName(val string) {
 // SetKind sets the value of Kind.
 func (s *FeedCard) SetKind(val CardKind) {
 	s.Kind = val
+}
+
+// SetQuestionSvg sets the value of QuestionSvg.
+func (s *FeedCard) SetQuestionSvg(val OptString) {
+	s.QuestionSvg = val
 }
 
 // SetQuestion sets the value of Question.
@@ -2411,7 +2474,7 @@ type SetPlanResponse []SetPlanItem
 
 func (*SetPlanResponse) getSetPlanRes() {}
 
-// A term of the table and the column it belongs to.
+// A sorting item and its category. Both strings support GFM + math.
 // Ref: #/components/schemas/TableItem
 type TableItem struct {
 	Text   string `json:"text"`
@@ -2438,7 +2501,8 @@ func (s *TableItem) SetColumn(val string) {
 	s.Column = val
 }
 
-// Sorting card: lay the terms out across the columns.
+// Sorting card: lay terms out across categories. Category names and items support GFM + math,
+// including Markdown tables. This task type is independent of Markdown table formatting.
 // Ref: #/components/schemas/TableLayout
 type TableLayout struct {
 	Columns []string    `json:"columns"`
@@ -2555,17 +2619,20 @@ type UpdateCardNotFound ErrorResponse
 
 func (*UpdateCardNotFound) updateCardRes() {}
 
+// Editing card content clears both generated SVG illustrations. SVG editing is not supported.
 // Ref: #/components/schemas/UpdateCardRequest
 type UpdateCardRequest struct {
-	Kind     OptCardKind `json:"kind"`
-	Question OptString   `json:"question"`
-	// Choice only.
+	Kind OptCardKind `json:"kind"`
+	// GFM + math; inline LaTeX $...$ and display LaTeX $$...$$.
+	Question OptString `json:"question"`
+	// Choice options as GFM + math.
 	Options []string       `json:"options"`
 	Table   OptTableLayout `json:"table"`
 	Answer  OptCardAnswer  `json:"answer"`
-	// 2-3 sentences.
+	// Explanation as GFM + math, including Markdown tables and LaTeX formulas.
 	Explanation OptString `json:"explanation"`
-	// Quote from the notes.
+	// Verbatim quote from the notes; preserve all original characters without Markdown or LaTeX
+	// conversion.
 	SourceQuote OptString `json:"sourceQuote"`
 	// Where the quote is from: «Лекция 3, стр. 2».
 	SourceRef OptString `json:"sourceRef"`

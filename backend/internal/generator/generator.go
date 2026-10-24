@@ -17,7 +17,7 @@ import (
 )
 
 // PipelineVersion identifies source input, prompt and code validation semantics.
-const PipelineVersion = "direct-generation-v12"
+const PipelineVersion = "direct-generation-v13"
 
 // Generator is safe for concurrent use. The provider owns transport retries.
 type Generator struct {
@@ -95,10 +95,16 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (out Result, err
 	}
 	out.Stats.Stages = map[string]StageStats{}
 	out.Stats.CallsByModel = map[string]int{}
-	out.Artifact = &Artifact{Version: PipelineVersion, Stages: map[string]json.RawMessage{}}
+	out.Artifact = &Artifact{Version: PipelineVersion, Stages: map[string]json.RawMessage{}, Requests: map[string]providers.Request{}, Responses: map[string]string{}}
 	r, e := g.completeStage(ctx, doc, source, "generation", map[string]any{"task": prompts.GenerateGoals, "title": doc.Title}, pages, &out)
 	if e != nil {
 		return out, e
+	}
+	if e = g.enrichIllustrations(ctx, r.Facts, &out); e != nil {
+		return out, e
+	}
+	if e = ctx.Err(); e != nil {
+		return out, contextualProblem(providerProblem(e), "illustrations", g.opts, time.Since(started))
 	}
 	out.Facts = r.Facts
 	out.Artifact.Facts = r.Facts
@@ -158,15 +164,39 @@ func cloneFacts(facts []Fact) []Fact {
 }
 
 func (g *Generator) completeStage(ctx context.Context, doc Document, source, stage string, input any, pages int, out *Result) (reply AIResponse, callErr error) {
+	payload, _ := json.Marshal(input)
+	req := providers.Request{Source: source, NoFallback: true, System: prompts.GeneratorSystem, User: string(payload), PDFs: doc.PDFs, Schema: stageSchema(), ReasoningEffort: g.opts.ReasoningEffort, MaxTokens: g.opts.MaxTokens, NoCache: true}
+	callErr = g.runStage(ctx, stage, req, out, func(resp providers.Response, _ *StageStats) error {
+		if e := decodeResponse(resp, &reply); e != nil {
+			return e
+		}
+		out.Coverage.Issues = slices.Clone(reply.Issues)
+		if e := validateFacts(reply.Facts, pages); e != nil {
+			return e
+		}
+		if g.opts.MaxFactsPerDoc > 0 && len(reply.Facts) > g.opts.MaxFactsPerDoc {
+			return problem("limit", "facts", fmt.Sprintf("generated %d facts, configured limit is %d", len(reply.Facts), g.opts.MaxFactsPerDoc))
+		}
+		return nil
+	})
+	return reply, callErr
+}
+
+// runStage shares billing, private artifacts and redacted diagnostics across requests.
+func (g *Generator) runStage(ctx context.Context, stage string, req providers.Request, out *Result, decode func(providers.Response, *StageStats) error) error {
 	began := time.Now()
 	before := providers.BudgetFrom(ctx).Snapshot()
-	payload, _ := json.Marshal(input)
 	callCtx, cancel := context.WithTimeout(ctx, g.opts.CallTimeout)
 	defer cancel()
-	req := providers.Request{Source: source, NoFallback: true, System: prompts.GeneratorSystem, User: string(payload), PDFs: doc.PDFs, Schema: stageSchema(), ReasoningEffort: g.opts.ReasoningEffort, MaxTokens: g.opts.MaxTokens, NoCache: true}
-	out.Artifact.Request = &req
+	out.Artifact.Requests[stage] = req
+	if stage == "generation" {
+		out.Artifact.Request = &req
+	}
 	resp, e := g.provider.Complete(callCtx, req)
-	out.Artifact.Response = string(resp.Content)
+	out.Artifact.Responses[stage] = string(resp.Content)
+	if stage == "generation" {
+		out.Artifact.Response = string(resp.Content)
+	}
 	if json.Valid(resp.Content) {
 		out.Artifact.Stages[stage] = resp.Content
 	}
@@ -192,7 +222,7 @@ func (g *Generator) completeStage(ctx context.Context, doc Document, source, sta
 	if e != nil {
 		e = providerProblem(e)
 	} else {
-		e = decodeResponse(resp, &reply)
+		e = decode(resp, &st)
 		if e != nil {
 			st.InvalidResponses = 1
 		}
@@ -201,19 +231,8 @@ func (g *Generator) completeStage(ctx context.Context, doc Document, source, sta
 	if e != nil && st.FailedCalls == 0 {
 		st.FailedCalls = 1
 	}
-	// Validate before publishing stage stats so its Error includes failures after
-	// decoding. Keep existing call/billing counters for these validation failures.
-	if e == nil {
-		out.Coverage.Issues = slices.Clone(reply.Issues)
-		e = validateFacts(reply.Facts, pages)
-		if e == nil && g.opts.MaxFactsPerDoc > 0 && len(reply.Facts) > g.opts.MaxFactsPerDoc {
-			e = problem("limit", "facts", fmt.Sprintf("generated %d facts, configured limit is %d", len(reply.Facts), g.opts.MaxFactsPerDoc))
-		}
-		if e != nil {
-			st.InvalidResponses = 1
-		}
-	}
 	st.Model = resp.Model
+	st.Backend = resp.Backend
 	st.Duration = time.Since(began)
 	if e != nil {
 		detail := contextualProblem(e, stage, g.opts, st.Duration)
@@ -230,7 +249,7 @@ func (g *Generator) completeStage(ctx context.Context, doc Document, source, sta
 	st.Budget = after
 	out.Stats.recordStage(stage, st)
 	slog.Info("generation stage completed", "stage", stage, "stats", st)
-	return reply, e
+	return e
 }
 
 // generationSource keeps non-PDF extraction intact and the shared prompt prefix stable.

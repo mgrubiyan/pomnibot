@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -24,7 +25,7 @@ func TestOpenRouterGenerationSendsRecallContractAndExpandsPairs(t *testing.T) {
 			var calls atomic.Int32
 			raw := recallReply(`{"kind":"recall","question":"Other aspect?","answer":"B","source":"S","sourceQuote":""}`)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				calls.Add(1)
+				call := calls.Add(1)
 				var body struct {
 					Messages []struct {
 						Role    string          `json:"role"`
@@ -49,6 +50,30 @@ func TestOpenRouterGenerationSendsRecallContractAndExpandsPairs(t *testing.T) {
 				}
 				if body.ResponseFormat.Type != "json_schema" || !body.ResponseFormat.JSONSchema.Strict || !body.Provider.RequireParameters || body.Provider.AllowFallbacks == nil || *body.Provider.AllowFallbacks {
 					t.Error("missing strict schema or provider constraints")
+				}
+				if call == 2 {
+					if len(body.Messages) != 2 || !strings.Contains(string(body.ResponseFormat.JSONSchema.Schema), `"illustrations"`) {
+						t.Error("illustration stage must omit the document and send its own schema")
+					}
+					var system string
+					_ = json.Unmarshal(body.Messages[0].Content, &system)
+					if system != prompts.GeneratorIllustrations {
+						t.Error("missing illustration prompt")
+					}
+					var payload string
+					_ = json.Unmarshal(body.Messages[1].Content, &payload)
+					var input struct {
+						Cards []struct {
+							ID string `json:"id"`
+						} `json:"cards"`
+					}
+					if err := json.Unmarshal([]byte(payload), &input); err != nil || len(input.Cards) != 2 {
+						t.Error("lost recall bindings")
+					}
+					content, _ := json.Marshal(map[string]any{"illustrations": []any{map[string]any{"cardId": "f0-c0", "questionSvg": testSVG, "explanationSvg": ""}}})
+					w.Header().Set("Content-Type", "application/json")
+					_ = json.NewEncoder(w).Encode(map[string]any{"model": openrouter.DefaultModel, "choices": []any{map[string]any{"message": map[string]any{"content": string(content)}, "finish_reason": "stop"}}, "usage": map[string]any{"prompt_tokens": 1, "completion_tokens": 1, "cost": 0}})
+					return
 				}
 				var gotSchema, wantSchema any
 				if err := json.Unmarshal(body.ResponseFormat.JSONSchema.Schema, &gotSchema); err != nil {
@@ -103,7 +128,7 @@ func TestOpenRouterGenerationSendsRecallContractAndExpandsPairs(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if calls.Load() != 1 || published != 1 || result.Stats.Cards != 4 || result.Stats.CardsFromModel != 0 || result.Stats.CardsSynthesized != 4 {
+			if calls.Load() != 2 || published != 1 || result.Stats.Cards != 4 || result.Stats.CardsFromModel != 0 || result.Stats.CardsSynthesized != 4 || result.Facts[0].Cards[0].Base().QuestionSvg != testSVG || result.Stats.FailedCalls != 0 {
 				t.Fatalf("calls=%d published=%d stats=%+v", calls.Load(), published, result.Stats)
 			}
 			for i := range 2 {
