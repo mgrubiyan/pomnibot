@@ -20,9 +20,10 @@ import (
 
 // GeneratedSet contains storage models prepared by the usecase and the private report.
 type GeneratedSet struct {
-	Facts  []cards.Fact
-	Cards  []cards.Card
-	Report generator.Result
+	Warnings []string
+	Facts    []cards.Fact
+	Cards    []cards.Card
+	Report   generator.Result
 }
 
 // SaveGeneratedSet persists the prepared models and their assigned fact identifiers.
@@ -42,6 +43,7 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID uuid.UUID, title
 		Title:     title,
 		AuthorID:  pgUserID,
 		ShareCode: shareCode,
+		Warnings:  append([]string{}, genResult.Warnings...),
 	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("create user set: %w", err)

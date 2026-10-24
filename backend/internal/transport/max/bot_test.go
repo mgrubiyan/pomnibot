@@ -65,7 +65,7 @@ func (m *mockUserService) GetAccount(ctx context.Context, id uuid.UUID) (usecase
 type mockSetService struct {
 	usecase.SetService
 	generateMockSetFunc  func(ctx context.Context, userID uuid.UUID, title string) (*contracts.CardSet, error)
-	saveGeneratedSetFunc func(ctx context.Context, userID uuid.UUID, title string, genResult generator.Result) (*contracts.CardSet, error)
+	saveGeneratedSetFunc func(ctx context.Context, userID uuid.UUID, title string, genResult generator.Result, warnings []string) (*contracts.CardSet, error)
 }
 
 func (m *mockSetService) GenerateMockSet(ctx context.Context, userID uuid.UUID, title string) (*contracts.CardSet, error) {
@@ -82,9 +82,9 @@ func (m *mockSetService) GenerateMockSet(ctx context.Context, userID uuid.UUID, 
 	return res, nil
 }
 
-func (m *mockSetService) SaveGeneratedSet(ctx context.Context, userID uuid.UUID, title string, genResult generator.Result) (*contracts.CardSet, error) {
+func (m *mockSetService) SaveGeneratedSet(ctx context.Context, userID uuid.UUID, title string, genResult generator.Result, warnings []string) (*contracts.CardSet, error) {
 	if m.saveGeneratedSetFunc != nil {
-		return m.saveGeneratedSetFunc(ctx, userID, title, genResult)
+		return m.saveGeneratedSetFunc(ctx, userID, title, genResult, warnings)
 	}
 	res := &contracts.CardSet{
 		ID:         uuid.New(),
@@ -468,7 +468,7 @@ func TestBot_FileAttachment_GeneratesSet(t *testing.T) {
 	var capturedTitle string
 
 	setSvc := &mockSetService{
-		saveGeneratedSetFunc: func(_ context.Context, userID uuid.UUID, title string, _ generator.Result) (*contracts.CardSet, error) {
+		saveGeneratedSetFunc: func(_ context.Context, userID uuid.UUID, title string, _ generator.Result, _ []string) (*contracts.CardSet, error) {
 			capturedUserID = userID
 			capturedTitle = title
 			res := &contracts.CardSet{

@@ -25,7 +25,7 @@ type captureDirectSaver struct {
 	calls  int
 }
 
-func (s *captureDirectSaver) SaveGeneratedSet(_ context.Context, _ uuid.UUID, title string, r generator.Result) (*contracts.CardSet, error) {
+func (s *captureDirectSaver) SaveGeneratedSet(_ context.Context, _ uuid.UUID, title string, r generator.Result, _ []string) (*contracts.CardSet, error) {
 	s.result = r
 	s.calls++
 	return &contracts.CardSet{Title: title}, nil

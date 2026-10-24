@@ -39,6 +39,7 @@ func TestSetService_GetSet(t *testing.T) {
 					Title:           "Test Set",
 					AuthorID:        authorUUID,
 					AuthorFirstName: "Alice",
+					Warnings:        []string{"Страница 2 размыта"},
 					ShareCode:       "123456",
 					CardsTotal:      10,
 					CardsDue:        5,
@@ -63,6 +64,14 @@ func TestSetService_GetSet(t *testing.T) {
 	}
 	if !res.UserPercentile.IsSet() || res.UserPercentile.Value != 0 {
 		t.Errorf("expected UserPercentile 0, got %+v", res.UserPercentile)
+	}
+
+	if len(res.Warnings) != 1 || res.Warnings[0] != "Страница 2 размыта" {
+		t.Fatalf("owner warnings missing: %v", res.Warnings)
+	}
+	readerSet, err := svc.GetSet(context.Background(), testOther, setUUID)
+	if err != nil || len(readerSet.Warnings) != 0 {
+		t.Fatalf("reader warnings exposed: %+v, err=%v", readerSet, err)
 	}
 
 	// Not found
@@ -858,7 +867,7 @@ func TestSetService_SaveGeneratedSet(t *testing.T) {
 	genResult := generator.Result{Facts: []generator.Fact{{Name: "Fact 1", Pages: []int{1}, Cards: []generator.Card{generator.FlipCard{CardBase: generator.CardBase{Question: "Q1", Source: "Source"}, Answer: "A1"}}}}}
 
 	t.Run("success saves generated set", func(t *testing.T) {
-		res, err := svc.SaveGeneratedSet(ctx, userID, title, genResult)
+		res, err := svc.SaveGeneratedSet(ctx, userID, title, genResult, nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

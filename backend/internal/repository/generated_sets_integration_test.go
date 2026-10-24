@@ -37,7 +37,7 @@ func TestGeneratedSetOrderAndChoiceIssuesPostgres(t *testing.T) {
 			generator.InputCard{CardBase: base("input"), Answer: "Typed"},
 		}})
 	}
-	set, err := sets.SaveGeneratedSet(ctx, owner, "Generated", result)
+	set, err := sets.SaveGeneratedSet(ctx, owner, "Generated", result, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,5 +157,38 @@ func TestGeneratedSetOrderAndChoiceIssuesPostgres(t *testing.T) {
 	issues, err := cards.GetSetIssues(ctx, owner, set.ID)
 	if err != nil || len(issues) != 0 {
 		t.Fatalf("open issues: %+v %v", issues, err)
+	}
+}
+
+func TestSetWarningsPostgres(t *testing.T) {
+	pool := manualTestPool(t)
+	q := db.New(pool)
+	sets := usecase.NewSetService(q, usecase.NewUserService(q))
+	owner, reader := uuid.New(), uuid.New()
+	warnings := []string{"Страница 2 размыта", "Пропущен слайд", "Не описана функция", "Пропущена формула"}
+	set, err := sets.SaveGeneratedSet(t.Context(), owner, "Лекция", generator.Result{}, warnings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(set.Warnings, warnings) {
+		t.Fatalf("saved warnings = %q", set.Warnings)
+	}
+	joined, err := sets.JoinSetByShareCode(t.Context(), reader, set.ShareCode.Value)
+	if err != nil || len(joined.Warnings) != 0 {
+		t.Fatalf("join exposed warnings: %+v, err=%v", joined, err)
+	}
+	for _, user := range []uuid.UUID{owner, reader} {
+		want := warnings
+		if user != owner {
+			want = nil
+		}
+		row, err := q.GetSetByID(t.Context(), db.GetSetByIDParams{ID: pgtype.UUID{Bytes: set.ID, Valid: true}, UserID: pgtype.UUID{Bytes: user, Valid: true}})
+		if err != nil || !slices.Equal(row.Warnings, want) {
+			t.Fatalf("SQL warnings for %s = %q, err=%v", user, row.Warnings, err)
+		}
+		loaded, err := sets.GetSet(t.Context(), user, set.ID)
+		if err != nil || !slices.Equal(loaded.Warnings, want) {
+			t.Fatalf("API set for %s = %+v, err=%v", user, loaded, err)
+		}
 	}
 }
