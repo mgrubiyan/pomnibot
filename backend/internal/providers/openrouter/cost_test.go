@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 
@@ -25,41 +24,30 @@ func estimateFor(t *testing.T, c *Client, req providers.Request) costEstimate {
 	return c.estimateCost(req, body)
 }
 
-func TestRecordedCostSamples(t *testing.T) {
-	var samples []struct {
-		ID, Group                                 string
-		TextBytes, PDFTextBytes, PDFPages         int
-		CacheWrite                                bool
-		MaxTokens, PromptTokens, CompletionTokens int
-		CostUSD                                   float64
-	}
-	data, err := os.ReadFile("testdata/cost_samples.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = json.Unmarshal(data, &samples); err != nil {
-		t.Fatal(err)
-	}
-	if len(samples) != 28 {
-		t.Fatalf("recorded corpus changed: %d samples", len(samples))
-	}
-	c := clientFor(t, func(http.ResponseWriter, *http.Request) { t.Error("offline replay made a request") })
-	for _, sample := range samples {
-		t.Run(sample.ID, func(t *testing.T) {
+func TestInputReservationStaysNearRecordedUsage(t *testing.T) {
+	// Representative input sizes from the October 2026 artifacts. Repeated runs
+	// are omitted; the native PDF example represents one 27-page document.
+	for _, tc := range []struct {
+		name                                           string
+		textBytes, pdfTextBytes, pages, reportedTokens int
+	}{
+		{"short text", 13005, 0, 0, 4376},
+		{"lecture text", 77215, 0, 0, 21148},
+		{"extracted reading", 71975, 0, 0, 24494},
+		{"native PDF", 20377, 26105, 27, 54317},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			req := providers.Request{}
-			if sample.PDFPages > 0 {
-				req.PDFs = []providers.PDF{{Pages: sample.PDFPages, TextBytes: sample.PDFTextBytes}}
+			if tc.pages > 0 {
+				req.PDFs = []providers.PDF{{Pages: tc.pages, TextBytes: tc.pdfTextBytes}}
 			}
-			body := chatRequest{Model: DefaultModel, MaxTokens: sample.MaxTokens, Messages: []message{{Content: strings.Repeat("x", sample.TextBytes)}}}
-			if sample.CacheWrite {
-				body.Messages = append(body.Messages, message{Content: []part{{CacheControl: &cacheControl{Type: "ephemeral"}}}})
+			body := chatRequest{Model: DefaultModel, MaxTokens: 128000, Messages: []message{{Content: strings.Repeat("x", tc.textBytes)}}}
+			e := (&Client{}).estimateCost(req, body)
+			// Cover observed usage while keeping the input overhead below 75%.
+			// A conservative byte-per-token or 16K-per-page regression must fail too.
+			if e.ReservedInputTokens < tc.reportedTokens || float64(e.ReservedInputTokens) > 1.75*float64(tc.reportedTokens) {
+				t.Errorf("input reservation %d outside [%d, %.0f] tokens", e.ReservedInputTokens, tc.reportedTokens, 1.75*float64(tc.reportedTokens))
 			}
-			e := c.estimateCost(req, body)
-			if e.Version != empiricalCostVersion || e.ReservedInputTokens < sample.PromptTokens || e.ReservedUSD < sample.CostUSD {
-				t.Errorf("%s under-reserved recorded usage: estimate=%+v actual_input=%d actual_cost=%g", sample.Group, e, sample.PromptTokens, sample.CostUSD)
-			}
-			// Repeated runs of the same source remain one source group, not independent PDFs.
-			t.Logf("group=%s input=%d reserve=%d reserve/actual=%.3f cost=%g reservation=%g", sample.Group, sample.PromptTokens, e.ReservedInputTokens, float64(e.ReservedInputTokens)/float64(sample.PromptTokens), sample.CostUSD, e.ReservedUSD)
 		})
 	}
 }

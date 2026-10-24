@@ -13,7 +13,8 @@ const (
 )
 
 // costEstimate is a reservation policy, not a guaranteed upper bound or a bill.
-// Coefficients and their limited offline corpus are documented in testdata/cost_samples.md.
+// Coefficients come from recorded text requests and one 27-page native PDF
+// (October 2026). The input margin is empirical; output reserves the full cap.
 type costEstimate struct {
 	Version              string
 	TextBytes            int
