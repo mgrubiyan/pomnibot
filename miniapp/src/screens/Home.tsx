@@ -20,7 +20,7 @@ import { estimateMinutes } from '../utils/estimate';
 import { aboutMinutesLabel, cardsLabel, cardsWord } from '../utils/plural';
 import { formatTodayDate } from '../utils/today';
 import { formatAuthorName, formatGreetingName } from '../utils/user';
-import { formatNextReviewSubtitle } from '../utils/reviewDate';
+import { formatNextReviewSubtitle, isNextReviewToday } from '../utils/reviewDate';
 import { cx } from '../utils/cx';
 import { useMoreBelow } from '../utils/useMoreBelow';
 import s from './Home.module.css';
@@ -85,6 +85,7 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, remo
     const [today, setToday] = useState<TodayData | null>(null);
     const [feedCards, setFeedCards] = useState<Card[]>([]);
     const [attempt, setAttempt] = useState(0);
+    const [now, setNow] = useState(() => new Date());
     const [bodyRef, moreBelow] = useMoreBelow<HTMLDivElement>(status === 'ready');
 
     useEffect(() => {
@@ -102,7 +103,8 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, remo
             })
             .catch(() => {
                 if (!cancelled) {
-                    setStatus('error');
+                    // A refresh in the background keeps what is on screen.
+                    setStatus((current) => (current === 'ready' ? current : 'error'));
                 }
             });
 
@@ -110,6 +112,35 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, remo
             cancelled = true;
         };
     }, [attempt, onTodayLoaded]);
+
+    // FSRS brings cards back within minutes, so the screen must not stay on
+    // «Пока всё» once they are due: the countdown ticks while the next review
+    // is today, and the data reloads when it comes or the app is reopened.
+    const nextReviewAt = today?.nextReviewAt;
+    useEffect(() => {
+        const target = nextReviewAt ? new Date(nextReviewAt).getTime() : NaN;
+        if (status !== 'ready' || isNaN(target)) {
+            return;
+        }
+        const tick = () => {
+            const current = new Date();
+            setNow(current);
+            if (current.getTime() >= target) {
+                setAttempt((value) => value + 1);
+            }
+        };
+        const onVisible = () => {
+            if (document.visibilityState === 'visible') {
+                tick();
+            }
+        };
+        const timer = isNextReviewToday(nextReviewAt) ? window.setInterval(tick, 30_000) : undefined;
+        document.addEventListener('visibilitychange', onVisible);
+        return () => {
+            window.clearInterval(timer);
+            document.removeEventListener('visibilitychange', onVisible);
+        };
+    }, [status, nextReviewAt]);
 
     const retry = () => {
         setStatus('loading');
@@ -148,7 +179,7 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, remo
         setDueMap.set(card.setId, (setDueMap.get(card.setId) ?? 0) + 1);
     }
     const dueCount = feedCards.filter((card) => !removedSetIds.includes(card.setId)).length;
-    const nextReviewSubtitle = formatNextReviewSubtitle(today.nextReviewAt);
+    const nextReviewSubtitle = formatNextReviewSubtitle(today.nextReviewAt, now);
 
     const bottomActions = (
         <Flex direction="column" align="stretch" gap={8}>
@@ -203,7 +234,10 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, remo
                                 <>
                                     <Flex align="center" gap={8}>
                                         <IconCheck size={24} tone="positive" />
-                                        <Typography.Text variant="subheader">На сегодня всё</Typography.Text>
+                                        <Typography.Text variant="subheader">
+                                            {/* «На сегодня всё» would be untrue while cards still come back today. */}
+                                            {isNextReviewToday(today.nextReviewAt, now) ? 'Пока всё' : 'На сегодня всё'}
+                                        </Typography.Text>
                                     </Flex>
                                     {nextReviewSubtitle ? (
                                         <Typography.Text variant="body" color="secondary">
