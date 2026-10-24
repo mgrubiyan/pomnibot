@@ -15,21 +15,14 @@ var _ Handler = UnimplementedHandler{}
 
 // AnswerQuestion implements AnswerQuestion operation.
 //
-// Send answer's text for input kind of questions.
+// Only the card the feed shows for a due fact is graded and recorded; asked again after that, the
+// endpoint repeats the recorded verdict. A typed answer need not match word for word: form, word order
+// and typos do not matter, and answers in other words are judged by a language model. When the model
+// does not answer in time nothing is recorded and the method is fallback: ask again. A card the feed
+// does not ask and the reader has never answered gets 409.
 //
 // POST /cards/{cardId}/answer
 func (UnimplementedHandler) AnswerQuestion(ctx context.Context, req *AnswerQuestionRequest, params AnswerQuestionParams) (r AnswerQuestionRes, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
-// CheckAnswer implements CheckAnswer operation.
-//
-// The answer need not match word for word: form, word order and typos do not matter, and answers in
-// other words are judged by a language model. Nothing is recorded: the feed sends results with
-// SendResults.
-//
-// POST /cards/{cardId}/check
-func (UnimplementedHandler) CheckAnswer(ctx context.Context, req *CheckAnswerRequest, params CheckAnswerParams) (r CheckAnswerRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
@@ -108,7 +101,8 @@ func (UnimplementedHandler) GetAdminIssues(ctx context.Context) (r GetAdminIssue
 
 // GetCardsBySetID implements GetCardsBySetID operation.
 //
-// Get cards.
+// The author gets whole cards; a member gets only the questions, without answers, options, tables,
+// explanations and quotes.
 //
 // GET /sets/{setId}/cards
 func (UnimplementedHandler) GetCardsBySetID(ctx context.Context, params GetCardsBySetIDParams) (r GetCardsBySetIDRes, _ error) {
@@ -126,7 +120,8 @@ func (UnimplementedHandler) GetFactsBySetID(ctx context.Context, params GetFacts
 
 // GetFeedQuestions implements GetFeedQuestions operation.
 //
-// Get questions of current feed.
+// Questions only: what answers a card comes back from AnswerQuestion, or from RevealCard for a flip
+// card.
 //
 // GET /feed
 func (UnimplementedHandler) GetFeedQuestions(ctx context.Context) (r GetFeedQuestionsRes, _ error) {
@@ -252,12 +247,13 @@ func (UnimplementedHandler) ResolveCardIssues(ctx context.Context, params Resolv
 	return r, ht.ErrNotImplemented
 }
 
-// SendResults implements SendResults operation.
+// RevealCard implements RevealCard operation.
 //
-// Send set/feed results.
+// Flip cards only, and only the card of the current feed or one the reader has answered. Recording the
+// grade is AnswerQuestion's job.
 //
-// POST /results
-func (UnimplementedHandler) SendResults(ctx context.Context, req SendResultsRequest) (r SendResultsRes, _ error) {
+// POST /cards/{cardId}/reveal
+func (UnimplementedHandler) RevealCard(ctx context.Context, params RevealCardParams) (r RevealCardRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 

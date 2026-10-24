@@ -175,7 +175,7 @@ func TestAPIHandler_CardsDelegation(t *testing.T) {
 			if userID != testAPIUserID456 || id != cardID || answer != "my answer" {
 				t.Errorf("unexpected args: userID=%s, id=%s, answer=%s", userID, id, answer)
 			}
-			return &contracts.AnswerQuestionResponse{IsCorrect: true, UserAnswer: answer}, nil
+			return &contracts.AnswerQuestionResponse{IsCorrect: true, Method: contracts.AnswerQuestionResponseMethodLocal}, nil
 		},
 	}
 
@@ -251,17 +251,11 @@ func TestAPIHandler_HomescreenDelegation(t *testing.T) {
 			}
 			return &contracts.TodayData{User: contracts.User{ID: testAPIUserID789, FirstName: "Alex"}, DueCount: 10, EstimatedMinutes: 15}, nil
 		},
-		getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID) ([]contracts.Card, error) {
+		getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID) ([]contracts.FeedCard, error) {
 			if userID != testAPIUserID789 {
 				t.Errorf("unexpected userID: %s", userID)
 			}
-			return []contracts.Card{{ID: uuid.New(), SetId: uuid.New(), Kind: contracts.CardKindChoice, Question: "Feed Card"}}, nil
-		},
-		sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.Answer) error {
-			if userID != testAPIUserID789 || len(results) != 1 {
-				t.Errorf("unexpected args: userID=%s, len=%d", userID, len(results))
-			}
-			return nil
+			return []contracts.FeedCard{{ID: uuid.New(), SetId: uuid.New(), Kind: contracts.CardKindChoice, Question: "Feed Card"}}, nil
 		},
 	}
 
@@ -285,18 +279,6 @@ func TestAPIHandler_HomescreenDelegation(t *testing.T) {
 		}
 		if _, ok := res.(*contracts.GetFeedQuestionsOKApplicationJSON); !ok {
 			t.Fatalf("expected *contracts.GetFeedQuestionsOKApplicationJSON, got %T", res)
-		}
-	})
-
-	t.Run("SendResults delegates to homescreenHandler", func(t *testing.T) {
-		res, err := h.SendResults(ctx, contracts.SendResultsRequest{
-			contracts.Answer{CardId: uuid.New(), Correct: true},
-		})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if _, ok := res.(*contracts.SendResultsNoContent); !ok {
-			t.Fatalf("expected *contracts.SendResultsNoContent, got %T", res)
 		}
 	})
 }
@@ -372,11 +354,6 @@ func TestAPIHandler_NilServicesFallback(t *testing.T) {
 		}
 
 		_, err = h.GetFeedQuestions(ctx)
-		if !errors.Is(err, ht.ErrNotImplemented) {
-			t.Fatalf("expected ErrNotImplemented, got %v", err)
-		}
-
-		_, err = h.SendResults(ctx, contracts.SendResultsRequest{})
 		if !errors.Is(err, ht.ErrNotImplemented) {
 			t.Fatalf("expected ErrNotImplemented, got %v", err)
 		}

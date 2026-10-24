@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button, CellList, CellSimple, Flex, Spinner, Typography } from '@maxhub/max-ui';
-import type { Card, CardSet, User } from '../types';
+import type { Card, CardSet, FeedCard, User } from '../types';
 import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -16,7 +16,7 @@ import s from './SetScreen.module.css';
 type Status = 'loading' | 'error' | 'ready';
 
 
-async function loadFeed(): Promise<Card[]> {
+async function loadFeed(): Promise<FeedCard[]> {
     const { data, error } = await api.GET('/feed');
     if (error || !data) {
         throw new Error(error?.message ?? 'Failed to load feed');
@@ -54,7 +54,7 @@ export function SetScreen({
     const [status, setStatus] = useState<Status>('loading');
     const [set, setSet] = useState<CardSet | null>(null);
     const [cards, setCards] = useState<Card[]>([]);
-    const [feedCards, setFeedCards] = useState<Card[]>([]);
+    const [feedCards, setFeedCards] = useState<FeedCard[]>([]);
     const [attempt, setAttempt] = useState(0);
     const [confirmingRemove, setConfirmingRemove] = useState(false);
     // Cards with open complaints. Only the author can see them, and the set

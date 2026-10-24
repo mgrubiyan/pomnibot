@@ -236,6 +236,8 @@ checks:
       type: array
       items:
         type: object
+        description: A card as the feed asks it, with nothing that gives the answer
+          away.
         required:
         - id
         - setId
@@ -243,9 +245,6 @@ checks:
         - factName
         - kind
         - question
-        - answer
-        - explanation
-        - sourceQuote
         properties:
           id:
             type: string
@@ -275,7 +274,8 @@ checks:
             description: choice only
           table:
             type: object
-            description: 'Sorting card: lay the terms out across the columns.'
+            description: The columns of a sorting card and the terms to lay out, without
+              their places.
             required:
             - columns
             - items
@@ -287,62 +287,7 @@ checks:
               items:
                 type: array
                 items:
-                  type: object
-                  description: A term of the table and the column it belongs to.
-                  required:
-                  - text
-                  - column
-                  properties:
-                    text:
-                      type: string
-                    column:
-                      type: string
-          answer:
-            description: ' choice - string[] (all correct option texts); legacy string/integer
-              supported input - string boolean - boolean table - #/components/schemas/TableLayout '
-            oneOf:
-            - type: array
-              minItems: 1
-              uniqueItems: true
-              items:
-                type: string
-            - type: integer
-            - type: string
-            - type: boolean
-            - type: object
-              description: 'Sorting card: lay the terms out across the columns.'
-              required:
-              - columns
-              - items
-              properties:
-                columns:
-                  type: array
-                  items:
-                    type: string
-                items:
-                  type: array
-                  items:
-                    type: object
-                    description: A term of the table and the column it belongs to.
-                    required:
-                    - text
-                    - column
-                    properties:
-                      text:
-                        type: string
-                      column:
-                        type: string
-          explanation:
-            type: string
-            description: 2-3 sentences
-          sourceQuote:
-            type: string
-            description: quote from the notes
-          sourceRef:
-            type: string
-            description: 'where the quote is from: «Лекция 3, стр. 2»'
-          step:
-            type: integer
+                  type: string
   timeoutMs: 5000
   repeatable: true
 - id: GetProfile
@@ -430,19 +375,6 @@ checks:
           - telegram
         profileComplete:
           type: boolean
-  timeoutMs: 5000
-  repeatable: false
-- id: SendResults
-  name: Send set/feed results
-  method: POST
-  path: /results
-  role: user
-  request:
-    headers:
-      Content-Type: application/json
-  expected:
-    statusCodes:
-    - 204
   timeoutMs: 5000
   repeatable: false
 - id: CreateSet
@@ -608,17 +540,16 @@ checks:
     - 200
     contentType: application/json
     requiredFields:
-    - answer
-    - explanation
     - factId
     - factName
     - id
     - kind
     - question
     - setId
-    - sourceQuote
     bodySchema:
       type: object
+      description: answer, explanation and sourceQuote are absent only in a set member's
+        list of the set's cards.
       required:
       - id
       - setId
@@ -626,9 +557,6 @@ checks:
       - factName
       - kind
       - question
-      - answer
-      - explanation
-      - sourceQuote
       properties:
         id:
           type: string
@@ -729,38 +657,9 @@ checks:
   timeoutMs: 5000
   repeatable: false
 - id: AnswerQuestion
-  name: Send answer's text for input kind of questions
+  name: Answer a card of the current feed and record the verdict
   method: POST
   path: /cards/{cardId}/answer
-  role: user
-  request:
-    path:
-      cardId: sample-id
-    headers:
-      Content-Type: application/json
-  expected:
-    statusCodes:
-    - 200
-    contentType: application/json
-    requiredFields:
-    - isCorrect
-    - userAnswer
-    bodySchema:
-      type: object
-      required:
-      - isCorrect
-      - userAnswer
-      properties:
-        isCorrect:
-          type: boolean
-        userAnswer:
-          type: string
-  timeoutMs: 5000
-  repeatable: false
-- id: CheckAnswer
-  name: Check a typed answer by meaning without recording it
-  method: POST
-  path: /cards/{cardId}/check
   role: user
   request:
     path:
@@ -792,8 +691,59 @@ checks:
           - local
           - model
           - fallback
-          description: 'local: matched up to form and typos, or surely wrong; model:
-            judged by meaning; fallback: the model did not answer in time, local verdict'
+          description: 'local: graded without a model (a typed answer matched up to
+            form and typos, or surely wrong); model: judged by meaning; fallback:
+            the model did not answer in time, nothing was recorded, ask again'
+        reveal:
+          type: object
+          description: Absent when the method is fallback
+          required:
+          - answer
+          - explanation
+          - sourceQuote
+          properties:
+            answer:
+              description: ' choice - string[] (all correct option texts); legacy
+                string/integer supported input - string boolean - boolean table -
+                #/components/schemas/TableLayout '
+              oneOf:
+              - type: array
+                minItems: 1
+                uniqueItems: true
+                items:
+                  type: string
+              - type: integer
+              - type: string
+              - type: boolean
+              - type: object
+                description: 'Sorting card: lay the terms out across the columns.'
+                required:
+                - columns
+                - items
+                properties:
+                  columns:
+                    type: array
+                    items:
+                      type: string
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      description: A term of the table and the column it belongs to.
+                      required:
+                      - text
+                      - column
+                      properties:
+                        text:
+                          type: string
+                        column:
+                          type: string
+            explanation:
+              type: string
+            sourceQuote:
+              type: string
+            sourceRef:
+              type: string
   timeoutMs: 5000
   repeatable: false
 - id: ReportCardIssue
@@ -822,6 +772,73 @@ checks:
   expected:
     statusCodes:
     - 204
+  timeoutMs: 5000
+  repeatable: false
+- id: RevealCard
+  name: Show the answer of a flip card before the reader grades themselves
+  method: POST
+  path: /cards/{cardId}/reveal
+  role: user
+  request:
+    path:
+      cardId: sample-id
+  expected:
+    statusCodes:
+    - 200
+    contentType: application/json
+    requiredFields:
+    - answer
+    - explanation
+    - sourceQuote
+    bodySchema:
+      type: object
+      description: What a feed card hides until it is answered.
+      required:
+      - answer
+      - explanation
+      - sourceQuote
+      properties:
+        answer:
+          description: ' choice - string[] (all correct option texts); legacy string/integer
+            supported input - string boolean - boolean table - #/components/schemas/TableLayout '
+          oneOf:
+          - type: array
+            minItems: 1
+            uniqueItems: true
+            items:
+              type: string
+          - type: integer
+          - type: string
+          - type: boolean
+          - type: object
+            description: 'Sorting card: lay the terms out across the columns.'
+            required:
+            - columns
+            - items
+            properties:
+              columns:
+                type: array
+                items:
+                  type: string
+              items:
+                type: array
+                items:
+                  type: object
+                  description: A term of the table and the column it belongs to.
+                  required:
+                  - text
+                  - column
+                  properties:
+                    text:
+                      type: string
+                    column:
+                      type: string
+        explanation:
+          type: string
+        sourceQuote:
+          type: string
+        sourceRef:
+          type: string
   timeoutMs: 5000
   repeatable: false
 - id: UpdateFact
@@ -854,17 +871,16 @@ checks:
     - 201
     contentType: application/json
     requiredFields:
-    - answer
-    - explanation
     - factId
     - factName
     - id
     - kind
     - question
     - setId
-    - sourceQuote
     bodySchema:
       type: object
+      description: answer, explanation and sourceQuote are absent only in a set member's
+        list of the set's cards.
       required:
       - id
       - setId
@@ -872,9 +888,6 @@ checks:
       - factName
       - kind
       - question
-      - answer
-      - explanation
-      - sourceQuote
       properties:
         id:
           type: string
@@ -1097,6 +1110,8 @@ checks:
       type: array
       items:
         type: object
+        description: answer, explanation and sourceQuote are absent only in a set
+          member's list of the set's cards.
         required:
         - id
         - setId
@@ -1104,9 +1119,6 @@ checks:
         - factName
         - kind
         - question
-        - answer
-        - explanation
-        - sourceQuote
         properties:
           id:
             type: string
@@ -1221,17 +1233,16 @@ checks:
     - 201
     contentType: application/json
     requiredFields:
-    - answer
-    - explanation
     - factId
     - factName
     - id
     - kind
     - question
     - setId
-    - sourceQuote
     bodySchema:
       type: object
+      description: answer, explanation and sourceQuote are absent only in a set member's
+        list of the set's cards.
       required:
       - id
       - setId
@@ -1239,9 +1250,6 @@ checks:
       - factName
       - kind
       - question
-      - answer
-      - explanation
-      - sourceQuote
       properties:
         id:
           type: string

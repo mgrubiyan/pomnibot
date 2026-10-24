@@ -84,6 +84,11 @@ func (s *ManualStore) CreateCard(ctx context.Context, userID uuid.UUID, setID uu
 	return cardID, err
 }
 
+// InTx runs fn in one transaction, for the writes of an answer.
+func (s *ManualStore) InTx(ctx context.Context, fn func(db.Querier) error) error {
+	return s.transaction(ctx, func(q *db.Queries) error { return fn(q) })
+}
+
 func (s *ManualStore) transaction(ctx context.Context, fn func(*db.Queries) error) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {

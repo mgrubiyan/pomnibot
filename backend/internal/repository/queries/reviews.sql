@@ -27,3 +27,12 @@ ON CONFLICT (user_id, fact_id) DO UPDATE SET
     last_reviewed_at = EXCLUDED.last_reviewed_at,
     next_review_at = EXCLUDED.next_review_at
 RETURNING *;
+
+-- name: GetLastAnswer :one
+-- The verdict recorded last for the user's answer to the card, if it was
+-- recorded after since; the id is a UUIDv7 and holds the time of the answer.
+SELECT correct FROM answers
+WHERE user_id = @user_id AND card_id = @card_id
+  AND uuid_extract_timestamp(id) >= @since::timestamptz
+ORDER BY id DESC
+LIMIT 1;

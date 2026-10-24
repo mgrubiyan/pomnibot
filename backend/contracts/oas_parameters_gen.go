@@ -81,72 +81,6 @@ func decodeAnswerQuestionParams(args [1]string, argsEscaped bool, r *http.Reques
 	return params, nil
 }
 
-// CheckAnswerParams is parameters of CheckAnswer operation.
-type CheckAnswerParams struct {
-	// The ID of the card.
-	CardId uuid.UUID
-}
-
-func unpackCheckAnswerParams(packed middleware.Parameters) (params CheckAnswerParams) {
-	{
-		key := middleware.ParameterKey{
-			Name: "cardId",
-			In:   "path",
-		}
-		params.CardId = packed[key].(uuid.UUID)
-	}
-	return params
-}
-
-func decodeCheckAnswerParams(args [1]string, argsEscaped bool, r *http.Request) (params CheckAnswerParams, _ error) {
-	// Decode path: cardId.
-	if err := func() error {
-		param := args[0]
-		if argsEscaped {
-			unescaped, err := url.PathUnescape(args[0])
-			if err != nil {
-				return errors.Wrap(err, "unescape path")
-			}
-			param = unescaped
-		}
-		if len(param) > 0 {
-			d := uri.NewPathDecoder(uri.PathDecoderConfig{
-				Param:   "cardId",
-				Value:   param,
-				Style:   uri.PathStyleSimple,
-				Explode: false,
-			})
-
-			if err := func() error {
-				val, err := d.DecodeValue()
-				if err != nil {
-					return err
-				}
-
-				c, err := conv.ToUUID(val)
-				if err != nil {
-					return err
-				}
-
-				params.CardId = c
-				return nil
-			}(); err != nil {
-				return err
-			}
-		} else {
-			return validate.ErrFieldRequired
-		}
-		return nil
-	}(); err != nil {
-		return params, &ogenerrors.DecodeParamError{
-			Name: "cardId",
-			In:   "path",
-			Err:  err,
-		}
-	}
-	return params, nil
-}
-
 // CreateCardParams is parameters of CreateCard operation.
 type CreateCardParams struct {
 	SetId uuid.UUID
@@ -1147,6 +1081,72 @@ func unpackResolveCardIssuesParams(packed middleware.Parameters) (params Resolve
 }
 
 func decodeResolveCardIssuesParams(args [1]string, argsEscaped bool, r *http.Request) (params ResolveCardIssuesParams, _ error) {
+	// Decode path: cardId.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "cardId",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToUUID(val)
+				if err != nil {
+					return err
+				}
+
+				params.CardId = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "cardId",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// RevealCardParams is parameters of RevealCard operation.
+type RevealCardParams struct {
+	// The ID of the card.
+	CardId uuid.UUID
+}
+
+func unpackRevealCardParams(packed middleware.Parameters) (params RevealCardParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "cardId",
+			In:   "path",
+		}
+		params.CardId = packed[key].(uuid.UUID)
+	}
+	return params
+}
+
+func decodeRevealCardParams(args [1]string, argsEscaped bool, r *http.Request) (params RevealCardParams, _ error) {
 	// Decode path: cardId.
 	if err := func() error {
 		param := args[0]

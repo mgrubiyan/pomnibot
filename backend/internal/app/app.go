@@ -64,7 +64,7 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 	}
 	// Before the pool closes: the messages look up the author's accounts.
 	defer issues.Close()
-	cardOptions = append(cardOptions, usecase.WithManualCards(store), usecase.WithIssueNotifier(issues))
+	cardOptions = append(cardOptions, usecase.WithManualCards(store), usecase.WithTransactions(store), usecase.WithIssueNotifier(issues))
 	cards := usecase.NewCardService(queries, users, cardOptions...)
 	home := usecase.NewHomescreenService(queries, users)
 	facts := usecase.NewFactService(queries)

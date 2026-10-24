@@ -136,7 +136,7 @@ func TestPlatformUsersMigrationAndSharedLearning(t *testing.T) {
 	if err != nil || len(list) != 1 {
 		t.Fatalf("shared cards: %v %v", list, err)
 	}
-	if _, err = cards.AnswerQuestion(ctx, telegramID, list[0].ID, "Answer"); err != nil {
+	if _, err = cards.AnswerQuestion(ctx, telegramID, list[0].ID, "true"); err != nil {
 		t.Fatal(err)
 	}
 	facts, err := q.GetFactsBySetID(ctx, pgtype.UUID{Bytes: set.ID, Valid: true})

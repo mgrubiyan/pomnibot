@@ -7,7 +7,6 @@ type OperationName = string
 
 const (
 	AnswerQuestionOperation     OperationName = "AnswerQuestion"
-	CheckAnswerOperation        OperationName = "CheckAnswer"
 	CreateCardOperation         OperationName = "CreateCard"
 	CreateCardInFactOperation   OperationName = "CreateCardInFact"
 	CreateFactOperation         OperationName = "CreateFact"
@@ -32,7 +31,7 @@ const (
 	ReorderCardsOperation       OperationName = "ReorderCards"
 	ReportCardIssueOperation    OperationName = "ReportCardIssue"
 	ResolveCardIssuesOperation  OperationName = "ResolveCardIssues"
-	SendResultsOperation        OperationName = "SendResults"
+	RevealCardOperation         OperationName = "RevealCard"
 	UpdateCardOperation         OperationName = "UpdateCard"
 	UpdateFactOperation         OperationName = "UpdateFact"
 	UpdateSetOperation          OperationName = "UpdateSet"

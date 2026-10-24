@@ -2,14 +2,18 @@ package repository_test
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
+	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
@@ -20,7 +24,7 @@ func TestGeneratedSetOrderAndChoiceIssuesPostgres(t *testing.T) {
 	q := db.New(pool)
 	users := usecase.NewUserService(q)
 	sets := usecase.NewSetService(q, users)
-	cards := usecase.NewCardService(q, users)
+	cards := usecase.NewCardService(q, users, usecase.WithTransactions(repository.NewManualStore(pool)))
 	owner, reader := uuid.New(), uuid.New()
 	pgReader := pgtype.UUID{Bytes: reader, Valid: true}
 	result := generator.Result{Artifact: &generator.Artifact{Version: generator.PipelineVersion}}
@@ -59,20 +63,30 @@ func TestGeneratedSetOrderAndChoiceIssuesPostgres(t *testing.T) {
 			t.Fatal("fact order changed")
 		}
 	}
-	all, err := sets.GetCardsBySetID(ctx, reader, set.ID)
+	all, err := sets.GetCardsBySetID(ctx, owner, set.ID)
 	if err != nil || len(all) != 125 {
 		t.Fatalf("cards=%d error=%v", len(all), err)
 	}
+	// A member answers these cards in the feed, so their list has only the questions.
+	listed, err := sets.GetCardsBySetID(ctx, reader, set.ID)
+	if err != nil || len(listed) != 125 {
+		t.Fatalf("member cards=%d error=%v", len(listed), err)
+	}
+	for i, card := range listed {
+		if card.Question != all[i].Question || card.Answer.Set || card.Explanation.Set || card.SourceQuote.Set || card.Options != nil || card.Table.Set {
+			t.Fatalf("member card %d gives the answer away: %+v", i, card)
+		}
+	}
 	kinds := []contracts.CardKind{contracts.CardKindFlip, contracts.CardKindBoolean, contracts.CardKindChoice, contracts.CardKindTable, contracts.CardKindInput}
 	for i, card := range all {
-		if card.Kind != kinds[i%5] || card.FactId != uuid.UUID(facts[i/5].ID.Bytes) || card.Question != fmt.Sprintf("%d %s", i/5, kinds[i%5]) || card.ID.Version() != 7 || card.SourceQuote != "Quote" {
+		if card.Kind != kinds[i%5] || card.FactId != uuid.UUID(facts[i/5].ID.Bytes) || card.Question != fmt.Sprintf("%d %s", i/5, kinds[i%5]) || card.ID.Version() != 7 || card.SourceQuote.Value != "Quote" {
 			t.Fatalf("card %d: %+v", i, card)
 		}
 		if i > 0 && bytes.Compare(all[i-1].ID[:], card.ID[:]) >= 0 {
 			t.Fatal("card order changed")
 		}
 	}
-	if !slices.Equal(all[2].Answer.StringArray, []string{"A", "B"}) || !slices.Equal(all[2].Options, []string{"A", "B", "C"}) || !slices.Equal(all[3].Table.Value.Columns, []string{"X", "Y"}) || all[3].Table.Value.Items[1].Text != "y" {
+	if !slices.Equal(all[2].Answer.Value.StringArray, []string{"A", "B"}) || !slices.Equal(all[2].Options, []string{"A", "B", "C"}) || !slices.Equal(all[3].Table.Value.Columns, []string{"X", "Y"}) || all[3].Table.Value.Items[1].Text != "y" {
 		t.Fatal("choice/table content lost")
 	}
 	setStep := func(step int) {
@@ -114,31 +128,52 @@ func TestGeneratedSetOrderAndChoiceIssuesPostgres(t *testing.T) {
 	}
 	assertFeed(owner, contracts.CardKindFlip, 25)
 	updated, err := cards.UpdateCard(ctx, owner, choiceID, &contracts.UpdateCardRequest{Answer: contracts.NewOptCardAnswer(contracts.NewStringArrayCardAnswer([]string{"B", "C"}))})
-	if err != nil || !slices.Equal(updated.Answer.StringArray, []string{"B", "C"}) {
+	if err != nil || !slices.Equal(updated.Answer.Value.StringArray, []string{"B", "C"}) {
 		t.Fatalf("edit: %+v %v", updated, err)
 	}
 	setStep(2)
 	assertFeed(reader, contracts.CardKindChoice, 25)
-	roundTrip, err := sets.GetCardsBySetID(ctx, reader, set.ID)
-	if err != nil || !slices.Equal(roundTrip[2].Answer.StringArray, []string{"B", "C"}) {
+	roundTrip, err := sets.GetCardsBySetID(ctx, owner, set.ID)
+	if err != nil || !slices.Equal(roundTrip[2].Answer.Value.StringArray, []string{"B", "C"}) {
 		t.Fatalf("edited answer: %v", err)
 	}
 	options, err := q.GetCardOptions(ctx, pgtype.UUID{Bytes: choiceID, Valid: true})
 	if err != nil || len(options) != 3 || options[0].IsCorrect || !options[1].IsCorrect || !options[2].IsCorrect {
 		t.Fatalf("edited options: %+v %v", options, err)
 	}
-	for _, tc := range []struct {
-		answer  string
-		correct bool
-	}{{`["C","B"]`, true}, {`["B"]`, false}, {`["A","B"]`, false}} {
-		verdict, err := cards.CheckAnswer(ctx, reader, choiceID, tc.answer)
-		if err != nil || verdict.IsCorrect != tc.correct {
-			t.Fatalf("check %s: %+v %v", tc.answer, verdict, err)
+	// Only the card the feed asks now is graded, not an easier or a harder
+	// card of the same fact.
+	for _, other := range []uuid.UUID{all[0].ID, all[4].ID} {
+		if _, err := cards.AnswerQuestion(ctx, reader, other, "true"); !errors.Is(err, usecase.ErrConflict) {
+			t.Fatalf("answer to a card out of the feed: %v", err)
 		}
 	}
+	if _, err := cards.RevealCard(ctx, reader, all[0].ID); !errors.Is(err, usecase.ErrConflict) {
+		t.Fatalf("reveal of a flip out of the feed: %v", err)
+	}
+	if _, err := cards.RevealCard(ctx, reader, choiceID); !errors.Is(err, usecase.ErrValidation) {
+		t.Fatalf("reveal of a choice card: %v", err)
+	}
 	answer, err := cards.AnswerQuestion(ctx, reader, choiceID, `["C","B"]`)
-	if err != nil || !answer.IsCorrect {
+	if err != nil || !answer.IsCorrect || !slices.Equal(answer.Reveal.Value.Answer.StringArray, []string{"B", "C"}) {
 		t.Fatalf("answer: %+v %v", answer, err)
+	}
+	// Asked again, the endpoint repeats the recorded verdict and records nothing.
+	again, err := cards.AnswerQuestion(ctx, reader, choiceID, `["B"]`)
+	if err != nil || !again.IsCorrect {
+		t.Fatalf("second answer: %+v %v", again, err)
+	}
+	var recorded int
+	if err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM answers WHERE user_id=$1 AND card_id=$2", reader, choiceID).Scan(&recorded); err != nil || recorded != 1 {
+		t.Fatalf("recorded answers=%d error=%v", recorded, err)
+	}
+	// Only a recent verdict is repeated: none was recorded after now.
+	if _, err := q.GetLastAnswer(ctx, db.GetLastAnswerParams{
+		UserID: pgReader,
+		CardID: pgtype.UUID{Bytes: choiceID, Valid: true},
+		Since:  pgtype.Timestamptz{Time: time.Now().Add(time.Second), Valid: true},
+	}); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("an older verdict was repeated: %v", err)
 	}
 	progress, err := q.GetUserFactProgress(ctx, db.GetUserFactProgressParams{UserID: pgReader, FactID: facts[0].ID})
 	if err != nil || progress.Step != 3 {

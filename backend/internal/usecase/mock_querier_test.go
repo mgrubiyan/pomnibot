@@ -3,6 +3,7 @@ package usecase_test
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 )
@@ -40,6 +41,7 @@ type mockQuerier struct {
 	isSetAuthorFunc                 func(ctx context.Context, arg db.IsSetAuthorParams) (bool, error)
 	joinSetFunc                     func(ctx context.Context, arg db.JoinSetParams) (db.UserSet, error)
 	recordAnswerFunc                func(ctx context.Context, arg db.RecordAnswerParams) (db.Answer, error)
+	getLastAnswerFunc               func(ctx context.Context, arg db.GetLastAnswerParams) (bool, error)
 	updateCardFunc                  func(ctx context.Context, arg db.UpdateCardParams) (db.UpdateCardRow, error)
 	updateSetTitleFunc              func(ctx context.Context, arg db.UpdateSetTitleParams) (int64, error)
 	setExistsFunc                   func(ctx context.Context, id pgtype.UUID) (bool, error)
@@ -314,6 +316,13 @@ func (m *mockQuerier) LeaveSet(ctx context.Context, arg db.LeaveSetParams) (int6
 		return m.leaveSetFunc(ctx, arg)
 	}
 	return 1, nil
+}
+
+func (m *mockQuerier) GetLastAnswer(ctx context.Context, arg db.GetLastAnswerParams) (bool, error) {
+	if m.getLastAnswerFunc != nil {
+		return m.getLastAnswerFunc(ctx, arg)
+	}
+	return false, pgx.ErrNoRows
 }
 
 func (m *mockQuerier) RecordAnswer(ctx context.Context, arg db.RecordAnswerParams) (db.Answer, error) {
