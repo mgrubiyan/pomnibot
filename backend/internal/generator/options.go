@@ -25,13 +25,15 @@ type Document struct {
 
 // Artifact retains private originals and the source representation for auditing.
 type Artifact struct {
-	Request  *providers.Request         `json:"request,omitempty"`  // private reproducible input, no provider credentials
-	Response string                     `json:"response,omitempty"` // full model content, including malformed or truncated responses
-	Stages   map[string]json.RawMessage `json:"stages,omitempty"`
-	Facts    []Fact                     `json:"facts,omitempty"`
-	Version  string                     `json:"version"`
-	Reading  material.Document          `json:"reading"`
-	Files    []ingest.File              `json:"files"` // private originals for reproducible region references
+	Requests  map[string]providers.Request `json:"requests,omitempty"`
+	Responses map[string]string            `json:"responses,omitempty"`
+	Request   *providers.Request           `json:"request,omitempty"`  // private reproducible input, no provider credentials
+	Response  string                       `json:"response,omitempty"` // full model content, including malformed or truncated responses
+	Stages    map[string]json.RawMessage   `json:"stages,omitempty"`
+	Facts     []Fact                       `json:"facts,omitempty"`
+	Version   string                       `json:"version"`
+	Reading   material.Document            `json:"reading"`
+	Files     []ingest.File                `json:"files"` // private originals for reproducible region references
 }
 
 // Result includes cards, available source coverage and processing metrics.
@@ -55,6 +57,7 @@ type Coverage struct {
 
 // Stats describes one Generate run.
 type Stats struct {
+	DroppedIllustrations int                   `json:"droppedIllustrations,omitempty"`
 	Stages               map[string]StageStats `json:"stages,omitempty"`
 	CachedTokens         int                   `json:"cachedTokens"`
 	CacheWriteTokens     int                   `json:"cacheWriteTokens"`
@@ -140,6 +143,8 @@ func OptionsFromEnv() (Options, error) {
 
 // StageStats records transport attempts, billing and validation for one phase.
 type StageStats struct {
+	Backend              string                   `json:"backend,omitempty"`
+	DroppedIllustrations int                      `json:"droppedIllustrations,omitempty"`
 	Model                string                   `json:"model"`
 	ModelCalls           int                      `json:"modelCalls"`
 	FailedCalls          int                      `json:"failedCalls"`
@@ -159,6 +164,7 @@ type StageStats struct {
 }
 
 func (s *Stats) recordStage(name string, st StageStats) {
+	s.DroppedIllustrations += st.DroppedIllustrations
 	s.UnreportedUsageCalls += st.UnreportedUsageCalls
 	s.ModelCalls += st.ModelCalls
 	s.FailedCalls += st.FailedCalls

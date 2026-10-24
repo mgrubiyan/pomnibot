@@ -19,6 +19,8 @@ import {
 } from '../utils/sets';
 import { groupCardsByFacts } from '../utils/factGroups';
 import { getFactCardIds, reorderCardsInFact } from '../utils/cardsOrder';
+import { StudyContent } from '../components/StudyContent';
+import { StudyIllustration } from '../components/StudyIllustration';
 import s from './SetCards.module.css';
 
 type Status = 'loading' | 'error' | 'ready';
@@ -515,9 +517,10 @@ export function SetCards({
                                                             : undefined
                                                     }
                                                     title={
-                                                        <span className={s.cardTitle}>
-                                                            {card.question}
-                                                        </span>
+                                                        <div>
+                                                            <StudyContent className={s.cardTitle} text={card.question} inControl />
+                                                            <StudyIllustration svg={card.questionSvg} alt="Иллюстрация к вопросу" />
+                                                        </div>
                                                     }
                                                     after={
                                                         isOwner &&

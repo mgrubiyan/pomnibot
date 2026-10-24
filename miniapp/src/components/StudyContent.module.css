@@ -1,0 +1,124 @@
+.content {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+    text-align: start;
+}
+
+.content > :first-child {
+    margin-top: 0;
+}
+
+.content > :last-child {
+    margin-bottom: 0;
+}
+
+.content :where(p, ul, ol, blockquote, pre) {
+    margin: 0.65em 0;
+}
+
+.content :where(p, li) {
+    white-space: pre-line;
+}
+
+.content :where(h1, h2, h3, h4, h5, h6) {
+    margin: 0.9em 0 0.4em;
+    font-size: 1.1em;
+    line-height: 1.35;
+}
+
+.content :where(ul, ol) {
+    padding-inline-start: 1.4em;
+}
+
+.content blockquote {
+    padding-inline-start: 0.8em;
+    border-inline-start: 3px solid var(--divider-primary);
+}
+
+.content a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
+.content code {
+    padding: 0.1em 0.25em;
+    border-radius: 4px;
+    background: var(--background-surface);
+    font-size: 0.9em;
+}
+
+.content pre,
+.scroll,
+.content :global(.katex-display) {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+}
+
+.content pre {
+    padding: 12px;
+    border-radius: 8px;
+    background: var(--background-surface);
+    white-space: pre;
+}
+
+.content pre code {
+    padding: 0;
+    background: transparent;
+}
+
+.content :global(.katex) {
+    font-size: 1.05em;
+    overflow-wrap: normal;
+}
+
+.content :global(.katex-display) {
+    padding: 0.3em 0;
+    overflow-y: hidden;
+    text-align: start;
+}
+
+.content :global(.katex-display .katex) {
+    display: block;
+    white-space: nowrap;
+    text-align: start;
+}
+
+.inlineMath {
+    display: inline-block;
+    max-width: 100%;
+    padding: 0.15em 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    vertical-align: middle;
+    overscroll-behavior-x: contain;
+}
+
+.scroll {
+    margin: 0.65em 0;
+}
+
+.content table {
+    min-width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95em;
+}
+
+.content :where(th, td) {
+    padding: 8px 10px;
+    border: 1px solid var(--divider-primary);
+    vertical-align: top;
+}
+
+.content th {
+    background: var(--background-surface);
+    font-weight: 600;
+}
+
+.content hr {
+    border: 0;
+    border-top: 1px solid var(--divider-primary);
+}

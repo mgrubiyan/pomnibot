@@ -46,12 +46,16 @@ func TestProcessingReportsMigrationPostgres(t *testing.T) {
 					t.Fatal(err)
 				}
 				var version, applied int
-				if err := pool.QueryRow(ctx, "SELECT MAX(version_id), COUNT(*) FILTER (WHERE version_id IN (14, 15, 16) AND is_applied) FROM goose_db_version").Scan(&version, &applied); err != nil || version != 16 || applied != 3 {
+				if err := pool.QueryRow(ctx, "SELECT MAX(version_id), COUNT(*) FILTER (WHERE version_id IN (14, 15, 16, 17) AND is_applied) FROM goose_db_version").Scan(&version, &applied); err != nil || version != 17 || applied != 4 {
 					t.Fatalf("migration version=%d applications=%d error=%v", version, applied, err)
 				}
 				var nonemptyWarnings int
 				if err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM sets WHERE warnings IS NULL OR cardinality(warnings) != 0").Scan(&nonemptyWarnings); err != nil || nonemptyWarnings != 0 {
 					t.Fatalf("existing sets have nonempty warnings: %d, error=%v", nonemptyWarnings, err)
+				}
+				var illustrated int
+				if err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM cards WHERE question_svg IS NOT NULL OR explanation_svg IS NOT NULL").Scan(&illustrated); err != nil || illustrated != 0 {
+					t.Fatalf("old cards gained illustrations: %d %v", illustrated, err)
 				}
 				var reports int
 				if err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM set_processing_reports").Scan(&reports); err != nil || reports != 0 {

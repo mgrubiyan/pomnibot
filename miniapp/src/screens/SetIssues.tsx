@@ -8,6 +8,7 @@ import { StatusScreen } from '../components/StatusScreen';
 import { IconCheck, IconOffline } from '../components/Icons';
 import { loadCards, loadSet, loadSetIssues } from '../utils/sets';
 import { answerPreview, cardsWithIssues, issueReasonLabel, type CardIssues } from '../utils/issues';
+import { StudyContent } from '../components/StudyContent';
 import s from './SetIssues.module.css';
 
 type Status = 'loading' | 'error' | 'ready';
@@ -132,11 +133,11 @@ export function SetIssues({ setId, onBack, onEditCard }: SetIssuesProps) {
                 {items.map(({ card, reasons }) => (
                     <Flex key={card.id} direction="column" align="stretch" gap={12} className={s.card}>
                         <Flex direction="column" align="stretch" gap={4}>
-                            <Typography.Text variant="body-strong" className={s.text}>
-                                {card.question}
+                            <Typography.Text variant="body-strong" asChild>
+                                <StudyContent className={s.text} text={card.question} />
                             </Typography.Text>
-                            <Typography.Text variant="description" color="secondary" className={s.text}>
-                                Ответ: {answerPreview(card)}
+                            <Typography.Text variant="description" color="secondary" asChild>
+                                <StudyContent className={s.text} text={`Ответ: ${answerPreview(card)}`} />
                             </Typography.Text>
                         </Flex>
                         <ul className={s.reasons}>

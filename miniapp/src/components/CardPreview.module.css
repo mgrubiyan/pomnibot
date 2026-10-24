@@ -1,0 +1,23 @@
+.preview {
+    min-width: 0;
+    padding: 12px 0;
+}
+
+.answers {
+    margin: 0;
+    padding-inline-start: 1.3em;
+}
+
+.answers li + li {
+    margin-top: 8px;
+}
+
+.columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+    gap: 12px;
+}
+
+.column {
+    min-width: 0;
+}

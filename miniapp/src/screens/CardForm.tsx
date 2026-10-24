@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Flex, IconButton, Input, Typography } from '@maxhub/max-ui';
+import { Button, Flex, IconButton, Typography } from '@maxhub/max-ui';
 import type { Card, CardKind, TableItem, TableLayout } from '../types';
 import { AutoTextarea } from '../components/AutoTextarea';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { ConfirmDiscardDialog } from '../components/ConfirmDiscardDialog';
+import { CardPreview } from '../components/CardPreview';
 import { CARD_KINDS } from '../utils/kinds';
 import { IconCross, IconDoc, IconPlus, IconTrash } from '../components/Icons';
 import type { CardPatch } from '../utils/cards';
@@ -181,6 +182,19 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
     const snapshot = JSON.stringify([kind, question, explanation, options, correctOptionIndices, booleanAnswer, textAnswer, tableColumns, tableItems]);
     const [initialSnapshot] = useState(snapshot);
     const dirty = snapshot !== initialSnapshot;
+    const previewTable = { columns: tableColumns, items: tableItems };
+    const previewCard: Partial<Card> = {
+        kind,
+        question,
+        explanation,
+        options: kind === 'choice' ? options : undefined,
+        answer: kind === 'choice' ? correctOptionIndices.map((index) => options[index])
+            : kind === 'boolean' ? booleanAnswer
+            : kind === 'table' ? previewTable : textAnswer,
+        table: kind === 'table' ? previewTable : undefined,
+        questionSvg: dirty ? undefined : card.questionSvg,
+        explanationSvg: dirty ? undefined : card.explanationSvg,
+    };
     useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
     const leave = (action: () => void) => {
         if (savingRef.current) return;
@@ -194,31 +208,25 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
 
         const patch: CardPatch = {
             kind,
-            question: question.trim(),
-            explanation: explanation.trim(),
+            question,
+            explanation,
         };
 
         if (kind === 'choice') {
-            const cleanedOptions = options.map((opt) => opt.trim());
-            patch.options = cleanedOptions;
-            patch.answer = correctOptionIndices.map((i) => cleanedOptions[i]);
+            patch.options = options;
+            patch.answer = correctOptionIndices.map((i) => options[i]);
         } else if (kind === 'boolean') {
             patch.answer = booleanAnswer;
         } else if (kind === 'table') {
-            const cleanedCols = tableColumns.map((c) => c.trim());
-            const cleanedItems = tableItems.map((item) => ({
-                text: item.text.trim(),
-                column: item.column.trim(),
-            }));
             const tableLayout: TableLayout = {
-                columns: cleanedCols,
-                items: cleanedItems,
+                columns: tableColumns,
+                items: tableItems.map((item) => ({ ...item })),
             };
             patch.table = tableLayout;
             patch.answer = tableLayout;
         } else {
             // input or flip
-            patch.answer = textAnswer.trim();
+            patch.answer = textAnswer;
         }
 
         savingRef.current = true;
@@ -239,6 +247,15 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                 />
 
                 <Flex direction="column" align="stretch" gap={16} className={s.form}>
+                    <details className={s.preview} open={Boolean(card.id)}>
+                        <summary>Предпросмотр</summary>
+                        <CardPreview card={previewCard} />
+                    </details>
+                    {card.questionSvg || card.explanationSvg ? (
+                        <Typography.Text variant="description" color="secondary">
+                            При сохранении карточки иллюстрации будут удалены.
+                        </Typography.Text>
+                    ) : null}
                     {/* Card kind Combobox */}
                     <Flex direction="column" align="stretch" gap={4}>
                         <Typography.Text variant="label" color="tertiary" asChild>
@@ -276,6 +293,9 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                             placeholder="Введите текст вопроса"
                             onChange={(event) => setQuestion(event.target.value)}
                         />
+                        <Typography.Text variant="description" color="tertiary">
+                            Поддерживаются Markdown и формулы: $...$, $$...$$.
+                        </Typography.Text>
                     </Flex>
 
                     {/* Answer section based on selected kind */}
@@ -297,7 +317,9 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                                     {/* MAX UI wraps the field in a div of its own; this one is
                                         the flex item that takes the free width. */}
                                     <div className={s.optionInput}>
-                                        <Input
+                                        <AutoTextarea
+                                            rows={1}
+                                            className={s.field}
                                             value={option}
                                             aria-label={`Вариант ${index + 1}`}
                                             placeholder={`Вариант ${index + 1}`}
@@ -358,24 +380,14 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                             <Typography.Text variant="label" color="tertiary" asChild>
                                 <label htmlFor="card-answer">Верный ответ</label>
                             </Typography.Text>
-                            {kind === 'flip' ? (
-                                <AutoTextarea
-                                    id="card-answer"
-                                    rows={3}
-                                    value={textAnswer}
-                                    className={s.field}
-                                    placeholder="Текст ответа на обороте карточки"
-                                    onChange={(event) => setTextAnswer(event.target.value)}
-                                />
-                            ) : (
-                                <Input
-                                    id="card-answer"
-                                    value={textAnswer}
-                                    className={s.field}
-                                    placeholder="Правильный ответ"
-                                    onChange={(event) => setTextAnswer(event.target.value)}
-                                />
-                            )}
+                            <AutoTextarea
+                                id="card-answer"
+                                rows={3}
+                                value={textAnswer}
+                                className={s.field}
+                                placeholder="Текст верного ответа"
+                                onChange={(event) => setTextAnswer(event.target.value)}
+                            />
                         </Flex>
                     )}
 
@@ -405,7 +417,8 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                                         className={s.columnCard}
                                     >
                                         <Flex align="center" gap={8} className={s.columnHeader}>
-                                            <Input
+                                            <AutoTextarea
+                                                rows={1}
                                                 value={colName}
                                                 aria-label={`Название столбца ${colIdx + 1}`}
                                                 className={s.columnInput}
@@ -426,7 +439,8 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                                         <Flex direction="column" align="stretch" gap={6}>
                                             {colItems.map(({ item, itemIdx }) => (
                                                 <Flex key={itemIdx} align="center" gap={8} className={s.itemRow}>
-                                                    <Input
+                                                    <AutoTextarea
+                                                        rows={1}
                                                         value={item.text}
                                                         aria-label={`Термин столбца ${colName}`}
                                                         className={s.itemInput}

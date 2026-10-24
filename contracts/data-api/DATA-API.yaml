@@ -196,6 +196,7 @@ checks:
             - table
           question:
             type: string
+            description: GFM + math; inline LaTeX $...$ and display LaTeX $$...$$.
           answer:
             type: string
             description: The answer as stored with the card; absent for tables
@@ -265,13 +266,18 @@ checks:
             - input
             - boolean
             - table
+          questionSvg:
+            type: string
+            description: Optional raw static self-contained SVG for the question with
+              viewBox, at most 128 KiB. Omitted when absent. Does not reveal the answer.
           question:
             type: string
+            description: GFM + math; inline LaTeX $...$ and display LaTeX $$...$$.
           options:
             type: array
             items:
               type: string
-            description: choice only
+            description: Choice options as GFM + math.
           table:
             type: object
             description: The columns of a sorting card and the terms to lay out, without
@@ -548,8 +554,13 @@ checks:
     - setId
     bodySchema:
       type: object
-      description: answer, explanation and sourceQuote are absent only in a set member's
-        list of the set's cards.
+      description: answer, explanation, explanationSvg and sourceQuote are absent
+        in a set member's list of the set's cards. New generated cards use GFM + math
+        in question, string answers, explanation, choice options and sorting content.
+        Inline LaTeX uses $...$ and display LaTeX uses $$...$$; backslashes are escaped
+        in JSON. Content is stored as source text, without HTML conversion. Existing
+        cards retain their text. factName is plain text; sourceQuote is verbatim and
+        never reformatted.
       required:
       - id
       - setId
@@ -579,14 +590,17 @@ checks:
           - table
         question:
           type: string
+          description: GFM + math; inline LaTeX $...$ and display LaTeX $$...$$.
         options:
           type: array
           items:
             type: string
-          description: choice only
+          description: Choice options as GFM + math.
         table:
           type: object
-          description: 'Sorting card: lay the terms out across the columns.'
+          description: 'Sorting card: lay terms out across categories. Category names
+            and items support GFM + math, including Markdown tables. This task type
+            is independent of Markdown table formatting.'
           required:
           - columns
           - items
@@ -599,7 +613,8 @@ checks:
               type: array
               items:
                 type: object
-                description: A term of the table and the column it belongs to.
+                description: A sorting item and its category. Both strings support
+                  GFM + math.
                 required:
                 - text
                 - column
@@ -609,8 +624,9 @@ checks:
                   column:
                     type: string
         answer:
-          description: ' choice - string[] (all correct option texts); legacy string/integer
-            supported input - string boolean - boolean table - #/components/schemas/TableLayout '
+          description: ' choice - GFM + math string[] (all correct option texts);
+            legacy string/integer supported input/flip - GFM + math string ($...$
+            inline LaTeX, $$...$$ display LaTeX) boolean - boolean table - #/components/schemas/TableLayout '
           oneOf:
           - type: array
             minItems: 1
@@ -621,7 +637,9 @@ checks:
           - type: string
           - type: boolean
           - type: object
-            description: 'Sorting card: lay the terms out across the columns.'
+            description: 'Sorting card: lay terms out across categories. Category
+              names and items support GFM + math, including Markdown tables. This
+              task type is independent of Markdown table formatting.'
             required:
             - columns
             - items
@@ -634,7 +652,8 @@ checks:
                 type: array
                 items:
                   type: object
-                  description: A term of the table and the column it belongs to.
+                  description: A sorting item and its category. Both strings support
+                    GFM + math.
                   required:
                   - text
                   - column
@@ -645,10 +664,20 @@ checks:
                       type: string
         explanation:
           type: string
-          description: 2-3 sentences
+          description: Explanation as GFM + math, including Markdown tables and LaTeX
+            formulas.
+        questionSvg:
+          type: string
+          description: Optional raw static self-contained SVG for the question with
+            viewBox, at most 128 KiB. Omitted when absent. Does not reveal the answer.
+        explanationSvg:
+          type: string
+          description: Optional raw static self-contained SVG for the explanation
+            with viewBox, at most 128 KiB. Omitted when absent.
         sourceQuote:
           type: string
-          description: quote from the notes
+          description: Verbatim quote from the notes; preserve all original characters
+            without Markdown or LaTeX conversion.
         sourceRef:
           type: string
           description: 'where the quote is from: «Лекция 3, стр. 2»'
@@ -703,9 +732,9 @@ checks:
           - sourceQuote
           properties:
             answer:
-              description: ' choice - string[] (all correct option texts); legacy
-                string/integer supported input - string boolean - boolean table -
-                #/components/schemas/TableLayout '
+              description: ' choice - GFM + math string[] (all correct option texts);
+                legacy string/integer supported input/flip - GFM + math string ($...$
+                inline LaTeX, $$...$$ display LaTeX) boolean - boolean table - #/components/schemas/TableLayout '
               oneOf:
               - type: array
                 minItems: 1
@@ -716,7 +745,9 @@ checks:
               - type: string
               - type: boolean
               - type: object
-                description: 'Sorting card: lay the terms out across the columns.'
+                description: 'Sorting card: lay terms out across categories. Category
+                  names and items support GFM + math, including Markdown tables. This
+                  task type is independent of Markdown table formatting.'
                 required:
                 - columns
                 - items
@@ -729,7 +760,8 @@ checks:
                     type: array
                     items:
                       type: object
-                      description: A term of the table and the column it belongs to.
+                      description: A sorting item and its category. Both strings support
+                        GFM + math.
                       required:
                       - text
                       - column
@@ -740,6 +772,12 @@ checks:
                           type: string
             explanation:
               type: string
+              description: Explanation as GFM + math, including Markdown tables and
+                LaTeX formulas.
+            explanationSvg:
+              type: string
+              description: Optional raw static self-contained SVG for the explanation
+                with viewBox, at most 128 KiB. Omitted when absent.
             sourceQuote:
               type: string
             sourceRef:
@@ -799,8 +837,9 @@ checks:
       - sourceQuote
       properties:
         answer:
-          description: ' choice - string[] (all correct option texts); legacy string/integer
-            supported input - string boolean - boolean table - #/components/schemas/TableLayout '
+          description: ' choice - GFM + math string[] (all correct option texts);
+            legacy string/integer supported input/flip - GFM + math string ($...$
+            inline LaTeX, $$...$$ display LaTeX) boolean - boolean table - #/components/schemas/TableLayout '
           oneOf:
           - type: array
             minItems: 1
@@ -811,7 +850,9 @@ checks:
           - type: string
           - type: boolean
           - type: object
-            description: 'Sorting card: lay the terms out across the columns.'
+            description: 'Sorting card: lay terms out across categories. Category
+              names and items support GFM + math, including Markdown tables. This
+              task type is independent of Markdown table formatting.'
             required:
             - columns
             - items
@@ -824,7 +865,8 @@ checks:
                 type: array
                 items:
                   type: object
-                  description: A term of the table and the column it belongs to.
+                  description: A sorting item and its category. Both strings support
+                    GFM + math.
                   required:
                   - text
                   - column
@@ -835,6 +877,12 @@ checks:
                       type: string
         explanation:
           type: string
+          description: Explanation as GFM + math, including Markdown tables and LaTeX
+            formulas.
+        explanationSvg:
+          type: string
+          description: Optional raw static self-contained SVG for the explanation
+            with viewBox, at most 128 KiB. Omitted when absent.
         sourceQuote:
           type: string
         sourceRef:
@@ -879,8 +927,13 @@ checks:
     - setId
     bodySchema:
       type: object
-      description: answer, explanation and sourceQuote are absent only in a set member's
-        list of the set's cards.
+      description: answer, explanation, explanationSvg and sourceQuote are absent
+        in a set member's list of the set's cards. New generated cards use GFM + math
+        in question, string answers, explanation, choice options and sorting content.
+        Inline LaTeX uses $...$ and display LaTeX uses $$...$$; backslashes are escaped
+        in JSON. Content is stored as source text, without HTML conversion. Existing
+        cards retain their text. factName is plain text; sourceQuote is verbatim and
+        never reformatted.
       required:
       - id
       - setId
@@ -910,14 +963,17 @@ checks:
           - table
         question:
           type: string
+          description: GFM + math; inline LaTeX $...$ and display LaTeX $$...$$.
         options:
           type: array
           items:
             type: string
-          description: choice only
+          description: Choice options as GFM + math.
         table:
           type: object
-          description: 'Sorting card: lay the terms out across the columns.'
+          description: 'Sorting card: lay terms out across categories. Category names
+            and items support GFM + math, including Markdown tables. This task type
+            is independent of Markdown table formatting.'
           required:
           - columns
           - items
@@ -930,7 +986,8 @@ checks:
               type: array
               items:
                 type: object
-                description: A term of the table and the column it belongs to.
+                description: A sorting item and its category. Both strings support
+                  GFM + math.
                 required:
                 - text
                 - column
@@ -940,8 +997,9 @@ checks:
                   column:
                     type: string
         answer:
-          description: ' choice - string[] (all correct option texts); legacy string/integer
-            supported input - string boolean - boolean table - #/components/schemas/TableLayout '
+          description: ' choice - GFM + math string[] (all correct option texts);
+            legacy string/integer supported input/flip - GFM + math string ($...$
+            inline LaTeX, $$...$$ display LaTeX) boolean - boolean table - #/components/schemas/TableLayout '
           oneOf:
           - type: array
             minItems: 1
@@ -952,7 +1010,9 @@ checks:
           - type: string
           - type: boolean
           - type: object
-            description: 'Sorting card: lay the terms out across the columns.'
+            description: 'Sorting card: lay terms out across categories. Category
+              names and items support GFM + math, including Markdown tables. This
+              task type is independent of Markdown table formatting.'
             required:
             - columns
             - items
@@ -965,7 +1025,8 @@ checks:
                 type: array
                 items:
                   type: object
-                  description: A term of the table and the column it belongs to.
+                  description: A sorting item and its category. Both strings support
+                    GFM + math.
                   required:
                   - text
                   - column
@@ -976,10 +1037,20 @@ checks:
                       type: string
         explanation:
           type: string
-          description: 2-3 sentences
+          description: Explanation as GFM + math, including Markdown tables and LaTeX
+            formulas.
+        questionSvg:
+          type: string
+          description: Optional raw static self-contained SVG for the question with
+            viewBox, at most 128 KiB. Omitted when absent. Does not reveal the answer.
+        explanationSvg:
+          type: string
+          description: Optional raw static self-contained SVG for the explanation
+            with viewBox, at most 128 KiB. Omitted when absent.
         sourceQuote:
           type: string
-          description: quote from the notes
+          description: Verbatim quote from the notes; preserve all original characters
+            without Markdown or LaTeX conversion.
         sourceRef:
           type: string
           description: 'where the quote is from: «Лекция 3, стр. 2»'
@@ -1110,8 +1181,13 @@ checks:
       type: array
       items:
         type: object
-        description: answer, explanation and sourceQuote are absent only in a set
-          member's list of the set's cards.
+        description: answer, explanation, explanationSvg and sourceQuote are absent
+          in a set member's list of the set's cards. New generated cards use GFM +
+          math in question, string answers, explanation, choice options and sorting
+          content. Inline LaTeX uses $...$ and display LaTeX uses $$...$$; backslashes
+          are escaped in JSON. Content is stored as source text, without HTML conversion.
+          Existing cards retain their text. factName is plain text; sourceQuote is
+          verbatim and never reformatted.
         required:
         - id
         - setId
@@ -1141,14 +1217,17 @@ checks:
             - table
           question:
             type: string
+            description: GFM + math; inline LaTeX $...$ and display LaTeX $$...$$.
           options:
             type: array
             items:
               type: string
-            description: choice only
+            description: Choice options as GFM + math.
           table:
             type: object
-            description: 'Sorting card: lay the terms out across the columns.'
+            description: 'Sorting card: lay terms out across categories. Category
+              names and items support GFM + math, including Markdown tables. This
+              task type is independent of Markdown table formatting.'
             required:
             - columns
             - items
@@ -1161,7 +1240,8 @@ checks:
                 type: array
                 items:
                   type: object
-                  description: A term of the table and the column it belongs to.
+                  description: A sorting item and its category. Both strings support
+                    GFM + math.
                   required:
                   - text
                   - column
@@ -1171,8 +1251,9 @@ checks:
                     column:
                       type: string
           answer:
-            description: ' choice - string[] (all correct option texts); legacy string/integer
-              supported input - string boolean - boolean table - #/components/schemas/TableLayout '
+            description: ' choice - GFM + math string[] (all correct option texts);
+              legacy string/integer supported input/flip - GFM + math string ($...$
+              inline LaTeX, $$...$$ display LaTeX) boolean - boolean table - #/components/schemas/TableLayout '
             oneOf:
             - type: array
               minItems: 1
@@ -1183,7 +1264,9 @@ checks:
             - type: string
             - type: boolean
             - type: object
-              description: 'Sorting card: lay the terms out across the columns.'
+              description: 'Sorting card: lay terms out across categories. Category
+                names and items support GFM + math, including Markdown tables. This
+                task type is independent of Markdown table formatting.'
               required:
               - columns
               - items
@@ -1196,7 +1279,8 @@ checks:
                   type: array
                   items:
                     type: object
-                    description: A term of the table and the column it belongs to.
+                    description: A sorting item and its category. Both strings support
+                      GFM + math.
                     required:
                     - text
                     - column
@@ -1207,10 +1291,20 @@ checks:
                         type: string
           explanation:
             type: string
-            description: 2-3 sentences
+            description: Explanation as GFM + math, including Markdown tables and
+              LaTeX formulas.
+          questionSvg:
+            type: string
+            description: Optional raw static self-contained SVG for the question with
+              viewBox, at most 128 KiB. Omitted when absent. Does not reveal the answer.
+          explanationSvg:
+            type: string
+            description: Optional raw static self-contained SVG for the explanation
+              with viewBox, at most 128 KiB. Omitted when absent.
           sourceQuote:
             type: string
-            description: quote from the notes
+            description: Verbatim quote from the notes; preserve all original characters
+              without Markdown or LaTeX conversion.
           sourceRef:
             type: string
             description: 'where the quote is from: «Лекция 3, стр. 2»'
@@ -1241,8 +1335,13 @@ checks:
     - setId
     bodySchema:
       type: object
-      description: answer, explanation and sourceQuote are absent only in a set member's
-        list of the set's cards.
+      description: answer, explanation, explanationSvg and sourceQuote are absent
+        in a set member's list of the set's cards. New generated cards use GFM + math
+        in question, string answers, explanation, choice options and sorting content.
+        Inline LaTeX uses $...$ and display LaTeX uses $$...$$; backslashes are escaped
+        in JSON. Content is stored as source text, without HTML conversion. Existing
+        cards retain their text. factName is plain text; sourceQuote is verbatim and
+        never reformatted.
       required:
       - id
       - setId
@@ -1272,14 +1371,17 @@ checks:
           - table
         question:
           type: string
+          description: GFM + math; inline LaTeX $...$ and display LaTeX $$...$$.
         options:
           type: array
           items:
             type: string
-          description: choice only
+          description: Choice options as GFM + math.
         table:
           type: object
-          description: 'Sorting card: lay the terms out across the columns.'
+          description: 'Sorting card: lay terms out across categories. Category names
+            and items support GFM + math, including Markdown tables. This task type
+            is independent of Markdown table formatting.'
           required:
           - columns
           - items
@@ -1292,7 +1394,8 @@ checks:
               type: array
               items:
                 type: object
-                description: A term of the table and the column it belongs to.
+                description: A sorting item and its category. Both strings support
+                  GFM + math.
                 required:
                 - text
                 - column
@@ -1302,8 +1405,9 @@ checks:
                   column:
                     type: string
         answer:
-          description: ' choice - string[] (all correct option texts); legacy string/integer
-            supported input - string boolean - boolean table - #/components/schemas/TableLayout '
+          description: ' choice - GFM + math string[] (all correct option texts);
+            legacy string/integer supported input/flip - GFM + math string ($...$
+            inline LaTeX, $$...$$ display LaTeX) boolean - boolean table - #/components/schemas/TableLayout '
           oneOf:
           - type: array
             minItems: 1
@@ -1314,7 +1418,9 @@ checks:
           - type: string
           - type: boolean
           - type: object
-            description: 'Sorting card: lay the terms out across the columns.'
+            description: 'Sorting card: lay terms out across categories. Category
+              names and items support GFM + math, including Markdown tables. This
+              task type is independent of Markdown table formatting.'
             required:
             - columns
             - items
@@ -1327,7 +1433,8 @@ checks:
                 type: array
                 items:
                   type: object
-                  description: A term of the table and the column it belongs to.
+                  description: A sorting item and its category. Both strings support
+                    GFM + math.
                   required:
                   - text
                   - column
@@ -1338,10 +1445,20 @@ checks:
                       type: string
         explanation:
           type: string
-          description: 2-3 sentences
+          description: Explanation as GFM + math, including Markdown tables and LaTeX
+            formulas.
+        questionSvg:
+          type: string
+          description: Optional raw static self-contained SVG for the question with
+            viewBox, at most 128 KiB. Omitted when absent. Does not reveal the answer.
+        explanationSvg:
+          type: string
+          description: Optional raw static self-contained SVG for the explanation
+            with viewBox, at most 128 KiB. Omitted when absent.
         sourceQuote:
           type: string
-          description: quote from the notes
+          description: Verbatim quote from the notes; preserve all original characters
+            without Markdown or LaTeX conversion.
         sourceRef:
           type: string
           description: 'where the quote is from: «Лекция 3, стр. 2»'

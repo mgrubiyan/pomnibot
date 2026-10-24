@@ -21,17 +21,19 @@ type storedCard = db.GetCardByIDRow
 // in its fact.
 func setCardOf(r db.GetCardsBySetIDRow) storedCard {
 	return storedCard{
-		ID:          r.ID,
-		SetID:       r.SetID,
-		FactID:      r.FactID,
-		FactName:    r.FactName,
-		Kind:        r.Kind,
-		Question:    r.Question,
-		AnswerText:  r.AnswerText,
-		Explanation: r.Explanation,
-		SourceQuote: r.SourceQuote,
-		SourceRef:   r.SourceRef,
-		UpdatedAt:   r.UpdatedAt,
+		ID:             r.ID,
+		SetID:          r.SetID,
+		FactID:         r.FactID,
+		FactName:       r.FactName,
+		Kind:           r.Kind,
+		Question:       r.Question,
+		AnswerText:     r.AnswerText,
+		Explanation:    r.Explanation,
+		QuestionSvg:    r.QuestionSvg,
+		ExplanationSvg: r.ExplanationSvg,
+		SourceQuote:    r.SourceQuote,
+		SourceRef:      r.SourceRef,
+		UpdatedAt:      r.UpdatedAt,
 	}
 }
 
@@ -114,6 +116,9 @@ func revealOf(c storedCard, d cardDetails) contracts.CardReveal {
 	if c.SourceRef.Valid && c.SourceRef.String != "" {
 		r.SourceRef.SetTo(c.SourceRef.String)
 	}
+	if c.ExplanationSvg.Valid && c.ExplanationSvg.String != "" {
+		r.ExplanationSvg.SetTo(c.ExplanationSvg.String)
+	}
 	stored := c.AnswerText.String
 	switch contracts.CardKind(c.Kind) {
 	case contracts.CardKindChoice:
@@ -141,6 +146,7 @@ func fullCard(c storedCard, d cardDetails) (contracts.Card, error) {
 	card.Explanation.SetTo(reveal.Explanation)
 	card.SourceQuote.SetTo(reveal.SourceQuote)
 	card.SourceRef = reveal.SourceRef
+	card.ExplanationSvg = reveal.ExplanationSvg
 	switch contracts.CardKind(c.Kind) {
 	case contracts.CardKindChoice:
 		card.Options = d.optionTexts()
@@ -157,14 +163,16 @@ func questionCard(c storedCard) (contracts.Card, error) {
 	if err != nil {
 		return contracts.Card{}, err
 	}
-	return contracts.Card{
+	card := contracts.Card{
 		ID:       ids.card,
 		SetId:    ids.set,
 		FactId:   ids.fact,
 		FactName: c.FactName,
 		Kind:     contracts.CardKind(c.Kind),
 		Question: c.Question,
-	}, nil
+	}
+	setCardIllustrations(&card, c.QuestionSvg, pgtype.Text{})
+	return card, nil
 }
 
 // feedCardOf is the card as the feed asks it: the options of a choice card
@@ -183,6 +191,9 @@ func feedCardOf(c storedCard, d cardDetails) (contracts.FeedCard, error) {
 		FactName: c.FactName,
 		Kind:     contracts.CardKind(c.Kind),
 		Question: c.Question,
+	}
+	if c.QuestionSvg.Valid && c.QuestionSvg.String != "" {
+		card.QuestionSvg.SetTo(c.QuestionSvg.String)
 	}
 	switch card.Kind {
 	case contracts.CardKindChoice:

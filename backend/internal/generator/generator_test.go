@@ -26,13 +26,16 @@ func TestStructuredSourceAndWarningsReachGeneration(t *testing.T) {
 	calls := 0
 	wrapped := providerFunc(func(ctx context.Context, r providers.Request) (providers.Response, error) {
 		calls++
+		if calls == 2 {
+			return p.Complete(ctx, r)
+		}
 		if !strings.Contains(r.Source, "formula") || !strings.Contains(r.Source, "uncertain") || !r.NoFallback {
 			t.Fatalf("lost source or fallback control: %+v", r)
 		}
 		return p.Complete(ctx, r)
 	})
 	r, e := NewGenerator(wrapped, Options{}).Generate(context.Background(), Document{Structure: &material.Document{Blocks: []material.Block{{ID: "p1", Page: 1, Text: "formula"}}, Pages: []material.Page{{Number: 1, Issues: []string{"uncertain"}}}}})
-	if e != nil || calls != 1 || CardCount(r.Facts) != 5 {
+	if e != nil || calls != 2 || CardCount(r.Facts) != 5 {
 		t.Fatalf("%+v %v", r, e)
 	}
 }

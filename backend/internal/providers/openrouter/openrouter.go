@@ -329,6 +329,8 @@ func (c *Client) requestBody(ctx context.Context, req providers.Request) (chatRe
 		if len(req.PDFs) > 0 {
 			body.Plugins = []map[string]any{{"id": "file-parser", "pdf": map[string]string{"engine": "native"}}}
 		}
+	}
+	if req.NoFallback || len(req.PDFs) > 0 || req.Source != "" {
 		body.Usage = map[string]bool{"include": true}
 		allowFallbacks := false
 		body.Provider.AllowFallbacks = &allowFallbacks

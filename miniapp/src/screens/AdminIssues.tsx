@@ -9,6 +9,7 @@ import { IconCheck, IconOffline } from '../components/Icons';
 import { REASON_FILTERS, STATUS_LABELS, adminAnswer, issuesTotal, reasonCounts } from '../utils/adminIssues';
 import { issueReasonLabel } from '../utils/issues';
 import { formatAuthorName } from '../utils/user';
+import { StudyContent } from '../components/StudyContent';
 import s from './AdminIssues.module.css';
 
 type Status = 'loading' | 'error' | 'ready';
@@ -132,12 +133,12 @@ export function AdminIssues({ onBack }: AdminIssuesProps) {
                             <Typography.Text variant="label" color="tertiary" className={s.text}>
                                 {issue.setTitle ?? 'Набор удалён'} · {STATUS_LABELS[issue.status]}
                             </Typography.Text>
-                            <Typography.Text variant="body-strong" className={s.text}>
-                                {issue.question}
+                            <Typography.Text variant="body-strong" asChild>
+                                <StudyContent className={s.text} text={issue.question} />
                             </Typography.Text>
                             {answer ? (
-                                <Typography.Text variant="description" color="secondary" className={s.text}>
-                                    Ответ: {answer}
+                                <Typography.Text variant="description" color="secondary" asChild>
+                                    <StudyContent className={s.text} text={`Ответ: ${answer}`} />
                                 </Typography.Text>
                             ) : null}
                             {issue.sourceQuote ? (

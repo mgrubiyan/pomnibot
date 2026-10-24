@@ -23,21 +23,23 @@ func (q *Queries) CountCardsByFactID(ctx context.Context, factID pgtype.UUID) (i
 }
 
 const createCard = `-- name: CreateCard :one
-INSERT INTO cards (id, fact_id, kind, question, answer_text, explanation, source_quote, source_ref, step)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING kind, question, answer_text, explanation, source_quote, source_ref, updated_at, id, fact_id, step
+INSERT INTO cards (id, fact_id, kind, question, answer_text, explanation, source_quote, source_ref, step, question_svg, explanation_svg)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING kind, question, answer_text, explanation, source_quote, source_ref, updated_at, id, fact_id, step, question_svg, explanation_svg
 `
 
 type CreateCardParams struct {
-	ID          pgtype.UUID `json:"id"`
-	FactID      pgtype.UUID `json:"fact_id"`
-	Kind        CardKind    `json:"kind"`
-	Question    string      `json:"question"`
-	AnswerText  pgtype.Text `json:"answer_text"`
-	Explanation string      `json:"explanation"`
-	SourceQuote string      `json:"source_quote"`
-	SourceRef   pgtype.Text `json:"source_ref"`
-	Step        int32       `json:"step"`
+	ID             pgtype.UUID `json:"id"`
+	FactID         pgtype.UUID `json:"fact_id"`
+	Kind           CardKind    `json:"kind"`
+	Question       string      `json:"question"`
+	AnswerText     pgtype.Text `json:"answer_text"`
+	Explanation    string      `json:"explanation"`
+	SourceQuote    string      `json:"source_quote"`
+	SourceRef      pgtype.Text `json:"source_ref"`
+	Step           int32       `json:"step"`
+	QuestionSvg    pgtype.Text `json:"question_svg"`
+	ExplanationSvg pgtype.Text `json:"explanation_svg"`
 }
 
 func (q *Queries) CreateCard(ctx context.Context, arg CreateCardParams) (Card, error) {
@@ -51,6 +53,8 @@ func (q *Queries) CreateCard(ctx context.Context, arg CreateCardParams) (Card, e
 		arg.SourceQuote,
 		arg.SourceRef,
 		arg.Step,
+		arg.QuestionSvg,
+		arg.ExplanationSvg,
 	)
 	var i Card
 	err := row.Scan(
@@ -64,6 +68,8 @@ func (q *Queries) CreateCard(ctx context.Context, arg CreateCardParams) (Card, e
 		&i.ID,
 		&i.FactID,
 		&i.Step,
+		&i.QuestionSvg,
+		&i.ExplanationSvg,
 	)
 	return i, err
 }
@@ -217,6 +223,8 @@ SELECT
     c.question,
     c.answer_text,
     c.explanation,
+    c.question_svg,
+    c.explanation_svg,
     c.source_quote,
     c.source_ref,
     c.updated_at
@@ -236,17 +244,19 @@ type GetCardByIDParams struct {
 }
 
 type GetCardByIDRow struct {
-	ID          pgtype.UUID        `json:"id"`
-	SetID       pgtype.UUID        `json:"set_id"`
-	FactID      pgtype.UUID        `json:"fact_id"`
-	FactName    string             `json:"fact_name"`
-	Kind        CardKind           `json:"kind"`
-	Question    string             `json:"question"`
-	AnswerText  pgtype.Text        `json:"answer_text"`
-	Explanation string             `json:"explanation"`
-	SourceQuote string             `json:"source_quote"`
-	SourceRef   pgtype.Text        `json:"source_ref"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	ID             pgtype.UUID        `json:"id"`
+	SetID          pgtype.UUID        `json:"set_id"`
+	FactID         pgtype.UUID        `json:"fact_id"`
+	FactName       string             `json:"fact_name"`
+	Kind           CardKind           `json:"kind"`
+	Question       string             `json:"question"`
+	AnswerText     pgtype.Text        `json:"answer_text"`
+	Explanation    string             `json:"explanation"`
+	QuestionSvg    pgtype.Text        `json:"question_svg"`
+	ExplanationSvg pgtype.Text        `json:"explanation_svg"`
+	SourceQuote    string             `json:"source_quote"`
+	SourceRef      pgtype.Text        `json:"source_ref"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) GetCardByID(ctx context.Context, arg GetCardByIDParams) (GetCardByIDRow, error) {
@@ -261,6 +271,8 @@ func (q *Queries) GetCardByID(ctx context.Context, arg GetCardByIDParams) (GetCa
 		&i.Question,
 		&i.AnswerText,
 		&i.Explanation,
+		&i.QuestionSvg,
+		&i.ExplanationSvg,
 		&i.SourceQuote,
 		&i.SourceRef,
 		&i.UpdatedAt,
@@ -278,6 +290,8 @@ SELECT
     c.question,
     c.answer_text,
     c.explanation,
+    c.question_svg,
+    c.explanation_svg,
     c.source_quote,
     c.source_ref,
     c.updated_at
@@ -293,17 +307,19 @@ type GetCardByIDForAuthorParams struct {
 }
 
 type GetCardByIDForAuthorRow struct {
-	ID          pgtype.UUID        `json:"id"`
-	SetID       pgtype.UUID        `json:"set_id"`
-	FactID      pgtype.UUID        `json:"fact_id"`
-	FactName    string             `json:"fact_name"`
-	Kind        CardKind           `json:"kind"`
-	Question    string             `json:"question"`
-	AnswerText  pgtype.Text        `json:"answer_text"`
-	Explanation string             `json:"explanation"`
-	SourceQuote string             `json:"source_quote"`
-	SourceRef   pgtype.Text        `json:"source_ref"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	ID             pgtype.UUID        `json:"id"`
+	SetID          pgtype.UUID        `json:"set_id"`
+	FactID         pgtype.UUID        `json:"fact_id"`
+	FactName       string             `json:"fact_name"`
+	Kind           CardKind           `json:"kind"`
+	Question       string             `json:"question"`
+	AnswerText     pgtype.Text        `json:"answer_text"`
+	Explanation    string             `json:"explanation"`
+	QuestionSvg    pgtype.Text        `json:"question_svg"`
+	ExplanationSvg pgtype.Text        `json:"explanation_svg"`
+	SourceQuote    string             `json:"source_quote"`
+	SourceRef      pgtype.Text        `json:"source_ref"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) GetCardByIDForAuthor(ctx context.Context, arg GetCardByIDForAuthorParams) (GetCardByIDForAuthorRow, error) {
@@ -318,6 +334,8 @@ func (q *Queries) GetCardByIDForAuthor(ctx context.Context, arg GetCardByIDForAu
 		&i.Question,
 		&i.AnswerText,
 		&i.Explanation,
+		&i.QuestionSvg,
+		&i.ExplanationSvg,
 		&i.SourceQuote,
 		&i.SourceRef,
 		&i.UpdatedAt,
@@ -561,6 +579,8 @@ SELECT
     c.question,
     c.answer_text,
     c.explanation,
+    c.question_svg,
+    c.explanation_svg,
     c.source_quote,
     c.source_ref,
     c.updated_at,
@@ -582,18 +602,20 @@ type GetCardsBySetIDParams struct {
 }
 
 type GetCardsBySetIDRow struct {
-	ID          pgtype.UUID        `json:"id"`
-	SetID       pgtype.UUID        `json:"set_id"`
-	FactID      pgtype.UUID        `json:"fact_id"`
-	FactName    string             `json:"fact_name"`
-	Kind        CardKind           `json:"kind"`
-	Question    string             `json:"question"`
-	AnswerText  pgtype.Text        `json:"answer_text"`
-	Explanation string             `json:"explanation"`
-	SourceQuote string             `json:"source_quote"`
-	SourceRef   pgtype.Text        `json:"source_ref"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	Step        int32              `json:"step"`
+	ID             pgtype.UUID        `json:"id"`
+	SetID          pgtype.UUID        `json:"set_id"`
+	FactID         pgtype.UUID        `json:"fact_id"`
+	FactName       string             `json:"fact_name"`
+	Kind           CardKind           `json:"kind"`
+	Question       string             `json:"question"`
+	AnswerText     pgtype.Text        `json:"answer_text"`
+	Explanation    string             `json:"explanation"`
+	QuestionSvg    pgtype.Text        `json:"question_svg"`
+	ExplanationSvg pgtype.Text        `json:"explanation_svg"`
+	SourceQuote    string             `json:"source_quote"`
+	SourceRef      pgtype.Text        `json:"source_ref"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	Step           int32              `json:"step"`
 }
 
 func (q *Queries) GetCardsBySetID(ctx context.Context, arg GetCardsBySetIDParams) ([]GetCardsBySetIDRow, error) {
@@ -614,6 +636,8 @@ func (q *Queries) GetCardsBySetID(ctx context.Context, arg GetCardsBySetIDParams
 			&i.Question,
 			&i.AnswerText,
 			&i.Explanation,
+			&i.QuestionSvg,
+			&i.ExplanationSvg,
 			&i.SourceQuote,
 			&i.SourceRef,
 			&i.UpdatedAt,
@@ -653,6 +677,8 @@ ranked_cards AS (
         c.question,
         c.answer_text,
         c.explanation,
+        c.question_svg,
+        c.explanation_svg,
         c.source_quote,
         c.source_ref,
         c.updated_at,
@@ -689,6 +715,8 @@ SELECT
     question,
     answer_text,
     explanation,
+    question_svg,
+    explanation_svg,
     source_quote,
     source_ref,
     updated_at
@@ -698,17 +726,19 @@ ORDER BY due_time ASC, fact_id ASC
 `
 
 type GetFeedCardsForUserRow struct {
-	ID          pgtype.UUID        `json:"id"`
-	SetID       pgtype.UUID        `json:"set_id"`
-	FactID      pgtype.UUID        `json:"fact_id"`
-	FactName    string             `json:"fact_name"`
-	Kind        CardKind           `json:"kind"`
-	Question    string             `json:"question"`
-	AnswerText  pgtype.Text        `json:"answer_text"`
-	Explanation string             `json:"explanation"`
-	SourceQuote string             `json:"source_quote"`
-	SourceRef   pgtype.Text        `json:"source_ref"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	ID             pgtype.UUID        `json:"id"`
+	SetID          pgtype.UUID        `json:"set_id"`
+	FactID         pgtype.UUID        `json:"fact_id"`
+	FactName       string             `json:"fact_name"`
+	Kind           CardKind           `json:"kind"`
+	Question       string             `json:"question"`
+	AnswerText     pgtype.Text        `json:"answer_text"`
+	Explanation    string             `json:"explanation"`
+	QuestionSvg    pgtype.Text        `json:"question_svg"`
+	ExplanationSvg pgtype.Text        `json:"explanation_svg"`
+	SourceQuote    string             `json:"source_quote"`
+	SourceRef      pgtype.Text        `json:"source_ref"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) GetFeedCardsForUser(ctx context.Context, userID pgtype.UUID) ([]GetFeedCardsForUserRow, error) {
@@ -729,6 +759,8 @@ func (q *Queries) GetFeedCardsForUser(ctx context.Context, userID pgtype.UUID) (
 			&i.Question,
 			&i.AnswerText,
 			&i.Explanation,
+			&i.QuestionSvg,
+			&i.ExplanationSvg,
 			&i.SourceQuote,
 			&i.SourceRef,
 			&i.UpdatedAt,
@@ -765,13 +797,15 @@ SET
     explanation = COALESCE($5, explanation),
     source_quote = COALESCE($6, source_quote),
     source_ref = COALESCE($7, source_ref),
+    question_svg = NULL,
+    explanation_svg = NULL,
     updated_at = CURRENT_TIMESTAMP
 FROM facts f
 JOIN sets s ON f.set_id = s.id
 WHERE cards.id = $1
   AND cards.fact_id = f.id
   AND s.author_id = $8
-RETURNING cards.id, cards.fact_id, cards.kind, cards.question, cards.answer_text, cards.explanation, cards.source_quote, cards.source_ref, cards.updated_at
+RETURNING cards.id, cards.fact_id, cards.kind, cards.question, cards.answer_text, cards.explanation, cards.question_svg, cards.explanation_svg, cards.source_quote, cards.source_ref, cards.updated_at
 `
 
 type UpdateCardParams struct {
@@ -786,15 +820,17 @@ type UpdateCardParams struct {
 }
 
 type UpdateCardRow struct {
-	ID          pgtype.UUID        `json:"id"`
-	FactID      pgtype.UUID        `json:"fact_id"`
-	Kind        CardKind           `json:"kind"`
-	Question    string             `json:"question"`
-	AnswerText  pgtype.Text        `json:"answer_text"`
-	Explanation string             `json:"explanation"`
-	SourceQuote string             `json:"source_quote"`
-	SourceRef   pgtype.Text        `json:"source_ref"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	ID             pgtype.UUID        `json:"id"`
+	FactID         pgtype.UUID        `json:"fact_id"`
+	Kind           CardKind           `json:"kind"`
+	Question       string             `json:"question"`
+	AnswerText     pgtype.Text        `json:"answer_text"`
+	Explanation    string             `json:"explanation"`
+	QuestionSvg    pgtype.Text        `json:"question_svg"`
+	ExplanationSvg pgtype.Text        `json:"explanation_svg"`
+	SourceQuote    string             `json:"source_quote"`
+	SourceRef      pgtype.Text        `json:"source_ref"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) UpdateCard(ctx context.Context, arg UpdateCardParams) (UpdateCardRow, error) {
@@ -816,6 +852,8 @@ func (q *Queries) UpdateCard(ctx context.Context, arg UpdateCardParams) (UpdateC
 		&i.Question,
 		&i.AnswerText,
 		&i.Explanation,
+		&i.QuestionSvg,
+		&i.ExplanationSvg,
 		&i.SourceQuote,
 		&i.SourceRef,
 		&i.UpdatedAt,
