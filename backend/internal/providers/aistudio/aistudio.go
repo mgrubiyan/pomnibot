@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mgrubiyan/pomnibot/backend/internal/prompts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 	"github.com/mgrubiyan/pomnibot/backend/internal/tlsroot"
 )
@@ -33,7 +34,7 @@ import (
 const (
 	DefaultModel     = "qwen3.6-35b-a3b"
 	DefaultBaseURL   = "https://ai.api.cloud.yandex.net"
-	DefaultMaxTokens = 8000 // a fragment's cards take up to this
+	DefaultMaxTokens = 8000
 )
 
 const (
@@ -158,6 +159,12 @@ func (e transportError) Unwrap() error { return e.err }
 // network errors. When the model cannot answer anyone for a while, the error
 // wraps providers.ErrUnavailable.
 func (c *Client) Complete(ctx context.Context, req providers.Request) (providers.Response, error) {
+	if req.Source != "" {
+		req.User = req.Source + "\n" + req.User
+	}
+	if len(req.PDFs) > 0 {
+		return providers.Response{}, providers.ErrCapability
+	}
 	resp, err := c.complete(ctx, req)
 	switch {
 	case err == nil:
@@ -274,34 +281,39 @@ type chatResponse struct {
 	} `json:"usage"`
 }
 
-const schemaPromptNote = "\n\nОтвет — только JSON, соответствующий этой JSON Schema:\n"
-
-func (c *Client) call(ctx context.Context, req providers.Request, withSchema bool) (providers.Response, error) {
+func (c *Client) call(ctx context.Context, req providers.Request, withSchema bool) (result providers.Response, callErr error) {
 	system := req.System
 	var format *responseFormat
 	switch {
 	case withSchema:
 		format = &responseFormat{Type: "json_schema", JSONSchema: jsonSchema{Name: "answer", Schema: req.Schema}}
 	case len(req.Schema) > 0:
-		system += schemaPromptNote + string(req.Schema)
+		system += prompts.SchemaNote + string(req.Schema)
 	}
 
 	var user any = req.User
-	if req.Image != nil {
-		user = []contentPart{
-			{Type: "text", Text: req.User},
-			{Type: "image_url", ImageURL: &imageURL{
-				URL: "data:" + req.Image.MimeType + ";base64," + base64.StdEncoding.EncodeToString(req.Image.Data),
-			}},
+	if images := providers.RequestImages(req); len(images) > 0 {
+		parts := []contentPart{{Type: "text", Text: req.User}}
+		for _, img := range images {
+			parts = append(parts, contentPart{Type: "image_url", ImageURL: &imageURL{URL: "data:" + img.MimeType + ";base64," + base64.StdEncoding.EncodeToString(img.Data)}})
 		}
+		user = parts
 	}
 
+	effort := "none"
+	if req.ReasoningEffort != "" {
+		effort = req.ReasoningEffort
+	}
+	maxTokens := c.cfg.MaxTokens
+	if req.MaxTokens > 0 {
+		maxTokens = min(maxTokens, req.MaxTokens)
+	}
 	body, err := json.Marshal(chatRequest{
 		Model:           c.modelURI(),
 		Messages:        []message{{Role: "system", Content: system}, {Role: "user", Content: user}},
 		Temperature:     req.Temperature,
-		MaxTokens:       c.cfg.MaxTokens,
-		ReasoningEffort: "none",
+		MaxTokens:       maxTokens,
+		ReasoningEffort: effort,
 		ResponseFormat:  format,
 	})
 	if err != nil {
@@ -317,6 +329,11 @@ func (c *Client) call(ctx context.Context, req providers.Request, withSchema boo
 	httpReq.Header.Set("Authorization", "Api-Key "+c.cfg.APIKey)
 	httpReq.Header.Set("x-folder-id", c.cfg.FolderID)
 
+	finish, reserveErr := providers.ReserveCall(ctx, 0)
+	if reserveErr != nil {
+		return providers.Response{}, reserveErr
+	}
+	defer func() { finish(result.Usage, false) }()
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
 		return providers.Response{}, fmt.Errorf("aistudio: chat request: %w", transportError{err})

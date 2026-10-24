@@ -378,8 +378,8 @@ export interface components {
         };
         /** @enum {string} */
         CardKind: "choice" | "flip" | "input" | "boolean" | "table";
-        /** @description choice - integer input - string boolean - boolean table - #/components/schemas/TableLayout */
-        CardAnswer: number | string | boolean | components["schemas"]["TableLayout"];
+        /** @description choice - string[] (all correct option texts); legacy string/integer supported input - string boolean - boolean table - #/components/schemas/TableLayout */
+        CardAnswer: string[] | number | string | boolean | components["schemas"]["TableLayout"];
         Card: {
             /** Format: uuid */
             id: string;
@@ -540,9 +540,11 @@ export interface components {
         };
         SendResultsRequest: components["schemas"]["Answer"][];
         AnswerQuestionRequest: {
+            /** @description Typed answer, or a JSON-encoded array of selected option texts for choice */
             answer: string;
         };
         CheckAnswerRequest: {
+            /** @description Typed answer, or a JSON-encoded array of selected option texts for choice */
             answer: string;
         };
         CheckAnswerResponse: {

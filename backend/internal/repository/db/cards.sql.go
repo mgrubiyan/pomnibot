@@ -656,7 +656,6 @@ SELECT
 FROM ranked_cards
 WHERE card_idx = LEAST(step, total_cards - 1)
 ORDER BY due_time ASC, fact_id ASC
-LIMIT 20
 `
 
 type GetFeedCardsForUserRow struct {

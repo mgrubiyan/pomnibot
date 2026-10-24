@@ -306,7 +306,11 @@ func (s *setServiceImpl) SaveGeneratedSet(ctx context.Context, userID uuid.UUID,
 		return nil, err
 	}
 
-	set, cardsCount, err := repository.SaveGeneratedSet(ctx, s.querier, userID, title, genResult)
+	prepared, err := prepareGeneratedSet(title, genResult)
+	if err != nil {
+		return nil, fmt.Errorf("prepare generated set: %w", err)
+	}
+	set, cardsCount, err := repository.SaveGeneratedSet(ctx, s.querier, userID, title, prepared)
 	if err != nil {
 		return nil, fmt.Errorf("save generated set for user: %w", err)
 	}
@@ -386,10 +390,9 @@ func (s *setServiceImpl) buildCard(
 		for _, o := range opts {
 			card.Options = append(card.Options, o.Text)
 		}
-		card.Answer = contracts.CardAnswer{
-			Type:   contracts.StringCardAnswer,
-			String: ansStr,
-		}
+
+		card.Answer = choiceAnswer(opts, ansStr)
+
 	case contracts.CardKindBoolean:
 		b, _ := strconv.ParseBool(ansStr)
 		card.Answer = contracts.CardAnswer{

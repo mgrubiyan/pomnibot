@@ -46,6 +46,7 @@ type Querier interface {
 	GetFactsBySetID(ctx context.Context, setID pgtype.UUID) ([]GetFactsBySetIDRow, error)
 	GetFeedCardsForUser(ctx context.Context, userID pgtype.UUID) ([]GetFeedCardsForUserRow, error)
 	GetNextReviewDateForUser(ctx context.Context, userID pgtype.UUID) (pgtype.Timestamptz, error)
+	GetProcessingReport(ctx context.Context, arg GetProcessingReportParams) ([]byte, error)
 	GetSetByID(ctx context.Context, arg GetSetByIDParams) (GetSetByIDRow, error)
 	GetSetByShareCode(ctx context.Context, shareCode string) (GetSetByShareCodeRow, error)
 	// Open complaints of the author's set: made after the card's last edit and
@@ -73,6 +74,7 @@ type Querier interface {
 	// Sets the reader's progress back to the previous card of the fact when they
 	// report a problem, so they don't skip ahead to harder cards.
 	RollbackFactStepOnCardIssue(ctx context.Context, arg RollbackFactStepOnCardIssueParams) error
+	SaveProcessingReport(ctx context.Context, arg SaveProcessingReportParams) (int64, error)
 	SaveTelegramProfile(ctx context.Context, arg SaveTelegramProfileParams) (User, error)
 	TelegramProfileInput(ctx context.Context, arg TelegramProfileInputParams) (User, error)
 	UpdateCard(ctx context.Context, arg UpdateCardParams) (UpdateCardRow, error)

@@ -34,7 +34,7 @@ func validateCreateCard(req *contracts.CreateCardRequest) error {
 			return invalid()
 		}
 	case contracts.CardKindChoice:
-		if req.Answer.Type != contracts.StringCardAnswer || len(req.Options) < 2 {
+		if (req.Answer.Type != contracts.StringCardAnswer && req.Answer.Type != contracts.StringArrayCardAnswer) || len(req.Options) < 2 {
 			return invalid()
 		}
 		seen := map[string]bool{}
@@ -46,10 +46,29 @@ func validateCreateCard(req *contracts.CreateCardRequest) error {
 			seen[v] = true
 			req.Options[i] = v
 		}
-		req.Answer.String = strings.TrimSpace(req.Answer.String)
-		if !seen[req.Answer.String] {
+
+		answers := req.Answer.StringArray
+		if req.Answer.Type == contracts.StringCardAnswer {
+			answers = []string{req.Answer.String}
+		}
+		if len(answers) == 0 {
 			return invalid()
 		}
+		selected := map[string]bool{}
+		for i, a := range answers {
+			a = strings.TrimSpace(a)
+			if !seen[a] || selected[a] {
+				return invalid()
+			}
+			selected[a] = true
+			answers[i] = a
+		}
+		if req.Answer.Type == contracts.StringCardAnswer {
+			req.Answer.String = answers[0]
+		} else {
+			req.Answer.StringArray = answers
+		}
+
 	case contracts.CardKindTable:
 		if !req.Table.IsSet() || req.Answer.Type != contracts.TableLayoutCardAnswer {
 			return invalid()

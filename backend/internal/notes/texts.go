@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
 // What the student reads when a document does not become a set. Each text
@@ -14,12 +14,13 @@ import (
 // different one, or wait. Our own failures, such as the model or the database,
 // are not explained; the student cannot fix them.
 const (
-	TextTryLater  = "😕 Не получилось сделать карточки. Пришли конспект ещё раз через пару минут."
-	TextResend    = "😕 Не получилось получить файл. Пришли его ещё раз."
-	TextNoText    = "😕 Не нашёл в файле текста. Если это фото, сними страницу целиком, при хорошем свете и без размытия."
-	TextOnlyJunk  = "😕 В этом файле нет материала для карточек. Пришли конспект лекции или страницы учебника."
-	TextOtherText = "😕 По этому тексту не получилось составить карточки. Попробуй прислать другой конспект."
-	TextNoCards   = "😕 По этому тексту не получилось составить карточки. Пришли конспект подробнее: с определениями, свойствами, причинами и следствиями."
+	TextBudgetExceeded = "😕 Достигнут лимит обработки этого документа. Проверенных карточек пока нет. Пришли меньший фрагмент."
+	TextSourceLimit    = "😕 Не получилось обработать документ целиком. Пришли отдельную главу или меньший фрагмент."
+	TextTryLater       = "😕 Не получилось сделать карточки. Пришли конспект ещё раз через пару минут."
+	TextResend         = "😕 Не получилось получить файл. Пришли его ещё раз."
+	TextNoText         = "😕 Не нашёл в файле текста. Если это фото, сними страницу целиком, при хорошем свете и без размытия."
+	TextOtherText      = "😕 По этому тексту не получилось составить карточки. Попробуй прислать другой конспект."
+	TextNoCards        = "😕 По этому тексту не получилось составить карточки. Пришли конспект подробнее: с определениями, свойствами, причинами и следствиями."
 )
 
 // maxWarningsShown keeps a long scan with many blurry pages from burying the
@@ -29,21 +30,24 @@ const maxWarningsShown = 3
 // FailureText is what to tell the student about an error of Make, or ""
 // when there is nothing to tell: the student gave up waiting.
 func FailureText(err error) string {
-	var (
-		ee *extractError
-		ne *NoCardsError
-	)
+	var ee *extractError
 	switch {
 	case errors.Is(err, ErrGaveUp):
 		return ""
+	case errors.Is(err, providers.ErrBudget):
+		return TextBudgetExceeded
+	case errors.Is(err, providers.ErrCapability):
+		return TextSourceLimit
+	case errors.Is(err, providers.ErrRefused):
+		return TextOtherText
 	case errors.Is(err, ErrNoFiles):
 		return TextResend
 	case errors.Is(err, ErrNoText):
 		return TextNoText
 	case errors.As(err, &ee):
 		return extractFailure(ee.err, ee.files)
-	case errors.As(err, &ne):
-		return noCardsReason(ne.Stats)
+	case errors.Is(err, ErrNoCards):
+		return TextNoCards
 	default:
 		return TextTryLater
 	}
@@ -61,22 +65,6 @@ func extractFailure(err error, files int) string {
 		return fmt.Sprintf("😕 Файл «%s»: %s", ie.File, ie.Message)
 	}
 	return "😕 " + ie.Message
-}
-
-// noCardsReason picks what to ask for when the set came out empty, from what
-// the generator saw: nothing but junk (send the notes themselves), refusals by
-// the content filter (send other notes), or cards that did not survive the
-// quote check (send more detailed notes).
-func noCardsReason(s generator.Stats) string {
-	sent := s.Chunks - s.ChunksFiltered
-	switch {
-	case s.Chunks > 0 && sent == 0:
-		return TextOnlyJunk
-	case s.ChunksRefused > 0 && s.ChunksRefused == sent:
-		return TextOtherText
-	default:
-		return TextNoCards
-	}
 }
 
 // WithWarnings appends what went wrong on single pages, such as a blurry

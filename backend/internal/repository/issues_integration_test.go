@@ -10,7 +10,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
-	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
@@ -34,9 +33,9 @@ func TestCardIssuesPostgres(t *testing.T) {
 		}
 	}
 	// Complaints are mostly about generated cards, which carry a quote.
-	generated, _, err := repository.SaveGeneratedSet(ctx, q, u1, "Set", generator.Result{
-		Facts: []cards.Fact{{ID: "fact", Name: "Fact"}},
-		Cards: []cards.Card{{FactID: "fact", Kind: cards.KindInput, Question: "Q", Answer: "A", Explanation: "E", SourceQuote: "Quote"}},
+	generated, _, err := repository.SaveGeneratedSet(ctx, q, u1, "Set", repository.GeneratedSet{
+		Facts: []cards.Fact{{ID: "01900000-0000-7000-8000-000000000004", Name: "Fact"}},
+		Cards: []cards.Card{{FactID: "01900000-0000-7000-8000-000000000004", Kind: cards.KindInput, Question: "Q", Answer: "A", Explanation: "E", SourceQuote: "Quote"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -123,11 +122,11 @@ func TestOpenCardIssuesPostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	generated, _, err := repository.SaveGeneratedSet(ctx, q, u1, "Set", generator.Result{
-		Facts: []cards.Fact{{ID: "f1", Name: "F1"}, {ID: "f2", Name: "F2"}},
+	generated, _, err := repository.SaveGeneratedSet(ctx, q, u1, "Set", repository.GeneratedSet{
+		Facts: []cards.Fact{{ID: "01900000-0000-7000-8000-000000000005", Name: "F1"}, {ID: "01900000-0000-7000-8000-000000000006", Name: "F2"}},
 		Cards: []cards.Card{
-			{FactID: "f1", Kind: cards.KindFlip, Question: "Q1", Answer: "A1"},
-			{FactID: "f2", Kind: cards.KindFlip, Question: "Q2", Answer: "A2"},
+			{FactID: "01900000-0000-7000-8000-000000000005", Kind: cards.KindFlip, Question: "Q1", Answer: "A1"},
+			{FactID: "01900000-0000-7000-8000-000000000006", Kind: cards.KindFlip, Question: "Q2", Answer: "A2"},
 		},
 	})
 	if err != nil {
@@ -242,12 +241,12 @@ func TestFeedSkipsReportedCardPostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	generated, _, err := repository.SaveGeneratedSet(ctx, q, u1, "Set", generator.Result{
-		Facts: []cards.Fact{{ID: "f1", Name: "F1"}, {ID: "f2", Name: "F2"}},
+	generated, _, err := repository.SaveGeneratedSet(ctx, q, u1, "Set", repository.GeneratedSet{
+		Facts: []cards.Fact{{ID: "01900000-0000-7000-8000-000000000005", Name: "F1"}, {ID: "01900000-0000-7000-8000-000000000006", Name: "F2"}},
 		Cards: []cards.Card{
-			{FactID: "f1", Kind: cards.KindFlip, Question: "Easy", Answer: "A0"},
-			{FactID: "f1", Kind: cards.KindInput, Question: "Input", Answer: "A1"},
-			{FactID: "f2", Kind: cards.KindFlip, Question: "Only", Answer: "A2"},
+			{FactID: "01900000-0000-7000-8000-000000000005", Kind: cards.KindFlip, Question: "Easy", Answer: "A0"},
+			{FactID: "01900000-0000-7000-8000-000000000005", Kind: cards.KindInput, Question: "Input", Answer: "A1"},
+			{FactID: "01900000-0000-7000-8000-000000000006", Kind: cards.KindFlip, Question: "Only", Answer: "A2"},
 		},
 	})
 	if err != nil {
@@ -351,9 +350,9 @@ func TestCardIssueNotifiesAuthorOncePostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	generated, _, err := repository.SaveGeneratedSet(ctx, q, u1, "Биология", generator.Result{
-		Facts: []cards.Fact{{ID: "f1", Name: "F1"}},
-		Cards: []cards.Card{{FactID: "f1", Kind: cards.KindFlip, Question: "Q1", Answer: "A1"}},
+	generated, _, err := repository.SaveGeneratedSet(ctx, q, u1, "Биология", repository.GeneratedSet{
+		Facts: []cards.Fact{{ID: "01900000-0000-7000-8000-000000000005", Name: "F1"}},
+		Cards: []cards.Card{{FactID: "01900000-0000-7000-8000-000000000005", Kind: cards.KindFlip, Question: "Q1", Answer: "A1"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -423,17 +422,17 @@ func TestListCardIssuesPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	questions := []string{"open", "fixed", "kept", "kept-then-edited", "fixed-then-kept", "fixed-kept-edited", "deleted"}
-	result := generator.Result{Facts: []cards.Fact{{ID: "f", Name: "F"}}}
+	result := repository.GeneratedSet{Facts: []cards.Fact{{ID: "01900000-0000-7000-8000-000000000003", Name: "F"}}}
 	for _, question := range questions {
-		result.Cards = append(result.Cards, cards.Card{FactID: "f", Kind: cards.KindFlip, Question: question, Answer: "A"})
+		result.Cards = append(result.Cards, cards.Card{FactID: "01900000-0000-7000-8000-000000000003", Kind: cards.KindFlip, Question: question, Answer: "A"})
 	}
 	kept, _, err := repository.SaveGeneratedSet(ctx, q, u1, "Биология", result)
 	if err != nil {
 		t.Fatal(err)
 	}
-	gone, _, err := repository.SaveGeneratedSet(ctx, q, u1, "Удалённый", generator.Result{
-		Facts: []cards.Fact{{ID: "g", Name: "G"}},
-		Cards: []cards.Card{{FactID: "g", Kind: cards.KindInput, Question: "set-deleted", Answer: "A", Explanation: "E", SourceQuote: "Quote"}},
+	gone, _, err := repository.SaveGeneratedSet(ctx, q, u1, "Удалённый", repository.GeneratedSet{
+		Facts: []cards.Fact{{ID: "01900000-0000-7000-8000-000000000007", Name: "G"}},
+		Cards: []cards.Card{{FactID: "01900000-0000-7000-8000-000000000007", Kind: cards.KindInput, Question: "set-deleted", Answer: "A", Explanation: "E", SourceQuote: "Quote"}},
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -16,6 +16,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/notes"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
 func (s *recordingServer) lastText() string {
@@ -85,22 +86,17 @@ func TestBot_FailuresTellTheStudentWhatHappened(t *testing.T) {
 		},
 		{
 			name: "model fails",
-			gen:  failingGen(fmt.Errorf("provider failed on 3 fragments in a row: %w", errors.New("503")), generator.Stats{}),
+			gen:  failingGen(fmt.Errorf("provider failed: %w", errors.New("503")), generator.Stats{}),
 			want: notes.TextTryLater,
 		},
 		{
-			name: "only a table of contents",
-			gen:  failingGen(nil, generator.Stats{Chunks: 2, ChunksFiltered: 2}),
-			want: notes.TextOnlyJunk,
-		},
-		{
-			name: "content filter refused every fragment",
-			gen:  failingGen(nil, generator.Stats{Chunks: 3, ChunksFiltered: 1, ChunksRefused: 2}),
+			name: "content filter refused the document",
+			gen:  failingGen(providers.ErrRefused, generator.Stats{}),
 			want: notes.TextOtherText,
 		},
 		{
 			name: "no card backed by a quote",
-			gen:  failingGen(nil, generator.Stats{Chunks: 2, CardsFromModel: 6, DroppedQuote: 6}),
+			gen:  failingGen(nil, generator.Stats{CardsFromModel: 6, DroppedQuote: 6}),
 			want: notes.TextNoCards,
 		},
 		{

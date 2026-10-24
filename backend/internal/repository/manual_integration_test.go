@@ -13,7 +13,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
-	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
@@ -22,7 +21,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
-func manualTestPool(t *testing.T, beforeMigration ...func(*pgxpool.Pool)) *pgxpool.Pool {
+func postgresTestDatabase(t *testing.T) (*pgxpool.Pool, string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
@@ -45,6 +44,13 @@ func manualTestPool(t *testing.T, beforeMigration ...func(*pgxpool.Pool)) *pgxpo
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
+	return pool, url
+}
+
+func manualTestPool(t *testing.T, beforeMigration ...func(*pgxpool.Pool)) *pgxpool.Pool {
+	t.Helper()
+	pool, _ := postgresTestDatabase(t)
+	ctx := t.Context()
 	entries, err := repository.MigrationsFS.ReadDir("migrations")
 	if err != nil {
 		t.Fatal(err)
@@ -91,7 +97,7 @@ func TestManualCardsPostgres(t *testing.T) {
 		{Kind: contracts.CardKindFlip, Question: "Flip", Answer: contracts.NewStringCardAnswer("Answer")},
 		{Kind: contracts.CardKindInput, Question: "Input", Answer: contracts.NewStringCardAnswer("Answer")},
 		{Kind: contracts.CardKindBoolean, Question: "Boolean", Answer: contracts.NewBoolCardAnswer(false)},
-		{Kind: contracts.CardKindChoice, Question: "Choice", Options: []string{"B", "A", "C"}, Answer: contracts.NewStringCardAnswer("A")},
+		{Kind: contracts.CardKindChoice, Question: "Choice", Options: []string{"B", "A", "C"}, Answer: contracts.NewStringArrayCardAnswer([]string{"B", "A"})},
 		{Kind: contracts.CardKindTable, Question: "Table", Table: contracts.NewOptTableLayout(table), Answer: contracts.NewTableLayoutCardAnswer(table)},
 	}
 	if _, err := sets.CreateSet(ctx, user11, &contracts.CreateSetRequest{Title: " ", Card: requests[0]}); !errors.Is(err, usecase.ErrValidation) {
@@ -198,8 +204,8 @@ func TestManualCardsPostgres(t *testing.T) {
 		t.Fatalf("orphan fact in plan: %d %v", len(plan), err)
 	}
 	// Generated facts can contain several cards; deleting one must preserve the others.
-	factID := uuid.NewString()
-	generated, _, err := repository.SaveGeneratedSet(ctx, q, user11, "Generated", generator.Result{Facts: []cards.Fact{{ID: factID, Name: "Fact"}}, Cards: []cards.Card{{FactID: factID, Kind: cards.KindFlip, Question: "Q1", Answer: "A"}, {FactID: factID, Kind: cards.KindInput, Question: "Q2", Answer: "A"}}})
+	factID := uuid.Must(uuid.NewV7()).String()
+	generated, _, err := repository.SaveGeneratedSet(ctx, q, user11, "Generated", repository.GeneratedSet{Facts: []cards.Fact{{ID: factID, Name: "Fact"}}, Cards: []cards.Card{{FactID: factID, Kind: cards.KindFlip, Question: "Q1", Answer: "A"}, {FactID: factID, Kind: cards.KindInput, Question: "Q2", Answer: "A"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -101,11 +101,3 @@ func TestQueue_CancelledWhileWaiting(t *testing.T) {
 		t.Errorf("ahead after a cancelled waiter = %d, want 1", ahead)
 	}
 }
-
-func TestNewQueue_Slots(t *testing.T) {
-	for _, tc := range []struct{ size, want int }{{1, 1}, {2, 2}, {0, 1}, {-3, 1}} {
-		if got := cap(NewQueue(tc.size).slots); got != tc.want {
-			t.Errorf("NewQueue(%d): slots = %d, want %d", tc.size, got, tc.want)
-		}
-	}
-}

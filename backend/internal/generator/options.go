@@ -1,141 +1,178 @@
 package generator
 
 import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"strconv"
 	"time"
 
-	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
+	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
+	"github.com/mgrubiyan/pomnibot/backend/internal/material"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
 // Document is the input: plain text of the notes and their title.
 //
-// ID identifies the stored document, such as its set id. Fact ids are
-// derived from it and the quote: the same notes uploaded twice must not share
-// fact ids, which the storage keeps unique across all sets. Without an ID
-// every Generate call picks a random one.
-//
-// PageStarts are byte offsets in Text where pages 1, 2, … start, as
-// ingest.PageInfo.Start gives them: cards then cite pages. Without them, as
-// for plain text, cards cite the title only.
+// PageStarts are byte offsets in Text where pages 1, 2, … start.
 type Document struct {
+	PDFs       []providers.PDF
+	Structure  *material.Document
 	Text       string
 	Title      string
-	ID         string
 	PageStarts []int
 }
 
-// Result is what Generate returns: the facts and their cards in document
-// order, and stats.
+// Artifact retains private originals and the source representation for auditing.
+type Artifact struct {
+	Request  *providers.Request         `json:"request,omitempty"`  // private reproducible input, no provider credentials
+	Response string                     `json:"response,omitempty"` // full model content, including malformed or truncated responses
+	Stages   map[string]json.RawMessage `json:"stages,omitempty"`
+	Facts    []Fact                     `json:"facts,omitempty"`
+	Version  string                     `json:"version"`
+	Reading  material.Document          `json:"reading"`
+	Files    []ingest.File              `json:"files"` // private originals for reproducible region references
+}
+
+// Result includes cards, available source coverage and processing metrics.
 type Result struct {
-	Facts []cards.Fact `json:"facts"`
-	Cards []cards.Card `json:"cards"`
-	Stats Stats        `json:"stats"`
+	Budget providers.BudgetSnapshot `json:"budget"`
+
+	Artifact *Artifact `json:"artifact,omitempty"`
+	Facts    []Fact    `json:"facts"`
+	Stats    Stats     `json:"stats"`
+	Coverage Coverage  `json:"coverage"`
 }
 
-// Batch is what OnBatch receives: cards now final and the facts first met
-// among them. A fact comes once, in the batch with its first card, so the
-// storage can insert it before its cards.
-type Batch struct {
-	Facts []cards.Fact
-	Cards []cards.Card
+// Batch is the complete nested result, published once after validation.
+type Batch struct{ Facts []Fact }
+
+// Coverage records source blocks without surviving citations and validation issues.
+type Coverage struct {
+	Issues     []string `json:"issues,omitempty"`
+	Unassigned []string `json:"unassigned,omitempty"`
 }
 
-// Stats describes one Generate run. Every dropped card and every chunk that
-// did not reach the model is counted with its reason: these numbers are how we
-// show that the "no made-up facts" filter actually works.
+// Stats describes one Generate run.
 type Stats struct {
-	Chunks         int            `json:"chunks"`         // fragments after splitting
-	ChunksFiltered int            `json:"chunksFiltered"` // junk, never sent to the model
-	FilteredBy     map[string]int `json:"filteredBy"`     // junk reason → fragments
-	ChunksSkipped  int            `json:"chunksSkipped"`  // not sent: MaxFactsPerDoc already used up
-	ChunksFailed   int            `json:"chunksFailed"`   // provider error after its retries and fallback
-	ChunksInvalid  int            `json:"chunksInvalid"`  // no valid JSON after the retry, fragment skipped
-	ChunksRefused  int            `json:"chunksRefused"`  // the content filter of every model blocked it
+	Stages               map[string]StageStats `json:"stages,omitempty"`
+	CachedTokens         int                   `json:"cachedTokens"`
+	CacheWriteTokens     int                   `json:"cacheWriteTokens"`
+	UnreportedUsageCalls int                   `json:"unreportedUsageCalls"`
+	CacheUsageReported   bool                  `json:"cacheUsageReported"`
+	CacheHits            int                   `json:"cacheHits"`
+	CostUSD              float64               `json:"costUsd"`
+	ModelCalls           int                   `json:"modelCalls"`
+	FailedCalls          int                   `json:"failedCalls"`
+	InvalidResponses     int                   `json:"invalidResponses"`
+	CallsByModel         map[string]int        `json:"callsByModel"`
+	PromptTokens         int                   `json:"promptTokens"`
+	CompletionTokens     int                   `json:"completionTokens"`
+	ReasoningTokens      *int                  `json:"reasoningTokens,omitempty"`
+	Facts                int                   `json:"facts"`
 
-	ModelCalls       int            `json:"modelCalls"`       // including retries
-	InvalidResponses int            `json:"invalidResponses"` // responses that failed JSON/schema parsing
-	CallsByModel     map[string]int `json:"callsByModel"`     // model reported by the provider → calls
-	PromptTokens     int            `json:"promptTokens"`
-	CompletionTokens int            `json:"completionTokens"`
+	// CardsFromModel = DroppedInvalid + DroppedQuote + DroppedDuplicate + DroppedByLimit + Cards.
+	CardsFromModel   int `json:"cardsFromModel"`
+	DroppedInvalid   int `json:"droppedInvalid"`
+	DroppedQuote     int `json:"droppedQuote"`
+	DroppedDuplicate int `json:"droppedDuplicate"`
+	DroppedByLimit   int `json:"droppedByLimit"`
+	Cards            int `json:"cards"`
 
-	FactsFromModel int `json:"factsFromModel"` // facts in parsed responses
-	Facts          int `json:"facts"`          // distinct facts among the cards returned
-
-	// Card counts. CardsFromModel = every Dropped* + Cards.
-	CardsFromModel     int `json:"cardsFromModel"`     // cards in parsed responses
-	DroppedInvalid     int `json:"droppedInvalid"`     // card breaks the schema: empty field, unknown kind
-	DroppedQuote       int `json:"droppedQuote"`       // its fact's quote not found in the fragment
-	DroppedPersonal    int `json:"droppedPersonal"`    // its fact's quote holds a password, a phone number or the like
-	DroppedUnsupported int `json:"droppedUnsupported"` // choice or input answer not in the quote, or given in the question; a flip answer its question names; a flip answer or a true claim the quote does not back
-	DroppedTable       int `json:"droppedTable"`       // table whose terms the quote does not put in their columns
-	DroppedExample     int `json:"droppedExample"`     // asks about names an example invents: «От какого класса наследуется класс B?»
-	DroppedDuplicate   int `json:"droppedDuplicate"`   // same fact or same question as earlier
-	DroppedByLimit     int `json:"droppedByLimit"`     // its fact is over MaxFactsPerDoc
-	DroppedVariants    int `json:"droppedVariants"`    // could not keep its kind, other cards cover the fact
-	DowngradedToFlip   int `json:"downgradedToFlip"`   // choice without enough distractors, the fact's only card
-	DroppedDistractors int `json:"droppedDistractors"` // wrong options the quote or the question names: likely right too
-	InputToFlip        int `json:"inputToFlip"`        // input with an answer too long to type, the fact's only card
-	Cards              int `json:"cards"`              // cards returned
-
-	// TrimmedExplanations lost a lead-in naming the notes or sentences
-	// about the notes or from outside them; the cards stay.
-	TrimmedExplanations int `json:"trimmedExplanations"`
-
-	ChunkTimeAvg   time.Duration `json:"chunkTimeAvg"` // model time per fragment, retries included
-	ChunkTimeMax   time.Duration `json:"chunkTimeMax"`
-	FirstCardAfter time.Duration `json:"firstCardAfter"` // from Generate start to the first OnBatch batch
+	FirstCardAfter time.Duration `json:"firstCardAfter"`
 	Total          time.Duration `json:"total"`
 }
 
-// Defaults for Options.
-const (
-	// DefaultConcurrency is 1 because the GigaChat freemium plan allows exactly
-	// one concurrent request; a second one gets 429.
-	DefaultConcurrency      = 1
-	DefaultChunkSize        = 2500
-	DefaultChunkOverlap     = 150
-	DefaultMaxFactsPerChunk = 5
-	DefaultCallTimeout      = 2 * time.Minute
-)
+// DefaultCallTimeout bounds one generation stage, including transport retries.
+const DefaultCallTimeout = 15 * time.Minute
 
-// Options configure a Generator. Zero values mean defaults.
+// Options controls generation and its shared document budget.
 type Options struct {
-	Concurrency      int           // parallel model calls, default 1
-	ChunkSize        int           // fragment size in characters, default 2500
-	ChunkOverlap     int           // characters shared with the previous fragment, default 150, negative for none
-	MaxFactsPerChunk int           // facts per fragment, default 5; each fact gets up to 4 cards
-	MaxFactsPerDoc   int           // 0 means no limit
-	CallTimeout      time.Duration // per model call, retries of the provider included
-	// OnBatch receives cards as soon as they are final, with their new facts,
-	// so a long document shows progress in minutes rather than all at once at
-	// the end. It is called from a single goroutine, outside locks, only with
-	// non-empty batches; a panic in it is logged and does not stop generation.
-	OnBatch func(Batch)
+	ReasoningEffort string
+	MaxTokens       int
+	Budget          providers.BudgetLimits
+	SourceBudget    int // complete source bytes; zero defaults to 80000
+	MaxFactsPerDoc  int // zero means unlimited
+	CallTimeout     time.Duration
+	OnBatch         func(Batch)
 }
 
 func (o Options) withDefaults() Options {
-	if o.Concurrency <= 0 {
-		o.Concurrency = DefaultConcurrency
+	if o.MaxTokens == 0 {
+		o.MaxTokens = 128000
 	}
-	if o.ChunkSize <= 0 {
-		o.ChunkSize = DefaultChunkSize
+	if o.ReasoningEffort == "" {
+		o.ReasoningEffort = "medium"
 	}
-	switch {
-	case o.ChunkOverlap == 0:
-		o.ChunkOverlap = DefaultChunkOverlap
-	case o.ChunkOverlap < 0:
-		o.ChunkOverlap = 0
+	if o.Budget == (providers.BudgetLimits{}) {
+		o.Budget = providers.DefaultDocumentLimits()
 	}
-	// Overlap is context, not content: a large one means paying for the
-	// same text twice.
-	o.ChunkOverlap = min(o.ChunkOverlap, o.ChunkSize/4)
-	if o.MaxFactsPerChunk <= 0 {
-		o.MaxFactsPerChunk = DefaultMaxFactsPerChunk
-	}
-	if o.MaxFactsPerDoc < 0 {
-		o.MaxFactsPerDoc = 0
+	if o.SourceBudget <= 0 {
+		o.SourceBudget = 80000
 	}
 	if o.CallTimeout <= 0 {
 		o.CallTimeout = DefaultCallTimeout
 	}
 	return o
+}
+
+// OptionsFromEnv configures reasoning and output limits for generation stages.
+func OptionsFromEnv() (Options, error) {
+	o := Options{ReasoningEffort: os.Getenv("GENERATION_REASONING_EFFORT")}
+	if raw := os.Getenv("GENERATION_MAX_TOKENS"); raw != "" {
+		n, e := strconv.Atoi(raw)
+		if e != nil || n <= 0 {
+			return o, fmt.Errorf("GENERATION_MAX_TOKENS must be positive")
+		}
+		o.MaxTokens = n
+	}
+	o = o.withDefaults()
+	switch o.ReasoningEffort {
+	case "low", "medium", "high", "xhigh", "max":
+	default:
+		return o, fmt.Errorf("GENERATION_REASONING_EFFORT must enable reasoning")
+	}
+	return o, nil
+}
+
+// StageStats records transport attempts, billing and validation for one phase.
+type StageStats struct {
+	Model                string                   `json:"model"`
+	ModelCalls           int                      `json:"modelCalls"`
+	FailedCalls          int                      `json:"failedCalls"`
+	InvalidResponses     int                      `json:"invalidResponses"`
+	PromptTokens         int                      `json:"promptTokens"`
+	CompletionTokens     int                      `json:"completionTokens"`
+	ReasoningTokens      *int                     `json:"reasoningTokens,omitempty"`
+	CostUSD              float64                  `json:"costUsd"`
+	CacheHits            int                      `json:"cacheHits"`
+	CachedTokens         int                      `json:"cachedTokens"`
+	CacheWriteTokens     int                      `json:"cacheWriteTokens"`
+	UnreportedUsageCalls int                      `json:"unreportedUsageCalls"`
+	CacheUsageReported   bool                     `json:"cacheUsageReported"`
+	Duration             time.Duration            `json:"duration"`
+	Error                string                   `json:"error,omitempty"`
+	Budget               providers.BudgetSnapshot `json:"budget"`
+}
+
+func (s *Stats) recordStage(name string, st StageStats) {
+	s.UnreportedUsageCalls += st.UnreportedUsageCalls
+	s.ModelCalls += st.ModelCalls
+	s.FailedCalls += st.FailedCalls
+	s.InvalidResponses += st.InvalidResponses
+	s.PromptTokens += st.PromptTokens
+	s.CompletionTokens += st.CompletionTokens
+	s.CostUSD += st.CostUSD
+	s.CachedTokens += st.CachedTokens
+	s.CacheWriteTokens += st.CacheWriteTokens
+	s.CacheHits += st.CacheHits
+	s.CacheUsageReported = s.CacheUsageReported || st.CacheUsageReported
+	if st.ReasoningTokens != nil {
+		if s.ReasoningTokens == nil {
+			s.ReasoningTokens = new(int)
+		}
+		*s.ReasoningTokens += *st.ReasoningTokens
+	}
+	s.CallsByModel[st.Model] += st.ModelCalls
+	s.Stages[name] = st
 }

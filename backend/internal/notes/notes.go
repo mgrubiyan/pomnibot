@@ -15,16 +15,20 @@ package notes
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
+	"github.com/mgrubiyan/pomnibot/backend/internal/processingcache"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
 // Extractor reads text from files and photos.
@@ -61,10 +65,13 @@ func FromGenerator(g *generator.Generator) Generator {
 
 // Maker turns files into saved sets. It is safe for concurrent use.
 type Maker struct {
-	queue     *generator.Queue
-	extractor Extractor
-	generator Generator
-	sets      Saver
+	cache         *processingcache.Cache
+	cacheIdentity string
+	budget        providers.BudgetLimits
+	queue         *generator.Queue
+	extractor     Extractor
+	generator     Generator
+	sets          Saver
 }
 
 // New returns a Maker that works on slots documents at once, at least one:
@@ -74,10 +81,48 @@ type Maker struct {
 func New(extractor Extractor, gen Generator, sets Saver, slots int) *Maker {
 	return &Maker{
 		queue:     generator.NewQueue(slots),
+		budget:    providers.DefaultDocumentLimits(),
 		extractor: extractor,
 		generator: gen,
 		sets:      sets,
 	}
+}
+
+// WithBudget configures the shared per-document provider ledger.
+func (m *Maker) WithBudget(l providers.BudgetLimits) *Maker { m.budget = l; return m }
+
+// WithCache enables bounded reading reuse within a user. identity must include
+// concrete reader models, prompts/schema, and extraction settings.
+func (m *Maker) WithCache(c *processingcache.Cache, identity string) *Maker {
+	m.cache = c
+	m.cacheIdentity = identity
+	return m
+}
+
+func (m *Maker) extract(ctx context.Context, files []ingest.File) (ingest.Result, error) {
+	key := processingcache.Key(processingcache.Scope(ctx), m.cacheIdentity, ingest.ProcessingIdentity(), files)
+	if m.cache != nil {
+		if data, ok := m.cache.Get(key); ok {
+			var res ingest.Result
+			if json.Unmarshal(data, &res) == nil {
+				slog.Info("notes: reading cache hit")
+				return res, nil
+			}
+		}
+	}
+	began := time.Now()
+	res, err := m.extractor.Extract(ctx, files)
+	slog.Info("notes: reading done", "pages", len(res.Pages), "took", time.Since(began), "error", err)
+	if err == nil && ctx.Err() == nil && m.cache != nil {
+		// Never reuse an incomplete/uncertain reading: a new attempt must have a
+		// chance to recover from a temporary vision failure.
+		reusable := ingest.ReusableReading(res)
+		if reusable {
+			data, _ := json.Marshal(res)
+			m.cache.Put(key, data)
+		}
+	}
+	return res, err
 }
 
 // Request is one document: the files a student sent at once, already
@@ -109,14 +154,8 @@ var (
 	ErrNoFiles = errors.New("no files to read")
 	ErrGaveUp  = errors.New("gave up waiting for a turn")
 	ErrNoText  = errors.New("no text in the files")
+	ErrNoCards = errors.New("no cards made from the document")
 )
-
-// NoCardsError is returned when the document gave no cards; Stats tell why.
-type NoCardsError struct {
-	Stats generator.Stats
-}
-
-func (e *NoCardsError) Error() string { return "no cards made from the document" }
 
 // extractError is a failure to read the files, with their number: the
 // message names the file at fault only when there are several.
@@ -136,6 +175,7 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 		slog.Error("no files to read among attachments", "user_id", req.UserID)
 		return Result{}, ErrNoFiles
 	}
+	ctx = processingcache.WithScope(ctx, req.UserID.String())
 	title := resolveSetTitle(req.Caption, req.Files[0].Name)
 	log := slog.With("user_id", req.UserID, "title", title)
 
@@ -153,12 +193,13 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 		p.Reading()
 	}
 
-	extracted, err := m.extractor.Extract(ctx, req.Files)
+	ctx = providers.WithBudget(ctx, providers.NewBudget(m.budget))
+	extracted, err := m.extract(ctx, req.Files)
 	if err != nil {
 		log.Error("failed to extract text from files", "error", err)
 		return Result{}, &extractError{err: err, files: len(req.Files)}
 	}
-	if strings.TrimSpace(extracted.Text) == "" {
+	if strings.TrimSpace(extracted.Text) == "" && len(extracted.PDFs) == 0 {
 		log.Warn("no text found in files", "files_count", len(req.Files))
 		return Result{}, ErrNoText
 	}
@@ -166,7 +207,10 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 		p.Generating()
 	}
 
-	doc := generator.Document{Text: extracted.Text, Title: title}
+	doc := generator.Document{Text: extracted.Text, Title: title, PDFs: extracted.PDFs}
+	if len(extracted.Document.Blocks) > 0 {
+		doc.Structure = &extracted.Document
+	}
 	for _, page := range extracted.Pages {
 		doc.PageStarts = append(doc.PageStarts, page.Start)
 	}
@@ -176,7 +220,7 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 	)
 	onBatch := func(b generator.Batch) {
 		mu.Lock()
-		total += len(b.Cards)
+		total += generator.CardCount(b.Facts)
 		n := total
 		mu.Unlock()
 		call(p.Cards, n)
@@ -186,22 +230,36 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 		log.Error("failed to generate cards from document", "error", err)
 		return Result{}, fmt.Errorf("generate cards: %w", err)
 	}
-	if len(genResult.Cards) == 0 {
+	if generator.CardCount(genResult.Facts) == 0 {
 		log.Warn("no cards generated from document", "stats", genResult.Stats)
-		return Result{}, &NoCardsError{Stats: genResult.Stats}
+		return Result{}, ErrNoCards
 	}
 
 	if isGenericTitle(title) {
-		if t := titleFromTopics(genResult.Facts); t != "" {
+		if t := titleFromFacts(genResult.Facts); t != "" {
 			title = t
 		}
 	}
+	if genResult.Artifact == nil {
+		genResult.Artifact = &generator.Artifact{}
+	}
+	genResult.Artifact.Version = generator.PipelineVersion
+	genResult.Artifact.Reading = extracted.Document
+	genResult.Artifact.Files = req.Files
 	set, err := m.sets.SaveGeneratedSet(ctx, req.UserID, title, genResult)
 	if err != nil {
 		log.Error("failed to save generated set to database", "error", err)
 		return Result{}, fmt.Errorf("save set: %w", err)
 	}
-	return Result{Set: set, Warnings: extracted.Warnings}, nil
+	var warnings []string
+	if len(genResult.Coverage.Unassigned) > 0 {
+		warnings = append(warnings, fmt.Sprintf("Набор частичный: без цитат в карточках осталось блоков — %d. Сверь темы карточек с конспектом.", len(genResult.Coverage.Unassigned)))
+	} else if doc.Structure != nil && len(genResult.Artifact.Facts) == 0 {
+		warnings = append(warnings, "Полнота набора не проверена. Сверь темы карточек с конспектом.")
+	}
+	warnings = append(warnings, genResult.Coverage.Issues...)
+	warnings = append(warnings, extracted.Warnings...)
+	return Result{Set: set, Warnings: warnings}, nil
 }
 
 func call(f func(int), n int) {

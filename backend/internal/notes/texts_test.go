@@ -1,6 +1,8 @@
 package notes
 
 import (
+	"fmt"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 	"strconv"
 	"strings"
 	"testing"
@@ -43,5 +45,19 @@ func TestFileCountText(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestBudgetFailureDoesNotInviteRepeatingTheSamePaidDocument(t *testing.T) {
+	got := FailureText(fmt.Errorf("generation: %w", providers.ErrBudget))
+	if got != TextBudgetExceeded {
+		t.Fatalf("budget cause concealed: %q", got)
+	}
+}
+
+func TestRefusalFailureAsksForOtherNotes(t *testing.T) {
+	got := FailureText(fmt.Errorf("generate cards: %w", providers.ErrRefused))
+	if got != TextOtherText {
+		t.Fatalf("refusal cause concealed: %q", got)
 	}
 }

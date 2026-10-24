@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"io"
 	"regexp"
-	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -52,35 +50,6 @@ func docxText(data []byte) (string, error) {
 		}
 	}
 	return "", errors.New("no word/document.xml")
-}
-
-// pptxSlides returns the text of each slide of a deck, in slide order.
-func pptxSlides(data []byte) ([]string, error) {
-	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
-	if err != nil {
-		return nil, err
-	}
-	type slide struct {
-		n int
-		f *zip.File
-	}
-	var slides []slide
-	for _, f := range zr.File {
-		if m := reSlide.FindStringSubmatch(f.Name); m != nil {
-			n, _ := strconv.Atoi(m[1])
-			slides = append(slides, slide{n, f})
-		}
-	}
-	sort.Slice(slides, func(i, j int) bool { return slides[i].n < slides[j].n })
-	texts := make([]string, 0, len(slides))
-	for _, s := range slides {
-		text, err := partText(s.f, "p", "t")
-		if err != nil {
-			return nil, err
-		}
-		texts = append(texts, text)
-	}
-	return texts, nil
 }
 
 // partText reads the text runs of an XML part: a paragraph element ends a

@@ -92,6 +92,19 @@ func TestMigration00009UpDown(t *testing.T) {
 	upSQL := parts[0]
 	downSQL := parts[1]
 
+	// Remove the report's foreign key before older migrations rebuild set IDs.
+	m14Data, err := repository.MigrationsFS.ReadFile("migrations/00014_processing_reports.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m14Parts := strings.Split(string(m14Data), "-- +goose Down")
+	if len(m14Parts) != 2 {
+		t.Fatalf("expected 2 parts for 00014, got %d", len(m14Parts))
+	}
+	if _, err := pool.Exec(ctx, m14Parts[1]); err != nil {
+		t.Fatalf("failed to run 00014 Down: %v", err)
+	}
+
 	// 0a. Roll back 00013 so card_issues foreign keys to users and cards are dropped
 	m13Data, err := repository.MigrationsFS.ReadFile("migrations/00013_card_issues.sql")
 	if err != nil {
@@ -215,6 +228,9 @@ func TestMigration00009UpDown(t *testing.T) {
 	// 7. Re-run 00013 Up and verify card_issues table exists
 	if _, err := pool.Exec(ctx, m13Up); err != nil {
 		t.Fatalf("failed to re-run 00013 Up: %v", err)
+	}
+	if _, err := pool.Exec(ctx, m14Parts[0]); err != nil {
+		t.Fatalf("failed to re-run 00014 Up: %v", err)
 	}
 	var hasCardIssues bool
 	if err := pool.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='card_issues')").Scan(&hasCardIssues); err != nil || !hasCardIssues {

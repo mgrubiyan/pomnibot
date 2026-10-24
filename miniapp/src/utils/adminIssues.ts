@@ -40,5 +40,15 @@ export function adminAnswer(issue: AdminCardIssue): string {
     if (issue.kind === 'boolean') {
         return issue.answer === 'true' ? 'Верно' : 'Неверно';
     }
+    if (issue.kind === 'choice' && issue.answer) {
+        try {
+            const answers: unknown = JSON.parse(issue.answer);
+            if (Array.isArray(answers) && answers.every((answer) => typeof answer === 'string')) {
+                return answers.join('; ');
+            }
+        } catch {
+            // Older cards store the option text directly.
+        }
+    }
     return issue.answer ?? '';
 }

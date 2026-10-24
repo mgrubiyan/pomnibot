@@ -171,6 +171,13 @@ type Set struct {
 	AuthorID  pgtype.UUID        `json:"author_id"`
 }
 
+type SetProcessingReport struct {
+	SetID     pgtype.UUID        `json:"set_id"`
+	Version   string             `json:"version"`
+	Report    []byte             `json:"report"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type User struct {
 	LastActiveAt    pgtype.Timestamptz `json:"last_active_at"`
 	FirstName       string             `json:"first_name"`

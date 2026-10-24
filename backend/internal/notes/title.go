@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
+	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 )
 
 // genericFileRegex matches names cameras, messengers and screenshots give
@@ -46,18 +46,18 @@ func isGenericTitle(title string) bool {
 	return false
 }
 
-// titleFromTopics names a set after its commonest topic, the first on a tie,
+// titleFromFacts names a set after its commonest fact name, the first on a tie,
 // or returns "" when the facts have none.
-func titleFromTopics(facts []cards.Fact) string {
+func titleFromFacts(facts []generator.Fact) string {
 	counts := map[string]int{}
 	best := ""
 	for _, f := range facts {
-		if f.Topic == "" {
+		if f.Name == "" {
 			continue
 		}
-		counts[f.Topic]++
-		if counts[f.Topic] > counts[best] {
-			best = f.Topic
+		counts[f.Name]++
+		if counts[f.Name] > counts[best] {
+			best = f.Name
 		}
 	}
 	return best

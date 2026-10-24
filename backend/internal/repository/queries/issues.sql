@@ -117,4 +117,3 @@ WHERE c.id = @card_id
   AND ufp.user_id = @user_id
   AND ufp.fact_id = c.fact_id
   AND s.author_id <> @user_id;
-

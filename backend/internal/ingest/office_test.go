@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -90,11 +91,109 @@ func TestExtractPresentation(t *testing.T) {
 	}
 }
 
+func TestPresentationPreservesInlineBreaksAndTabs(t *testing.T) {
+	paragraphs := `<a:p><a:r><a:t>SELECT</a:t></a:r><a:tab/><a:r><a:t>id</a:t></a:r><a:br/><a:r><a:t>FROM</a:t><a:tab/><a:t>students;</a:t></a:r></a:p><a:p><a:r><a:t>Next paragraph</a:t></a:r></a:p>`
+	want := "SELECT\tid\nFROM\tstudents;\nNext paragraph"
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{name: "shape", body: `<p:spTree><p:sp><p:txBody>` + paragraphs + `</p:txBody></p:sp></p:spTree>`},
+		{name: "table cell", body: `<p:spTree><p:graphicFrame><a:tbl><a:tr><a:tc><a:txBody>` + paragraphs + `</a:txBody></a:tc></a:tr></a:tbl></p:graphicFrame></p:spTree>`},
+		{name: "fallback", body: paragraphs},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := zipOf(t, map[string]string{
+				"ppt/slides/slide1.xml": `<p:sld xmlns:p="p" xmlns:a="a"><p:cSld>` + tc.body + `</p:cSld></p:sld>`,
+			})
+			res, err := newExtractor(t, &fakePDF{}).Extract(context.Background(), []File{{Name: "query.pptx", Data: data}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.Text != want {
+				t.Errorf("text = %q, want %q", res.Text, want)
+			}
+			if len(res.Document.Blocks) != 1 || res.Document.Blocks[0].Text != want {
+				t.Fatalf("source block separators lost: %+v", res.Document.Blocks)
+			}
+			if tc.name == "table cell" && res.Document.Blocks[0].Cells[0][0] != want {
+				t.Errorf("table cell = %q, want %q", res.Document.Blocks[0].Cells[0][0], want)
+			}
+		})
+	}
+}
+
 func TestExtractRejectsOtherArchives(t *testing.T) {
 	data := zipOf(t, map[string]string{"photos/1.jpg": "x"})
 	ex := newExtractor(t, &fakePDF{})
 	_, err := ex.Extract(context.Background(), []File{{Name: "archive.zip", Data: data}})
 	if err == nil || !strings.Contains(err.Error(), "unsupported") {
 		t.Errorf("Extract() error = %v, want unsupported", err)
+	}
+}
+
+func TestPresentationPreservesTablesAndFlagsUnrenderedConnections(t *testing.T) {
+	slide := `<sld><cSld><spTree><sp><txBody><p><r><t>Типы</t></r></p></txBody></sp><graphicFrame><tbl><tr><tc><p><r><t>Тип</t></r></p></tc><tc><p><r><t>Описание</t></r></p></tc></tr><tr><tc><p><r><t>INT</t></r></p></tc><tc><p><r><t>Целое</t></r></p></tc></tr></tbl></graphicFrame><cxnSp><nvCxnSpPr><cNvCxnSpPr><stCxn id="2"/><endCxn id="3"/></cNvCxnSpPr></nvCxnSpPr></cxnSp></spTree></cSld></sld>`
+	data := zipOf(t, map[string]string{"ppt/slides/slide1.xml": slide})
+	ex := newExtractor(t, &fakePDF{})
+	res, err := ex.Extract(context.Background(), []File{{Name: "tables.pptx", Data: data}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, b := range res.Document.Blocks {
+		if b.Kind == "table" {
+			found = true
+			if len(b.Cells) != 2 || b.Cells[1][1] != "Целое" {
+				t.Fatalf("columns lost: %+v", b)
+			}
+		}
+	}
+	if !found || len(res.Document.Pages[0].Issues) == 0 {
+		t.Fatal("table structure or connection uncertainty lost")
+	}
+}
+
+func TestPresentationUsesDeclaredSlideOrder(t *testing.T) {
+	for _, prefix := range []string{"", "/ppt/"} {
+		t.Run("prefix="+prefix, func(t *testing.T) {
+			data := zipOf(t, map[string]string{
+				"ppt/presentation.xml":            `<presentation xmlns:r="r"><sldIdLst><sldId id="1" r:id="first"/><sldId id="2" r:id="second"/></sldIdLst></presentation>`,
+				"ppt/_rels/presentation.xml.rels": fmt.Sprintf(`<Relationships><Relationship Id="first" Target="%sslides/slide7.xml"/><Relationship Id="second" Target="%sslides/slide2.xml"/></Relationships>`, prefix, prefix),
+				"ppt/slides/slide2.xml":           `<sld><p><t>Второй слайд</t></p></sld>`,
+				"ppt/slides/slide7.xml":           `<sld><p><t>Первый слайд</t></p></sld>`,
+			})
+			ex := newExtractor(t, &fakePDF{})
+			res, err := ex.Extract(context.Background(), []File{{Name: "order.pptx", Data: data}})
+			if err != nil || !strings.HasPrefix(res.Text, "Первый слайд") {
+				t.Fatalf("declared order lost: %q %v", res.Text, err)
+			}
+		})
+	}
+}
+
+func TestPresentationResolvesEmbeddedImageTargets(t *testing.T) {
+	image := pngBytes(t, 4, 4)
+	for _, target := range []string{"../media/image1.png", "/ppt/media/image1.png"} {
+		t.Run(target, func(t *testing.T) {
+			data := zipOf(t, map[string]string{
+				"ppt/slides/slide1.xml":            `<sld xmlns:r="r"><cSld><spTree><pic><blipFill><blip r:embed="image"/></blipFill></pic></spTree></cSld></sld>`,
+				"ppt/slides/_rels/slide1.xml.rels": fmt.Sprintf(`<Relationships><Relationship Id="image" Target="%s"/></Relationships>`, target),
+				"ppt/media/image1.png":             string(image),
+			})
+			ocr := &fakeOCR{answer: func(int, OCRRequest) ([]OCRPage, error) {
+				return []OCRPage{{Text: "Текст изображения"}}, nil
+			}}
+			res, err := newOCRExtractor(t, ocr, &fakePDF{}).Extract(context.Background(), []File{{Name: "image.pptx", Data: data}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(ocr.reqs) != 1 || !bytes.Equal(ocr.reqs[0].Data, image) {
+				t.Fatalf("embedded image not passed to OCR: %+v", ocr.reqs)
+			}
+			if res.Text != "Текст изображения" || len(res.Document.Blocks) != 1 || res.Document.Blocks[0].Kind != "image" {
+				t.Fatalf("embedded image content lost: %+v", res)
+			}
+		})
 	}
 }

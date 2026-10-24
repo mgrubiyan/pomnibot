@@ -11,7 +11,7 @@ const issue = (reason: AdminCardIssue['reason'], kind: AdminCardIssue['kind'] = 
     answer,
     explanation: '',
     sourceQuote: '',
-    reporter: { id: 1, firstName: 'Анна' },
+    reporter: { id: crypto.randomUUID(), firstName: 'Анна' },
     createdAt: '2026-10-23T10:00:00Z',
 });
 
@@ -31,6 +31,9 @@ describe('adminAnswer', () => {
         expect(adminAnswer(issue('answer', 'table'))).toBe('Таблица');
         expect(adminAnswer(issue('answer', 'input', 'Митоз'))).toBe('Митоз');
         expect(adminAnswer(issue('answer', 'flip'))).toBe('');
+        expect(adminAnswer(issue('answer', 'choice', '["A","B"]'))).toBe('A; B');
+        expect(adminAnswer(issue('answer', 'choice', 'Legacy answer'))).toBe('Legacy answer');
+        expect(adminAnswer(issue('answer', 'choice', '[incomplete'))).toBe('[incomplete');
     });
 });
 

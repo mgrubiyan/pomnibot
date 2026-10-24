@@ -173,6 +173,9 @@ func TestCheckAsksModelWhenUnsure(t *testing.T) {
 		t.Fatalf("model called %d times, want once", len(model.reqs))
 	}
 	req := model.reqs[0]
+	if req.ReasoningEffort != "none" || req.MaxTokens != 256 {
+		t.Errorf("grading must disable thinking and bound the short verdict: %+v", req)
+	}
 	for _, part := range []string{sorted.Question, sorted.Expected, sorted.Quote, sorted.Given} {
 		if !strings.Contains(req.User, part) {
 			t.Errorf("request lacks %q:\n%s", part, req.User)

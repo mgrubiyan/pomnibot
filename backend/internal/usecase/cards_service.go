@@ -2,8 +2,10 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/grader"
+	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 )
 
@@ -68,6 +71,40 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID uuid.UUID, card
 		return nil, fmt.Errorf("get card by id for author: %w", err)
 	}
 
+	// Validate a complete choice update before changing stored answers or options.
+	if (req.Kind.IsSet() && req.Kind.Value == contracts.CardKindChoice) || (!req.Kind.IsSet() && existing.Kind == "choice") {
+		if req.Answer.IsSet() || req.Options != nil {
+			options := req.Options
+			if options == nil {
+				rows, loadErr := s.querier.GetCardOptions(ctx, pgCardID)
+				if loadErr != nil {
+					return nil, loadErr
+				}
+				for _, o := range rows {
+					options = append(options, o.Text)
+				}
+			}
+			answer := contracts.NewStringArrayCardAnswer(cards.ChoiceAnswers(existing.AnswerText.String))
+			if req.Answer.IsSet() {
+				answer = req.Answer.Value
+			}
+			if answer.Type == contracts.IntCardAnswer {
+				if answer.Int < 0 || answer.Int >= len(options) {
+					return nil, fmt.Errorf("%w: invalid choice index", ErrValidation)
+				}
+				answer = contracts.NewStringCardAnswer(options[answer.Int])
+			}
+			check := contracts.CreateCardRequest{Kind: contracts.CardKindChoice, Question: existing.Question, Options: options, Answer: answer}
+			if req.Question.IsSet() {
+				check.Question = req.Question.Value
+			}
+			if err := validateCreateCard(&check); err != nil {
+				return nil, err
+			}
+			req.Options = check.Options
+			req.Answer = contracts.NewOptCardAnswer(check.Answer)
+		}
+	}
 	// Update base card fields
 	arg := db.UpdateCardParams{
 		ID:          pgCardID,
@@ -96,6 +133,9 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID uuid.UUID, card
 	}
 	if req.Answer.IsSet() {
 		switch req.Answer.Value.Type {
+		case contracts.StringArrayCardAnswer:
+			data, _ := json.Marshal(req.Answer.Value.StringArray)
+			arg.AnswerText = pgtype.Text{String: string(data), Valid: true}
 		case contracts.StringCardAnswer:
 			arg.AnswerText = pgtype.Text{String: req.Answer.Value.String, Valid: true}
 		case contracts.BoolCardAnswer:
@@ -125,7 +165,7 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID uuid.UUID, card
 			return nil, fmt.Errorf("delete card options: %w", err)
 		}
 		for idx, opt := range req.Options {
-			isCorrect := strings.TrimSpace(opt) == strings.TrimSpace(updated.AnswerText.String)
+			isCorrect := slices.Contains(cards.ChoiceAnswers(updated.AnswerText.String), strings.TrimSpace(opt))
 			if _, err := s.querier.CreateCardOption(ctx, db.CreateCardOptionParams{
 				CardID:    pgCardID,
 				Position:  int32(idx),
@@ -195,6 +235,8 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID uuid.UUID, card
 			Type:        contracts.TableLayoutCardAnswer,
 			TableLayout: req.Table.Value,
 		}
+	} else if cardKind == contracts.CardKindChoice {
+		res.Answer = contracts.NewStringArrayCardAnswer(cards.ChoiceAnswers(updated.AnswerText.String))
 	} else if cardKind == contracts.CardKindBoolean {
 		b, _ := strconv.ParseBool(updated.AnswerText.String)
 		res.Answer = contracts.CardAnswer{
@@ -331,7 +373,7 @@ func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID uuid.UUID, 
 		return nil, fmt.Errorf("get card by id: %w", err)
 	}
 
-	isCorrect := s.grader.Check(ctx, gradeInput(card, answer)).Correct
+	isCorrect := s.gradeCard(ctx, card, answer).Correct
 
 	_, err = s.querier.RecordAnswer(ctx, db.RecordAnswerParams{
 		UserID:  pgUserID,
@@ -368,7 +410,7 @@ func (s *cardServiceImpl) CheckAnswer(ctx context.Context, userID uuid.UUID, car
 		return nil, fmt.Errorf("get card by id: %w", err)
 	}
 
-	v := s.grader.Check(ctx, gradeInput(card, answer))
+	v := s.gradeCard(ctx, card, answer)
 	res := &contracts.CheckAnswerResponse{
 		IsCorrect: v.Correct,
 		Method:    contracts.CheckAnswerResponseMethod(v.Method),
@@ -386,4 +428,11 @@ func gradeInput(card db.GetCardByIDRow, answer string) grader.Input {
 		Quote:    card.SourceQuote,
 		Given:    answer,
 	}
+}
+
+func (s *cardServiceImpl) gradeCard(ctx context.Context, card db.GetCardByIDRow, answer string) grader.Verdict {
+	if card.Kind == "choice" {
+		return grader.Verdict{Correct: cards.MatchChoiceAnswer(card.AnswerText.String, answer), Method: grader.MethodLocal}
+	}
+	return s.grader.Check(ctx, gradeInput(card, answer))
 }
