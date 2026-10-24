@@ -130,3 +130,9 @@
 .confirmText {
     text-align: center;
 }
+
+/* Why «Сохранить» is disabled, right under it. */
+.saveHint {
+    text-align: center;
+    text-wrap: pretty;
+}
