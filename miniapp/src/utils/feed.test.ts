@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { CardReveal, FeedCard } from '../types';
-import { layoutOf, patchFeedCard, resumedCards, revealedCard } from './feed';
+import { layoutOf, patchFeedCard, rejoinedFeed, resumedCards, revealedCard } from './feed';
 
 const card = (id: string, extra: Partial<FeedCard> = {}): FeedCard => ({
     id,
@@ -56,6 +56,14 @@ describe('resumedCards', () => {
     it('drops a card reported meanwhile only from the cards ahead', () => {
         const resumed = resumedCards({ cards, index: 1, results: [] }, ['1', '2'], {});
         expect(resumed.map((c) => c.id)).toEqual(['1', '3']);
+    });
+});
+
+describe('rejoinedFeed', () => {
+    it('keeps the cards gone through and adds the rest of the reloaded feed', () => {
+        const passed = [card('1'), card('2')];
+        const feed = [card('2'), card('3'), card('4')];
+        expect(rejoinedFeed(passed, feed, ['4'], {}).map((c) => c.id)).toEqual(['1', '2', '3']);
     });
 });
 

@@ -140,6 +140,10 @@ type AnswerQuestionBadRequest ErrorResponse
 
 func (*AnswerQuestionBadRequest) answerQuestionRes() {}
 
+type AnswerQuestionConflict ErrorResponse
+
+func (*AnswerQuestionConflict) answerQuestionRes() {}
+
 type AnswerQuestionForbidden ErrorResponse
 
 func (*AnswerQuestionForbidden) answerQuestionRes() {}
@@ -2070,6 +2074,10 @@ func (*ResolveCardIssuesNotFound) resolveCardIssuesRes() {}
 type RevealCardBadRequest ErrorResponse
 
 func (*RevealCardBadRequest) revealCardRes() {}
+
+type RevealCardConflict ErrorResponse
+
+func (*RevealCardConflict) revealCardRes() {}
 
 type RevealCardForbidden ErrorResponse
 

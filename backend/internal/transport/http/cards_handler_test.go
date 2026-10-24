@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"fmt"
 	"errors"
 	"reflect"
 	"testing"
@@ -511,7 +512,7 @@ func TestCardsHandler_DeleteCard_RelationalIntegrity(t *testing.T) {
 }
 
 func TestCardsHandler_RevealCard(t *testing.T) {
-	flipID, inputID := uuid.New(), uuid.New()
+	flipID, inputID, answeredID := uuid.New(), uuid.New(), uuid.New()
 	ctx := WithUserID(context.Background(), testUserID)
 	svc := &mockCardService{
 		revealCardFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID) (*contracts.CardReveal, error) {
@@ -523,6 +524,8 @@ func TestCardsHandler_RevealCard(t *testing.T) {
 				return &contracts.CardReveal{Answer: contracts.NewStringCardAnswer("отсортированный")}, nil
 			case inputID:
 				return nil, usecase.ErrValidation
+			case answeredID:
+				return nil, usecase.ErrConflict
 			}
 			return nil, usecase.ErrNotFound
 		},
@@ -538,6 +541,11 @@ func TestCardsHandler_RevealCard(t *testing.T) {
 		t.Error("input: no response")
 	} else if _, ok := res.(*contracts.RevealCardBadRequest); !ok {
 		t.Errorf("input: res %T, want bad request", res)
+	}
+	if res, _ := h.RevealCard(ctx, contracts.RevealCardParams{CardId: answeredID}); res == nil {
+		t.Error("out of the feed: no response")
+	} else if _, ok := res.(*contracts.RevealCardConflict); !ok {
+		t.Errorf("out of the feed: res %T, want conflict", res)
 	}
 	if res, _ := h.RevealCard(ctx, contracts.RevealCardParams{CardId: uuid.New()}); res == nil {
 		t.Error("unknown card: no response")
@@ -705,6 +713,20 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 			wantResType: (*contracts.AnswerQuestionBadRequest)(nil),
 		},
 		{
+			name:   "A card out of the feed maps to AnswerQuestionConflict",
+			ctx:    WithUserID(context.Background(), testUserID),
+			cardID: cardID,
+			req:    &contracts.AnswerQuestionRequest{Answer: "foo"},
+			mockSetup: func(_ *testing.T) *mockCardService {
+				return &mockCardService{
+					answerQuestionFunc: func(context.Context, uuid.UUID, uuid.UUID, string) (*contracts.AnswerQuestionResponse, error) {
+						return nil, fmt.Errorf("%w: the card is not in the feed", usecase.ErrConflict)
+					},
+				}
+			},
+			wantResType: (*contracts.AnswerQuestionConflict)(nil),
+		},
+		{
 			name:   "Not Found error maps to AnswerQuestionNotFound",
 			ctx:    WithUserID(context.Background(), testUserID),
 			cardID: cardID,
@@ -797,6 +819,10 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 			case *contracts.AnswerQuestionNotFound:
 				if _, ok := res.(*contracts.AnswerQuestionNotFound); !ok {
 					t.Fatalf("expected *contracts.AnswerQuestionNotFound, got %T", res)
+				}
+			case *contracts.AnswerQuestionConflict:
+				if _, ok := res.(*contracts.AnswerQuestionConflict); !ok {
+					t.Fatalf("expected *contracts.AnswerQuestionConflict, got %T", res)
 				}
 			case *contracts.AnswerQuestionInternalServerError:
 				if _, ok := res.(*contracts.AnswerQuestionInternalServerError); !ok {

@@ -18,8 +18,10 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 )
 
-// errNotInFeed: the card is not the one the feed asks of the reader now.
-var errNotInFeed = fmt.Errorf("%w: the card is not in the feed", ErrNotFound)
+// errNotInFeed: the card is not the one the feed asks of the reader now. A
+// conflict, not a missing card: the mini app skips such a card, while a card
+// the reader cannot see at all (as after their sign-in expired) stops the run.
+var errNotInFeed = fmt.Errorf("%w: the card is not in the feed", ErrConflict)
 
 // answerLocks serialize the answers of one reader to one fact, so a double
 // tap or an overlapping retry is not recorded twice. One process serves the

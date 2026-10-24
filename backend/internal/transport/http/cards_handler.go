@@ -111,6 +111,9 @@ func (h *CardsHandler) AnswerQuestion(ctx context.Context, req *contracts.Answer
 		if errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
 			return &contracts.AnswerQuestionNotFound{Message: err.Error()}, nil
 		}
+		if errors.Is(err, usecase.ErrConflict) {
+			return &contracts.AnswerQuestionConflict{Message: err.Error()}, nil
+		}
 		return &contracts.AnswerQuestionInternalServerError{Message: internalError(ctx, "AnswerQuestion", err)}, nil
 	}
 	return res, nil
@@ -126,6 +129,9 @@ func (h *CardsHandler) RevealCard(ctx context.Context, params contracts.RevealCa
 		}
 		if errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
 			return &contracts.RevealCardNotFound{Message: err.Error()}, nil
+		}
+		if errors.Is(err, usecase.ErrConflict) {
+			return &contracts.RevealCardConflict{Message: err.Error()}, nil
 		}
 		return &contracts.RevealCardInternalServerError{Message: internalError(ctx, "RevealCard", err)}, nil
 	}

@@ -229,7 +229,7 @@ export interface paths {
         put?: never;
         /**
          * Answer a card of the current feed and record the verdict
-         * @description Only the card the feed shows for a due fact is graded and recorded; asked again after that, the endpoint repeats the recorded verdict. A typed answer need not match word for word: form, word order and typos do not matter, and answers in other words are judged by a language model. When the model does not answer in time nothing is recorded and the method is fallback: ask again.
+         * @description Only the card the feed shows for a due fact is graded and recorded; asked again after that, the endpoint repeats the recorded verdict. A typed answer need not match word for word: form, word order and typos do not matter, and answers in other words are judged by a language model. When the model does not answer in time nothing is recorded and the method is fallback: ask again. A card the feed does not ask and the reader has never answered gets 409.
          */
         post: operations["AnswerQuestion"];
         delete?: never;
@@ -584,6 +584,15 @@ export interface components {
         };
         /** @description Resource not found */
         NotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description The feed does not ask this card now, and the reader has never answered it */
+        NotInFeed: {
             headers: {
                 [name: string]: unknown;
             };
@@ -1051,6 +1060,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["NotInFeed"];
             500: components["responses"]["InternalServerError"];
         };
     };
@@ -1078,6 +1088,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["NotInFeed"];
             500: components["responses"]["InternalServerError"];
         };
     };

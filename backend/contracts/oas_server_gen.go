@@ -13,7 +13,8 @@ type Handler interface {
 	// Only the card the feed shows for a due fact is graded and recorded; asked again after that, the
 	// endpoint repeats the recorded verdict. A typed answer need not match word for word: form, word order
 	// and typos do not matter, and answers in other words are judged by a language model. When the model
-	// does not answer in time nothing is recorded and the method is fallback: ask again.
+	// does not answer in time nothing is recorded and the method is fallback: ask again. A card the feed
+	// does not ask and the reader has never answered gets 409.
 	//
 	// POST /cards/{cardId}/answer
 	AnswerQuestion(ctx context.Context, req *AnswerQuestionRequest, params AnswerQuestionParams) (AnswerQuestionRes, error)

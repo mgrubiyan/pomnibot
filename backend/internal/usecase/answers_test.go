@@ -159,8 +159,8 @@ func TestAnswerQuestionOnlyGradesTheFeedCard(t *testing.T) {
 	f.inFeed.Store(false)
 	svc := usecase.NewCardService(f, usecase.NewUserService(f))
 	_, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(f.card.ID.Bytes), "true")
-	if !errors.Is(err, usecase.ErrNotFound) || f.recorded.Load() != 0 {
-		t.Fatalf("err = %v, recorded %d; want ErrNotFound and nothing recorded", err, f.recorded.Load())
+	if !errors.Is(err, usecase.ErrConflict) || f.recorded.Load() != 0 {
+		t.Fatalf("err = %v, recorded %d; want ErrConflict and nothing recorded", err, f.recorded.Load())
 	}
 
 	if _, err := svc.AnswerQuestion(context.Background(), testUser2, uuid.UUID(f.card.ID.Bytes), "true"); !errors.Is(err, usecase.ErrNotFound) {
@@ -275,8 +275,8 @@ func TestRevealCard(t *testing.T) {
 		f := newAnswerFixture(testCard("flip", "отсортированный"))
 		f.inFeed.Store(false)
 		svc := usecase.NewCardService(f, usecase.NewUserService(f))
-		if _, err := svc.RevealCard(context.Background(), testUser1, uuid.UUID(f.card.ID.Bytes)); !errors.Is(err, usecase.ErrNotFound) {
-			t.Fatalf("err = %v, want ErrNotFound", err)
+		if _, err := svc.RevealCard(context.Background(), testUser1, uuid.UUID(f.card.ID.Bytes)); !errors.Is(err, usecase.ErrConflict) {
+			t.Fatalf("err = %v, want ErrConflict", err)
 		}
 	})
 }

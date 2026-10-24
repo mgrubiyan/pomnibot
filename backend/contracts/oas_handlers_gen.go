@@ -38,7 +38,8 @@ func (c *codeRecorder) Unwrap() http.ResponseWriter {
 // Only the card the feed shows for a due fact is graded and recorded; asked again after that, the
 // endpoint repeats the recorded verdict. A typed answer need not match word for word: form, word order
 // and typos do not matter, and answers in other words are judged by a language model. When the model
-// does not answer in time nothing is recorded and the method is fallback: ask again.
+// does not answer in time nothing is recorded and the method is fallback: ask again. A card the feed
+// does not ask and the reader has never answered gets 409.
 //
 // POST /cards/{cardId}/answer
 func (s *Server) handleAnswerQuestionRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {

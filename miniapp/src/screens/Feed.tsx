@@ -4,7 +4,7 @@ import type { Answer, Card, CardAnswer, CardReveal, FeedCard } from '../types';
 import { api } from '../api';
 import { TableColumns, TablePool } from '../components/TableCard';
 import type { CardPatch } from '../utils/cards';
-import { layoutOf, resumedCards, revealedCard, visibleFeed, type FeedResume } from '../utils/feed';
+import { layoutOf, rejoinedFeed, resumedCards, revealedCard, type FeedResume } from '../utils/feed';
 import { AnswerCheck, type CheckStage } from '../components/AnswerCheck';
 import {
     correctCount,
@@ -61,6 +61,21 @@ interface Checked {
 
 /** The feed no longer asks the card: it was deleted or changed meanwhile. */
 const GONE = 'gone';
+/**
+ * The backend refused the card for another reason, as when the reader's
+ * sign-in expired and the card is no longer theirs: the run stops instead of
+ * skipping every card that follows.
+ */
+const FAILED = 'failed';
+
+type Refusal = typeof GONE | typeof FAILED;
+
+function refusalOf(status: number): Refusal | null {
+    if (status === 409) {
+        return GONE;
+    }
+    return status >= 400 && status < 500 ? FAILED : null;
+}
 
 /**
  * Every answer goes to the backend, which grades and records it: the feed
@@ -69,14 +84,15 @@ const GONE = 'gone';
  * when there is no verdict yet: the request was lost, or the backend gave
  * up on the model (fallback) — the reader keeps waiting for a real one.
  */
-async function sendAnswer(cardId: string, answer: string): Promise<Checked | typeof GONE | null> {
+async function sendAnswer(cardId: string, answer: string): Promise<Checked | Refusal | null> {
     try {
         const { data, response } = await api.POST('/cards/{cardId}/answer', {
             params: { path: { cardId } },
             body: { answer },
         });
-        if (response.status >= 400 && response.status < 500) {
-            return GONE;
+        const refusal = refusalOf(response.status);
+        if (refusal) {
+            return refusal;
         }
         if (!data || data.method === 'fallback' || !data.reveal) {
             return null;
@@ -88,13 +104,14 @@ async function sendAnswer(cardId: string, answer: string): Promise<Checked | typ
 }
 
 /** The answer of a flip card, which the reader then grades themselves. */
-async function fetchReveal(cardId: string): Promise<CardReveal | typeof GONE | null> {
+async function fetchReveal(cardId: string): Promise<CardReveal | Refusal | null> {
     try {
         const { data, response } = await api.POST('/cards/{cardId}/reveal', {
             params: { path: { cardId } },
         });
-        if (response.status >= 400 && response.status < 500) {
-            return GONE;
+        const refusal = refusalOf(response.status);
+        if (refusal) {
+            return refusal;
         }
         return data ?? null;
     } catch {
@@ -234,6 +251,9 @@ export function Feed({
     const [leaving, setLeaving] = useState(false);
 
     const [attempt, setAttempt] = useState(0);
+    // The cards a stopped run has gone through: their answers are recorded,
+    // so the reloaded feed no longer holds them.
+    const passedRef = useRef<FeedCard[]>([]);
 
     const card = cards[index];
     const options = useMemo(() => (card ? optionsOf(card) : []), [card]);
@@ -252,7 +272,7 @@ export function Feed({
                 if (cancelled) {
                     return;
                 }
-                setCards(visibleFeed(next, removedCardIds, cardPatches));
+                setCards(rejoinedFeed(passedRef.current, next, removedCardIds, cardPatches));
                 setStatus('ready');
             })
             .catch(() => {
@@ -267,6 +287,7 @@ export function Feed({
     }, [attempt, resume, setId, removedCardIds, cardPatches]);
 
     const retry = () => {
+        passedRef.current = cards.slice(0, index);
         setStatus('loading');
         setAttempt((current) => current + 1);
     };
@@ -302,6 +323,12 @@ export function Feed({
         reset();
     }, [reset]);
 
+    // The card is answered anew once the run is retried.
+    const stop = useCallback(() => {
+        reset();
+        setStatus('error');
+    }, [reset]);
+
     /**
      * Sends the answer and waits for the verdict, asking again while there is
      * none. A card the feed no longer asks is skipped without a result.
@@ -331,6 +358,10 @@ export function Feed({
                         showNext();
                         return;
                     }
+                    if (result === FAILED) {
+                        stop();
+                        return;
+                    }
                     setReason(result.reason);
                     setReveal(result.reveal);
                     onVerdict(result);
@@ -338,7 +369,7 @@ export function Feed({
             };
             attempt();
         },
-        [showNext],
+        [showNext, stop],
     );
 
     // Leaving the feed drops a check that is still waiting or retrying.
@@ -433,6 +464,10 @@ export function Feed({
                 setOpening(false);
                 if (result === GONE) {
                     showNext();
+                    return;
+                }
+                if (result === FAILED) {
+                    stop();
                     return;
                 }
                 setReveal(result);

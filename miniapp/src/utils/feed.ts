@@ -43,6 +43,17 @@ export function resumedCards(resume: FeedResume, removedIds: string[], patches: 
     ];
 }
 
+/** A stopped run reloaded: the cards gone through, then the rest of the feed. */
+export function rejoinedFeed(
+    passed: FeedCard[],
+    feed: FeedCard[],
+    removedIds: string[],
+    patches: Record<string, CardPatch>,
+): FeedCard[] {
+    const passedIds = new Set(passed.map((card) => card.id));
+    return [...passed, ...visibleFeed(feed.filter((card) => !passedIds.has(card.id)), removedIds, patches)];
+}
+
 /**
  * The terms of a sorting card as the table components take them: without
  * their columns until the answer, in the columns the backend revealed after.

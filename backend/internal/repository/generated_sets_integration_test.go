@@ -141,11 +141,11 @@ func TestGeneratedSetOrderAndChoiceIssuesPostgres(t *testing.T) {
 	// Only the card the feed asks now is graded, not an easier or a harder
 	// card of the same fact.
 	for _, other := range []uuid.UUID{all[0].ID, all[4].ID} {
-		if _, err := cards.AnswerQuestion(ctx, reader, other, "true"); !errors.Is(err, usecase.ErrNotFound) {
+		if _, err := cards.AnswerQuestion(ctx, reader, other, "true"); !errors.Is(err, usecase.ErrConflict) {
 			t.Fatalf("answer to a card out of the feed: %v", err)
 		}
 	}
-	if _, err := cards.RevealCard(ctx, reader, all[0].ID); !errors.Is(err, usecase.ErrNotFound) {
+	if _, err := cards.RevealCard(ctx, reader, all[0].ID); !errors.Is(err, usecase.ErrConflict) {
 		t.Fatalf("reveal of a flip out of the feed: %v", err)
 	}
 	if _, err := cards.RevealCard(ctx, reader, choiceID); !errors.Is(err, usecase.ErrValidation) {
