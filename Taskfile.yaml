@@ -94,7 +94,7 @@ tasks:
       - task: backend:test
 
   cardsgen:
-    desc: 'Карточки из конспекта на живом GigaChat: task cardsgen -- notes.txt'
+    desc: 'Карточки по всему документу: task cardsgen -- notes.txt'
     dir: '{{.USER_WORKING_DIR}}'
     cmds:
       - go -C '{{.ROOT_DIR}}/backend' build -o '{{.ROOT_DIR}}/.task/bin/cardsgen' ./cmd/cardsgen
@@ -134,8 +134,3 @@ tasks:
     desc: 'Остановка PostgreSQL в Docker Compose'
     cmds:
       - docker compose stop postgres
-
-  db:seed:
-    desc: 'Запуск сидера данных'
-    cmds:
-      - task: backend:seed

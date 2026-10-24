@@ -1,6 +1,6 @@
 -- name: CreateSet :one
-INSERT INTO sets (title, author_id, share_code)
-VALUES ($1, $2, $3)
+INSERT INTO sets (title, author_id, share_code, warnings)
+VALUES ($1, $2, $3, COALESCE(sqlc.arg(warnings)::TEXT[], '{}'::TEXT[]))
 RETURNING *;
 
 -- name: GetSetByID :one
@@ -12,18 +12,18 @@ SELECT
     u.last_name AS author_last_name,
     u.username AS author_username,
     s.share_code,
-    s.created_at,
     s.updated_at,
+    CASE WHEN s.author_id = sqlc.arg('user_id') THEN s.warnings ELSE '{}'::TEXT[] END::TEXT[] AS warnings,
     (SELECT COUNT(*)::INT FROM cards c JOIN facts f ON c.fact_id = f.id WHERE f.set_id = s.id) AS cards_total,
     (SELECT COUNT(*)::INT
      FROM facts f
-     LEFT JOIN user_fact_progress ufp ON ufp.fact_id = f.id AND ufp.user_id = $2
+     LEFT JOIN user_fact_progress ufp ON ufp.fact_id = f.id AND ufp.user_id = sqlc.arg('user_id')
      WHERE f.set_id = s.id
        AND (ufp.next_review_at IS NULL OR ufp.next_review_at <= NOW())) AS cards_due
 FROM sets s
 JOIN users u ON s.author_id = u.id
 WHERE s.id = $1
-  AND (s.author_id = $2 OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = $2));
+  AND (s.author_id = sqlc.arg('user_id') OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = sqlc.arg('user_id')));
 
 -- name: GetSetByShareCode :one
 SELECT
@@ -34,14 +34,8 @@ SELECT
     u.last_name AS author_last_name,
     u.username AS author_username,
     s.share_code,
-    s.created_at,
     s.updated_at,
-    (SELECT COUNT(*)::INT FROM cards c JOIN facts f ON c.fact_id = f.id WHERE f.set_id = s.id) AS cards_total,
-    (SELECT COUNT(*)::INT
-     FROM facts f
-     LEFT JOIN user_fact_progress ufp ON ufp.fact_id = f.id AND ufp.user_id = $2
-     WHERE f.set_id = s.id
-       AND (ufp.next_review_at IS NULL OR ufp.next_review_at <= NOW())) AS cards_due
+    (SELECT COUNT(*)::INT FROM cards c JOIN facts f ON c.fact_id = f.id WHERE f.set_id = s.id) AS cards_total
 FROM sets s
 JOIN users u ON s.author_id = u.id
 WHERE s.share_code = $1;
@@ -61,7 +55,6 @@ SELECT
     u.last_name AS author_last_name,
     u.username AS author_username,
     s.share_code,
-    s.created_at,
     s.updated_at,
     (SELECT COUNT(*)::INT FROM cards c JOIN facts f ON c.fact_id = f.id WHERE f.set_id = s.id) AS cards_total,
     (SELECT COUNT(*)::INT
@@ -107,17 +100,26 @@ WITH set_facts AS (
 facts_count AS (
     SELECT COUNT(*)::INT AS total FROM set_facts
 ),
+fact_cards AS (
+    SELECT c.fact_id, COUNT(*)::INT AS total_cards
+    FROM cards c
+    JOIN set_facts sf ON sf.id = c.fact_id
+    GROUP BY c.fact_id
+),
 participants AS (
     SELECT us.user_id FROM user_sets us WHERE us.set_id = sqlc.arg('set_id')::UUID
     UNION
     SELECT s.author_id AS user_id FROM sets s WHERE s.id = sqlc.arg('set_id')::UUID
 ),
--- Aggregate only existing progress before joining participants. Missing facts
--- contribute the default 700 without expanding every participant into every fact.
 progress_by_user AS (
-    SELECT ufp.user_id, SUM(ufp.elo::BIGINT - 700)::FLOAT AS elo_delta
+    SELECT
+        ufp.user_id,
+        SUM(
+            LEAST(ufp.step, GREATEST(1, COALESCE(fc.total_cards, 1)))::FLOAT / GREATEST(1, COALESCE(fc.total_cards, 1))::FLOAT
+        )::FLOAT AS total_mastery
     FROM user_fact_progress ufp
     JOIN set_facts sf ON sf.id = ufp.fact_id
+    LEFT JOIN fact_cards fc ON fc.fact_id = ufp.fact_id
     GROUP BY ufp.user_id
 ),
 user_scores AS (
@@ -126,8 +128,8 @@ user_scores AS (
         fc.total AS facts_count,
         CASE
             WHEN fc.total = 0 THEN 0::FLOAT
-            ELSE 700.0 + COALESCE(pu.elo_delta, 0) / fc.total
-        END AS avg_elo
+            ELSE COALESCE(pu.total_mastery, 0.0) / fc.total::FLOAT
+        END AS avg_mastery
     FROM participants p
     CROSS JOIN facts_count fc
     LEFT JOIN progress_by_user pu ON pu.user_id = p.user_id
@@ -138,13 +140,8 @@ ranked AS (
         u.first_name,
         u.last_name,
         u.username,
-        CASE
-            WHEN us.facts_count = 0 THEN 0
-            WHEN us.avg_elo <= 800 THEN 0
-            WHEN us.avg_elo >= 1400 THEN 100
-            ELSE ROUND(((us.avg_elo - 800.0) / 600.0) * 100)::INT
-        END AS percentile,
-        RANK() OVER (ORDER BY us.avg_elo DESC)::INT AS rank
+        CAST(LEAST(100, GREATEST(0, ROUND(us.avg_mastery * 100.0))) AS INT) AS percentile,
+        DENSE_RANK() OVER (ORDER BY us.avg_mastery DESC)::INT AS rank
     FROM user_scores us
     JOIN users u ON u.id = us.user_id
 )
@@ -159,19 +156,28 @@ WITH set_facts AS (
 facts_count AS (
     SELECT COUNT(*)::INT AS total FROM set_facts
 ),
+fact_cards AS (
+    SELECT c.fact_id, COUNT(*)::INT AS total_cards
+    FROM cards c
+    JOIN set_facts sf ON sf.id = c.fact_id
+    GROUP BY c.fact_id
+),
 participants AS (
     SELECT us.user_id FROM user_sets us WHERE us.set_id = sqlc.arg('set_id')::UUID
     UNION
     SELECT s.author_id AS user_id FROM sets s WHERE s.id = sqlc.arg('set_id')::UUID
     UNION
-    SELECT sqlc.arg('user_id')::BIGINT AS user_id
+    SELECT sqlc.arg('user_id')::UUID AS user_id
 ),
--- Aggregate only existing progress before joining participants. Missing facts
--- contribute the default 700 without expanding every participant into every fact.
 progress_by_user AS (
-    SELECT ufp.user_id, SUM(ufp.elo::BIGINT - 700)::FLOAT AS elo_delta
+    SELECT
+        ufp.user_id,
+        SUM(
+            LEAST(ufp.step, GREATEST(1, COALESCE(fc.total_cards, 1)))::FLOAT / GREATEST(1, COALESCE(fc.total_cards, 1))::FLOAT
+        )::FLOAT AS total_mastery
     FROM user_fact_progress ufp
     JOIN set_facts sf ON sf.id = ufp.fact_id
+    LEFT JOIN fact_cards fc ON fc.fact_id = ufp.fact_id
     GROUP BY ufp.user_id
 ),
 user_scores AS (
@@ -180,8 +186,8 @@ user_scores AS (
         fc.total AS facts_count,
         CASE
             WHEN fc.total = 0 THEN 0::FLOAT
-            ELSE 700.0 + COALESCE(pu.elo_delta, 0) / fc.total
-        END AS avg_elo
+            ELSE COALESCE(pu.total_mastery, 0.0) / fc.total::FLOAT
+        END AS avg_mastery
     FROM participants p
     CROSS JOIN facts_count fc
     LEFT JOIN progress_by_user pu ON pu.user_id = p.user_id
@@ -189,19 +195,13 @@ user_scores AS (
 ranked AS (
     SELECT
         us.user_id,
-        CASE
-            WHEN us.facts_count = 0 THEN 0
-            WHEN us.avg_elo <= 800 THEN 0
-            WHEN us.avg_elo >= 1400 THEN 100
-            ELSE ROUND(((us.avg_elo - 800.0) / 600.0) * 100)::INT
-        END AS percentile,
-        RANK() OVER (ORDER BY us.avg_elo DESC)::INT AS rank
+        CAST(LEAST(100, GREATEST(0, ROUND(us.avg_mastery * 100.0))) AS INT) AS percentile,
+        DENSE_RANK() OVER (ORDER BY us.avg_mastery DESC)::INT AS rank
     FROM user_scores us
-    JOIN users u ON u.id = us.user_id
 )
 SELECT percentile, rank
 FROM ranked
-WHERE user_id = sqlc.arg('user_id')::BIGINT;
+WHERE user_id = sqlc.arg('user_id')::UUID;
 
 -- name: LockSetForAuthor :one
 SELECT id FROM sets WHERE id = $1 AND author_id = $2 FOR UPDATE;

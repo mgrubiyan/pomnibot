@@ -25,27 +25,28 @@ func NewHomescreenService(querier db.Querier, userService UserService) Homescree
 	}
 }
 
-func (s *homescreenServiceImpl) GetToday(ctx context.Context, userID int64) (*contracts.TodayData, error) {
+func (s *homescreenServiceImpl) GetToday(ctx context.Context, userID uuid.UUID) (*contracts.TodayData, error) {
 	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return nil, err
 	}
 
-	user, err := s.querier.GetUserByID(ctx, userID)
+	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
+	user, err := s.querier.GetUserByID(ctx, pgUserID)
 	if err != nil {
 		return nil, fmt.Errorf("get user by id: %w", err)
 	}
 
-	dueCount, err := s.querier.CountTotalDueCardsForUser(ctx, userID)
+	dueCount, err := s.querier.CountTotalDueCardsForUser(ctx, pgUserID)
 	if err != nil {
 		return nil, fmt.Errorf("count due cards: %w", err)
 	}
 
-	nextReviewAt, err := s.querier.GetNextReviewDateForUser(ctx, userID)
+	nextReviewAt, err := s.querier.GetNextReviewDateForUser(ctx, pgUserID)
 	if err != nil {
 		return nil, fmt.Errorf("get next review date: %w", err)
 	}
 
-	setRows, err := s.querier.GetUserSets(ctx, userID)
+	setRows, err := s.querier.GetUserSets(ctx, pgUserID)
 	if err != nil {
 		return nil, fmt.Errorf("get user sets: %w", err)
 	}
@@ -89,12 +90,13 @@ func (s *homescreenServiceImpl) GetToday(ctx context.Context, userID int64) (*co
 	}, nil
 }
 
-func (s *homescreenServiceImpl) GetFeedQuestions(ctx context.Context, userID int64) ([]contracts.Card, error) {
+func (s *homescreenServiceImpl) GetFeedQuestions(ctx context.Context, userID uuid.UUID) ([]contracts.Card, error) {
 	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return nil, err
 	}
 
-	rows, err := s.querier.GetFeedCardsForUser(ctx, userID)
+	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
+	rows, err := s.querier.GetFeedCardsForUser(ctx, pgUserID)
 	if err != nil {
 		return nil, fmt.Errorf("get feed cards for user: %w", err)
 	}
@@ -127,11 +129,12 @@ func (s *homescreenServiceImpl) GetFeedQuestions(ctx context.Context, userID int
 	return cards, nil
 }
 
-func (s *homescreenServiceImpl) SendResults(ctx context.Context, userID int64, results []contracts.AnswerResult) error {
+func (s *homescreenServiceImpl) SendResults(ctx context.Context, userID uuid.UUID, results []contracts.Answer) error {
 	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return err
 	}
 
+	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
 	for _, res := range results {
 		var pgCardID pgtype.UUID
 		if err := pgCardID.Scan(res.CardId.String()); err != nil {
@@ -140,32 +143,23 @@ func (s *homescreenServiceImpl) SendResults(ctx context.Context, userID int64, r
 
 		card, err := s.querier.GetCardByID(ctx, db.GetCardByIDParams{
 			ID:     pgCardID,
-			UserID: userID,
+			UserID: pgUserID,
 		})
 		if err != nil {
 			return fmt.Errorf("card %s not found: %w", res.CardId, ErrNotFound)
 		}
 
-		var answeredAt pgtype.Timestamptz
-		_ = answeredAt.Scan(res.AnsweredAt)
-
-		_, err = s.querier.RecordAnswerResult(ctx, db.RecordAnswerResultParams{
-			UserID:     userID,
-			CardID:     pgCardID,
-			Correct:    res.Correct,
-			AnsweredAt: answeredAt,
+		_, err = s.querier.RecordAnswer(ctx, db.RecordAnswerParams{
+			UserID:  pgUserID,
+			CardID:  pgCardID,
+			Correct: res.Correct,
 		})
 		if err != nil {
-			return fmt.Errorf("record answer result: %w", err)
+			return fmt.Errorf("record answer: %w", err)
 		}
 
-		_, err = s.querier.UpdateFactProgressOnAnswer(ctx, db.UpdateFactProgressOnAnswerParams{
-			UserID:  userID,
-			FactID:  card.FactID,
-			Column3: res.Correct,
-		})
-		if err != nil {
-			return fmt.Errorf("update fact progress on answer: %w", err)
+		if err := processFactAnswer(ctx, s.querier, pgUserID, card.FactID, res.Correct); err != nil {
+			return fmt.Errorf("process fact answer: %w", err)
 		}
 	}
 
@@ -182,15 +176,21 @@ func (s *homescreenServiceImpl) buildFeedCard(ctx context.Context, r db.GetFeedC
 		return contracts.Card{}, fmt.Errorf("parse set uuid: %w", err)
 	}
 
+	factUUID, err := uuid.FromBytes(r.FactID.Bytes[:])
+	if err != nil {
+		return contracts.Card{}, fmt.Errorf("parse fact uuid: %w", err)
+	}
+
 	cardKind := contracts.CardKind(r.Kind)
 	card := contracts.Card{
 		ID:          cardUUID,
 		SetId:       setUUID,
+		FactId:      factUUID,
+		FactName:    r.FactName,
 		Kind:        cardKind,
 		Question:    r.Question,
 		Explanation: r.Explanation,
 		SourceQuote: r.SourceQuote,
-		Topic:       r.Topic,
 	}
 
 	if r.SourceRef.Valid && r.SourceRef.String != "" {
@@ -212,10 +212,8 @@ func (s *homescreenServiceImpl) buildFeedCard(ctx context.Context, r db.GetFeedC
 		for _, o := range opts {
 			card.Options = append(card.Options, o.Text)
 		}
-		card.Answer = contracts.CardAnswer{
-			Type:   contracts.StringCardAnswer,
-			String: ansStr,
-		}
+		card.Answer = choiceAnswer(opts, ansStr)
+
 	case contracts.CardKindBoolean:
 		b, _ := strconv.ParseBool(ansStr)
 		card.Answer = contracts.CardAnswer{

@@ -3,7 +3,7 @@ package notes
 import (
 	"testing"
 
-	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
+	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 )
 
 // Phone cameras and screenshots name files by date or number: such a name
@@ -36,7 +36,7 @@ func TestResolveSetTitleFromFilename(t *testing.T) {
 		"Лекция 3. Клеточный цикл.pdf": "Лекция 3. Клеточный цикл",
 		// A title or name with no extension keeps everything after its dots.
 		"Лекция 3. Клеточный цикл": "Лекция 3. Клеточный цикл",
-		"Версия 1.2":               "Версия 1.2",
+		"Версия 1.2": "Версия 1.2",
 	} {
 		if got := resolveSetTitle("", name); got != want {
 			t.Errorf("resolveSetTitle(%q) = %q, want %q", name, got, want)
@@ -57,11 +57,11 @@ func TestIsGenericTitleAfterSpaces(t *testing.T) {
 // A set made from photos with no caption is named after its commonest topic,
 // not «Новый конспект (17.10 23:55)».
 func TestTitleFromTopics(t *testing.T) {
-	facts := []cards.Fact{{Topic: "Фазы митоза"}, {Topic: ""}, {Topic: "Клеточный цикл"}, {Topic: "Фазы митоза"}}
-	if got := titleFromTopics(facts); got != "Фазы митоза" {
-		t.Errorf("titleFromTopics = %q, want the commonest topic", got)
+	facts := []generator.Fact{{Name: "Фазы митоза"}, {Name: ""}, {Name: "Клеточный цикл"}, {Name: "Фазы митоза"}}
+	if got := titleFromFacts(facts); got != "Фазы митоза" {
+		t.Errorf("titleFromFacts = %q, want the commonest topic", got)
 	}
-	if got := titleFromTopics([]cards.Fact{{Topic: ""}}); got != "" {
-		t.Errorf("titleFromTopics = %q, want none without topics", got)
+	if got := titleFromFacts([]generator.Fact{{Name: ""}}); got != "" {
+		t.Errorf("titleFromFacts = %q, want none without topics", got)
 	}
 }

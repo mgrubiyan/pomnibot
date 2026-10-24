@@ -108,6 +108,22 @@ func (s *Card) Validate() error {
 
 func (s CardAnswer) Validate() error {
 	switch s.Type {
+	case StringArrayCardAnswer:
+		if s.StringArray == nil {
+			return errors.New("nil is invalid value")
+		}
+		if err := (validate.Array{
+			MinLength:    1,
+			MinLengthSet: true,
+			MaxLength:    0,
+			MaxLengthSet: false,
+		}).ValidateLength(len(s.StringArray)); err != nil {
+			return errors.Wrap(err, "array")
+		}
+		if err := validate.UniqueItems(s.StringArray); err != nil {
+			return errors.Wrap(err, "array")
+		}
+		return nil
 	case IntCardAnswer:
 		return nil // no validation needed
 	case StringCardAnswer:
@@ -582,7 +598,7 @@ func (s *ReportCardIssueRequest) Validate() error {
 }
 
 func (s SendResultsRequest) Validate() error {
-	alias := ([]AnswerResult)(s)
+	alias := ([]Answer)(s)
 	if alias == nil {
 		return errors.New("nil is invalid value")
 	}

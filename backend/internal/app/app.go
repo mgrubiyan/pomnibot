@@ -17,6 +17,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest/yandex"
 	"github.com/mgrubiyan/pomnibot/backend/internal/notes"
+	"github.com/mgrubiyan/pomnibot/backend/internal/processingcache"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/aistudio"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
@@ -89,13 +90,21 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 		if err != nil {
 			return fmt.Errorf("initialize OCR: %w", err)
 		}
-		fullPages := cfg.LLM.Primary == config.PrimaryOpenRouter
-		extractor, err := ingest.NewExtractor(&ingest.VisionOCR{Model: llm.vision, Checker: ocr, FullPage: fullPages}, ingest.Options{ReadAllPDFPages: fullPages})
+		extractor, err := ingest.NewExtractor(&ingest.VisionOCR{Model: llm.vision, Checker: ocr, FullPage: true, Concurrency: llm.tasks, CallTimeout: generator.DefaultCallTimeout}, ingest.Options{NativePDF: true})
 		if err != nil {
 			return fmt.Errorf("initialize extractor: %w", err)
 		}
-		cardGenerator := generator.NewGenerator(llm.text, generator.Options{})
-		maker := notes.New(extractor, notes.FromGenerator(cardGenerator), sets, llm.slots)
+		genOptions, err := generator.OptionsFromEnv()
+		if err != nil {
+			return err
+		}
+		genOptions.SourceBudget = llm.sourceBytes
+		cardGenerator := generator.NewGenerator(llm.text, genOptions)
+		limits := providers.DefaultDocumentLimits()
+		if cfg.OpenRouter != nil {
+			limits.USD = .15
+		}
+		maker := notes.New(extractor, notes.FromGenerator(cardGenerator), sets, llm.slots).WithCache(llm.cache, llm.readingIdentity).WithBudget(limits)
 		maxBot, err := startMAXBot(ctx, cfg, maker, users)
 		if err != nil {
 			return err
@@ -115,20 +124,19 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 
 // models are the model clients the app shares.
 type models struct {
-	text   providers.Provider // writes cards and grades answers
-	vision providers.Provider // reads photos of notes
-	slots  int                // documents turned into cards at once
+	tasks           int
+	sourceBytes     int
+	cache           *processingcache.Cache
+	identity        string
+	readingIdentity string
+	text            providers.Provider // writes cards and grades answers
+	vision          providers.Provider // reads photos of notes
+	slots           int                // documents turned into cards at once
 }
 
 // aiStudioSlots is how many documents are turned into cards at once on AI
 // Studio, the quota for requests at once without a subscription.
 const aiStudioSlots = 2
-
-// aiStudioRequests is how many requests we send AI Studio at once. Measured
-// on 2026-10-20: five pass, the sixth gets 429. A class checking answers at
-// once queues behind them instead of retrying 429s, and the documents, at
-// most aiStudioSlots requests, leave the rest of the slots to grading.
-const aiStudioRequests = 5
 
 // newModels shares a single fallback chain across cards, grading and photos.
 // OpenRouter is backed by GigaChat, then AI Studio; without OpenRouter the
@@ -140,30 +148,43 @@ func newModels(cfg config.Config) (models, error) {
 	}
 	// Two documents, or a photo and the cards of another, would reach
 	// GigaChat at once; its plan answers the second with 429.
-	gigaOne := providers.Limit(giga, 1)
+	gigaProfile, qwenProfile, routerProfile := providers.GigaChatProfile(), providers.QwenProfile(), providers.OpenRouterProfile()
+	gigaOne := providers.Limit(giga, gigaProfile.Requests)
+	cache := processingcache.New(64 << 20)
+	modelIDs := []any{cfg.LLM.Primary, cfg.GigaChat.Model, cfg.GigaChat.FallbackModel, cfg.GigaChat.BaseURL, cfg.GigaChat.MaxTokens}
+	if cfg.AIStudio != nil {
+		modelIDs = append(modelIDs, cfg.AIStudio.Model, cfg.AIStudio.BaseURL, cfg.AIStudio.MaxTokens)
+	}
+	if cfg.OpenRouter != nil {
+		modelIDs = append(modelIDs, cfg.OpenRouter.Model, cfg.OpenRouter.BaseURL, cfg.OpenRouter.MaxTokens, cfg.OpenRouter.Effort)
+	}
+	readingIdentity := processingcache.Key(modelIDs, ingest.ProcessingIdentity())
+	identity := processingcache.Key(modelIDs, generator.PipelineVersion)
+
+	wrap := func(p providers.Provider) providers.Provider { return processingcache.Wrap(p, cache, identity) }
 
 	if cfg.AIStudio == nil && cfg.OpenRouter == nil {
 		slog.Warn("AI Studio is off: GigaChat does it all, no backup when it is down")
 		// GigaChat alone still gets a timeout on photos, so that a hang
 		// leaves the OCR time.
 		photos := providers.NewFallback(cfg.LLM.Cooldown,
-			providers.Backend{Name: "gigachat", Provider: gigaOne, Timeout: cfg.LLM.PrimaryTimeout})
-		return models{text: gigaOne, vision: photos, slots: 1}, nil
+			providers.Backend{Name: "gigachat", Provider: gigaOne, Timeout: cfg.LLM.PrimaryTimeout, Capabilities: &gigaProfile.Capabilities})
+		return models{text: wrap(photos), vision: processingcache.Wrap(photos, cache, readingIdentity), slots: 1, tasks: 1, sourceBytes: gigaProfile.SourceBytes, cache: cache, identity: identity, readingIdentity: readingIdentity}, nil
 	}
-	backends := []providers.Backend{{Name: config.PrimaryGigaChat, Provider: gigaOne}}
+	backends := []providers.Backend{{Name: config.PrimaryGigaChat, Provider: gigaOne, Capabilities: &gigaProfile.Capabilities}}
 	if cfg.AIStudio != nil {
 		studio, err := aistudio.New(*cfg.AIStudio)
 		if err != nil {
 			return models{}, fmt.Errorf("initialize AI Studio: %w", err)
 		}
-		backends = append(backends, providers.Backend{Name: config.PrimaryAIStudio, Provider: providers.Limit(studio, aiStudioRequests)})
+		backends = append(backends, providers.Backend{Name: config.PrimaryAIStudio, Provider: providers.Limit(studio, qwenProfile.Requests), Capabilities: &qwenProfile.Capabilities})
 	}
 	if cfg.OpenRouter != nil {
 		router, err := openrouter.New(*cfg.OpenRouter)
 		if err != nil {
 			return models{}, fmt.Errorf("initialize OpenRouter: %w", err)
 		}
-		backends = append(backends, providers.Backend{Name: config.PrimaryOpenRouter, Provider: providers.Limit(router, aiStudioRequests)})
+		backends = append(backends, providers.Backend{Name: config.PrimaryOpenRouter, Provider: providers.Limit(router, routerProfile.Requests), Capabilities: &routerProfile.Capabilities})
 	}
 	// Move the selected primary to the front, preserving the backup order.
 	for i := range backends {
@@ -184,7 +205,15 @@ func newModels(cfg config.Config) (models, error) {
 	}
 	slog.Info("models", "primary", cfg.LLM.Primary,
 		"primary_timeout", cfg.LLM.PrimaryTimeout, "cooldown", cfg.LLM.Cooldown, "documents_at_once", slots)
-	return models{text: chain, vision: chain, slots: slots}, nil
+	profile := qwenProfile
+	if cfg.LLM.Primary == config.PrimaryGigaChat {
+		profile = gigaProfile
+	}
+	if cfg.LLM.Primary == config.PrimaryOpenRouter {
+		profile = routerProfile
+	}
+	shared := wrap(chain)
+	return models{text: shared, vision: processingcache.Wrap(chain, cache, readingIdentity), slots: slots, tasks: profile.Tasks, sourceBytes: profile.SourceBytes, cache: cache, identity: identity, readingIdentity: readingIdentity}, nil
 }
 
 func startMAXBot(ctx context.Context, cfg config.Config, maker *notes.Maker, users usecase.UserService) (*maxtransport.Bot, error) {

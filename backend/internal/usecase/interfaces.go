@@ -11,34 +11,34 @@ import (
 
 // SetService defines domain operations on card sets.
 type SetService interface {
-	CreateSet(context.Context, int64, *contracts.CreateSetRequest) (*contracts.CardSet, error)
-	GetSet(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.CardSet, error)
-	DeleteSet(ctx context.Context, userID int64, setID uuid.UUID) error
-	GetCardsBySetID(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.Card, error)
-	GetSetShareCode(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.CardSet, error)
-	GetSetPlan(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.SetPlanItem, error)
-	GetSetLeaderboard(ctx context.Context, userID int64, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error)
-	JoinSetByShareCode(ctx context.Context, userID int64, code string) (*contracts.CardSet, error)
-	SaveGeneratedSet(ctx context.Context, userID int64, title string, genResult generator.Result) (*contracts.CardSet, error)
+	CreateSet(context.Context, uuid.UUID, *contracts.CreateSetRequest) (*contracts.CardSet, error)
+	GetSet(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.CardSet, error)
+	DeleteSet(ctx context.Context, userID uuid.UUID, setID uuid.UUID) error
+	GetCardsBySetID(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.Card, error)
+	GetSetShareCode(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.CardSet, error)
+	GetSetPlan(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.SetPlanItem, error)
+	GetSetLeaderboard(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error)
+	JoinSetByShareCode(ctx context.Context, userID uuid.UUID, code string) (*contracts.CardSet, error)
+	SaveGeneratedSet(ctx context.Context, userID uuid.UUID, title string, genResult generator.Result, warnings []string) (*contracts.CardSet, error)
 }
 
 // CardService defines domain operations on individual cards.
 type CardService interface {
-	CreateCard(context.Context, int64, uuid.UUID, *contracts.CreateCardRequest) (*contracts.Card, error)
-	UpdateCard(ctx context.Context, userID int64, cardID uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error)
-	DeleteCard(ctx context.Context, userID int64, cardID uuid.UUID) error
-	AnswerQuestion(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error)
-	CheckAnswer(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error)
-	ReportCardIssue(ctx context.Context, userID int64, cardID uuid.UUID, reason contracts.CardIssueReason) error
-	GetSetIssues(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.SetIssue, error)
-	ResolveCardIssues(ctx context.Context, userID int64, cardID uuid.UUID) error
+	CreateCard(context.Context, uuid.UUID, uuid.UUID, *contracts.CreateCardRequest) (*contracts.Card, error)
+	UpdateCard(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error)
+	DeleteCard(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) error
+	AnswerQuestion(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error)
+	CheckAnswer(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error)
+	ReportCardIssue(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, reason contracts.CardIssueReason) error
+	GetSetIssues(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.SetIssue, error)
+	ResolveCardIssues(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) error
 }
 
 // HomescreenService defines domain operations for today overview, feed, and submitting review results.
 type HomescreenService interface {
-	GetToday(ctx context.Context, userID int64) (*contracts.TodayData, error)
-	GetFeedQuestions(ctx context.Context, userID int64) ([]contracts.Card, error)
-	SendResults(ctx context.Context, userID int64, results []contracts.AnswerResult) error
+	GetToday(ctx context.Context, userID uuid.UUID) (*contracts.TodayData, error)
+	GetFeedQuestions(ctx context.Context, userID uuid.UUID) ([]contracts.Card, error)
+	SendResults(ctx context.Context, userID uuid.UUID, results []contracts.Answer) error
 }
 
 // MAXUserParams comes from a verified MAX request or bot update.
@@ -70,9 +70,9 @@ type Account struct {
 type UserService interface {
 	UpsertMAXUser(context.Context, MAXUserParams) (Account, error)
 	UpsertTelegramUser(context.Context, TelegramUserParams) (Account, error)
-	GetAccount(context.Context, int64) (Account, error)
-	SaveProfile(context.Context, int64, string, string) (Account, error)
-	ProfileInput(context.Context, int64, string, bool) (Account, error)
-	EnsureUser(ctx context.Context, userID int64) error
-	GetUsersWithDueFacts(ctx context.Context, now time.Time, tz string) ([]int64, error)
+	GetAccount(context.Context, uuid.UUID) (Account, error)
+	SaveProfile(context.Context, uuid.UUID, string, string) (Account, error)
+	ProfileInput(context.Context, uuid.UUID, string, bool) (Account, error)
+	EnsureUser(ctx context.Context, userID uuid.UUID) error
+	GetUsersWithDueFacts(ctx context.Context, now time.Time, tz string) ([]uuid.UUID, error)
 }

@@ -14,7 +14,8 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
-	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
+	"github.com/mgrubiyan/pomnibot/backend/internal/material"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
 type fakeExtractor struct {
@@ -37,10 +38,11 @@ type fakeGenerator struct {
 }
 
 func oneCard(topic string) generator.Result {
-	return generator.Result{
-		Facts: []cards.Fact{{ID: "f1", Name: "Митоз", Topic: topic}},
-		Cards: []cards.Card{{FactID: "f1", Kind: cards.KindFlip, Question: "Сколько фаз у митоза?", Answer: "Четыре"}},
+	name := topic
+	if name == "" {
+		name = "Митоз"
 	}
+	return generator.Result{Facts: []generator.Fact{{Name: name, Pages: []int{1}, Cards: []generator.Card{generator.FlipCard{CardBase: generator.CardBase{Question: "Сколько фаз у митоза?", Source: "Митоз"}, Answer: "Четыре"}}}}}
 }
 
 func (f *fakeGenerator) Generate(ctx context.Context, doc generator.Document, onBatch func(generator.Batch)) (generator.Result, error) {
@@ -49,24 +51,26 @@ func (f *fakeGenerator) Generate(ctx context.Context, doc generator.Document, on
 	}
 	res := oneCard("")
 	if onBatch != nil {
-		onBatch(generator.Batch{Facts: res.Facts, Cards: res.Cards})
+		onBatch(generator.Batch{Facts: res.Facts})
 	}
 	return res, nil
 }
 
 type fakeSaver struct {
-	mu     sync.Mutex
-	titles []string
-	err    error
+	mu       sync.Mutex
+	titles   []string
+	warnings []string
+	err      error
 }
 
-func (f *fakeSaver) SaveGeneratedSet(_ context.Context, _ int64, title string, _ generator.Result) (*contracts.CardSet, error) {
+func (f *fakeSaver) SaveGeneratedSet(_ context.Context, _ uuid.UUID, title string, _ generator.Result, warnings []string) (*contracts.CardSet, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.titles = append(f.titles, title)
+	f.warnings = warnings
 	return &contracts.CardSet{ID: uuid.New(), Title: title}, nil
 }
 
@@ -80,7 +84,7 @@ func TestMake_SavesSetNamedAfterFile(t *testing.T) {
 	m := New(extractor, &fakeGenerator{}, saver, 1)
 
 	var cardsSeen []int
-	res, err := m.Make(context.Background(), Request{UserID: 1, Files: file("Лекция_4_митоз.pdf")},
+	res, err := m.Make(context.Background(), Request{UserID: uuid.New(), Files: file("Лекция_4_митоз.pdf")},
 		Progress{Cards: func(total int) { cardsSeen = append(cardsSeen, total) }})
 	if err != nil {
 		t.Fatalf("Make: %v", err)
@@ -90,6 +94,9 @@ func TestMake_SavesSetNamedAfterFile(t *testing.T) {
 	}
 	if !slices.Equal(res.Warnings, []string{"Страница 2 размыта"}) {
 		t.Errorf("warnings = %q, want the extractor's", res.Warnings)
+	}
+	if !slices.Equal(saver.warnings, res.Warnings) {
+		t.Fatalf("saved warnings = %q, want %q", saver.warnings, res.Warnings)
 	}
 	if !slices.Equal(cardsSeen, []int{1}) {
 		t.Errorf("Cards progress = %v, want [1]", cardsSeen)
@@ -149,9 +156,8 @@ func TestMake_Failures(t *testing.T) {
 		{name: "unknown extract error", extractor: &fakeExtractor{err: errors.New("boom")}, want: TextTryLater},
 		{name: "no text", extractor: &fakeExtractor{result: ingest.Result{Text: " \n ", Warnings: []string{}}}, want: TextNoText},
 		{name: "model fails", gen: failing(errors.New("503"), generator.Stats{}), want: TextTryLater},
-		{name: "only junk", gen: failing(nil, generator.Stats{Chunks: 2, ChunksFiltered: 2}), want: TextOnlyJunk},
-		{name: "refused", gen: failing(nil, generator.Stats{Chunks: 3, ChunksFiltered: 1, ChunksRefused: 2}), want: TextOtherText},
-		{name: "no card kept", gen: failing(nil, generator.Stats{Chunks: 2, CardsFromModel: 6, DroppedQuote: 6}), want: TextNoCards},
+		{name: "refused", gen: failing(providers.ErrRefused, generator.Stats{}), want: TextOtherText},
+		{name: "no card kept", gen: failing(nil, generator.Stats{CardsFromModel: 6, DroppedQuote: 6}), want: TextNoCards},
 		{name: "saving fails", saveErr: errors.New("db down"), want: TextTryLater},
 	}
 	for _, tt := range tests {
@@ -302,10 +308,58 @@ func TestMake_SlotsAtLeastOne(t *testing.T) {
 
 func TestWithWarnings(t *testing.T) {
 	got := WithWarnings("Готово", []string{"1", "2", "3", "4", "5"})
-	if !strings.Contains(got, "⚠️ 1\n⚠️ 2\n⚠️ 3") || !strings.Contains(got, "…и ещё 2") || strings.Contains(got, "⚠️ 4") {
-		t.Errorf("WithWarnings = %q, want three warnings and «…и ещё 2»", got)
+	if got != "Готово\n\n⚠️ Есть замечания к набору — их можно посмотреть в мини-приложении." {
+		t.Errorf("WithWarnings = %q, want a compact notice", got)
 	}
 	if got := WithWarnings("Готово", nil); got != "Готово" {
 		t.Errorf("WithWarnings without warnings = %q", got)
+	}
+}
+
+func TestMakeWarnsWhenSourceBlocksRemainUnassigned(t *testing.T) {
+	gen := &fakeGenerator{generate: func(context.Context, generator.Document, func(generator.Batch)) (generator.Result, error) {
+		r := oneCard("")
+		r.Coverage.Unassigned = []string{"b"}
+		r.Coverage.Issues = []string{"Пропущена формула"}
+		return r, nil
+	}}
+	extractor := &fakeExtractor{result: ingest.Result{Text: "Митоз.", Warnings: []string{"Размытая страница"}, Document: material.Document{Blocks: []material.Block{{ID: "b", Text: "Митоз."}}}}}
+	saver := &fakeSaver{}
+	m := New(extractor, gen, saver, 1)
+	res, err := m.Make(context.Background(), Request{UserID: uuid.New(), Files: file("lecture.pdf")}, Progress{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Warnings) != 3 || !strings.Contains(res.Warnings[0], "Набор частичный") {
+		t.Fatalf("hidden partial result: %+v", res)
+	}
+	if !slices.Equal(saver.warnings, res.Warnings) || !slices.Equal(res.Warnings[1:], []string{"Пропущена формула", "Размытая страница"}) {
+		t.Fatalf("saved warnings = %q, returned = %q", saver.warnings, res.Warnings)
+	}
+}
+
+func TestMakeNativePDFWithoutTextAndNeverSavesFailedGeneration(t *testing.T) {
+	for _, failed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "save validated", true: "reject generation"}[failed], func(t *testing.T) {
+			saver := &fakeSaver{}
+			ex := &fakeExtractor{result: ingest.Result{PDFs: []providers.PDF{{Name: "scan.pdf", Data: []byte("%PDF"), Pages: 2}}, Warnings: []string{}}}
+			gen := &fakeGenerator{generate: func(_ context.Context, doc generator.Document, _ func(generator.Batch)) (generator.Result, error) {
+				if len(doc.PDFs) != 1 || doc.PDFs[0].Pages != 2 {
+					t.Fatalf("lost originals: %+v", doc)
+				}
+				if failed {
+					return oneCard("T"), errors.New("generation failed")
+				}
+				return oneCard("T"), nil
+			}}
+			_, err := New(ex, gen, saver, 1).Make(context.Background(), Request{UserID: uuid.New(), Files: file("scan.pdf")}, Progress{})
+			if failed {
+				if err == nil || len(saver.titles) != 0 {
+					t.Fatal("saved failed generation")
+				}
+			} else if err != nil || len(saver.titles) != 1 {
+				t.Fatalf("not saved: %v", err)
+			}
+		})
 	}
 }

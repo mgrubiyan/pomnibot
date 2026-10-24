@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mgrubiyan/pomnibot/backend/internal/prompts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 	"github.com/mgrubiyan/pomnibot/backend/internal/tlsroot"
 )
@@ -152,6 +153,9 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("yandexgpt: status %d: %s", e.Status, e.Body)
 }
 
+// StatusCode exposes HTTP diagnostics without rendering upstream response text.
+func (e *APIError) StatusCode() int { return e.Status }
+
 // transportError is a failure to reach the API or to read its answer, the
 // only kind of non-HTTP error that may pass on a retry.
 type transportError struct{ err error }
@@ -166,6 +170,12 @@ var errNoImages = errors.New("yandexgpt: images are not supported")
 // errors. When YandexGPT cannot answer anyone for a while, the error wraps
 // providers.ErrUnavailable.
 func (c *Client) Complete(ctx context.Context, req providers.Request) (providers.Response, error) {
+	if req.Source != "" {
+		req.User = req.Source + "\n" + req.User
+	}
+	if len(req.PDFs) > 0 || (req.ReasoningEffort != "" && req.ReasoningEffort != "none") {
+		return providers.Response{}, providers.ErrCapability
+	}
 	if req.Image != nil {
 		return providers.Response{}, errNoImages
 	}
@@ -275,23 +285,25 @@ type completionResponse struct {
 	Result *completion `json:"result"`
 }
 
-const schemaPromptNote = "\n\nОтвет — только JSON, соответствующий этой JSON Schema:\n"
-
-func (c *Client) call(ctx context.Context, req providers.Request, withSchema bool) (providers.Response, error) {
+func (c *Client) call(ctx context.Context, req providers.Request, withSchema bool) (result providers.Response, callErr error) {
 	system := req.System
 	var schema *jsonSchema
 	switch {
 	case withSchema:
 		schema = &jsonSchema{Schema: req.Schema}
 	case len(req.Schema) > 0:
-		system += schemaPromptNote + string(req.Schema)
+		system += prompts.SchemaNote + string(req.Schema)
+	}
+	maxTokens := c.cfg.MaxTokens
+	if req.MaxTokens > 0 {
+		maxTokens = min(maxTokens, req.MaxTokens)
 	}
 
 	body, err := json.Marshal(completionRequest{
 		ModelURI: c.modelURI(),
 		CompletionOptions: completionOptions{
 			Temperature: min(max(req.Temperature, 0), 1),
-			MaxTokens:   strconv.Itoa(c.cfg.MaxTokens),
+			MaxTokens:   strconv.Itoa(maxTokens),
 		},
 		Messages:   []message{{Role: "system", Text: system}, {Role: "user", Text: req.User}},
 		JSONSchema: schema,
@@ -309,6 +321,11 @@ func (c *Client) call(ctx context.Context, req providers.Request, withSchema boo
 	httpReq.Header.Set("Authorization", "Api-Key "+c.cfg.APIKey)
 	httpReq.Header.Set("x-folder-id", c.cfg.FolderID)
 
+	finish, reserveErr := providers.ReserveCall(ctx, 0)
+	if reserveErr != nil {
+		return providers.Response{}, reserveErr
+	}
+	defer func() { finish(result.Usage, false) }()
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
 		return providers.Response{}, fmt.Errorf("yandexgpt: completion request: %w", transportError{err})

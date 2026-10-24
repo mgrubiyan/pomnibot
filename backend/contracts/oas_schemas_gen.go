@@ -136,6 +136,32 @@ func (s *AdminCardIssue) SetCreatedAt(val time.Time) {
 	s.CreatedAt = val
 }
 
+// Ref: #/components/schemas/Answer
+type Answer struct {
+	CardId  uuid.UUID `json:"cardId"`
+	Correct bool      `json:"correct"`
+}
+
+// GetCardId returns the value of CardId.
+func (s *Answer) GetCardId() uuid.UUID {
+	return s.CardId
+}
+
+// GetCorrect returns the value of Correct.
+func (s *Answer) GetCorrect() bool {
+	return s.Correct
+}
+
+// SetCardId sets the value of CardId.
+func (s *Answer) SetCardId(val uuid.UUID) {
+	s.CardId = val
+}
+
+// SetCorrect sets the value of Correct.
+func (s *Answer) SetCorrect(val bool) {
+	s.Correct = val
+}
+
 type AnswerQuestionBadRequest ErrorResponse
 
 func (*AnswerQuestionBadRequest) answerQuestionRes() {}
@@ -154,6 +180,7 @@ func (*AnswerQuestionNotFound) answerQuestionRes() {}
 
 // Ref: #/components/schemas/AnswerQuestionRequest
 type AnswerQuestionRequest struct {
+	// Typed answer, or a JSON-encoded array of selected option texts for choice.
 	Answer string `json:"answer"`
 }
 
@@ -195,47 +222,12 @@ func (s *AnswerQuestionResponse) SetUserAnswer(val string) {
 
 func (*AnswerQuestionResponse) answerQuestionRes() {}
 
-// Ref: #/components/schemas/AnswerResult
-type AnswerResult struct {
-	CardId     uuid.UUID `json:"cardId"`
-	Correct    bool      `json:"correct"`
-	AnsweredAt time.Time `json:"answeredAt"`
-}
-
-// GetCardId returns the value of CardId.
-func (s *AnswerResult) GetCardId() uuid.UUID {
-	return s.CardId
-}
-
-// GetCorrect returns the value of Correct.
-func (s *AnswerResult) GetCorrect() bool {
-	return s.Correct
-}
-
-// GetAnsweredAt returns the value of AnsweredAt.
-func (s *AnswerResult) GetAnsweredAt() time.Time {
-	return s.AnsweredAt
-}
-
-// SetCardId sets the value of CardId.
-func (s *AnswerResult) SetCardId(val uuid.UUID) {
-	s.CardId = val
-}
-
-// SetCorrect sets the value of Correct.
-func (s *AnswerResult) SetCorrect(val bool) {
-	s.Correct = val
-}
-
-// SetAnsweredAt sets the value of AnsweredAt.
-func (s *AnswerResult) SetAnsweredAt(val time.Time) {
-	s.AnsweredAt = val
-}
-
 // Ref: #/components/schemas/Card
 type Card struct {
 	ID       uuid.UUID `json:"id"`
 	SetId    uuid.UUID `json:"setId"`
+	FactId   uuid.UUID `json:"factId"`
+	FactName string    `json:"factName"`
 	Kind     CardKind  `json:"kind"`
 	Question string    `json:"question"`
 	// Choice only.
@@ -248,8 +240,6 @@ type Card struct {
 	SourceQuote string `json:"sourceQuote"`
 	// Where the quote is from: «Лекция 3, стр. 2».
 	SourceRef OptString `json:"sourceRef"`
-	// Topic, used for stats.
-	Topic string `json:"topic"`
 }
 
 // GetID returns the value of ID.
@@ -260,6 +250,16 @@ func (s *Card) GetID() uuid.UUID {
 // GetSetId returns the value of SetId.
 func (s *Card) GetSetId() uuid.UUID {
 	return s.SetId
+}
+
+// GetFactId returns the value of FactId.
+func (s *Card) GetFactId() uuid.UUID {
+	return s.FactId
+}
+
+// GetFactName returns the value of FactName.
+func (s *Card) GetFactName() string {
+	return s.FactName
 }
 
 // GetKind returns the value of Kind.
@@ -302,11 +302,6 @@ func (s *Card) GetSourceRef() OptString {
 	return s.SourceRef
 }
 
-// GetTopic returns the value of Topic.
-func (s *Card) GetTopic() string {
-	return s.Topic
-}
-
 // SetID sets the value of ID.
 func (s *Card) SetID(val uuid.UUID) {
 	s.ID = val
@@ -315,6 +310,16 @@ func (s *Card) SetID(val uuid.UUID) {
 // SetSetId sets the value of SetId.
 func (s *Card) SetSetId(val uuid.UUID) {
 	s.SetId = val
+}
+
+// SetFactId sets the value of FactId.
+func (s *Card) SetFactId(val uuid.UUID) {
+	s.FactId = val
+}
+
+// SetFactName sets the value of FactName.
+func (s *Card) SetFactName(val string) {
+	s.FactName = val
 }
 
 // SetKind sets the value of Kind.
@@ -357,20 +362,17 @@ func (s *Card) SetSourceRef(val OptString) {
 	s.SourceRef = val
 }
 
-// SetTopic sets the value of Topic.
-func (s *Card) SetTopic(val string) {
-	s.Topic = val
-}
-
 func (*Card) createCardRes() {}
 func (*Card) updateCardRes() {}
 
-// Choice - integer input - string boolean - boolean table - #/components/schemas/TableLayout.
+// Choice - string[] (all correct option texts); legacy string/integer supported input - string boolean
+// - boolean table - #/components/schemas/TableLayout.
 // Ref: #/components/schemas/CardAnswer
 // CardAnswer represents sum type.
 type CardAnswer struct {
 	// Type selects the active sum variant, switch on this field.
 	Type        CardAnswerType
+	StringArray []string
 	Int         int
 	String      string
 	Bool        bool
@@ -382,11 +384,15 @@ type CardAnswerType string
 
 // Possible values for CardAnswerType.
 const (
+	StringArrayCardAnswer CardAnswerType = "[]string"
 	IntCardAnswer         CardAnswerType = "int"
 	StringCardAnswer      CardAnswerType = "string"
 	BoolCardAnswer        CardAnswerType = "bool"
 	TableLayoutCardAnswer CardAnswerType = "TableLayout"
 )
+
+// IsStringArray reports whether CardAnswer is []string.
+func (s CardAnswer) IsStringArray() bool { return s.Type == StringArrayCardAnswer }
 
 // IsInt reports whether CardAnswer is int.
 func (s CardAnswer) IsInt() bool { return s.Type == IntCardAnswer }
@@ -399,6 +405,27 @@ func (s CardAnswer) IsBool() bool { return s.Type == BoolCardAnswer }
 
 // IsTableLayout reports whether CardAnswer is TableLayout.
 func (s CardAnswer) IsTableLayout() bool { return s.Type == TableLayoutCardAnswer }
+
+// SetStringArray sets CardAnswer to []string.
+func (s *CardAnswer) SetStringArray(v []string) {
+	s.Type = StringArrayCardAnswer
+	s.StringArray = v
+}
+
+// GetStringArray returns []string and true boolean if CardAnswer is []string.
+func (s CardAnswer) GetStringArray() (v []string, ok bool) {
+	if !s.IsStringArray() {
+		return v, false
+	}
+	return s.StringArray, true
+}
+
+// NewStringArrayCardAnswer returns new CardAnswer from []string.
+func NewStringArrayCardAnswer(v []string) CardAnswer {
+	var s CardAnswer
+	s.SetStringArray(v)
+	return s
+}
 
 // SetInt sets CardAnswer to int.
 func (s *CardAnswer) SetInt(v int) {
@@ -672,6 +699,8 @@ type CardSet struct {
 	CardsDue  int       `json:"cardsDue"`
 	Author    User      `json:"author"`
 	ShareCode OptString `json:"shareCode"`
+	// Processing and recognition remarks, visible only to the set author.
+	Warnings []string `json:"warnings"`
 	// User's rank place in the set rating (1-based).
 	UserRank OptInt `json:"userRank"`
 	// User's progress mapped from ELO (0-100%).
@@ -706,6 +735,11 @@ func (s *CardSet) GetAuthor() User {
 // GetShareCode returns the value of ShareCode.
 func (s *CardSet) GetShareCode() OptString {
 	return s.ShareCode
+}
+
+// GetWarnings returns the value of Warnings.
+func (s *CardSet) GetWarnings() []string {
+	return s.Warnings
 }
 
 // GetUserRank returns the value of UserRank.
@@ -748,6 +782,11 @@ func (s *CardSet) SetShareCode(val OptString) {
 	s.ShareCode = val
 }
 
+// SetWarnings sets the value of Warnings.
+func (s *CardSet) SetWarnings(val []string) {
+	s.Warnings = val
+}
+
 // SetUserRank sets the value of UserRank.
 func (s *CardSet) SetUserRank(val OptInt) {
 	s.UserRank = val
@@ -781,6 +820,7 @@ func (*CheckAnswerNotFound) checkAnswerRes() {}
 
 // Ref: #/components/schemas/CheckAnswerRequest
 type CheckAnswerRequest struct {
+	// Typed answer, or a JSON-encoded array of selected option texts for choice.
 	Answer string `json:"answer"`
 }
 
@@ -1851,7 +1891,7 @@ type SendResultsNoContent struct{}
 
 func (*SendResultsNoContent) sendResultsRes() {}
 
-type SendResultsRequest []AnswerResult
+type SendResultsRequest []Answer
 
 // Ref: #/components/schemas/SetIssue
 type SetIssue struct {
@@ -2118,8 +2158,6 @@ type UpdateCardRequest struct {
 	SourceQuote OptString `json:"sourceQuote"`
 	// Where the quote is from: «Лекция 3, стр. 2».
 	SourceRef OptString `json:"sourceRef"`
-	// Topic, used for stats.
-	Topic OptString `json:"topic"`
 }
 
 // GetKind returns the value of Kind.
@@ -2162,11 +2200,6 @@ func (s *UpdateCardRequest) GetSourceRef() OptString {
 	return s.SourceRef
 }
 
-// GetTopic returns the value of Topic.
-func (s *UpdateCardRequest) GetTopic() OptString {
-	return s.Topic
-}
-
 // SetKind sets the value of Kind.
 func (s *UpdateCardRequest) SetKind(val OptCardKind) {
 	s.Kind = val
@@ -2207,21 +2240,16 @@ func (s *UpdateCardRequest) SetSourceRef(val OptString) {
 	s.SourceRef = val
 }
 
-// SetTopic sets the value of Topic.
-func (s *UpdateCardRequest) SetTopic(val OptString) {
-	s.Topic = val
-}
-
 // Ref: #/components/schemas/User
 type User struct {
-	ID        int64     `json:"id"`
+	ID        uuid.UUID `json:"id"`
 	FirstName string    `json:"firstName"`
 	LastName  OptString `json:"lastName"`
 	Username  OptString `json:"username"`
 }
 
 // GetID returns the value of ID.
-func (s *User) GetID() int64 {
+func (s *User) GetID() uuid.UUID {
 	return s.ID
 }
 
@@ -2241,7 +2269,7 @@ func (s *User) GetUsername() OptString {
 }
 
 // SetID sets the value of ID.
-func (s *User) SetID(val int64) {
+func (s *User) SetID(val uuid.UUID) {
 	s.ID = val
 }
 

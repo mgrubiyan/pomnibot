@@ -287,7 +287,7 @@ func TestConfigFromEnv(t *testing.T) {
 		t.Fatalf("ConfigFromEnv() error = %v", err)
 	}
 	if cfg.Model != "qwen3.6-35b-a3b" || cfg.BaseURL != DefaultBaseURL || cfg.MaxTokens != 8000 {
-		t.Errorf("config = %+v, want Qwen, the default URL and 8000 tokens: a fragment's cards take that", cfg)
+		t.Errorf("config = %+v, want Qwen, the default URL and 8000 tokens", cfg)
 	}
 
 	t.Setenv("YC_LLM_MODEL", "gemma-3-27b-it")
@@ -315,5 +315,20 @@ func TestConfigErrors(t *testing.T) {
 				t.Errorf("ConfigFromEnv() error = %v, want one naming %s", err, tc.key)
 			}
 		})
+	}
+}
+
+func TestCompletePreservesMultipleSourceImages(t *testing.T) {
+	api := &fakeAPI{reply: func(_ int, raw map[string]any) reply {
+		msgs := raw["messages"].([]any)
+		parts := msgs[1].(map[string]any)["content"].([]any)
+		if len(parts) != 3 {
+			t.Error("source page images lost")
+		}
+		return ok(`{}`)
+	}}
+	_, err := newTestClient(t, api).Complete(context.Background(), providers.Request{User: "pages", Images: []providers.Image{{MimeType: "image/png", Data: []byte("first")}, {MimeType: "image/jpeg", Data: []byte("second")}}})
+	if err != nil {
+		t.Fatal(err)
 	}
 }

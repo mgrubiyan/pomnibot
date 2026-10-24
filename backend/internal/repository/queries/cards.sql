@@ -23,20 +23,16 @@ SELECT
     c.id,
     f.set_id,
     c.fact_id,
+    f.name AS fact_name,
     c.kind,
-    ck.difficulty_level,
     c.question,
     c.answer_text,
     c.explanation,
     c.source_quote,
     c.source_ref,
-    COALESCE(t.name, '') AS topic,
-    c.created_at,
     c.updated_at
 FROM cards c
 JOIN facts f ON c.fact_id = f.id
-JOIN card_kinds ck ON c.kind = ck.kind
-LEFT JOIN topics t ON f.topic_id = t.id
 WHERE c.id = $1
   AND EXISTS (
       SELECT 1 FROM sets s
@@ -49,20 +45,16 @@ SELECT
     c.id,
     f.set_id,
     c.fact_id,
+    f.name AS fact_name,
     c.kind,
-    ck.difficulty_level,
     c.question,
     c.answer_text,
     c.explanation,
     c.source_quote,
     c.source_ref,
-    COALESCE(t.name, '') AS topic,
-    c.created_at,
     c.updated_at
 FROM cards c
 JOIN facts f ON c.fact_id = f.id
-JOIN card_kinds ck ON c.kind = ck.kind
-LEFT JOIN topics t ON f.topic_id = t.id
 JOIN sets s ON f.set_id = s.id
 WHERE c.id = $1 AND s.author_id = $2;
 
@@ -71,42 +63,38 @@ SELECT
     c.id,
     f.set_id,
     c.fact_id,
+    f.name AS fact_name,
     c.kind,
-    ck.difficulty_level,
     c.question,
     c.answer_text,
     c.explanation,
     c.source_quote,
     c.source_ref,
-    COALESCE(t.name, '') AS topic,
-    c.created_at,
     c.updated_at
 FROM cards c
 JOIN facts f ON c.fact_id = f.id
-JOIN card_kinds ck ON c.kind = ck.kind
-LEFT JOIN topics t ON f.topic_id = t.id
 WHERE f.set_id = $1
   AND EXISTS (
       SELECT 1 FROM sets s
-      WHERE s.id = $1
+      WHERE s.id = f.set_id
         AND (s.author_id = @user_id OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = @user_id))
   )
-ORDER BY c.created_at ASC;
+ORDER BY f.id ASC, c.id ASC;
 
 -- name: GetCardOptions :many
-SELECT id, card_id, position, text, is_correct
+SELECT *
 FROM card_options
 WHERE card_id = $1
 ORDER BY position ASC;
 
 -- name: GetCardTableColumns :many
-SELECT id, card_id, position, name
+SELECT *
 FROM card_table_columns
 WHERE card_id = $1
 ORDER BY position ASC;
 
 -- name: GetCardTableItems :many
-SELECT id, card_id, item_text, column_name, position
+SELECT *
 FROM card_table_items
 WHERE card_id = $1
 ORDER BY position, id;
@@ -126,7 +114,7 @@ JOIN sets s ON f.set_id = s.id
 WHERE cards.id = $1
   AND cards.fact_id = f.id
   AND s.author_id = $8
-RETURNING cards.id, cards.fact_id, cards.kind, cards.question, cards.answer_text, cards.explanation, cards.source_quote, cards.source_ref, cards.created_at, cards.updated_at;
+RETURNING cards.id, cards.fact_id, cards.kind, cards.question, cards.answer_text, cards.explanation, cards.source_quote, cards.source_ref, cards.updated_at;
 
 -- name: DeleteCard :one
 WITH removed AS (
@@ -155,18 +143,11 @@ WITH user_due_facts AS (
     SELECT
         f.id AS fact_id,
         f.set_id,
-        COALESCE(t.name, '') AS topic,
-        COALESCE(ufp.elo, 700) AS elo,
-        CASE
-            WHEN COALESCE(ufp.elo, 700) < 800 THEN 0
-            WHEN COALESCE(ufp.elo, 700) < 1000 THEN 1
-            WHEN COALESCE(ufp.elo, 700) < 1200 THEN 2
-            WHEN COALESCE(ufp.elo, 700) < 1400 THEN 3
-            ELSE 4
-        END AS target_difficulty
+        f.name AS fact_name,
+        COALESCE(ufp.step, 0) AS step,
+        COALESCE(ufp.next_review_at, '1970-01-01'::timestamptz) AS due_time
     FROM user_sets us
     JOIN facts f ON us.set_id = f.set_id
-    LEFT JOIN topics t ON f.topic_id = t.id
     LEFT JOIN user_fact_progress ufp ON ufp.fact_id = f.id AND ufp.user_id = us.user_id
     WHERE us.user_id = $1
       AND (ufp.next_review_at IS NULL OR ufp.next_review_at <= NOW())
@@ -176,55 +157,56 @@ ranked_cards AS (
         c.id,
         udf.set_id,
         c.fact_id,
+        udf.fact_name,
         c.kind,
-        ck.difficulty_level,
         c.question,
         c.answer_text,
         c.explanation,
         c.source_quote,
         c.source_ref,
-        udf.topic,
-        c.created_at,
         c.updated_at,
+        udf.due_time,
+        udf.step,
         ROW_NUMBER() OVER (
             PARTITION BY c.fact_id
-            ORDER BY ABS(ck.difficulty_level - udf.target_difficulty) ASC, c.created_at ASC
-        ) AS rank
+            ORDER BY c.id ASC
+        ) - 1 AS card_idx,
+        COUNT(*) OVER (PARTITION BY c.fact_id) AS total_cards
     FROM cards c
     JOIN user_due_facts udf ON c.fact_id = udf.fact_id
-    JOIN card_kinds ck ON c.kind = ck.kind
-    -- A card the user complained about waits for the author to edit it or
-    -- keep it; the fact goes on with its other cards. The author's own
-    -- complaints wait in «Жалобы», their cards stay in their feed.
+    -- A reader who complained about a card will not see it or any subsequent
+    -- harder cards of that fact until the author fixes the card or keeps it.
+    -- The author sees all cards as normal.
     WHERE NOT EXISTS (
         SELECT 1 FROM card_issues i
+        JOIN cards reported ON reported.id = i.card_id
         JOIN sets s ON s.id = udf.set_id
-        WHERE i.card_id = c.id
+        WHERE reported.fact_id = c.fact_id
+          AND c.id >= reported.id
           AND i.user_id = $1
           AND s.author_id <> $1
           AND i.resolved_at IS NULL
-          AND i.created_at > c.updated_at
+          AND i.created_at > reported.updated_at
     )
 )
 SELECT
     id,
     set_id,
     fact_id,
+    fact_name,
     kind,
-    difficulty_level,
     question,
     answer_text,
     explanation,
     source_quote,
     source_ref,
-    topic,
-    created_at,
     updated_at
 FROM ranked_cards
-WHERE rank = 1
--- A steady order: the feed comes back at the same index after a complaint
--- or an edit, and a reported card's fact keeps its place.
-ORDER BY fact_id;
+WHERE card_idx = LEAST(step, total_cards - 1)
+ORDER BY due_time ASC, fact_id ASC;
+
+-- name: CountCardsByFactID :one
+SELECT COUNT(*)::INT FROM cards WHERE fact_id = $1;
 
 -- name: GetCardOptionsBatch :many
 SELECT * FROM card_options

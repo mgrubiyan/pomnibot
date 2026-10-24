@@ -17,6 +17,9 @@ import (
 
 func TestCardService_ReportCardIssue(t *testing.T) {
 	cardID := uuid.New()
+	userUUID := uuid.New()
+	authorUUID := uuid.New()
+	pgAuthorUUID := pgtype.UUID{Bytes: authorUUID, Valid: true}
 	errDB := errors.New("connection reset")
 	tests := []struct {
 		name    string
@@ -25,9 +28,9 @@ func TestCardService_ReportCardIssue(t *testing.T) {
 		want    []usecase.CardIssueReport
 		wantErr error
 	}{
-		{"first complaint", db.CreateCardIssueRow{AuthorID: 11, SetTitle: "Биология", NotifyAuthor: true}, nil,
-			[]usecase.CardIssueReport{{AuthorID: 11, SetTitle: "Биология"}}, nil},
-		{"author already told", db.CreateCardIssueRow{AuthorID: 11, SetTitle: "Биология"}, nil, nil, nil},
+		{"first complaint", db.CreateCardIssueRow{AuthorID: pgAuthorUUID, SetTitle: "Биология", NotifyAuthor: true}, nil,
+			[]usecase.CardIssueReport{{AuthorID: authorUUID, SetTitle: "Биология"}}, nil},
+		{"author already told", db.CreateCardIssueRow{AuthorID: pgAuthorUUID, SetTitle: "Биология"}, nil, nil, nil},
 		{"card gone or not visible", db.CreateCardIssueRow{}, pgx.ErrNoRows, nil, usecase.ErrNotFound},
 		{"database down", db.CreateCardIssueRow{}, errDB, nil, errDB},
 	}
@@ -40,11 +43,11 @@ func TestCardService_ReportCardIssue(t *testing.T) {
 			}}
 			notifier := &issueNotifierSpy{}
 			svc := usecase.NewCardService(m, usecase.NewUserService(m), usecase.WithIssueNotifier(notifier))
-			err := svc.ReportCardIssue(context.Background(), 7, cardID, contracts.CardIssueReasonWording)
+			err := svc.ReportCardIssue(context.Background(), userUUID, cardID, contracts.CardIssueReasonWording)
 			if !errors.Is(err, tt.wantErr) || (tt.wantErr == nil && err != nil) {
 				t.Fatalf("err = %v, want %v", err, tt.wantErr)
 			}
-			if got.UserID != 7 || uuid.UUID(got.CardID.Bytes) != cardID || !got.CardID.Valid || got.Reason != db.CardIssueReasonWording {
+			if uuid.UUID(got.UserID.Bytes) != userUUID || uuid.UUID(got.CardID.Bytes) != cardID || !got.CardID.Valid || got.Reason != db.CardIssueReasonWording {
 				t.Errorf("params = %+v", got)
 			}
 			if !reflect.DeepEqual(notifier.reports, tt.want) {
@@ -56,11 +59,12 @@ func TestCardService_ReportCardIssue(t *testing.T) {
 
 // Without a notifier, as locally, the complaint is still saved.
 func TestCardService_ReportCardIssue_NoNotifier(t *testing.T) {
+	authorUUID := uuid.New()
 	m := &mockQuerier{createCardIssueFunc: func(context.Context, db.CreateCardIssueParams) (db.CreateCardIssueRow, error) {
-		return db.CreateCardIssueRow{AuthorID: 11, NotifyAuthor: true}, nil
+		return db.CreateCardIssueRow{AuthorID: pgtype.UUID{Bytes: authorUUID, Valid: true}, NotifyAuthor: true}, nil
 	}}
 	svc := usecase.NewCardService(m, usecase.NewUserService(m))
-	if err := svc.ReportCardIssue(context.Background(), 7, uuid.New(), contracts.CardIssueReasonOther); err != nil {
+	if err := svc.ReportCardIssue(context.Background(), uuid.New(), uuid.New(), contracts.CardIssueReasonOther); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -73,6 +77,7 @@ func (s *issueNotifierSpy) CardIssueReported(_ context.Context, r usecase.CardIs
 
 func TestCardService_GetSetIssues(t *testing.T) {
 	setID, cardID := uuid.New(), uuid.New()
+	userUUID := uuid.New()
 	at := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
 	errDB := errors.New("connection reset")
 	rows := []db.GetSetIssuesRow{{
@@ -96,20 +101,20 @@ func TestCardService_GetSetIssues(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := &mockQuerier{
 				isSetAuthorFunc: func(_ context.Context, arg db.IsSetAuthorParams) (bool, error) {
-					if uuid.UUID(arg.ID.Bytes) != setID || arg.AuthorID != 7 {
+					if uuid.UUID(arg.ID.Bytes) != setID || uuid.UUID(arg.AuthorID.Bytes) != userUUID {
 						t.Fatalf("author check = %+v", arg)
 					}
 					return tt.author, nil
 				},
 				getSetIssuesFunc: func(_ context.Context, arg db.GetSetIssuesParams) ([]db.GetSetIssuesRow, error) {
-					if uuid.UUID(arg.SetID.Bytes) != setID || arg.UserID != 7 {
+					if uuid.UUID(arg.SetID.Bytes) != setID || uuid.UUID(arg.UserID.Bytes) != userUUID {
 						t.Fatalf("params = %+v", arg)
 					}
 					return rows, tt.err
 				},
 			}
 			svc := usecase.NewCardService(m, usecase.NewUserService(m))
-			got, err := svc.GetSetIssues(context.Background(), 7, setID)
+			got, err := svc.GetSetIssues(context.Background(), userUUID, setID)
 			if !errors.Is(err, tt.wantErr) || (tt.wantErr == nil && err != nil) {
 				t.Fatalf("err = %v, want %v", err, tt.wantErr)
 			}
@@ -122,6 +127,7 @@ func TestCardService_GetSetIssues(t *testing.T) {
 
 func TestCardService_ResolveCardIssues(t *testing.T) {
 	cardID := uuid.New()
+	userUUID := uuid.New()
 	errDB := errors.New("connection reset")
 	tests := []struct {
 		name    string
@@ -136,13 +142,13 @@ func TestCardService_ResolveCardIssues(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := &mockQuerier{closeCardIssuesFunc: func(_ context.Context, arg db.CloseCardIssuesParams) (bool, error) {
-				if uuid.UUID(arg.CardID.Bytes) != cardID || arg.UserID != 7 {
+				if uuid.UUID(arg.CardID.Bytes) != cardID || uuid.UUID(arg.UserID.Bytes) != userUUID {
 					t.Fatalf("params = %+v", arg)
 				}
 				return tt.found, tt.err
 			}}
 			svc := usecase.NewCardService(m, usecase.NewUserService(m))
-			err := svc.ResolveCardIssues(context.Background(), 7, cardID)
+			err := svc.ResolveCardIssues(context.Background(), userUUID, cardID)
 			if !errors.Is(err, tt.wantErr) || (tt.wantErr == nil && err != nil) {
 				t.Fatalf("err = %v, want %v", err, tt.wantErr)
 			}

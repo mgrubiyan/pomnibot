@@ -378,13 +378,16 @@ export interface components {
         };
         /** @enum {string} */
         CardKind: "choice" | "flip" | "input" | "boolean" | "table";
-        /** @description choice - integer input - string boolean - boolean table - #/components/schemas/TableLayout */
-        CardAnswer: number | string | boolean | components["schemas"]["TableLayout"];
+        /** @description choice - string[] (all correct option texts); legacy string/integer supported input - string boolean - boolean table - #/components/schemas/TableLayout */
+        CardAnswer: string[] | number | string | boolean | components["schemas"]["TableLayout"];
         Card: {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
             setId: string;
+            /** Format: uuid */
+            factId: string;
+            factName: string;
             kind: components["schemas"]["CardKind"];
             question: string;
             /** @description choice only */
@@ -397,8 +400,6 @@ export interface components {
             sourceQuote: string;
             /** @description where the quote is from: «Лекция 3, стр. 2» */
             sourceRef?: string;
-            /** @description topic, used for stats */
-            topic: string;
         };
         CreateSetRequest: {
             title: string;
@@ -425,8 +426,6 @@ export interface components {
             sourceQuote?: string;
             /** @description where the quote is from: «Лекция 3, стр. 2» */
             sourceRef?: string;
-            /** @description topic, used for stats */
-            topic?: string;
         };
         /**
          * @description What is wrong with a card, in the reader's opinion.
@@ -468,8 +467,8 @@ export interface components {
             lastReportedAt: string;
         };
         User: {
-            /** Format: int64 */
-            id: number;
+            /** Format: uuid */
+            id: string;
             firstName: string;
             lastName?: string;
             username?: string;
@@ -485,6 +484,8 @@ export interface components {
             author: components["schemas"]["User"];
             /** @example 123456 */
             shareCode?: string;
+            /** @description Processing and recognition remarks, visible only to the set author */
+            warnings?: string[];
             /**
              * @description User's rank place in the set rating (1-based)
              * @example 1
@@ -534,18 +535,18 @@ export interface components {
             /** @description The user sees every complaint, at GET /admin/issues */
             isAdmin?: boolean;
         };
-        AnswerResult: {
+        Answer: {
             /** Format: uuid */
             cardId: string;
             correct: boolean;
-            /** Format: date-time */
-            answeredAt: string;
         };
-        SendResultsRequest: components["schemas"]["AnswerResult"][];
+        SendResultsRequest: components["schemas"]["Answer"][];
         AnswerQuestionRequest: {
+            /** @description Typed answer, or a JSON-encoded array of selected option texts for choice */
             answer: string;
         };
         CheckAnswerRequest: {
+            /** @description Typed answer, or a JSON-encoded array of selected option texts for choice */
             answer: string;
         };
         CheckAnswerResponse: {

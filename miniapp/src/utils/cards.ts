@@ -8,7 +8,6 @@ export interface CardPatch {
     options?: string[];
     table?: TableLayout;
     explanation?: string;
-    topic?: string;
     sourceQuote?: string;
     sourceRef?: string;
 }

@@ -50,8 +50,8 @@ func TestCardService_UpdateCard_ReportsFailedRows(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := &mockQuerier{
-				updateCardFunc: func(_ context.Context, arg db.UpdateCardParams) (db.Card, error) {
-					return db.Card{ID: arg.ID, Kind: arg.Kind, Question: arg.Question, AnswerText: arg.AnswerText}, nil
+				updateCardFunc: func(_ context.Context, arg db.UpdateCardParams) (db.UpdateCardRow, error) {
+					return db.UpdateCardRow{ID: arg.ID, Kind: arg.Kind, Question: arg.Question, AnswerText: arg.AnswerText}, nil
 				},
 			}
 			tt.mock(m)
@@ -64,7 +64,7 @@ func TestCardService_UpdateCard_ReportsFailedRows(t *testing.T) {
 					Items:   []contracts.TableItem{{Text: "Анафаза", Column: "Фаза"}},
 				}),
 			}
-			res, err := svc.UpdateCard(context.Background(), 1, uuid.New(), req)
+			res, err := svc.UpdateCard(context.Background(), uuid.New(), uuid.New(), req)
 			if !errors.Is(err, errDB) {
 				t.Fatalf("err = %v, want it to wrap %v", err, errDB)
 			}

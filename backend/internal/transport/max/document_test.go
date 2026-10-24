@@ -109,7 +109,7 @@ func TestBot_DocumentInProgressDoesNotBlockOthers(t *testing.T) {
 	var savedMu sync.Mutex
 	var saved []string
 	setSvc := &mockSetService{
-		saveGeneratedSetFunc: func(_ context.Context, _ int64, title string, _ generator.Result) (*contracts.CardSet, error) {
+		saveGeneratedSetFunc: func(_ context.Context, _ uuid.UUID, title string, _ generator.Result, _ []string) (*contracts.CardSet, error) {
 			savedMu.Lock()
 			saved = append(saved, title)
 			savedMu.Unlock()
@@ -203,8 +203,9 @@ func TestMAXUsesInternalIDForNotes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var savedID int64
-	sets := &mockSetService{saveGeneratedSetFunc: func(_ context.Context, id int64, title string, _ generator.Result) (*contracts.CardSet, error) {
+	testID900 := uuid.MustParse("00000000-0000-0000-0000-000000000900")
+	var savedID uuid.UUID
+	sets := &mockSetService{saveGeneratedSetFunc: func(_ context.Context, id uuid.UUID, title string, _ generator.Result, _ []string) (*contracts.CardSet, error) {
 		savedID = id
 		return &contracts.CardSet{ID: uuid.New(), Title: title}, nil
 	}}
@@ -212,14 +213,14 @@ func TestMAXUsesInternalIDForNotes(t *testing.T) {
 		if i.MaxID != 42 {
 			t.Errorf("identity: %+v", i)
 		}
-		return usecase.Account{User: contracts.User{ID: 900}, MaxID: 42, ProfileComplete: true}, nil
+		return usecase.Account{User: contracts.User{ID: testID900}, MaxID: 42, ProfileComplete: true}, nil
 	}}
 	bot, err := NewBot(client, "https://example.test", users, notes.New(&mockFileExtractor{}, &mockCardGenerator{}, sets, 1))
 	if err != nil {
 		t.Fatal(err)
 	}
 	bot.handleUpdate(context.Background(), fileUpdate(42, "note.pdf"))
-	if savedID != 900 {
-		t.Fatalf("saved with external ID: %d", savedID)
+	if savedID != testID900 {
+		t.Fatalf("saved with external ID: %s", savedID)
 	}
 }

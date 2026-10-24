@@ -1,9 +1,13 @@
 package notes
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/mgrubiyan/pomnibot/backend/contracts"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
 func TestFileCountText(t *testing.T) {
@@ -43,5 +47,33 @@ func TestFileCountText(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestBudgetFailureDoesNotInviteRepeatingTheSamePaidDocument(t *testing.T) {
+	got := FailureText(fmt.Errorf("generation: %w", providers.ErrBudget))
+	if got != TextBudgetExceeded {
+		t.Fatalf("budget cause concealed: %q", got)
+	}
+}
+
+func TestRefusalFailureAsksForOtherNotes(t *testing.T) {
+	got := FailureText(fmt.Errorf("generate cards: %w", providers.ErrRefused))
+	if got != TextOtherText {
+		t.Fatalf("refusal cause concealed: %q", got)
+	}
+}
+
+func TestSuccessText(t *testing.T) {
+	for _, warnings := range [][]string{nil, {"Страница 2 размыта", "Пропущен слайд"}} {
+		result := Result{Set: &contracts.CardSet{Title: "Лекция", ShareCode: contracts.NewOptString("123456")}, Warnings: warnings}
+		want := "🎉 Набор «Лекция» успешно создан!\nКод для совместного доступа: 123456"
+		if len(warnings) > 0 {
+			want += "\n\n⚠️ Есть замечания к набору — их можно посмотреть в мини-приложении."
+		}
+		want += "\n\nОткрой мини-приложение, чтобы начать тренировку:"
+		if got := SuccessText(result); got != want {
+			t.Errorf("SuccessText = %q, want %q", got, want)
+		}
 	}
 }

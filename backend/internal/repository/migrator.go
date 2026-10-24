@@ -1,4 +1,4 @@
-// Package repository provides database migration runners, seeders, and repository helpers.
+// Package repository provides database migration runners and repository helpers.
 package repository
 
 import (

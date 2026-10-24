@@ -18,7 +18,7 @@ import (
 func TestRunMigrationsAppliesMissingPostgres(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
-	container, err := postgres.Run(ctx, "postgres:17-alpine",
+	container, err := postgres.Run(ctx, "postgres:18-alpine",
 		postgres.WithDatabase("pomnibot_test"),
 		postgres.WithUsername("pomnibot"),
 		postgres.WithPassword("pomnibot"),

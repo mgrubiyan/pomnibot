@@ -46,10 +46,10 @@ func poorRecognition(p OCRPage) bool {
 			garbage++
 		}
 	}
-	if chars < minOCRChars {
+	if chars < minOCRChars && (len(p.Image) == 0 || len(p.Blocks) == 0 && p.Observations == "") {
 		return true
 	}
-	if float64(garbage)/float64(chars) > maxGarbageShare {
+	if chars > 0 && float64(garbage)/float64(chars) > maxGarbageShare {
 		return true
 	}
 

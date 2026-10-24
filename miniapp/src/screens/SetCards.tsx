@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button, CellList, CellSimple, Flex, Spinner, Typography } from '@maxhub/max-ui';
 import type { Card, CardSet, User } from '../types';
 import { Screen } from '../components/Screen';
@@ -55,6 +55,32 @@ export function SetCards({ setId, currentUser, toast, onBack, onAddCard, onOpenC
         setAttempt((current) => current + 1);
     };
 
+    const factGroups = useMemo(() => {
+        const groups: { factId: string; factName: string; cards: Card[] }[] = [];
+        const indexById = new Map<string, number>();
+
+        for (const card of cards) {
+            const key = card.factId || 'unknown';
+            let groupIndex = indexById.get(key);
+            if (groupIndex === undefined) {
+                groupIndex = groups.length;
+                indexById.set(key, groupIndex);
+                groups.push({
+                    factId: key,
+                    factName: card.factName || 'Факт',
+                    cards: [],
+                });
+            }
+            groups[groupIndex].cards.push(card);
+        }
+
+        for (const g of groups) {
+            g.cards.sort((a, b) => a.id.localeCompare(b.id));
+        }
+
+        return groups;
+    }, [cards]);
+
     if (status === 'loading') {
         return (
             <StatusScreen
@@ -99,19 +125,25 @@ export function SetCards({ setId, currentUser, toast, onBack, onAddCard, onOpenC
                     </Typography.Text>
                 ) : null}
                 {isOwner && <Button size="medium" onClick={() => onAddCard(set.title)}>Добавить карточку</Button>}
-                <CellList mode="island" filled className={s.list}>
-                    {cards.map((card, index) => (
-                        <CellSimple
-                            key={card.id}
-                            as={isOwner ? 'button' : undefined}
-                            separator={index > 0}
-                            showChevron={isOwner}
-                            onClick={isOwner ? () => onOpenCard(card, set.title) : undefined}
-                            title={<span className={s.cardTitle}>{card.question}</span>}
-                            subtitle={card.topic}
-                        />
-                    ))}
-                </CellList>
+                {factGroups.map((group) => (
+                    <Flex key={group.factId} direction="column" align="stretch" gap={6} className={s.factSection}>
+                        <Typography.Text variant="label-strong" color="secondary" className={s.factHeader}>
+                            {group.factName}
+                        </Typography.Text>
+                        <CellList mode="island" filled className={s.list}>
+                            {group.cards.map((card, index) => (
+                                <CellSimple
+                                    key={card.id}
+                                    as={isOwner ? 'button' : undefined}
+                                    separator={index > 0}
+                                    showChevron={isOwner}
+                                    onClick={isOwner ? () => onOpenCard(card, set.title) : undefined}
+                                    title={<span className={s.cardTitle}>{card.question}</span>}
+                                />
+                            ))}
+                        </CellList>
+                    </Flex>
+                ))}
             </Flex>
 
             {toast ? (

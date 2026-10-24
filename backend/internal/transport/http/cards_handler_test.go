@@ -11,60 +11,62 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
+var testUserID = uuid.MustParse("00000000-0000-0000-0000-000000012345")
+
 type mockCardService struct {
 	usecase.CardService
-	updateCardFunc     func(ctx context.Context, userID int64, cardID uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error)
-	deleteCardFunc     func(ctx context.Context, userID int64, cardID uuid.UUID) error
-	answerQuestionFunc func(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error)
-	checkAnswerFunc    func(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error)
-	reportIssueFunc    func(ctx context.Context, userID int64, cardID uuid.UUID, reason contracts.CardIssueReason) error
-	setIssuesFunc      func(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.SetIssue, error)
-	resolveIssuesFunc  func(ctx context.Context, userID int64, cardID uuid.UUID) error
+	updateCardFunc     func(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error)
+	deleteCardFunc     func(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) error
+	answerQuestionFunc func(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error)
+	checkAnswerFunc    func(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error)
+	reportIssueFunc    func(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, reason contracts.CardIssueReason) error
+	setIssuesFunc      func(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.SetIssue, error)
+	resolveIssuesFunc  func(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) error
 }
 
-func (m *mockCardService) GetSetIssues(ctx context.Context, userID int64, setID uuid.UUID) ([]contracts.SetIssue, error) {
+func (m *mockCardService) GetSetIssues(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.SetIssue, error) {
 	if m.setIssuesFunc != nil {
 		return m.setIssuesFunc(ctx, userID, setID)
 	}
 	return nil, nil
 }
 
-func (m *mockCardService) ResolveCardIssues(ctx context.Context, userID int64, cardID uuid.UUID) error {
+func (m *mockCardService) ResolveCardIssues(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) error {
 	if m.resolveIssuesFunc != nil {
 		return m.resolveIssuesFunc(ctx, userID, cardID)
 	}
 	return nil
 }
 
-func (m *mockCardService) ReportCardIssue(ctx context.Context, userID int64, cardID uuid.UUID, reason contracts.CardIssueReason) error {
+func (m *mockCardService) ReportCardIssue(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, reason contracts.CardIssueReason) error {
 	if m.reportIssueFunc != nil {
 		return m.reportIssueFunc(ctx, userID, cardID, reason)
 	}
 	return nil
 }
 
-func (m *mockCardService) UpdateCard(ctx context.Context, userID int64, cardID uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error) {
+func (m *mockCardService) UpdateCard(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error) {
 	if m.updateCardFunc != nil {
 		return m.updateCardFunc(ctx, userID, cardID, req)
 	}
 	return nil, nil
 }
 
-func (m *mockCardService) DeleteCard(ctx context.Context, userID int64, cardID uuid.UUID) error {
+func (m *mockCardService) DeleteCard(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) error {
 	if m.deleteCardFunc != nil {
 		return m.deleteCardFunc(ctx, userID, cardID)
 	}
 	return nil
 }
 
-func (m *mockCardService) AnswerQuestion(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error) {
+func (m *mockCardService) AnswerQuestion(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error) {
 	if m.answerQuestionFunc != nil {
 		return m.answerQuestionFunc(ctx, userID, cardID, answer)
 	}
 	return nil, nil
 }
 
-func (m *mockCardService) CheckAnswer(ctx context.Context, userID int64, cardID uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error) {
+func (m *mockCardService) CheckAnswer(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error) {
 	if m.checkAnswerFunc != nil {
 		return m.checkAnswerFunc(ctx, userID, cardID, answer)
 	}
@@ -81,7 +83,8 @@ func TestCardsHandler_UpdateCard(t *testing.T) {
 		Question:    "Updated question?",
 		Options:     []string{"A", "B"},
 		Explanation: "Updated explanation",
-		Topic:       "General",
+		FactId:      uuid.New(),
+		FactName:    "General",
 	}
 
 	tests := []struct {
@@ -95,16 +98,16 @@ func TestCardsHandler_UpdateCard(t *testing.T) {
 	}{
 		{
 			name:   "Success returns Card and propagates userID",
-			ctx:    WithUserID(context.Background(), 12345),
+			ctx:    WithUserID(context.Background(), testUserID),
 			cardID: cardID,
 			req: &contracts.UpdateCardRequest{
 				Question: contracts.NewOptString("Updated question?"),
 			},
 			mockSetup: func(t *testing.T) *mockCardService {
 				return &mockCardService{
-					updateCardFunc: func(_ context.Context, userID int64, id uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error) {
-						if userID != 12345 {
-							t.Fatalf("expected userID 12345, got %d", userID)
+					updateCardFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error) {
+						if userID != testUserID {
+							t.Fatalf("unexpected userID: %s", userID)
 						}
 						if id != cardID {
 							t.Fatalf("expected cardID %s, got %s", cardID, id)
@@ -134,8 +137,8 @@ func TestCardsHandler_UpdateCard(t *testing.T) {
 			req:    &contracts.UpdateCardRequest{},
 			mockSetup: func(t *testing.T) *mockCardService {
 				return &mockCardService{
-					updateCardFunc: func(_ context.Context, userID int64, _ uuid.UUID, _ *contracts.UpdateCardRequest) (*contracts.Card, error) {
-						if userID != 0 {
+					updateCardFunc: func(_ context.Context, userID uuid.UUID, _ uuid.UUID, _ *contracts.UpdateCardRequest) (*contracts.Card, error) {
+						if userID != uuid.Nil {
 							t.Fatalf("expected fallback userID 0, got %d", userID)
 						}
 						return expectedCard, nil
@@ -146,7 +149,7 @@ func TestCardsHandler_UpdateCard(t *testing.T) {
 		},
 		{
 			name:   "Nil request body returns UpdateCardBadRequest",
-			ctx:    WithUserID(context.Background(), 12345),
+			ctx:    WithUserID(context.Background(), testUserID),
 			cardID: cardID,
 			req:    nil,
 			mockSetup: func(_ *testing.T) *mockCardService {
@@ -165,14 +168,14 @@ func TestCardsHandler_UpdateCard(t *testing.T) {
 		},
 		{
 			name:   "Validation error from service maps to UpdateCardBadRequest",
-			ctx:    WithUserID(context.Background(), 12345),
+			ctx:    WithUserID(context.Background(), testUserID),
 			cardID: cardID,
 			req:    &contracts.UpdateCardRequest{},
 			mockSetup: func(t *testing.T) *mockCardService {
 				return &mockCardService{
-					updateCardFunc: func(_ context.Context, userID int64, id uuid.UUID, _ *contracts.UpdateCardRequest) (*contracts.Card, error) {
-						if userID != 12345 {
-							t.Fatalf("expected userID 12345, got %d", userID)
+					updateCardFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, _ *contracts.UpdateCardRequest) (*contracts.Card, error) {
+						if userID != testUserID {
+							t.Fatalf("unexpected userID: %s", userID)
 						}
 						if id != cardID {
 							t.Fatalf("expected cardID %s, got %s", cardID, id)
@@ -185,14 +188,14 @@ func TestCardsHandler_UpdateCard(t *testing.T) {
 		},
 		{
 			name:   "Not Found error maps to UpdateCardNotFound",
-			ctx:    WithUserID(context.Background(), 12345),
+			ctx:    WithUserID(context.Background(), testUserID),
 			cardID: cardID,
 			req:    &contracts.UpdateCardRequest{},
 			mockSetup: func(t *testing.T) *mockCardService {
 				return &mockCardService{
-					updateCardFunc: func(_ context.Context, userID int64, id uuid.UUID, _ *contracts.UpdateCardRequest) (*contracts.Card, error) {
-						if userID != 12345 {
-							t.Fatalf("expected userID 12345, got %d", userID)
+					updateCardFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, _ *contracts.UpdateCardRequest) (*contracts.Card, error) {
+						if userID != testUserID {
+							t.Fatalf("unexpected userID: %s", userID)
 						}
 						if id != cardID {
 							t.Fatalf("expected cardID %s, got %s", cardID, id)
@@ -205,14 +208,14 @@ func TestCardsHandler_UpdateCard(t *testing.T) {
 		},
 		{
 			name:   "Forbidden error maps to UpdateCardNotFound to prevent leaking resource existence",
-			ctx:    WithUserID(context.Background(), 12345),
+			ctx:    WithUserID(context.Background(), testUserID),
 			cardID: cardID,
 			req:    &contracts.UpdateCardRequest{},
 			mockSetup: func(t *testing.T) *mockCardService {
 				return &mockCardService{
-					updateCardFunc: func(_ context.Context, userID int64, id uuid.UUID, _ *contracts.UpdateCardRequest) (*contracts.Card, error) {
-						if userID != 12345 {
-							t.Fatalf("expected userID 12345, got %d", userID)
+					updateCardFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, _ *contracts.UpdateCardRequest) (*contracts.Card, error) {
+						if userID != testUserID {
+							t.Fatalf("unexpected userID: %s", userID)
 						}
 						if id != cardID {
 							t.Fatalf("expected cardID %s, got %s", cardID, id)
@@ -225,14 +228,14 @@ func TestCardsHandler_UpdateCard(t *testing.T) {
 		},
 		{
 			name:   "Internal error maps to UpdateCardInternalServerError",
-			ctx:    WithUserID(context.Background(), 12345),
+			ctx:    WithUserID(context.Background(), testUserID),
 			cardID: cardID,
 			req:    &contracts.UpdateCardRequest{},
 			mockSetup: func(t *testing.T) *mockCardService {
 				return &mockCardService{
-					updateCardFunc: func(_ context.Context, userID int64, id uuid.UUID, _ *contracts.UpdateCardRequest) (*contracts.Card, error) {
-						if userID != 12345 {
-							t.Fatalf("expected userID 12345, got %d", userID)
+					updateCardFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, _ *contracts.UpdateCardRequest) (*contracts.Card, error) {
+						if userID != testUserID {
+							t.Fatalf("unexpected userID: %s", userID)
 						}
 						if id != cardID {
 							t.Fatalf("expected cardID %s, got %s", cardID, id)
@@ -288,8 +291,8 @@ func TestCardsHandler_UpdateCard_RelationalIntegrity(t *testing.T) {
 	foreignCardID := uuid.New()
 
 	service := &mockCardService{
-		updateCardFunc: func(_ context.Context, userID int64, cardID uuid.UUID, _ *contracts.UpdateCardRequest) (*contracts.Card, error) {
-			if userID != 100 {
+		updateCardFunc: func(_ context.Context, userID uuid.UUID, cardID uuid.UUID, _ *contracts.UpdateCardRequest) (*contracts.Card, error) {
+			if userID != testUserID {
 				t.Errorf("expected userID 100, got %d", userID)
 			}
 			if cardID != userOwnedCardID {
@@ -303,7 +306,7 @@ func TestCardsHandler_UpdateCard_RelationalIntegrity(t *testing.T) {
 	h := NewCardsHandler(service)
 
 	// User requests updating their own card -> success
-	res, err := h.UpdateCard(WithUserID(context.Background(), 100), &contracts.UpdateCardRequest{}, contracts.UpdateCardParams{CardId: userOwnedCardID})
+	res, err := h.UpdateCard(WithUserID(context.Background(), testUserID), &contracts.UpdateCardRequest{}, contracts.UpdateCardParams{CardId: userOwnedCardID})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -312,7 +315,7 @@ func TestCardsHandler_UpdateCard_RelationalIntegrity(t *testing.T) {
 	}
 
 	// User requests updating someone else's card -> 404 NotFound
-	resForeign, err := h.UpdateCard(WithUserID(context.Background(), 100), &contracts.UpdateCardRequest{}, contracts.UpdateCardParams{CardId: foreignCardID})
+	resForeign, err := h.UpdateCard(WithUserID(context.Background(), testUserID), &contracts.UpdateCardRequest{}, contracts.UpdateCardParams{CardId: foreignCardID})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -334,13 +337,13 @@ func TestCardsHandler_DeleteCard(t *testing.T) {
 	}{
 		{
 			name:   "Success returns DeleteCardNoContent",
-			ctx:    WithUserID(context.Background(), 12345),
+			ctx:    WithUserID(context.Background(), testUserID),
 			cardID: cardID,
 			mockSetup: func(t *testing.T) *mockCardService {
 				return &mockCardService{
-					deleteCardFunc: func(_ context.Context, userID int64, id uuid.UUID) error {
-						if userID != 12345 {
-							t.Fatalf("expected userID 12345, got %d", userID)
+					deleteCardFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID) error {
+						if userID != testUserID {
+							t.Fatalf("unexpected userID: %s", userID)
 						}
 						if id != cardID {
 							t.Fatalf("expected cardID %s, got %s", cardID, id)
@@ -357,8 +360,8 @@ func TestCardsHandler_DeleteCard(t *testing.T) {
 			cardID: cardID,
 			mockSetup: func(t *testing.T) *mockCardService {
 				return &mockCardService{
-					deleteCardFunc: func(_ context.Context, userID int64, _ uuid.UUID) error {
-						if userID != 0 {
+					deleteCardFunc: func(_ context.Context, userID uuid.UUID, _ uuid.UUID) error {
+						if userID != uuid.Nil {
 							t.Fatalf("expected fallback userID 0, got %d", userID)
 						}
 						return nil
@@ -369,13 +372,13 @@ func TestCardsHandler_DeleteCard(t *testing.T) {
 		},
 		{
 			name:   "Not Found returns DeleteCardNotFound",
-			ctx:    WithUserID(context.Background(), 12345),
+			ctx:    WithUserID(context.Background(), testUserID),
 			cardID: cardID,
 			mockSetup: func(t *testing.T) *mockCardService {
 				return &mockCardService{
-					deleteCardFunc: func(_ context.Context, userID int64, id uuid.UUID) error {
-						if userID != 12345 {
-							t.Fatalf("expected userID 12345, got %d", userID)
+					deleteCardFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID) error {
+						if userID != testUserID {
+							t.Fatalf("unexpected userID: %s", userID)
 						}
 						if id != cardID {
 							t.Fatalf("expected cardID %s, got %s", cardID, id)
@@ -397,13 +400,13 @@ func TestCardsHandler_DeleteCard(t *testing.T) {
 		},
 		{
 			name:   "Forbidden returns DeleteCardNotFound to prevent information leakage",
-			ctx:    WithUserID(context.Background(), 12345),
+			ctx:    WithUserID(context.Background(), testUserID),
 			cardID: cardID,
 			mockSetup: func(t *testing.T) *mockCardService {
 				return &mockCardService{
-					deleteCardFunc: func(_ context.Context, userID int64, id uuid.UUID) error {
-						if userID != 12345 {
-							t.Fatalf("expected userID 12345, got %d", userID)
+					deleteCardFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID) error {
+						if userID != testUserID {
+							t.Fatalf("unexpected userID: %s", userID)
 						}
 						if id != cardID {
 							t.Fatalf("expected cardID %s, got %s", cardID, id)
@@ -416,13 +419,13 @@ func TestCardsHandler_DeleteCard(t *testing.T) {
 		},
 		{
 			name:   "Internal error returns DeleteCardInternalServerError",
-			ctx:    WithUserID(context.Background(), 12345),
+			ctx:    WithUserID(context.Background(), testUserID),
 			cardID: cardID,
 			mockSetup: func(t *testing.T) *mockCardService {
 				return &mockCardService{
-					deleteCardFunc: func(_ context.Context, userID int64, id uuid.UUID) error {
-						if userID != 12345 {
-							t.Fatalf("expected userID 12345, got %d", userID)
+					deleteCardFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID) error {
+						if userID != testUserID {
+							t.Fatalf("unexpected userID: %s", userID)
 						}
 						if id != cardID {
 							t.Fatalf("expected cardID %s, got %s", cardID, id)
@@ -474,8 +477,8 @@ func TestCardsHandler_DeleteCard_RelationalIntegrity(t *testing.T) {
 	foreignCardID := uuid.New()
 
 	service := &mockCardService{
-		deleteCardFunc: func(_ context.Context, userID int64, cardID uuid.UUID) error {
-			if userID != 100 {
+		deleteCardFunc: func(_ context.Context, userID uuid.UUID, cardID uuid.UUID) error {
+			if userID != testUserID {
 				t.Errorf("expected userID 100, got %d", userID)
 			}
 			if cardID != userOwnedCardID {
@@ -489,7 +492,7 @@ func TestCardsHandler_DeleteCard_RelationalIntegrity(t *testing.T) {
 	h := NewCardsHandler(service)
 
 	// User deletes their own card -> 204 NoContent
-	res, err := h.DeleteCard(WithUserID(context.Background(), 100), contracts.DeleteCardParams{CardId: userOwnedCardID})
+	res, err := h.DeleteCard(WithUserID(context.Background(), testUserID), contracts.DeleteCardParams{CardId: userOwnedCardID})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -498,7 +501,7 @@ func TestCardsHandler_DeleteCard_RelationalIntegrity(t *testing.T) {
 	}
 
 	// User attempts to delete foreign card -> 404 NotFound
-	resForeign, err := h.DeleteCard(WithUserID(context.Background(), 100), contracts.DeleteCardParams{CardId: foreignCardID})
+	resForeign, err := h.DeleteCard(WithUserID(context.Background(), testUserID), contracts.DeleteCardParams{CardId: foreignCardID})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -509,13 +512,13 @@ func TestCardsHandler_DeleteCard_RelationalIntegrity(t *testing.T) {
 
 func TestCardsHandler_CheckAnswer(t *testing.T) {
 	cardID := uuid.New()
-	ctx := WithUserID(context.Background(), 12345)
+	ctx := WithUserID(context.Background(), testUserID)
 	svc := &mockCardService{
-		checkAnswerFunc: func(_ context.Context, userID int64, id uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error) {
+		checkAnswerFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error) {
 			if id != cardID {
 				return nil, usecase.ErrNotFound
 			}
-			if userID != 12345 || answer != "массив упорядочен" {
+			if userID != testUserID || answer != "массив упорядочен" {
 				t.Fatalf("service got user %d, answer %q", userID, answer)
 			}
 			return &contracts.CheckAnswerResponse{IsCorrect: true, Method: contracts.CheckAnswerResponseMethodModel}, nil
@@ -553,14 +556,14 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 	}{
 		{
 			name:   "Success correct answer returns AnswerQuestionResponse with IsCorrect true",
-			ctx:    WithUserID(context.Background(), 12345),
+			ctx:    WithUserID(context.Background(), testUserID),
 			cardID: cardID,
 			req:    &contracts.AnswerQuestionRequest{Answer: "42"},
 			mockSetup: func(t *testing.T) *mockCardService {
 				return &mockCardService{
-					answerQuestionFunc: func(_ context.Context, userID int64, id uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error) {
-						if userID != 12345 {
-							t.Fatalf("expected userID 12345, got %d", userID)
+					answerQuestionFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error) {
+						if userID != testUserID {
+							t.Fatalf("unexpected userID: %s", userID)
 						}
 						if id != cardID {
 							t.Fatalf("expected cardID %s, got %s", cardID, id)
@@ -588,14 +591,14 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 		},
 		{
 			name:   "Success incorrect answer returns AnswerQuestionResponse with IsCorrect false",
-			ctx:    WithUserID(context.Background(), 12345),
+			ctx:    WithUserID(context.Background(), testUserID),
 			cardID: cardID,
 			req:    &contracts.AnswerQuestionRequest{Answer: "wrong"},
 			mockSetup: func(t *testing.T) *mockCardService {
 				return &mockCardService{
-					answerQuestionFunc: func(_ context.Context, userID int64, id uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error) {
-						if userID != 12345 {
-							t.Fatalf("expected userID 12345, got %d", userID)
+					answerQuestionFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error) {
+						if userID != testUserID {
+							t.Fatalf("unexpected userID: %s", userID)
 						}
 						if id != cardID {
 							t.Fatalf("expected cardID %s, got %s", cardID, id)
@@ -625,8 +628,8 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 			req:    &contracts.AnswerQuestionRequest{Answer: "42"},
 			mockSetup: func(t *testing.T) *mockCardService {
 				return &mockCardService{
-					answerQuestionFunc: func(_ context.Context, userID int64, _ uuid.UUID, _ string) (*contracts.AnswerQuestionResponse, error) {
-						if userID != 0 {
+					answerQuestionFunc: func(_ context.Context, userID uuid.UUID, _ uuid.UUID, _ string) (*contracts.AnswerQuestionResponse, error) {
+						if userID != uuid.Nil {
 							t.Fatalf("expected fallback userID 0, got %d", userID)
 						}
 						return &contracts.AnswerQuestionResponse{IsCorrect: true, UserAnswer: "42"}, nil
@@ -637,7 +640,7 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 		},
 		{
 			name:   "Nil request body returns AnswerQuestionBadRequest",
-			ctx:    WithUserID(context.Background(), 12345),
+			ctx:    WithUserID(context.Background(), testUserID),
 			cardID: cardID,
 			req:    nil,
 			mockSetup: func(_ *testing.T) *mockCardService {
@@ -656,7 +659,7 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 		},
 		{
 			name:   "Empty answer returns AnswerQuestionBadRequest",
-			ctx:    WithUserID(context.Background(), 12345),
+			ctx:    WithUserID(context.Background(), testUserID),
 			cardID: cardID,
 			req:    &contracts.AnswerQuestionRequest{Answer: ""},
 			mockSetup: func(_ *testing.T) *mockCardService {
@@ -666,7 +669,7 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 		},
 		{
 			name:   "Whitespace-only answer returns AnswerQuestionBadRequest",
-			ctx:    WithUserID(context.Background(), 12345),
+			ctx:    WithUserID(context.Background(), testUserID),
 			cardID: cardID,
 			req:    &contracts.AnswerQuestionRequest{Answer: "   "},
 			mockSetup: func(_ *testing.T) *mockCardService {
@@ -676,14 +679,14 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 		},
 		{
 			name:   "Validation error from service maps to AnswerQuestionBadRequest",
-			ctx:    WithUserID(context.Background(), 12345),
+			ctx:    WithUserID(context.Background(), testUserID),
 			cardID: cardID,
 			req:    &contracts.AnswerQuestionRequest{Answer: "foo"},
 			mockSetup: func(t *testing.T) *mockCardService {
 				return &mockCardService{
-					answerQuestionFunc: func(_ context.Context, userID int64, id uuid.UUID, ans string) (*contracts.AnswerQuestionResponse, error) {
-						if userID != 12345 {
-							t.Fatalf("expected userID 12345, got %d", userID)
+					answerQuestionFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, ans string) (*contracts.AnswerQuestionResponse, error) {
+						if userID != testUserID {
+							t.Fatalf("unexpected userID: %s", userID)
 						}
 						if id != cardID {
 							t.Fatalf("expected cardID %s, got %s", cardID, id)
@@ -699,14 +702,14 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 		},
 		{
 			name:   "Not Found error maps to AnswerQuestionNotFound",
-			ctx:    WithUserID(context.Background(), 12345),
+			ctx:    WithUserID(context.Background(), testUserID),
 			cardID: cardID,
 			req:    &contracts.AnswerQuestionRequest{Answer: "foo"},
 			mockSetup: func(t *testing.T) *mockCardService {
 				return &mockCardService{
-					answerQuestionFunc: func(_ context.Context, userID int64, id uuid.UUID, ans string) (*contracts.AnswerQuestionResponse, error) {
-						if userID != 12345 {
-							t.Fatalf("expected userID 12345, got %d", userID)
+					answerQuestionFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, ans string) (*contracts.AnswerQuestionResponse, error) {
+						if userID != testUserID {
+							t.Fatalf("unexpected userID: %s", userID)
 						}
 						if id != cardID {
 							t.Fatalf("expected cardID %s, got %s", cardID, id)
@@ -722,14 +725,14 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 		},
 		{
 			name:   "Forbidden error maps to AnswerQuestionNotFound for relational isolation",
-			ctx:    WithUserID(context.Background(), 12345),
+			ctx:    WithUserID(context.Background(), testUserID),
 			cardID: cardID,
 			req:    &contracts.AnswerQuestionRequest{Answer: "foo"},
 			mockSetup: func(t *testing.T) *mockCardService {
 				return &mockCardService{
-					answerQuestionFunc: func(_ context.Context, userID int64, id uuid.UUID, ans string) (*contracts.AnswerQuestionResponse, error) {
-						if userID != 12345 {
-							t.Fatalf("expected userID 12345, got %d", userID)
+					answerQuestionFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, ans string) (*contracts.AnswerQuestionResponse, error) {
+						if userID != testUserID {
+							t.Fatalf("unexpected userID: %s", userID)
 						}
 						if id != cardID {
 							t.Fatalf("expected cardID %s, got %s", cardID, id)
@@ -745,14 +748,14 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 		},
 		{
 			name:   "Internal error maps to AnswerQuestionInternalServerError",
-			ctx:    WithUserID(context.Background(), 12345),
+			ctx:    WithUserID(context.Background(), testUserID),
 			cardID: cardID,
 			req:    &contracts.AnswerQuestionRequest{Answer: "foo"},
 			mockSetup: func(t *testing.T) *mockCardService {
 				return &mockCardService{
-					answerQuestionFunc: func(_ context.Context, userID int64, id uuid.UUID, ans string) (*contracts.AnswerQuestionResponse, error) {
-						if userID != 12345 {
-							t.Fatalf("expected userID 12345, got %d", userID)
+					answerQuestionFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, ans string) (*contracts.AnswerQuestionResponse, error) {
+						if userID != testUserID {
+							t.Fatalf("unexpected userID: %s", userID)
 						}
 						if id != cardID {
 							t.Fatalf("expected cardID %s, got %s", cardID, id)
@@ -808,6 +811,7 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 
 func TestCardsHandler_ReportCardIssue(t *testing.T) {
 	cardID := uuid.New()
+	testUserID := uuid.New()
 	tests := []struct {
 		name    string
 		req     *contracts.ReportCardIssueRequest
@@ -825,15 +829,15 @@ func TestCardsHandler_ReportCardIssue(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			reached := false
 			h := NewCardsHandler(&mockCardService{
-				reportIssueFunc: func(_ context.Context, userID int64, id uuid.UUID, reason contracts.CardIssueReason) error {
+				reportIssueFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, reason contracts.CardIssueReason) error {
 					reached = true
-					if userID != 12345 || id != cardID || reason != tt.req.Reason {
-						t.Fatalf("got user %d, card %s, reason %q", userID, id, reason)
+					if userID != testUserID || id != cardID || reason != tt.req.Reason {
+						t.Fatalf("got user %s, card %s, reason %q", userID, id, reason)
 					}
 					return tt.err
 				},
 			})
-			res, err := h.ReportCardIssue(WithUserID(context.Background(), 12345), tt.req, contracts.ReportCardIssueParams{CardId: cardID})
+			res, err := h.ReportCardIssue(WithUserID(context.Background(), testUserID), tt.req, contracts.ReportCardIssueParams{CardId: cardID})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -849,6 +853,7 @@ func TestCardsHandler_ReportCardIssue(t *testing.T) {
 
 func TestCardsHandler_GetSetIssues(t *testing.T) {
 	setID := uuid.New()
+	testUserID := uuid.New()
 	issues := []contracts.SetIssue{{CardId: uuid.New(), Reason: contracts.CardIssueReasonAnswer, Count: 2}}
 	tests := []struct {
 		name   string
@@ -864,14 +869,14 @@ func TestCardsHandler_GetSetIssues(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := NewCardsHandler(&mockCardService{
-				setIssuesFunc: func(_ context.Context, userID int64, id uuid.UUID) ([]contracts.SetIssue, error) {
-					if userID != 12345 || id != setID {
-						t.Fatalf("got user %d, set %s", userID, id)
+				setIssuesFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID) ([]contracts.SetIssue, error) {
+					if userID != testUserID || id != setID {
+						t.Fatalf("got user %s, set %s", userID, id)
 					}
 					return tt.issues, tt.err
 				},
 			})
-			res, err := h.GetSetIssues(WithUserID(context.Background(), 12345), contracts.GetSetIssuesParams{SetId: setID})
+			res, err := h.GetSetIssues(WithUserID(context.Background(), testUserID), contracts.GetSetIssuesParams{SetId: setID})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -888,6 +893,7 @@ func TestCardsHandler_GetSetIssues(t *testing.T) {
 
 func TestCardsHandler_ResolveCardIssues(t *testing.T) {
 	cardID := uuid.New()
+	testUserID := uuid.New()
 	tests := []struct {
 		name string
 		err  error
@@ -900,14 +906,14 @@ func TestCardsHandler_ResolveCardIssues(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := NewCardsHandler(&mockCardService{
-				resolveIssuesFunc: func(_ context.Context, userID int64, id uuid.UUID) error {
-					if userID != 12345 || id != cardID {
-						t.Fatalf("got user %d, card %s", userID, id)
+				resolveIssuesFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID) error {
+					if userID != testUserID || id != cardID {
+						t.Fatalf("got user %s, card %s", userID, id)
 					}
 					return tt.err
 				},
 			})
-			res, err := h.ResolveCardIssues(WithUserID(context.Background(), 12345), contracts.ResolveCardIssuesParams{CardId: cardID})
+			res, err := h.ResolveCardIssues(WithUserID(context.Background(), testUserID), contracts.ResolveCardIssuesParams{CardId: cardID})
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -14,10 +14,17 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
-	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/notes"
 	maxtransport "github.com/mgrubiyan/pomnibot/backend/internal/transport/max"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
+)
+
+import "github.com/google/uuid"
+
+var (
+	testTgUser900 = uuid.MustParse("00000000-0000-0000-0000-000000000900")
+	testTgUser901 = uuid.MustParse("00000000-0000-0000-0000-000000000901")
+	testTgUser800 = uuid.MustParse("00000000-0000-0000-0000-000000000800")
 )
 
 type testUsers struct {
@@ -38,7 +45,7 @@ func (u *testUsers) UpsertTelegramUser(_ context.Context, params usecase.Telegra
 	u.calls++
 	return u.account, nil
 }
-func (u *testUsers) ProfileInput(_ context.Context, _ int64, text string, restart bool) (usecase.Account, error) {
+func (u *testUsers) ProfileInput(_ context.Context, _ uuid.UUID, text string, restart bool) (usecase.Account, error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	if restart {
@@ -64,17 +71,17 @@ func (u *testUsers) ProfileInput(_ context.Context, _ int64, text string, restar
 	}
 	return u.account, nil
 }
-func (u *testUsers) GetUsersWithDueFacts(context.Context, time.Time, string) ([]int64, error) {
-	return []int64{900, 901}, nil
+func (u *testUsers) GetUsersWithDueFacts(context.Context, time.Time, string) ([]uuid.UUID, error) {
+	return []uuid.UUID{testTgUser900, testTgUser901}, nil
 }
-func (u *testUsers) GetAccount(_ context.Context, id int64) (usecase.Account, error) {
-	if id == 900 {
+func (u *testUsers) GetAccount(_ context.Context, id uuid.UUID) (usecase.Account, error) {
+	if id == testTgUser900 {
 		return usecase.Account{TgID: 43, BotStarted: true, ProfileComplete: true}, nil
 	}
-	if id == 901 {
+	if id == testTgUser901 {
 		return usecase.Account{MaxID: 43, ProfileComplete: true}, nil
 	}
-	return usecase.Account{}, fmt.Errorf("wrong internal ID %d", id)
+	return usecase.Account{}, fmt.Errorf("wrong internal ID %s", id)
 }
 
 type extractorFunc func(context.Context, []ingest.File) (ingest.Result, error)
@@ -91,7 +98,7 @@ func (generatorStub) Generate(context.Context, generator.Document, func(generato
 
 type saverStub struct{}
 
-func (saverStub) SaveGeneratedSet(context.Context, int64, string, generator.Result) (*contracts.CardSet, error) {
+func (saverStub) SaveGeneratedSet(context.Context, uuid.UUID, string, generator.Result, []string) (*contracts.CardSet, error) {
 	return &contracts.CardSet{}, nil
 }
 
@@ -117,7 +124,7 @@ func testBot(t *testing.T, users *testUsers, handler http.HandlerFunc, extractor
 func sendOK(w http.ResponseWriter) { _, _ = w.Write([]byte(`{"ok":true,"result":{"message_id":1}}`)) }
 
 func TestTelegramProfileDialogue(t *testing.T) {
-	users := &testUsers{account: usecase.Account{User: contracts.User{ID: 900}, TgID: 42, ProfileStep: "last_name"}}
+	users := &testUsers{account: usecase.Account{User: contracts.User{ID: testTgUser900}, TgID: 42, ProfileStep: "last_name"}}
 	var texts []string
 	bot, _ := testBot(t, users, func(w http.ResponseWriter, r *http.Request) {
 		var body struct{ Text string }
@@ -150,7 +157,7 @@ func TestTelegramProfileDialogue(t *testing.T) {
 	if err := bot.handleMessage(ctx, testMessage(6, "Имя")); err != nil {
 		t.Fatal(err)
 	}
-	if !users.account.ProfileComplete || users.account.User.ID != 900 || users.account.User.LastName.Value != "Фамилия" {
+	if !users.account.ProfileComplete || users.account.User.ID != testTgUser900 || users.account.User.LastName.Value != "Фамилия" {
 		t.Fatalf("profile: %+v", users.account)
 	}
 	if err := bot.handleMessage(ctx, testMessage(7, "/profile")); err != nil {
@@ -171,7 +178,7 @@ func TestTelegramProfileDialogue(t *testing.T) {
 }
 
 func TestTelegramAlbumAndPhotos(t *testing.T) {
-	users := &testUsers{account: usecase.Account{User: contracts.User{ID: 900}, TgID: 42, ProfileComplete: true}}
+	users := &testUsers{account: usecase.Account{User: contracts.User{ID: testTgUser900}, TgID: 42, ProfileComplete: true}}
 	var mu sync.Mutex
 	var downloads []string
 	extracted := make(chan []ingest.File, 2)
@@ -249,7 +256,7 @@ func TestTelegramRejectsOversizeAndDownloadErrors(t *testing.T) {
 			if tooLarge {
 				message.Document.Size = MaxFileSize + 1
 			}
-			bot.process(context.Background(), 900, []*Message{message})
+			bot.process(context.Background(), testTgUser900, []*Message{message})
 			expected := notes.TextResend
 			if tooLarge {
 				expected = textLargeFile
@@ -262,7 +269,7 @@ func TestTelegramRejectsOversizeAndDownloadErrors(t *testing.T) {
 }
 
 func TestPollingDeduplicatesAndOrdersDialogue(t *testing.T) {
-	users := &testUsers{account: usecase.Account{User: contracts.User{ID: 900}, TgID: 42, ProfileStep: "last_name"}}
+	users := &testUsers{account: usecase.Account{User: contracts.User{ID: testTgUser900}, TgID: 42, ProfileStep: "last_name"}}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	polls := 0
@@ -324,7 +331,7 @@ func TestAlbumShutdown(t *testing.T) {
 	m := testMessage(1, "")
 	m.Photos = []File{{ID: "photo", Width: 100, Height: 100}}
 	m.MediaGroupID = "pending"
-	bot.addAlbum(ctx, 900, m)
+	bot.addAlbum(ctx, testTgUser900, m)
 	cancel()
 	done := make(chan struct{})
 	go func() { bot.Wait(); close(done) }()
@@ -347,10 +354,10 @@ func (f generatingFunc) Generate(ctx context.Context, doc generator.Document, on
 	return f(ctx, doc, onBatch)
 }
 
-type savingFunc func(context.Context, int64, string, generator.Result) (*contracts.CardSet, error)
+type savingFunc func(context.Context, uuid.UUID, string, generator.Result, []string) (*contracts.CardSet, error)
 
-func (f savingFunc) SaveGeneratedSet(ctx context.Context, id int64, title string, result generator.Result) (*contracts.CardSet, error) {
-	return f(ctx, id, title, result)
+func (f savingFunc) SaveGeneratedSet(ctx context.Context, id uuid.UUID, title string, result generator.Result, warnings []string) (*contracts.CardSet, error) {
+	return f(ctx, id, title, result, warnings)
 }
 
 func TestTelegramUsesSharedMakerAndInternalUserID(t *testing.T) {
@@ -386,9 +393,9 @@ func TestTelegramUsesSharedMakerAndInternalUserID(t *testing.T) {
 	}, nil)
 	started := make(chan struct{}, 2)
 	unblock := make(chan struct{})
-	var savedIDs []int64
+	var savedIDs []uuid.UUID
 	maker := notes.New(extractorFunc(func(context.Context, []ingest.File) (ingest.Result, error) {
-		return ingest.Result{Text: "material"}, nil
+		return ingest.Result{Text: "material", Warnings: []string{"Размытая страница"}}, nil
 	}),
 		generatingFunc(func(ctx context.Context, _ generator.Document, onBatch func(generator.Batch)) (generator.Result, error) {
 			started <- struct{}{}
@@ -397,10 +404,13 @@ func TestTelegramUsesSharedMakerAndInternalUserID(t *testing.T) {
 			case <-ctx.Done():
 				return generator.Result{}, ctx.Err()
 			}
-			card := cards.Card{FactID: "fact", Question: "Question", Answer: "Answer"}
-			onBatch(generator.Batch{Cards: []cards.Card{card}})
-			return generator.Result{Cards: []cards.Card{card}}, nil
-		}), savingFunc(func(_ context.Context, id int64, title string, _ generator.Result) (*contracts.CardSet, error) {
+			facts := []generator.Fact{{Name: "Fact", Pages: []int{1}, Cards: []generator.Card{generator.FlipCard{CardBase: generator.CardBase{Question: "Question", Source: "source"}, Answer: "Answer"}}}}
+			onBatch(generator.Batch{Facts: facts})
+			return generator.Result{Facts: facts}, nil
+		}), savingFunc(func(_ context.Context, id uuid.UUID, title string, _ generator.Result, warnings []string) (*contracts.CardSet, error) {
+			if len(warnings) != 1 || warnings[0] != "Размытая страница" {
+				t.Errorf("lost warnings: %q", warnings)
+			}
 			savedIDs = append(savedIDs, id)
 			return &contracts.CardSet{Title: title, ShareCode: contracts.NewOptString("123456")}, nil
 		}), 1)
@@ -410,14 +420,14 @@ func TestTelegramUsesSharedMakerAndInternalUserID(t *testing.T) {
 	// An existing MAX job holds the application Maker's only slot.
 	maxDone := make(chan error, 1)
 	go func() {
-		_, err := maker.Make(ctx, notes.Request{UserID: 800, Files: []ingest.File{{Name: "max.txt", Data: []byte("text")}}}, notes.Progress{})
+		_, err := maker.Make(ctx, notes.Request{UserID: testTgUser800, Files: []ingest.File{{Name: "max.txt", Data: []byte("text")}}}, notes.Progress{})
 		maxDone <- err
 	}()
 	<-started
 	message := testMessage(1, "")
 	message.Document = &File{ID: "doc", Name: "telegram.txt"}
 	telegramDone := make(chan struct{})
-	go func() { bot.process(ctx, 900, []*Message{message}); close(telegramDone) }()
+	go func() { bot.process(ctx, testTgUser900, []*Message{message}); close(telegramDone) }()
 	select {
 	case <-queued:
 	case <-time.After(2 * time.Second):
@@ -435,12 +445,16 @@ func TestTelegramUsesSharedMakerAndInternalUserID(t *testing.T) {
 		t.Fatal(err)
 	}
 	<-telegramDone
-	if len(savedIDs) != 2 || savedIDs[0] != 800 || savedIDs[1] != 900 {
+	if len(savedIDs) != 2 || savedIDs[0] != testTgUser800 || savedIDs[1] != testTgUser900 {
 		t.Fatalf("saved IDs: %v", savedIDs)
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if !strings.Contains(statuses[len(statuses)-1], "123456") {
+	last := statuses[len(statuses)-1]
+	if !strings.Contains(last, notes.TextRemarksInMiniApp) || strings.Contains(last, "Размытая страница") {
+		t.Fatalf("unexpected warning notice: %q", last)
+	}
+	if !strings.Contains(last, "123456") {
 		t.Fatalf("missing share code: %v", statuses)
 	}
 }

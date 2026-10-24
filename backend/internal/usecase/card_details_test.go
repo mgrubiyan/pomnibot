@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
@@ -33,7 +34,7 @@ func (q *detailBatchQuerier) GetCardOptionsBatch(_ context.Context, ids []pgtype
 	q.batches++
 	rows := []db.CardOption{}
 	for _, id := range ids {
-		rows = append(rows, db.CardOption{CardID: id, Text: "Answer"})
+		rows = append(rows, db.CardOption{CardID: id, Text: "Answer", IsCorrect: true}, db.CardOption{CardID: id, Text: "Another", IsCorrect: true}, db.CardOption{CardID: id, Text: "Wrong"})
 	}
 	return rows, nil
 }
@@ -66,11 +67,12 @@ func TestCardListsBatchDetails(t *testing.T) {
 					if i%2 == 1 {
 						kind = "table"
 					}
-					rows = append(rows, db.GetCardsBySetIDRow{ID: pgtype.UUID{Bytes: [16]byte{15: byte(i + 2)}, Valid: true}, SetID: set, Kind: kind, AnswerText: pgtype.Text{String: "Answer", Valid: true}})
+					rows = append(rows, db.GetCardsBySetIDRow{ID: pgtype.UUID{Bytes: [16]byte{15: byte(i + 2)}, Valid: true}, SetID: set, Kind: db.CardKind(kind), AnswerText: pgtype.Text{String: "Answer", Valid: true}})
 				}
 				return rows, nil
 			}
-			q.getFeedCardsForUserFunc = func(ctx context.Context, _ int64) ([]db.GetFeedCardsForUserRow, error) {
+			testUserID := uuid.New()
+			q.getFeedCardsForUserFunc = func(ctx context.Context, _ pgtype.UUID) ([]db.GetFeedCardsForUserRow, error) {
 				source, _ := q.getCardsBySetIDFunc(ctx, db.GetCardsBySetIDParams{})
 				rows := []db.GetFeedCardsForUserRow{}
 				for _, r := range source {
@@ -81,13 +83,13 @@ func TestCardListsBatchDetails(t *testing.T) {
 			users := usecase.NewUserService(q)
 			var count int
 			if feed {
-				cards, err := usecase.NewHomescreenService(q, users).GetFeedQuestions(context.Background(), 22)
+				cards, err := usecase.NewHomescreenService(q, users).GetFeedQuestions(context.Background(), testUserID)
 				if err != nil {
 					t.Fatal(err)
 				}
 				count = len(cards)
 				for i, c := range cards {
-					if i%2 == 0 && (len(c.Options) != 1 || c.Options[0] != "Answer") {
+					if i%2 == 0 && (len(c.Options) != 3 || c.Options[0] != "Answer" || c.Answer.Type != contracts.StringArrayCardAnswer || len(c.Answer.StringArray) != 2) {
 						t.Fatalf("lost choice details: %+v", c)
 					}
 					if i%2 == 1 && (len(c.Table.Value.Columns) != 1 || len(c.Table.Value.Items) != 1) {
@@ -95,13 +97,13 @@ func TestCardListsBatchDetails(t *testing.T) {
 					}
 				}
 			} else {
-				cards, err := usecase.NewSetService(q, users).GetCardsBySetID(context.Background(), 22, uuid.UUID(set.Bytes))
+				cards, err := usecase.NewSetService(q, users).GetCardsBySetID(context.Background(), testUserID, uuid.UUID(set.Bytes))
 				if err != nil {
 					t.Fatal(err)
 				}
 				count = len(cards)
 				for i, c := range cards {
-					if i%2 == 0 && (len(c.Options) != 1 || c.Options[0] != "Answer") {
+					if i%2 == 0 && (len(c.Options) != 3 || c.Options[0] != "Answer" || c.Answer.Type != contracts.StringArrayCardAnswer || len(c.Answer.StringArray) != 2) {
 						t.Fatalf("lost choice details: %+v", c)
 					}
 					if i%2 == 1 && (len(c.Table.Value.Columns) != 1 || len(c.Table.Value.Items) != 1) {

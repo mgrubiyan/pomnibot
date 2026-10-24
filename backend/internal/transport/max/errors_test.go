@@ -16,6 +16,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/notes"
+	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
 func (s *recordingServer) lastText() string {
@@ -85,22 +86,17 @@ func TestBot_FailuresTellTheStudentWhatHappened(t *testing.T) {
 		},
 		{
 			name: "model fails",
-			gen:  failingGen(fmt.Errorf("provider failed on 3 fragments in a row: %w", errors.New("503")), generator.Stats{}),
+			gen:  failingGen(fmt.Errorf("provider failed: %w", errors.New("503")), generator.Stats{}),
 			want: notes.TextTryLater,
 		},
 		{
-			name: "only a table of contents",
-			gen:  failingGen(nil, generator.Stats{Chunks: 2, ChunksFiltered: 2}),
-			want: notes.TextOnlyJunk,
-		},
-		{
-			name: "content filter refused every fragment",
-			gen:  failingGen(nil, generator.Stats{Chunks: 3, ChunksFiltered: 1, ChunksRefused: 2}),
+			name: "content filter refused the document",
+			gen:  failingGen(providers.ErrRefused, generator.Stats{}),
 			want: notes.TextOtherText,
 		},
 		{
 			name: "no card backed by a quote",
-			gen:  failingGen(nil, generator.Stats{Chunks: 2, CardsFromModel: 6, DroppedQuote: 6}),
+			gen:  failingGen(nil, generator.Stats{CardsFromModel: 6, DroppedQuote: 6}),
 			want: notes.TextNoCards,
 		},
 		{
@@ -125,7 +121,7 @@ func TestBot_FailuresTellTheStudentWhatHappened(t *testing.T) {
 			if gen == nil {
 				gen = &mockCardGenerator{}
 			}
-			setSvc := &mockSetService{saveGeneratedSetFunc: func(_ context.Context, _ int64, title string, _ generator.Result) (*contracts.CardSet, error) {
+			setSvc := &mockSetService{saveGeneratedSetFunc: func(_ context.Context, _ uuid.UUID, title string, _ generator.Result, _ []string) (*contracts.CardSet, error) {
 				if tt.saveErr != nil {
 					return nil, tt.saveErr
 				}
@@ -172,7 +168,7 @@ func TestBot_SuccessMentionsPoorlyReadPages(t *testing.T) {
 			Warnings: []string{"Страница 1 распознана плохо, попробуйте переснять."},
 		}, nil
 	}}
-	setSvc := &mockSetService{saveGeneratedSetFunc: func(_ context.Context, _ int64, title string, _ generator.Result) (*contracts.CardSet, error) {
+	setSvc := &mockSetService{saveGeneratedSetFunc: func(_ context.Context, _ uuid.UUID, title string, _ generator.Result, _ []string) (*contracts.CardSet, error) {
 		return &contracts.CardSet{ID: uuid.New(), Title: title}, nil
 	}}
 	b, err := NewBot(client, "https://example.test", &mockUserService{}, notes.New(extractor, &mockCardGenerator{}, setSvc, 1))
@@ -183,8 +179,8 @@ func TestBot_SuccessMentionsPoorlyReadPages(t *testing.T) {
 	b.handleUpdate(context.Background(), fileUpdate(1, "photo.jpg"))
 
 	got := server.lastText()
-	if !strings.Contains(got, "успешно создан") || !strings.Contains(got, "Страница 1 распознана плохо") {
-		t.Errorf("last message = %q, want the success text with the page warning", got)
+	if !strings.Contains(got, "успешно создан") || !strings.Contains(got, notes.TextRemarksInMiniApp) || strings.Contains(got, "Страница 1 распознана плохо") {
+		t.Errorf("last message = %q, want the success text with a compact warning notice", got)
 	}
 }
 

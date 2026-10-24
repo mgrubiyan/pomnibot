@@ -12,6 +12,9 @@ export const issueReasonLabel = (reason: CardIssueReason) =>
 
 /** The answer as one line under the question. */
 export function answerPreview(card: Card): string {
+    if (Array.isArray(card.answer)) {
+        return card.answer.join('; ');
+    }
     if (typeof card.answer === 'boolean') {
         return card.answer ? 'Верно' : 'Неверно';
     }

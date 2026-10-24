@@ -7,22 +7,24 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
 func TestChatIssueNotifier(t *testing.T) {
-	account := usecase.Account{User: contracts.User{ID: 11}, MaxID: 5, TgID: 6}
-	accounts := accountsFunc(func(_ context.Context, id int64) (usecase.Account, error) {
-		if id != 11 {
-			t.Errorf("account of %d", id)
+	authorID := uuid.New()
+	account := usecase.Account{User: contracts.User{ID: authorID}, MaxID: 5, TgID: 6}
+	accounts := accountsFunc(func(_ context.Context, id uuid.UUID) (usecase.Account, error) {
+		if id != authorID {
+			t.Errorf("account of %s", id)
 		}
 		return account, nil
 	})
 	failing, working := &messengerSpy{err: errors.New("blocked")}, &messengerSpy{}
 	n := usecase.NewChatIssueNotifier(accounts, failing, working)
 	ctx, cancel := context.WithCancel(context.Background())
-	n.CardIssueReported(ctx, usecase.CardIssueReport{AuthorID: 11, SetTitle: "Биология"})
+	n.CardIssueReported(ctx, usecase.CardIssueReport{AuthorID: authorID, SetTitle: "Биология"})
 	// The request is over by the time the message goes out.
 	cancel()
 	n.Close()
@@ -41,20 +43,21 @@ func TestChatIssueNotifier(t *testing.T) {
 }
 
 func TestChatIssueNotifier_NoAccount(t *testing.T) {
+	authorID := uuid.New()
 	m := &messengerSpy{}
-	n := usecase.NewChatIssueNotifier(accountsFunc(func(context.Context, int64) (usecase.Account, error) {
+	n := usecase.NewChatIssueNotifier(accountsFunc(func(context.Context, uuid.UUID) (usecase.Account, error) {
 		return usecase.Account{}, errors.New("db down")
 	}), m)
-	n.CardIssueReported(context.Background(), usecase.CardIssueReport{AuthorID: 11})
+	n.CardIssueReported(context.Background(), usecase.CardIssueReport{AuthorID: authorID})
 	n.Close()
 	if len(m.sent) != 0 {
 		t.Fatalf("sent = %+v", m.sent)
 	}
 }
 
-type accountsFunc func(context.Context, int64) (usecase.Account, error)
+type accountsFunc func(context.Context, uuid.UUID) (usecase.Account, error)
 
-func (f accountsFunc) GetAccount(ctx context.Context, id int64) (usecase.Account, error) {
+func (f accountsFunc) GetAccount(ctx context.Context, id uuid.UUID) (usecase.Account, error) {
 	return f(ctx, id)
 }
 
@@ -81,12 +84,13 @@ func (m *messengerSpy) SendToUser(ctx context.Context, account usecase.Account, 
 // A complaint saved while the server stops is kept, but no message starts
 // once Close has begun waiting.
 func TestChatIssueNotifier_AfterClose(t *testing.T) {
+	authorID := uuid.New()
 	m := &messengerSpy{}
-	n := usecase.NewChatIssueNotifier(accountsFunc(func(context.Context, int64) (usecase.Account, error) {
+	n := usecase.NewChatIssueNotifier(accountsFunc(func(context.Context, uuid.UUID) (usecase.Account, error) {
 		return usecase.Account{MaxID: 5}, nil
 	}), m)
 	n.Close()
-	n.CardIssueReported(context.Background(), usecase.CardIssueReport{AuthorID: 11})
+	n.CardIssueReported(context.Background(), usecase.CardIssueReport{AuthorID: authorID})
 	n.Close()
 	if len(m.sent) != 0 {
 		t.Fatalf("sent after Close: %+v", m.sent)

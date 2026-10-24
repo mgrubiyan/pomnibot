@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Flex, IconButton, Input, Spinner, Typography } from '@maxhub/max-ui';
-import type { AnswerResult, Card } from '../types';
+import type { Answer, Card } from '../types';
 import { api } from '../api';
 import { TableColumns, TablePool } from '../components/TableCard';
 import { visibleCards, type CardPatch } from '../utils/cards';
@@ -93,7 +93,7 @@ function shuffle<T>(items: readonly T[]): T[] {
 /** What the card asks of the reader, said above the question. */
 const TASKS: Record<Card['kind'], string> = {
     flip: 'Вспомните ответ',
-    choice: 'Выберите ответ',
+    choice: 'Выберите все верные ответы',
     boolean: 'Верно или нет?',
     input: 'Впишите ответ',
     table: 'Разложите по колонкам',
@@ -112,6 +112,7 @@ function optionsOf(card: Card): Option[] {
 }
 
 function answerTextOf(card: Card): string {
+    if (Array.isArray(card.answer)) return card.answer.join('; ');
     if (typeof card.answer === 'boolean') {
         return card.answer ? 'true' : 'false';
     }
@@ -153,14 +154,14 @@ export interface FeedProps {
     removedCardIds: string[];
     cardPatches: Record<string, CardPatch>;
     initialIndex?: number;
-    initialResults?: AnswerResult[];
+    initialResults?: Answer[];
     onExit: () => void;
     onBack?: () => void;
     /**
      * Opens the complaint about the card; the feed comes back at the same card.
      * Resolves to false when the complaint screen could not be opened.
      */
-    onReportCard: (card: Card, currentIndex: number, currentResults: AnswerResult[]) => Promise<boolean>;
+    onReportCard: (card: Card, currentIndex: number, currentResults: Answer[]) => Promise<boolean>;
     /** Opens sharing from the result screen; absent for the daily mix. */
     onShare?: () => void;
 }
@@ -180,9 +181,10 @@ export function Feed({
     const [status, setStatus] = useState<Status>('loading');
     const [cards, setCards] = useState<Card[]>([]);
     const [index, setIndex] = useState(initialIndex);
-    const [results, setResults] = useState<AnswerResult[]>(initialResults);
+    const [results, setResults] = useState<Answer[]>(initialResults);
 
     const [given, setGiven] = useState<string | null>(null);
+    const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
     const [verdict, setVerdict] = useState<Verdict | null>(null);
     // A typed answer being checked by meaning, and why it counts or not.
     const [check, setCheck] = useState<{ stage: CheckStage; answer: string } | null>(null);
@@ -224,7 +226,9 @@ export function Feed({
                 if (cancelled) {
                     return;
                 }
-                setCards(visibleCards(next, setId, removedCardIds, cardPatches));
+                setCards(visibleCards(next, setId, removedCardIds, cardPatches).map((item) =>
+                    item.table ? { ...item, table: { ...item.table, items: shuffle(item.table.items) } } : item,
+                ));
                 setStatus('ready');
             })
             .catch(() => {
@@ -316,7 +320,10 @@ export function Feed({
             if (!card) {
                 return;
             }
-            const exact = norm(value) === norm(answerTextOf(card));
+            const expected = Array.isArray(card.answer) ? card.answer : [answerTextOf(card)];
+            const exact = card.kind === 'choice'
+                ? selectedOptions.length === expected.length && expected.every((answer) => selectedOptions.includes(answer))
+                : norm(value) === norm(answerTextOf(card));
             if (card.kind !== 'input' || exact) {
                 setGiven(value);
                 setVerdict(exact ? 'correct' : 'wrong');
@@ -328,7 +335,7 @@ export function Feed({
             // Other words: the card turns once the backend has judged them.
             askCheck(card.id, value);
         },
-        [card, askCheck, startFlip],
+        [card, askCheck, startFlip, selectedOptions],
     );
 
     const reset = useCallback(() => {
@@ -339,6 +346,7 @@ export function Feed({
         setVerdict(null);
         setRevealed(false);
         setDraft('');
+        setSelectedOptions([]);
         setPicked(null);
         setFlipping(false);
     }, []);
@@ -388,10 +396,9 @@ export function Feed({
 
     const goNext = () => {
         if (card && verdict) {
-            const result: AnswerResult = {
+            const result: Answer = {
                 cardId: card.id,
                 correct: verdict === 'correct',
-                answeredAt: new Date().toISOString(),
             };
             setResults((current) => [...current, result]);
         }
@@ -419,7 +426,7 @@ export function Feed({
     const [isLeaving, setIsLeaving] = useState(false);
 
     const submitResults = useCallback(
-        async (currentResults: AnswerResult[]): Promise<void> => {
+        async (currentResults: Answer[]): Promise<void> => {
             if (inFlightRef.current) {
                 try {
                     await inFlightRef.current;
@@ -576,7 +583,7 @@ export function Feed({
                             <IconChevronLeft size={20} />
                         </IconButton>
                         <Typography.Text variant="label" color="secondary" className={s.topic}>
-                            {card.topic}
+                            {card.factName}
                         </Typography.Text>
                     </Flex>
                     <Typography.Text variant="label" color="secondary" style={{ flexShrink: 0 }}>
@@ -844,11 +851,22 @@ export function Feed({
                             key={option.value}
                             type="button"
                             className={s.option}
-                            onClick={() => submit(option.value)}
+                            aria-pressed={card.kind === 'choice' ? selectedOptions.includes(option.value) : undefined}
+                            onClick={() => card.kind === 'choice'
+                                ? setSelectedOptions((current) => current.includes(option.value)
+                                    ? current.filter((value) => value !== option.value) : [...current, option.value])
+                                : submit(option.value)}
                         >
-                            <Typography.Text variant="body">{option.label}</Typography.Text>
+                            <Typography.Text variant="body">{card.kind === 'choice' ? `${selectedOptions.includes(option.value) ? '☑' : '☐'} ` : ''}{option.label}</Typography.Text>
                         </button>
                     ))}
+
+                    {card.kind === 'choice' ? (
+                        <Button size="medium" variant="secondary" stretched disabled={selectedOptions.length === 0}
+                            onClick={() => submit(selectedOptions.join('; '))}>
+                            Проверить
+                        </Button>
+                    ) : null}
 
                     {card.kind === 'input' && !check ? (
                         <>

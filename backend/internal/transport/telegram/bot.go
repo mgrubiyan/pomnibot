@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/notes"
 	maxtransport "github.com/mgrubiyan/pomnibot/backend/internal/transport/max"
@@ -35,7 +36,7 @@ type Bot struct {
 
 type album struct {
 	messages    []*Message
-	userID      int64
+	userID      uuid.UUID
 	changed     chan struct{}
 	first, last time.Time
 }
@@ -211,7 +212,7 @@ func (b *Bot) welcome(ctx context.Context, chatID int64) {
 	b.send(ctx, chatID, "Профиль сохранён. Пришлите конспект файлом, PDF, Word, презентацией или фотографиями — я создам карточки для повторения. Изменить имя: /profile", true)
 }
 
-func (b *Bot) addAlbum(ctx context.Context, userID int64, m *Message) {
+func (b *Bot) addAlbum(ctx context.Context, userID uuid.UUID, m *Message) {
 	key := fmt.Sprintf("%d:%s", m.Chat.ID, m.MediaGroupID)
 	b.mu.Lock()
 	a := b.albums[key]
@@ -284,7 +285,7 @@ func messageFile(m *Message) File {
 	return best
 }
 
-func (b *Bot) process(ctx context.Context, userID int64, messages []*Message) {
+func (b *Bot) process(ctx context.Context, userID uuid.UUID, messages []*Message) {
 	chatID := messages[0].Chat.ID
 	for _, m := range messages {
 		if messageFile(m).Size > MaxFileSize {

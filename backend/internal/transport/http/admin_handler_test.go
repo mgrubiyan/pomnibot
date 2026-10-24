@@ -14,26 +14,27 @@ type adminServiceStub struct {
 	admin  bool
 	err    error
 	issues []contracts.AdminCardIssue
-	userID int64
+	userID uuid.UUID
 }
 
-func (s *adminServiceStub) IsAdmin(_ context.Context, userID int64) (bool, error) {
+func (s *adminServiceStub) IsAdmin(_ context.Context, userID uuid.UUID) (bool, error) {
 	s.userID = userID
 	return s.admin, s.err
 }
 
-func (s *adminServiceStub) ListCardIssues(_ context.Context, userID int64) ([]contracts.AdminCardIssue, error) {
+func (s *adminServiceStub) ListCardIssues(_ context.Context, userID uuid.UUID) ([]contracts.AdminCardIssue, error) {
 	s.userID = userID
 	return s.issues, s.err
 }
 
 func TestAPIHandler_GetAdminIssues(t *testing.T) {
-	ctx := WithUserID(context.Background(), 7)
+	testUserID := uuid.New()
+	ctx := WithUserID(context.Background(), testUserID)
 	issue := contracts.AdminCardIssue{ID: uuid.New(), Question: "Q"}
 
 	admin := &adminServiceStub{issues: []contracts.AdminCardIssue{issue}}
 	res, err := NewAPIHandler(nil, nil, nil, nil).WithAdmin(admin).GetAdminIssues(ctx)
-	if got, ok := res.(*contracts.GetAdminIssuesOKApplicationJSON); err != nil || !ok || len(*got) != 1 || (*got)[0].ID != issue.ID || admin.userID != 7 {
+	if got, ok := res.(*contracts.GetAdminIssuesOKApplicationJSON); err != nil || !ok || len(*got) != 1 || (*got)[0].ID != issue.ID || admin.userID != testUserID {
 		t.Fatalf("admin: %#v, %v", res, err)
 	}
 
@@ -49,9 +50,10 @@ func TestAPIHandler_GetAdminIssues(t *testing.T) {
 }
 
 func TestAPIHandler_GetTodayMarksAdmin(t *testing.T) {
-	ctx := WithUserID(context.Background(), 7)
-	home := &mockHomescreenService{getTodayFunc: func(context.Context, int64) (*contracts.TodayData, error) {
-		return &contracts.TodayData{User: contracts.User{ID: 7}}, nil
+	testUserID := uuid.New()
+	ctx := WithUserID(context.Background(), testUserID)
+	home := &mockHomescreenService{getTodayFunc: func(context.Context, uuid.UUID) (*contracts.TodayData, error) {
+		return &contracts.TodayData{User: contracts.User{ID: testUserID}}, nil
 	}}
 	tests := []struct {
 		name  string
@@ -70,8 +72,8 @@ func TestAPIHandler_GetTodayMarksAdmin(t *testing.T) {
 			if err != nil || !ok {
 				t.Fatalf("GetToday = %#v, %v", res, err)
 			}
-			if got := today.IsAdmin.Value; got != tt.want || tt.admin.userID != 7 {
-				t.Fatalf("isAdmin = %v for user %d, want %v", got, tt.admin.userID, tt.want)
+			if got := today.IsAdmin.Value; got != tt.want || tt.admin.userID != testUserID {
+				t.Fatalf("isAdmin = %v for user %s, want %v", got, tt.admin.userID, tt.want)
 			}
 		})
 	}

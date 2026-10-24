@@ -20,7 +20,7 @@ WITH card AS (
 SELECT
     card.author_id,
     card.title AS set_title,
-    (card.author_id <> @user_id::bigint AND NOT EXISTS (
+    (card.author_id <> @user_id::uuid AND NOT EXISTS (
         SELECT 1 FROM card_issues i
         WHERE i.card_id = card.id
           AND i.user_id <> card.author_id
@@ -102,3 +102,18 @@ LEFT JOIN cards c ON c.id = i.card_id
 ORDER BY i.created_at DESC, i.id
 -- The mini app says the list is cut off at this number: ADMIN_ISSUES_LIMIT.
 LIMIT 1000;
+
+-- name: RollbackFactStepOnCardIssue :exec
+-- Sets the reader's progress back to the previous card of the fact when they
+-- report a problem, so they don't skip ahead to harder cards.
+UPDATE user_fact_progress ufp
+SET step = LEAST(ufp.step, GREATEST(0, (
+    SELECT COUNT(*)::int - 1 FROM cards c2 WHERE c2.fact_id = c.fact_id AND c2.id < c.id
+)))
+FROM cards c
+JOIN facts f ON f.id = c.fact_id
+JOIN sets s ON s.id = f.set_id
+WHERE c.id = @card_id
+  AND ufp.user_id = @user_id
+  AND ufp.fact_id = c.fact_id
+  AND s.author_id <> @user_id;

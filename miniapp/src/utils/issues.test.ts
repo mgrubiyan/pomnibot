@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { Card, SetIssue } from '../types';
-import { cardsWithIssues } from './issues';
+import { answerPreview, cardsWithIssues } from './issues';
 
 const card = (id: string) => ({ id, question: `Q${id}` }) as Card;
 const issue = (cardId: string, reason: SetIssue['reason'], count: number, lastReportedAt: string): SetIssue => ({
@@ -30,5 +30,11 @@ describe('cardsWithIssues', () => {
 
     it('skips complaints about cards that are no longer in the set', () => {
         expect(cardsWithIssues([card('1')], [issue('9', 'other', 1, '2026-10-22T08:00:00Z')])).toEqual([]);
+    });
+});
+
+describe('answerPreview', () => {
+    it('shows all correct choice answers in complaints', () => {
+        expect(answerPreview({ ...card('1'), kind: 'choice', answer: ['A', 'B'] })).toBe('A; B');
     });
 });
