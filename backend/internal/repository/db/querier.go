@@ -11,9 +11,18 @@ import (
 )
 
 type Querier interface {
+	// Dismisses the open complaints of a card; false when the user is not the
+	// author of its set or the card is gone. Complaints an edit already answered
+	// stay as they are, so the admin still sees them fixed.
+	CloseCardIssues(ctx context.Context, arg CloseCardIssuesParams) (bool, error)
 	CountCardsByFactID(ctx context.Context, factID pgtype.UUID) (int32, error)
 	CountTotalDueCardsForUser(ctx context.Context, userID pgtype.UUID) (int32, error)
 	CreateCard(ctx context.Context, arg CreateCardParams) (Card, error)
+	// Saves the complaint with a copy of the card; no row when the card is gone
+	// or the user can't see its set. notify_author is true when no other reader
+	// has an open complaint about the card: the author hears about it once, until
+	// they edit the card or keep it. The main query does not see the new row.
+	CreateCardIssue(ctx context.Context, arg CreateCardIssueParams) (CreateCardIssueRow, error)
 	CreateCardOption(ctx context.Context, arg CreateCardOptionParams) (CardOption, error)
 	CreateCardTableColumn(ctx context.Context, arg CreateCardTableColumnParams) (CardTableColumn, error)
 	CreateCardTableItem(ctx context.Context, arg CreateCardTableItemParams) (CardTableItem, error)
@@ -39,6 +48,9 @@ type Querier interface {
 	GetNextReviewDateForUser(ctx context.Context, userID pgtype.UUID) (pgtype.Timestamptz, error)
 	GetSetByID(ctx context.Context, arg GetSetByIDParams) (GetSetByIDRow, error)
 	GetSetByShareCode(ctx context.Context, shareCode string) (GetSetByShareCodeRow, error)
+	// Open complaints of the author's set: made after the card's last edit and
+	// not dismissed. Complaints about deleted cards are not listed.
+	GetSetIssues(ctx context.Context, arg GetSetIssuesParams) ([]GetSetIssuesRow, error)
 	GetSetLeaderboard(ctx context.Context, setID pgtype.UUID) ([]GetSetLeaderboardRow, error)
 	GetSetPlan(ctx context.Context, arg GetSetPlanParams) ([]GetSetPlanRow, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
@@ -50,8 +62,17 @@ type Querier interface {
 	IsSetAuthor(ctx context.Context, arg IsSetAuthorParams) (bool, error)
 	JoinSet(ctx context.Context, arg JoinSetParams) (UserSet, error)
 	LeaveSet(ctx context.Context, arg LeaveSetParams) (int64, error)
+	// Every complaint, for admins, newest first. The status: deleted when the
+	// card is gone; fixed when the card was edited after the complaint and before
+	// any «Всё верно» (which also closes complaints the edit answered); kept when
+	// the author left the card as it is; open otherwise.
+	// The mini app says the list is cut off at this number: ADMIN_ISSUES_LIMIT.
+	ListCardIssues(ctx context.Context) ([]ListCardIssuesRow, error)
 	LockSetForAuthor(ctx context.Context, arg LockSetForAuthorParams) (pgtype.UUID, error)
 	RecordAnswer(ctx context.Context, arg RecordAnswerParams) (Answer, error)
+	// Sets the reader's progress back to the previous card of the fact when they
+	// report a problem, so they don't skip ahead to harder cards.
+	RollbackFactStepOnCardIssue(ctx context.Context, arg RollbackFactStepOnCardIssueParams) error
 	SaveTelegramProfile(ctx context.Context, arg SaveTelegramProfileParams) (User, error)
 	TelegramProfileInput(ctx context.Context, arg TelegramProfileInputParams) (User, error)
 	UpdateCard(ctx context.Context, arg UpdateCardParams) (UpdateCardRow, error)

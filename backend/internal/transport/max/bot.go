@@ -418,7 +418,12 @@ func (b *Bot) buildAppButtons() [][]map[string]interface{} {
 	if b.botUser != nil && b.botUser.Username != nil {
 		username = *b.botUser.Username
 	}
+	return appButtons(username, b.appURL)
+}
 
+// appButtons open the mini app in MAX, when the bot's username is known, and
+// in the browser.
+func appButtons(username, appURL string) [][]map[string]interface{} {
 	buttons := [][]map[string]interface{}{}
 
 	if username != "" {
@@ -435,7 +440,7 @@ func (b *Bot) buildAppButtons() [][]map[string]interface{} {
 		{
 			"type": "link",
 			"text": "Открыть в браузере 🌐",
-			"url":  b.appURL,
+			"url":  appURL,
 		},
 	})
 

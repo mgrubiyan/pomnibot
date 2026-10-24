@@ -76,9 +76,11 @@ export interface HomeProps {
     removedSetIds: string[];
     /** Notify parent when today data (including current user) is loaded */
     onTodayLoaded?: (today: TodayData) => void;
+    /** Every complaint across all sets; the row is there for admins only. */
+    onOpenAdminIssues?: () => void;
 }
 
-export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, removedSetIds, onTodayLoaded }: HomeProps) {
+export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, removedSetIds, onTodayLoaded, onOpenAdminIssues }: HomeProps) {
     const [status, setStatus] = useState<Status>('loading');
     const [today, setToday] = useState<TodayData | null>(null);
     const [feedCards, setFeedCards] = useState<Card[]>([]);
@@ -253,6 +255,18 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, remo
                         </Typography.Text>
                     </Flex>
                 )}
+
+                {today.isAdmin && onOpenAdminIssues ? (
+                    <CellList mode="island" filled className={s.setsList}>
+                        <CellSimple
+                            as="button"
+                            showChevron
+                            onClick={onOpenAdminIssues}
+                            title="Все жалобы"
+                            subtitle="Ошибки в карточках по всем наборам"
+                        />
+                    </CellList>
+                ) : null}
 
                 <button type="button" className={s.why} onClick={onOpenWhy}>
                     <Typography.Text variant="label" color="tertiary">

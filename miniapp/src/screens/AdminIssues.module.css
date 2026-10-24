@@ -1,0 +1,36 @@
+/* Every complaint, for admins: filters by reason, then one block per complaint. */
+
+.body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+/* Filters wrap rather than scroll, so the chosen one stays in sight. */
+.filters {
+    padding: 0 16px 4px;
+}
+
+.issue {
+    box-sizing: border-box;
+    padding: 16px 20px;
+    border-radius: 16px;
+    background: var(--background-card);
+}
+
+.text {
+    overflow-wrap: anywhere;
+}
+
+.quote {
+    margin: 0;
+    padding-left: 12px;
+    border-left: 2px solid var(--divider-primary);
+    overflow-wrap: anywhere;
+}
+
+.footer {
+    padding-top: 12px;
+    border-top: 1px solid var(--divider-primary);
+}

@@ -11,6 +11,50 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type CardIssueReason string
+
+const (
+	CardIssueReasonAnswer     CardIssueReason = "answer"
+	CardIssueReasonWording    CardIssueReason = "wording"
+	CardIssueReasonNotInNotes CardIssueReason = "not-in-notes"
+	CardIssueReasonOther      CardIssueReason = "other"
+)
+
+func (e *CardIssueReason) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CardIssueReason(s)
+	case string:
+		*e = CardIssueReason(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CardIssueReason: %T", src)
+	}
+	return nil
+}
+
+type NullCardIssueReason struct {
+	CardIssueReason CardIssueReason `json:"card_issue_reason"`
+	Valid           bool            `json:"valid"` // Valid is true if CardIssueReason is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCardIssueReason) Scan(value interface{}) error {
+	if value == nil {
+		ns.CardIssueReason, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CardIssueReason.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCardIssueReason) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CardIssueReason), nil
+}
+
 type CardKind string
 
 const (
@@ -73,6 +117,21 @@ type Card struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	ID          pgtype.UUID        `json:"id"`
 	FactID      pgtype.UUID        `json:"fact_id"`
+}
+
+type CardIssue struct {
+	ID          pgtype.UUID        `json:"id"`
+	CardID      pgtype.UUID        `json:"card_id"`
+	SetID       pgtype.UUID        `json:"set_id"`
+	UserID      pgtype.UUID        `json:"user_id"`
+	Reason      CardIssueReason    `json:"reason"`
+	Kind        CardKind           `json:"kind"`
+	Question    string             `json:"question"`
+	AnswerText  pgtype.Text        `json:"answer_text"`
+	Explanation string             `json:"explanation"`
+	SourceQuote string             `json:"source_quote"`
+	ResolvedAt  pgtype.Timestamptz `json:"resolved_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
 type CardOption struct {

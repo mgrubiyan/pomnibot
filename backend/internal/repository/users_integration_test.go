@@ -92,7 +92,39 @@ func TestMigration00009UpDown(t *testing.T) {
 	upSQL := parts[0]
 	downSQL := parts[1]
 
-	// 0. Roll back 00011 first so topics exists for 00009 Down
+	// 0a. Roll back 00013 so card_issues foreign keys to users and cards are dropped
+	m13Data, err := repository.MigrationsFS.ReadFile("migrations/00013_card_issues.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m13Parts := strings.Split(string(m13Data), "-- +goose Down")
+	if len(m13Parts) != 2 {
+		t.Fatalf("expected 2 parts for 00013, got %d", len(m13Parts))
+	}
+	m13Up := m13Parts[0]
+	m13Down := m13Parts[1]
+
+	if _, err := pool.Exec(ctx, m13Down); err != nil {
+		t.Fatalf("failed to run 00013 Down: %v", err)
+	}
+
+	// 0b. Roll back 00012 so card_kind enum and FSRS schema are reverted
+	m12Data, err := repository.MigrationsFS.ReadFile("migrations/00012_fsrs6_and_card_kind_enum.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m12Parts := strings.Split(string(m12Data), "-- +goose Down")
+	if len(m12Parts) != 2 {
+		t.Fatalf("expected 2 parts for 00012, got %d", len(m12Parts))
+	}
+	m12Up := m12Parts[0]
+	m12Down := m12Parts[1]
+
+	if _, err := pool.Exec(ctx, m12Down); err != nil {
+		t.Fatalf("failed to run 00012 Down: %v", err)
+	}
+
+	// 0c. Roll back 00011 first so topics exists for 00009 Down
 	m11Data, err := repository.MigrationsFS.ReadFile("migrations/00011_drop_topics.sql")
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +140,7 @@ func TestMigration00009UpDown(t *testing.T) {
 		t.Fatalf("failed to run 00011 Down: %v", err)
 	}
 
-	// 0b. Roll back 00010 so 00009 operates on answer_results
+	// 0d. Roll back 00010 so 00009 operates on answer_results
 	m10Data, err := repository.MigrationsFS.ReadFile("migrations/00010_rename_answer_results_to_answers.sql")
 	if err != nil {
 		t.Fatal(err)
@@ -173,5 +205,19 @@ func TestMigration00009UpDown(t *testing.T) {
 	var hasTopics bool
 	if err := pool.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='topics')").Scan(&hasTopics); err != nil || hasTopics {
 		t.Fatalf("expected topics table to NOT exist after 00011 Up, err: %v", err)
+	}
+
+	// 6. Re-run 00012 Up and verify card_kind enum exists
+	if _, err := pool.Exec(ctx, m12Up); err != nil {
+		t.Fatalf("failed to re-run 00012 Up: %v", err)
+	}
+
+	// 7. Re-run 00013 Up and verify card_issues table exists
+	if _, err := pool.Exec(ctx, m13Up); err != nil {
+		t.Fatalf("failed to re-run 00013 Up: %v", err)
+	}
+	var hasCardIssues bool
+	if err := pool.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='card_issues')").Scan(&hasCardIssues); err != nil || !hasCardIssues {
+		t.Fatalf("expected card_issues table to exist after 00013 Up, err: %v", err)
 	}
 }

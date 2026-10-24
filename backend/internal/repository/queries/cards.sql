@@ -174,6 +174,20 @@ ranked_cards AS (
         COUNT(*) OVER (PARTITION BY c.fact_id) AS total_cards
     FROM cards c
     JOIN user_due_facts udf ON c.fact_id = udf.fact_id
+    -- A reader who complained about a card will not see it or any subsequent
+    -- harder cards of that fact until the author fixes the card or keeps it.
+    -- The author sees all cards as normal.
+    WHERE NOT EXISTS (
+        SELECT 1 FROM card_issues i
+        JOIN cards reported ON reported.id = i.card_id
+        JOIN sets s ON s.id = udf.set_id
+        WHERE reported.fact_id = c.fact_id
+          AND c.id >= reported.id
+          AND i.user_id = $1
+          AND s.author_id <> $1
+          AND i.resolved_at IS NULL
+          AND i.created_at > reported.updated_at
+    )
 )
 SELECT
     id,
@@ -189,8 +203,7 @@ SELECT
     updated_at
 FROM ranked_cards
 WHERE card_idx = LEAST(step, total_cards - 1)
-ORDER BY due_time ASC
-LIMIT 20;
+ORDER BY due_time ASC, fact_id ASC;
 
 -- name: CountCardsByFactID :one
 SELECT COUNT(*)::INT FROM cards WHERE fact_id = $1;

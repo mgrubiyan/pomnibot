@@ -55,6 +55,7 @@
 5. В конце — итоги: сколько верных ответов и в каких темах были ошибки.
 6. Студент делится набором с группой по коду; одногруппник вводит код в мини-приложении и получает тот же набор.
 7. Каждый день в заданное время бот напоминает тем, у кого есть карточки на повтор.
+8. Если в карточке ошибка, читатель отмечает её в ленте. Автору набора приходит сообщение от бота, а в наборе появляются «Жалобы»: карточку можно исправить или оставить как есть.
 
 ## Состав и архитектура
 
@@ -72,8 +73,8 @@
 | `backend/internal/generator` | нарезка конспекта на фрагменты и генерация карточек через модель (OpenRouter, GigaChat или Qwen) с проверкой цитат |
 | `backend/internal/grader` | проверка печатного ответа: локальное сравнение, затем модель по смыслу |
 | `backend/internal/transport/http` | роутер, авторизация по `initData` от MAX и Telegram, отдача статики |
-| `backend/internal/transport/telegram` | Telegram Bot API, long polling, профиль, файлы, альбомы и напоминания |
-| `backend/internal/transport/max` | бот в MAX: клиент MAX Bot API, long polling, приём файлов, напоминания |
+| `backend/internal/transport/telegram` | Telegram Bot API, long polling, профиль, файлы, альбомы, напоминания и жалобы автору |
+| `backend/internal/transport/max` | бот в MAX: клиент MAX Bot API, long polling, приём файлов, напоминания и жалобы автору |
 | `backend/internal/usecase` | бизнес-логика: наборы, лента, результаты, интервальные повторения |
 | `backend/internal/repository` | миграции (goose), SQL-запросы (sqlc), демо-данные |
 | `miniapp/` | мини-приложение: React 19, TypeScript, Vite, `@maxhub/max-ui` |
@@ -213,6 +214,15 @@ cp .env.example .env
 | `NOTIFICATIONS_ENABLED` | `true` | `false` выключает ежедневные напоминания бота |
 | `NOTIFICATION_TIME` | `10:00` | время рассылки |
 | `NOTIFICATION_TZ` | `Europe/Moscow` | часовой пояс рассылки и расчёта «на сегодня» |
+
+**Админы**
+
+| Переменная | .env.example | Назначение |
+|---|---|---|
+| `ADMIN_MAX_IDS` | пусто | ID пользователей MAX через запятую: им на главной видны «Все жалобы» по всем наборам |
+| `ADMIN_TG_IDS` | пусто | то же для Telegram |
+
+Локально (`APP_ENV=local`) админ — тестовый пользователь браузера.
 
 **CI/CD**
 
