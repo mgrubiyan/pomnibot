@@ -89,7 +89,8 @@ type Invoker interface {
 	GetAdminIssues(ctx context.Context) (GetAdminIssuesRes, error)
 	// GetCardsBySetID invokes GetCardsBySetID operation.
 	//
-	// Only the author can get cards of a set; other users receive 403 Forbidden.
+	// The author gets whole cards; a member gets only the questions, without answers, options, tables,
+	// explanations and quotes.
 	//
 	// GET /sets/{setId}/cards
 	GetCardsBySetID(ctx context.Context, params GetCardsBySetIDParams) (GetCardsBySetIDRes, error)
@@ -1124,7 +1125,8 @@ func (c *Client) sendGetAdminIssues(ctx context.Context) (res GetAdminIssuesRes,
 
 // GetCardsBySetID invokes GetCardsBySetID operation.
 //
-// Only the author can get cards of a set; other users receive 403 Forbidden.
+// The author gets whole cards; a member gets only the questions, without answers, options, tables,
+// explanations and quotes.
 //
 // GET /sets/{setId}/cards
 func (c *Client) GetCardsBySetID(ctx context.Context, params GetCardsBySetIDParams) (GetCardsBySetIDRes, error) {

@@ -408,7 +408,7 @@ func TestGetFeedQuestionsHidesAnswers(t *testing.T) {
 	}
 }
 
-func TestGetCardsBySetIDForbidsNonAuthor(t *testing.T) {
+func TestGetCardsBySetIDGivesMembersQuestionsOnly(t *testing.T) {
 	setID := uuid.New()
 	pgSetID := pgtype.UUID{Bytes: setID, Valid: true}
 	author := pgtype.UUID{Bytes: testUser3, Valid: true}
@@ -430,9 +430,13 @@ func TestGetCardsBySetIDForbidsNonAuthor(t *testing.T) {
 	}
 	svc := usecase.NewSetService(q, usecase.NewUserService(q))
 
-	_, err := svc.GetCardsBySetID(context.Background(), testUser1, setID)
-	if !errors.Is(err, usecase.ErrForbidden) {
-		t.Fatalf("expected ErrForbidden for member, got: %v", err)
+	member, err := svc.GetCardsBySetID(context.Background(), testUser1, setID)
+	if err != nil || len(member) != 1 {
+		t.Fatalf("member: %+v, %v", member, err)
+	}
+	c := member[0]
+	if c.Question != choice.Question || c.Answer.Set || c.Explanation.Set || c.SourceQuote.Set || len(c.Options) != 0 || c.Table.Set {
+		t.Fatalf("a member must get only the question: %+v", c)
 	}
 
 	own, err := svc.GetCardsBySetID(context.Background(), testUser3, setID)

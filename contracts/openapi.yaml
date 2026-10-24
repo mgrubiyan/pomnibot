@@ -388,7 +388,8 @@ paths:
         - Sets
       summary: Get cards
       description: >-
-        Only the author can get cards of a set; other users receive 403 Forbidden.
+        The author gets whole cards; a member gets only the questions, without
+        answers, options, tables, explanations and quotes.
       operationId: GetCardsBySetID
       parameters:
         - name: setId

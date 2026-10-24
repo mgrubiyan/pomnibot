@@ -74,10 +74,7 @@ func (h *SetsHandler) GetCardsBySetID(ctx context.Context, params contracts.GetC
 	userID, _ := UserIDFromContext(ctx)
 	cards, err := h.setService.GetCardsBySetID(ctx, userID, params.SetId)
 	if err != nil {
-		if errors.Is(err, usecase.ErrForbidden) {
-			return &contracts.GetCardsBySetIDForbidden{Message: err.Error()}, nil
-		}
-		if errors.Is(err, usecase.ErrNotFound) {
+		if errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
 			return &contracts.GetCardsBySetIDNotFound{Message: err.Error()}, nil
 		}
 		return &contracts.GetCardsBySetIDInternalServerError{Message: internalError(ctx, "GetCardsBySetID", err)}, nil
