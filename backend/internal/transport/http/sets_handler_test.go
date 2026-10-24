@@ -389,7 +389,7 @@ func TestSetsHandler_GetCardsBySetID(t *testing.T) {
 		}
 	})
 
-	t.Run("Forbidden access maps to Forbidden 403", func(t *testing.T) {
+	t.Run("Forbidden access maps to Not Found", func(t *testing.T) {
 		svc := &mockSetService{
 			getCardsBySetIDFunc: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) ([]contracts.Card, error) {
 				return nil, usecase.ErrForbidden
@@ -400,8 +400,8 @@ func TestSetsHandler_GetCardsBySetID(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if _, ok := res.(*contracts.GetCardsBySetIDForbidden); !ok {
-			t.Fatalf("expected *contracts.GetCardsBySetIDForbidden, got %T", res)
+		if _, ok := res.(*contracts.GetCardsBySetIDNotFound); !ok {
+			t.Fatalf("expected *contracts.GetCardsBySetIDNotFound, got %T", res)
 		}
 	})
 

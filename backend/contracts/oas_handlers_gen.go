@@ -1368,7 +1368,8 @@ func (s *Server) handleGetAdminIssuesRequest(args [0]string, argsEscaped bool, w
 
 // handleGetCardsBySetIDRequest handles GetCardsBySetID operation.
 //
-// Only the author can get cards of a set; other users receive 403 Forbidden.
+// The author gets whole cards; a member gets only the questions, without answers, options, tables,
+// explanations and quotes.
 //
 // GET /sets/{setId}/cards
 func (s *Server) handleGetCardsBySetIDRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {

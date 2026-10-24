@@ -154,7 +154,7 @@ export interface paths {
         };
         /**
          * Get cards
-         * @description Only the author can get cards of a set; other users receive 403 Forbidden.
+         * @description The author gets whole cards; a member gets only the questions, without answers, options, tables, explanations and quotes.
          */
         get: operations["GetCardsBySetID"];
         put?: never;

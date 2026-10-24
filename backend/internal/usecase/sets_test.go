@@ -112,7 +112,7 @@ func TestSetService_GetCardsBySetID_StepReturned(t *testing.T) {
 
 	mock := &mockQuerier{
 		getSetByIDFunc: func(_ context.Context, _ db.GetSetByIDParams) (db.GetSetByIDRow, error) {
-			return db.GetSetByIDRow{ID: pgSetUUID, AuthorID: pgAuthorUUID, Title: "Set 1"}, nil
+			return db.GetSetByIDRow{ID: pgSetUUID, Title: "Set 1"}, nil
 		},
 		getCardsBySetIDFunc: func(_ context.Context, _ db.GetCardsBySetIDParams) ([]db.GetCardsBySetIDRow, error) {
 			return []db.GetCardsBySetIDRow{
