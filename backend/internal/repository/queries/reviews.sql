@@ -30,9 +30,10 @@ RETURNING *;
 
 -- name: GetLastAnswer :one
 -- The verdict recorded last for the user's answer to the card, if it was
--- recorded after since; the id is a UUIDv7 and holds the time of the answer.
+-- recorded after since_id: ids are UUIDv7 and grow with the time of the
+-- answer, so the bound reads only the user's latest answers by their index.
 SELECT correct FROM answers
 WHERE user_id = @user_id AND card_id = @card_id
-  AND uuid_extract_timestamp(id) >= @since::timestamptz
+  AND id >= @since_id::uuid
 ORDER BY id DESC
 LIMIT 1;

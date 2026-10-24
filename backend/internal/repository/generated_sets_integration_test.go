@@ -154,6 +154,8 @@ func TestGeneratedSetOrderAndChoiceIssuesPostgres(t *testing.T) {
 	if _, err := cards.RevealCard(ctx, reader, choiceID); !errors.Is(err, usecase.ErrValidation) {
 		t.Fatalf("reveal of a choice card: %v", err)
 	}
+	beforeAnswer := uuid.Must(uuid.NewV7())
+	time.Sleep(5 * time.Millisecond)
 	answer, err := cards.AnswerQuestion(ctx, reader, choiceID, `["C","B"]`)
 	if err != nil || !answer.IsCorrect || !slices.Equal(answer.Reveal.Value.Answer.StringArray, []string{"B", "C"}) {
 		t.Fatalf("answer: %+v %v", answer, err)
@@ -167,12 +169,21 @@ func TestGeneratedSetOrderAndChoiceIssuesPostgres(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM answers WHERE user_id=$1 AND card_id=$2", reader, choiceID).Scan(&recorded); err != nil || recorded != 1 {
 		t.Fatalf("recorded answers=%d error=%v", recorded, err)
 	}
-	// Only a recent verdict is repeated: none was recorded after now.
-	if _, err := q.GetLastAnswer(ctx, db.GetLastAnswerParams{
-		UserID: pgReader,
-		CardID: pgtype.UUID{Bytes: choiceID, Valid: true},
-		Since:  pgtype.Timestamptz{Time: time.Now().Add(time.Second), Valid: true},
-	}); !errors.Is(err, pgx.ErrNoRows) {
+	// Only a verdict recorded after the bound is repeated.
+	time.Sleep(5 * time.Millisecond)
+	afterAnswer := uuid.Must(uuid.NewV7())
+	lastSince := func(bound uuid.UUID) error {
+		_, err := q.GetLastAnswer(ctx, db.GetLastAnswerParams{
+			UserID:  pgReader,
+			CardID:  pgtype.UUID{Bytes: choiceID, Valid: true},
+			SinceID: pgtype.UUID{Bytes: bound, Valid: true},
+		})
+		return err
+	}
+	if err := lastSince(beforeAnswer); err != nil {
+		t.Fatalf("the verdict recorded after the bound: %v", err)
+	}
+	if err := lastSince(afterAnswer); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("an older verdict was repeated: %v", err)
 	}
 	progress, err := q.GetUserFactProgress(ctx, db.GetUserFactProgressParams{UserID: pgReader, FactID: facts[0].ID})

@@ -214,9 +214,9 @@ func (s *cardServiceImpl) inTx(ctx context.Context, fn func(db.Querier) error) e
 // within the replay window; errNotInFeed when there is none.
 func (s *cardServiceImpl) lastAnswer(ctx context.Context, userID, cardID pgtype.UUID) (bool, error) {
 	correct, err := s.querier.GetLastAnswer(ctx, db.GetLastAnswerParams{
-		UserID: userID,
-		CardID: cardID,
-		Since:  pgtype.Timestamptz{Time: time.Now().Add(-replayWindow), Valid: true},
+		UserID:  userID,
+		CardID:  cardID,
+		SinceID: pgtype.UUID{Bytes: uuidV7Floor(time.Now().Add(-replayWindow)), Valid: true},
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, errNotInFeed
@@ -225,6 +225,19 @@ func (s *cardServiceImpl) lastAnswer(ctx context.Context, userID, cardID pgtype.
 		return false, fmt.Errorf("get last answer: %w", err)
 	}
 	return correct, nil
+}
+
+// uuidV7Floor is the least UUIDv7 of the millisecond t: every id made at
+// or after t sorts at or above it.
+func uuidV7Floor(t time.Time) uuid.UUID {
+	var id uuid.UUID
+	ms := uint64(t.UnixMilli())
+	for i := range 6 {
+		id[i] = byte(ms >> (40 - 8*i))
+	}
+	id[6] = 0x70 // version 7
+	id[8] = 0x80 // RFC 4122 variant
+	return id
 }
 
 func (s *cardServiceImpl) grade(ctx context.Context, card storedCard, details cardDetails, answer string) (grader.Verdict, error) {

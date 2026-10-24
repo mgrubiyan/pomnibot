@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"bytes"
 	"testing"
 	"time"
 
@@ -54,5 +55,25 @@ func TestAnswerLocksSerializeOneKey(t *testing.T) {
 	case <-got:
 	case <-time.After(5 * time.Second):
 		t.Fatal("the second answer was not let in after the first")
+	}
+}
+
+// The floor of a moment sorts above ids made before it and at or below ids
+// made from it on, as the database orders its UUIDv7 answer ids.
+func TestUUIDV7Floor(t *testing.T) {
+	before := uuid.Must(uuid.NewV7())
+	time.Sleep(2 * time.Millisecond)
+	now := time.Now()
+	floor := uuidV7Floor(now)
+	time.Sleep(2 * time.Millisecond)
+	after := uuid.Must(uuid.NewV7())
+	if floor.Version() != 7 || floor.Variant() != uuid.RFC4122 {
+		t.Fatalf("floor %s is not a UUIDv7", floor)
+	}
+	if bytes.Compare(before[:], floor[:]) >= 0 || bytes.Compare(floor[:], after[:]) > 0 {
+		t.Fatalf("floor %s does not sit between %s and %s", floor, before, after)
+	}
+	if sec, nsec := floor.Time().UnixTime(); time.Unix(sec, nsec).UnixMilli() != now.UnixMilli() {
+		t.Fatalf("floor holds %v, want %v", time.Unix(sec, nsec), now)
 	}
 }
