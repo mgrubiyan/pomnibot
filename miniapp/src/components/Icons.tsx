@@ -51,6 +51,13 @@ export const IconCross = (props: IconProps) => (
 );
 
 
+/** The drag handle of a reorderable row: the «≡» the set editor's hint names. */
+export const IconGrip = (props: IconProps) => (
+    <Icon {...props}>
+        <path d="M5 8h14M5 12h14M5 16h14" />
+    </Icon>
+);
+
 export const IconCopy = (props: IconProps) => (
     <Icon {...props}>
         <rect x="9" y="9" width="11" height="11" rx="2" />

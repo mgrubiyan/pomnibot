@@ -4,7 +4,7 @@ import type { Card, CardSet, Fact, User } from '../types';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusScreen } from '../components/StatusScreen';
-import { IconOffline, IconPencil, IconPlus, IconTrash } from '../components/Icons';
+import { IconGrip, IconOffline, IconPencil, IconPlus, IconTrash } from '../components/Icons';
 import { InputDialog } from '../components/InputDialog';
 import { ConfirmActionDialog } from '../components/ConfirmActionDialog';
 import {
@@ -537,7 +537,7 @@ export function SetCards({
                                                                 }
                                                                 onClick={(e) => e.stopPropagation()}
                                                             >
-                                                                ≡
+                                                                <IconGrip size={20} />
                                                             </span>
                                                         ) : undefined
                                                     }

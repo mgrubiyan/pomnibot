@@ -15,7 +15,8 @@
 }
 
 .setTitleCard {
-    margin: 0 16px 8px;
+    /* As wide as the card lists below it, like the cards of the other screens. */
+    margin: 0 0 8px;
     padding: 12px 16px;
     background: var(--background-card);
     border-radius: 16px;
@@ -33,7 +34,7 @@
 }
 
 .addFactContainer {
-    padding: 0 16px;
+    padding: 0;
 }
 
 .factSection {
@@ -68,11 +69,16 @@
     position: relative;
     user-select: none;
     -webkit-user-select: none;
+    /* Picking a card up and putting it down is a state change, not a jump. */
+    transition:
+        opacity 0.15s ease,
+        background-color 0.15s ease;
 }
 
+/* The library's own pressed tint: it follows the theme, a fixed black does not. */
 .cardDragging {
     opacity: 0.6;
-    background: var(--background-card-hover, rgb(0 0 0 / 5%));
+    background-color: var(--states-background-pressed-transparent);
 }
 
 .cardTitle {
@@ -93,8 +99,6 @@
     justify-content: center;
     width: 36px;
     height: 36px;
-    font-size: 22px;
-    line-height: 1;
     color: var(--text-tertiary);
     border-radius: 8px;
     transition: color 0.15s ease;
