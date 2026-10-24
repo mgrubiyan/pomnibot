@@ -94,7 +94,7 @@ func (m *mockSetService) GenerateMockSet(ctx context.Context, userID uuid.UUID, 
 	return nil, nil
 }
 
-func (m *mockSetService) SaveGeneratedSet(_ context.Context, _ uuid.UUID, _ string, _ generator.Result) (*contracts.CardSet, error) {
+func (m *mockSetService) SaveGeneratedSet(_ context.Context, _ uuid.UUID, _ string, _ generator.Result, _ []string) (*contracts.CardSet, error) {
 	return nil, nil
 }
 

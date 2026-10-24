@@ -43,7 +43,7 @@ type Generator interface {
 
 // Saver saves the cards as a new set of the user.
 type Saver interface {
-	SaveGeneratedSet(ctx context.Context, userID uuid.UUID, title string, genResult generator.Result) (*contracts.CardSet, error)
+	SaveGeneratedSet(ctx context.Context, userID uuid.UUID, title string, genResult generator.Result, warnings []string) (*contracts.CardSet, error)
 }
 
 type fromGenerator struct {
@@ -246,11 +246,6 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 	genResult.Artifact.Version = generator.PipelineVersion
 	genResult.Artifact.Reading = extracted.Document
 	genResult.Artifact.Files = req.Files
-	set, err := m.sets.SaveGeneratedSet(ctx, req.UserID, title, genResult)
-	if err != nil {
-		log.Error("failed to save generated set to database", "error", err)
-		return Result{}, fmt.Errorf("save set: %w", err)
-	}
 	var warnings []string
 	if len(genResult.Coverage.Unassigned) > 0 {
 		warnings = append(warnings, fmt.Sprintf("Набор частичный: без цитат в карточках осталось блоков — %d. Сверь темы карточек с конспектом.", len(genResult.Coverage.Unassigned)))
@@ -259,6 +254,11 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 	}
 	warnings = append(warnings, genResult.Coverage.Issues...)
 	warnings = append(warnings, extracted.Warnings...)
+	set, err := m.sets.SaveGeneratedSet(ctx, req.UserID, title, genResult, warnings)
+	if err != nil {
+		log.Error("failed to save generated set to database", "error", err)
+		return Result{}, fmt.Errorf("save set: %w", err)
+	}
 	return Result{Set: set, Warnings: warnings}, nil
 }
 

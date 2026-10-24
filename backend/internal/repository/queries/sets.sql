@@ -1,6 +1,6 @@
 -- name: CreateSet :one
-INSERT INTO sets (title, author_id, share_code)
-VALUES ($1, $2, $3)
+INSERT INTO sets (title, author_id, share_code, warnings)
+VALUES ($1, $2, $3, COALESCE(sqlc.arg(warnings)::TEXT[], '{}'::TEXT[]))
 RETURNING *;
 
 -- name: GetSetByID :one
@@ -13,16 +13,17 @@ SELECT
     u.username AS author_username,
     s.share_code,
     s.updated_at,
+    CASE WHEN s.author_id = sqlc.arg('user_id') THEN s.warnings ELSE '{}'::TEXT[] END::TEXT[] AS warnings,
     (SELECT COUNT(*)::INT FROM cards c JOIN facts f ON c.fact_id = f.id WHERE f.set_id = s.id) AS cards_total,
     (SELECT COUNT(*)::INT
      FROM facts f
-     LEFT JOIN user_fact_progress ufp ON ufp.fact_id = f.id AND ufp.user_id = $2
+     LEFT JOIN user_fact_progress ufp ON ufp.fact_id = f.id AND ufp.user_id = sqlc.arg('user_id')
      WHERE f.set_id = s.id
        AND (ufp.next_review_at IS NULL OR ufp.next_review_at <= NOW())) AS cards_due
 FROM sets s
 JOIN users u ON s.author_id = u.id
 WHERE s.id = $1
-  AND (s.author_id = $2 OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = $2));
+  AND (s.author_id = sqlc.arg('user_id') OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = sqlc.arg('user_id')));
 
 -- name: GetSetByShareCode :one
 SELECT

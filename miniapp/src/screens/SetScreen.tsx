@@ -33,6 +33,7 @@ export interface SetScreenProps {
     /** The list of cards lives on its own screen, managed from there. */
     onOpenCards: (setId: string) => void;
     onShare: (setId: string, setTitle: string) => void;
+    onOpenWarnings?: (setId: string) => void;
     /** Complaints about the cards; only the author gets there. */
     onOpenIssues?: (setId: string) => void;
     onOpenLeaderboard?: (setId: string, setTitle: string) => void;
@@ -47,6 +48,7 @@ export function SetScreen({
     onOpenCards,
     onShare,
     onOpenIssues,
+    onOpenWarnings,
     onOpenLeaderboard,
 }: SetScreenProps) {
     const [status, setStatus] = useState<Status>('loading');
@@ -145,6 +147,7 @@ export function SetScreen({
     const hasDue = dueCount > 0;
     const shared = !isOwner;
     const showLeaderboard = isOwner && Boolean(onOpenLeaderboard);
+    const showWarnings = isOwner && Boolean(set.warnings?.length) && Boolean(onOpenWarnings);
     const showIssues = isOwner && issueCards > 0 && Boolean(onOpenIssues);
 
     return (
@@ -195,11 +198,21 @@ export function SetScreen({
                             subtitle="Ошибки, которые нашли в карточках"
                         />
                     ) : null}
-                    {showLeaderboard ? (
+                    {showWarnings ? (
                         <CellSimple
                             as="button"
                             showChevron
                             separator={showIssues}
+                            onClick={() => onOpenWarnings?.(set.id)}
+                            title={`Замечания · ${set.warnings?.length}`}
+                            subtitle="Нюансы распознавания и структуры"
+                        />
+                    ) : null}
+                    {showLeaderboard ? (
+                        <CellSimple
+                            as="button"
+                            showChevron
+                            separator={showIssues || showWarnings}
                             onClick={() => onOpenLeaderboard?.(set.id, set.title)}
                             title="Таблица лидеров"
                             subtitle="Рейтинг участников"
@@ -208,7 +221,7 @@ export function SetScreen({
                     <CellSimple
                         as="button"
                         showChevron
-                        separator={showIssues || showLeaderboard}
+                        separator={showIssues || showWarnings || showLeaderboard}
                         onClick={() => onOpenCards(set.id)}
                         title={`Карточки · ${cards.length}`}
                         subtitle={isOwner ? 'Просмотр и правка' : 'Просмотр'}

@@ -3,7 +3,6 @@ package notes
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
@@ -23,9 +22,8 @@ const (
 	TextNoCards        = "😕 По этому тексту не получилось составить карточки. Пришли конспект подробнее: с определениями, свойствами, причинами и следствиями."
 )
 
-// maxWarningsShown keeps a long scan with many blurry pages from burying the
-// message about the finished set.
-const maxWarningsShown = 3
+// TextRemarksInMiniApp points authors to the full processing remarks.
+const TextRemarksInMiniApp = "⚠️ Есть замечания к набору — их можно посмотреть в мини-приложении."
 
 // FailureText is what to tell the student about an error of Make, or ""
 // when there is nothing to tell: the student gave up waiting.
@@ -67,21 +65,12 @@ func extractFailure(err error, files int) string {
 	return "😕 " + ie.Message
 }
 
-// WithWarnings appends what went wrong on single pages, such as a blurry
-// photo, to the message about a finished set.
+// WithWarnings adds a compact notice pointing to the full remarks in the Mini App.
 func WithWarnings(text string, warnings []string) string {
 	if len(warnings) == 0 {
 		return text
 	}
-	shown := warnings[:min(len(warnings), maxWarningsShown)]
-	var b strings.Builder
-	b.WriteString(text)
-	b.WriteString("\n\n⚠️ ")
-	b.WriteString(strings.Join(shown, "\n⚠️ "))
-	if more := len(warnings) - len(shown); more > 0 {
-		fmt.Fprintf(&b, "\n…и ещё %d", more)
-	}
-	return b.String()
+	return text + "\n\n" + TextRemarksInMiniApp
 }
 
 // Shared progress and result wording used by every messenger adapter.

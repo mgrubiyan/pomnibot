@@ -711,6 +711,8 @@ type CardSet struct {
 	CardsDue  int       `json:"cardsDue"`
 	Author    User      `json:"author"`
 	ShareCode OptString `json:"shareCode"`
+	// Processing and recognition remarks, visible only to the set author.
+	Warnings []string `json:"warnings"`
 	// User's rank place in the set rating (1-based).
 	UserRank OptInt `json:"userRank"`
 	// User's progress mapped from ELO (0-100%).
@@ -745,6 +747,11 @@ func (s *CardSet) GetAuthor() User {
 // GetShareCode returns the value of ShareCode.
 func (s *CardSet) GetShareCode() OptString {
 	return s.ShareCode
+}
+
+// GetWarnings returns the value of Warnings.
+func (s *CardSet) GetWarnings() []string {
+	return s.Warnings
 }
 
 // GetUserRank returns the value of UserRank.
@@ -785,6 +792,11 @@ func (s *CardSet) SetAuthor(val User) {
 // SetShareCode sets the value of ShareCode.
 func (s *CardSet) SetShareCode(val OptString) {
 	s.ShareCode = val
+}
+
+// SetWarnings sets the value of Warnings.
+func (s *CardSet) SetWarnings(val []string) {
+	s.Warnings = val
 }
 
 // SetUserRank sets the value of UserRank.

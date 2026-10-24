@@ -1249,6 +1249,11 @@ components:
           type: string
           pattern: '\d{6}'
           example: '123456'
+        warnings:
+          type: array
+          items:
+            type: string
+          description: Processing and recognition remarks, visible only to the set author
         userRank:
           type: integer
           description: User's rank place in the set rating (1-based)

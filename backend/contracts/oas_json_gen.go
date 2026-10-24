@@ -1314,6 +1314,16 @@ func (s *CardSet) encodeFields(e *jx.Encoder) {
 		}
 	}
 	{
+		if s.Warnings != nil {
+			e.FieldStart("warnings")
+			e.ArrStart()
+			for _, elem := range s.Warnings {
+				e.Str(elem)
+			}
+			e.ArrEnd()
+		}
+	}
+	{
 		if s.UserRank.Set {
 			e.FieldStart("userRank")
 			s.UserRank.Encode(e)
@@ -1327,15 +1337,16 @@ func (s *CardSet) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfCardSet = [8]string{
+var jsonFieldsNameOfCardSet = [9]string{
 	0: "id",
 	1: "title",
 	2: "cardsTotal",
 	3: "cardsDue",
 	4: "author",
 	5: "shareCode",
-	6: "userRank",
-	7: "userPercentile",
+	6: "warnings",
+	7: "userRank",
+	8: "userPercentile",
 }
 
 // Decode decodes CardSet from json.
@@ -1343,7 +1354,7 @@ func (s *CardSet) Decode(d *jx.Decoder) error {
 	if s == nil {
 		return errors.New("invalid: unable to decode CardSet to nil")
 	}
-	var requiredBitSet [1]uint8
+	var requiredBitSet [2]uint8
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
@@ -1415,6 +1426,25 @@ func (s *CardSet) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"shareCode\"")
 			}
+		case "warnings":
+			if err := func() error {
+				s.Warnings = make([]string, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem string
+					v, err := d.Str()
+					elem = string(v)
+					if err != nil {
+						return err
+					}
+					s.Warnings = append(s.Warnings, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"warnings\"")
+			}
 		case "userRank":
 			if err := func() error {
 				s.UserRank.Reset()
@@ -1444,8 +1474,9 @@ func (s *CardSet) Decode(d *jx.Decoder) error {
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
-	for i, mask := range [1]uint8{
+	for i, mask := range [2]uint8{
 		0b00011111,
+		0b00000000,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.

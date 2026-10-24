@@ -20,7 +20,7 @@ type SetService interface {
 	GetSetPlan(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.SetPlanItem, error)
 	GetSetLeaderboard(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error)
 	JoinSetByShareCode(ctx context.Context, userID uuid.UUID, code string) (*contracts.CardSet, error)
-	SaveGeneratedSet(ctx context.Context, userID uuid.UUID, title string, genResult generator.Result) (*contracts.CardSet, error)
+	SaveGeneratedSet(ctx context.Context, userID uuid.UUID, title string, genResult generator.Result, warnings []string) (*contracts.CardSet, error)
 }
 
 // FactService defines domain operations on facts within card sets.

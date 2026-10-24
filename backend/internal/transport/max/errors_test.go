@@ -121,7 +121,7 @@ func TestBot_FailuresTellTheStudentWhatHappened(t *testing.T) {
 			if gen == nil {
 				gen = &mockCardGenerator{}
 			}
-			setSvc := &mockSetService{saveGeneratedSetFunc: func(_ context.Context, _ uuid.UUID, title string, _ generator.Result) (*contracts.CardSet, error) {
+			setSvc := &mockSetService{saveGeneratedSetFunc: func(_ context.Context, _ uuid.UUID, title string, _ generator.Result, _ []string) (*contracts.CardSet, error) {
 				if tt.saveErr != nil {
 					return nil, tt.saveErr
 				}
@@ -168,7 +168,7 @@ func TestBot_SuccessMentionsPoorlyReadPages(t *testing.T) {
 			Warnings: []string{"Страница 1 распознана плохо, попробуйте переснять."},
 		}, nil
 	}}
-	setSvc := &mockSetService{saveGeneratedSetFunc: func(_ context.Context, _ uuid.UUID, title string, _ generator.Result) (*contracts.CardSet, error) {
+	setSvc := &mockSetService{saveGeneratedSetFunc: func(_ context.Context, _ uuid.UUID, title string, _ generator.Result, _ []string) (*contracts.CardSet, error) {
 		return &contracts.CardSet{ID: uuid.New(), Title: title}, nil
 	}}
 	b, err := NewBot(client, "https://example.test", &mockUserService{}, notes.New(extractor, &mockCardGenerator{}, setSvc, 1))
@@ -179,8 +179,8 @@ func TestBot_SuccessMentionsPoorlyReadPages(t *testing.T) {
 	b.handleUpdate(context.Background(), fileUpdate(1, "photo.jpg"))
 
 	got := server.lastText()
-	if !strings.Contains(got, "успешно создан") || !strings.Contains(got, "Страница 1 распознана плохо") {
-		t.Errorf("last message = %q, want the success text with the page warning", got)
+	if !strings.Contains(got, "успешно создан") || !strings.Contains(got, notes.TextRemarksInMiniApp) || strings.Contains(got, "Страница 1 распознана плохо") {
+		t.Errorf("last message = %q, want the success text with a compact warning notice", got)
 	}
 }
 

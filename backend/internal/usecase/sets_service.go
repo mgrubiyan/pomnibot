@@ -59,6 +59,10 @@ func (s *setServiceImpl) GetSet(ctx context.Context, userID uuid.UUID, setID uui
 		return nil, err
 	}
 
+	if row.AuthorID == pgUserID {
+		res.Warnings = row.Warnings
+	}
+
 	// The rating is optional: a set is shown without it when it cannot be read.
 	rating, err := s.querier.GetUserSetRating(ctx, db.GetUserSetRatingParams{
 		SetID:  pgUUID,
@@ -347,12 +351,12 @@ func (s *setServiceImpl) JoinSetByShareCode(ctx context.Context, userID uuid.UUI
 	return mapSetRowToContract(row.ID, row.Title, author, row.ShareCode, row.CardsTotal, 0)
 }
 
-func (s *setServiceImpl) SaveGeneratedSet(ctx context.Context, userID uuid.UUID, title string, genResult generator.Result) (*contracts.CardSet, error) {
+func (s *setServiceImpl) SaveGeneratedSet(ctx context.Context, userID uuid.UUID, title string, genResult generator.Result, warnings []string) (*contracts.CardSet, error) {
 	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return nil, err
 	}
 
-	prepared, err := prepareGeneratedSet(title, genResult)
+	prepared, err := prepareGeneratedSet(title, genResult, warnings)
 	if err != nil {
 		return nil, fmt.Errorf("prepare generated set: %w", err)
 	}
@@ -369,6 +373,7 @@ func (s *setServiceImpl) SaveGeneratedSet(ctx context.Context, userID uuid.UUID,
 	res := &contracts.CardSet{
 		ID:         setUUID,
 		Title:      set.Title,
+		Warnings:   set.Warnings,
 		CardsTotal: cardsCount,
 		CardsDue:   cardsCount,
 	}

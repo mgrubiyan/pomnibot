@@ -170,6 +170,7 @@ type Set struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 	ID        pgtype.UUID        `json:"id"`
 	AuthorID  pgtype.UUID        `json:"author_id"`
+	Warnings  []string           `json:"warnings"`
 }
 
 type SetProcessingReport struct {

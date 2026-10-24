@@ -27,19 +27,25 @@ func (q *Queries) CountTotalDueCardsForUser(ctx context.Context, userID pgtype.U
 }
 
 const createSet = `-- name: CreateSet :one
-INSERT INTO sets (title, author_id, share_code)
-VALUES ($1, $2, $3)
-RETURNING title, share_code, updated_at, id, author_id
+INSERT INTO sets (title, author_id, share_code, warnings)
+VALUES ($1, $2, $3, COALESCE($4::TEXT[], '{}'::TEXT[]))
+RETURNING title, share_code, updated_at, id, author_id, warnings
 `
 
 type CreateSetParams struct {
 	Title     string      `json:"title"`
 	AuthorID  pgtype.UUID `json:"author_id"`
 	ShareCode string      `json:"share_code"`
+	Warnings  []string    `json:"warnings"`
 }
 
 func (q *Queries) CreateSet(ctx context.Context, arg CreateSetParams) (Set, error) {
-	row := q.db.QueryRow(ctx, createSet, arg.Title, arg.AuthorID, arg.ShareCode)
+	row := q.db.QueryRow(ctx, createSet,
+		arg.Title,
+		arg.AuthorID,
+		arg.ShareCode,
+		arg.Warnings,
+	)
 	var i Set
 	err := row.Scan(
 		&i.Title,
@@ -47,6 +53,7 @@ func (q *Queries) CreateSet(ctx context.Context, arg CreateSetParams) (Set, erro
 		&i.UpdatedAt,
 		&i.ID,
 		&i.AuthorID,
+		&i.Warnings,
 	)
 	return i, err
 }
@@ -93,6 +100,7 @@ SELECT
     u.username AS author_username,
     s.share_code,
     s.updated_at,
+    CASE WHEN s.author_id = $2 THEN s.warnings ELSE '{}'::TEXT[] END::TEXT[] AS warnings,
     (SELECT COUNT(*)::INT FROM cards c JOIN facts f ON c.fact_id = f.id WHERE f.set_id = s.id) AS cards_total,
     (SELECT COUNT(*)::INT
      FROM facts f
@@ -119,6 +127,7 @@ type GetSetByIDRow struct {
 	AuthorUsername  pgtype.Text        `json:"author_username"`
 	ShareCode       string             `json:"share_code"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	Warnings        []string           `json:"warnings"`
 	CardsTotal      int32              `json:"cards_total"`
 	CardsDue        int32              `json:"cards_due"`
 }
@@ -135,6 +144,7 @@ func (q *Queries) GetSetByID(ctx context.Context, arg GetSetByIDParams) (GetSetB
 		&i.AuthorUsername,
 		&i.ShareCode,
 		&i.UpdatedAt,
+		&i.Warnings,
 		&i.CardsTotal,
 		&i.CardsDue,
 	)

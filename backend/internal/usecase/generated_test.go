@@ -74,7 +74,7 @@ func TestSaveGeneratedFactsAssignsUUIDsAndConvertsCards(t *testing.T) {
 	}, Coverage: generator.Coverage{Issues: []string{"uncertain page"}}, Artifact: &generator.Artifact{Version: generator.PipelineVersion, Response: "original model response"}}
 	svc := usecase.NewSetService(q, usecase.NewUserService(q))
 	for run := 0; run < 2; run++ {
-		set, err := svc.SaveGeneratedSet(t.Context(), uuid.New(), "Lecture", r)
+		set, err := svc.SaveGeneratedSet(t.Context(), uuid.New(), "Lecture", r, nil)
 		if err != nil || set.CardsTotal != 7 {
 			t.Fatalf("%+v %v", set, err)
 		}
