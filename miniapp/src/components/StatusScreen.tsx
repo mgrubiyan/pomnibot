@@ -16,7 +16,9 @@ export function StatusScreen({ icon, title, text, action }: StatusScreenProps) {
         <Screen>
             <Flex direction="column" align="center" justify="center" gap={12} className={s.status}>
                 {icon}
-                <Typography.Text variant="subheader">{title}</Typography.Text>
+                <Typography.Text variant="subheader" className={s.statusTitle}>
+                    {title}
+                </Typography.Text>
                 <Typography.Text variant="body" color="secondary" className={s.statusText}>
                     {text}
                 </Typography.Text>

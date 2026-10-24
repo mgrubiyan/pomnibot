@@ -4,6 +4,7 @@
     text-align: center;
 }
 
+.statusTitle,
 .statusText {
     /* Centred lines of even length: no lone word left on the last one. */
     text-wrap: balance;

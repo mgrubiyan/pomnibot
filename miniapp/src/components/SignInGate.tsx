@@ -18,8 +18,8 @@ export function SignInGate({ children }: { children: ReactNode }) {
     return (
         <StatusScreen
             icon={<IconClock size={48} tone="muted" />}
-            title="Вход устарел"
-            text="Закройте приложение и откройте его снова"
+            title="Приложение открыто уже давно"
+            text="Откройте его ещё раз — все ваши ответы на месте"
             action={
                 close ? (
                     <Button size="medium" variant="primary" stretched onClick={close}>
