@@ -21,6 +21,15 @@ func TestPromptsAndSchemaUseNestedFacts(t *testing.T) {
 				t.Errorf("%s omits %s", name, field)
 			}
 		}
+		if !strings.Contains(prompt, "запрещено ссылаться на номера страниц, слайдов, лекций или документа") {
+			t.Errorf("%s must explicitly forbid referencing page or slide numbers in questions and answers", name)
+		}
+		if !strings.Contains(prompt, "Не смешивай в ответе определение понятия и вычисление конкретного примера") {
+			t.Errorf("%s must instruct not to mix definitions and example calculations in answers", name)
+		}
+		if !strings.Contains(prompt, "в примере со слайда 33") {
+			t.Errorf("%s must forbid page/slide references in premises", name)
+		}
 	}
 	if !strings.Contains(prompts.GeneratorSystem, "одинаковыми question, answer, source и sourceQuote") {
 		t.Fatal("system prompt must request a matching mandatory pair")
