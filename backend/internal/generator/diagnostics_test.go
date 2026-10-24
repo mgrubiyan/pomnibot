@@ -206,10 +206,12 @@ func TestNestedResponseDiagnosticsAndParserCauses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, tc := range []struct{ content, path string }{
-		{strings.Replace(string(b), `"rows":["B"]`, `"rows":["B",42]`, 1), "facts[0].cards[1].columns[1].rows[1]"},
-		{strings.Replace(string(b), `"rows":["B"]`, `"rows":["B"],"`+privateDiagnosticText+`":1`, 1), "facts[0].cards[1].<unknown>"},
-		{strings.Replace(string(b), `"issues":[]`, `"issues":["ok",42]`, 1), "issues[1]"},
+	// Go 1.27 adds array indices to UnmarshalTypeError.Field. Go 1.26
+	// exposes the same field path without those optional nested indices.
+	for _, tc := range []struct{ content, path, indexedPath string }{
+		{strings.Replace(string(b), `"rows":["B"]`, `"rows":["B",42]`, 1), "facts[0].cards[1].columns.rows", "facts[0].cards[1].columns[1].rows[1]"},
+		{strings.Replace(string(b), `"rows":["B"]`, `"rows":["B"],"`+privateDiagnosticText+`":1`, 1), "facts[0].cards[1].<unknown>", ""},
+		{strings.Replace(string(b), `"issues":[]`, `"issues":["ok",42]`, 1), "issues", "issues[1]"},
 	} {
 		p := providerFunc(func(context.Context, providers.Request) (providers.Response, error) {
 			return providers.Response{Content: []byte(tc.content)}, nil
@@ -218,7 +220,7 @@ func TestNestedResponseDiagnosticsAndParserCauses(t *testing.T) {
 		if err == nil {
 			t.Fatal("accepted invalid structure")
 		}
-		if fields := diagnosticFields(t, err); fields["path"] != tc.path {
+		if fields := diagnosticFields(t, err); fields["path"] != tc.path && (tc.indexedPath == "" || fields["path"] != tc.indexedPath) {
 			t.Errorf("path = %v, want %s", fields["path"], tc.path)
 		}
 		if !strings.Contains(tc.path, "<unknown>") {
