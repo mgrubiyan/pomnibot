@@ -71,7 +71,10 @@ type Stats struct {
 	ReasoningTokens      *int                  `json:"reasoningTokens,omitempty"`
 	Facts                int                   `json:"facts"`
 
-	// CardsFromModel = DroppedInvalid + DroppedQuote + DroppedDuplicate + DroppedByLimit + Cards.
+	// CardsFromModel counts directly returned boolean, choice and table cards.
+	// CardsSynthesized counts flip/input cards expanded from every recall.
+	// Cards counts all published cards: CardsFromModel + CardsSynthesized.
+	CardsSynthesized int `json:"cardsSynthesized"`
 	CardsFromModel   int `json:"cardsFromModel"`
 	DroppedInvalid   int `json:"droppedInvalid"`
 	DroppedQuote     int `json:"droppedQuote"`

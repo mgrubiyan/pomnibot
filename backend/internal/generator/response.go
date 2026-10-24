@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// AIResponse is the complete model response, before storage identifiers exist.
+// AIResponse decodes the private model contract into expanded facts for validation.
 type AIResponse struct {
 	Facts  []Fact   `json:"facts"`
 	Issues []string `json:"issues"`
@@ -20,8 +20,9 @@ type Fact struct {
 	Pages []int  `json:"pages"`
 	Cards []Card `json:"cards"`
 
-	// Keep wire indices for diagnostics after the stable difficulty sort.
+	// Keep legacy wire indices and model paths after the stable difficulty sort.
 	cardIndices []int
+	cardPaths   []string
 }
 
 // Card is one of the five supported question formats.
@@ -109,70 +110,15 @@ func (f *Fact) UnmarshalJSON(b []byte) error {
 	flip, input := false, false
 	for i, raw := range wire.Cards {
 		path := fmt.Sprintf("cards[%d]", i)
-		var fields map[string]json.RawMessage
-		if err := json.Unmarshal(raw, &fields); err != nil {
-			return shapeProblem(path, "object", err)
-		}
-		if err := requiredFields(raw, "kind"); err != nil {
-			return atPath(path, err)
-		}
-		var kind string
-		if err := json.Unmarshal(fields["kind"], &kind); err != nil {
-			return shapeProblem(path+".kind", "string", err)
-		}
-		delete(fields, "kind")
-		for key, value := range fields {
-			if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-				// An unknown field name can itself contain private response text.
-				if !knownCardField(key) {
-					key = "<unknown>"
-				}
-				return problem("null_field", path+"."+key, "card field is null")
-			}
-		}
-		content, err := json.Marshal(fields)
+		c, err := decodeCard(raw)
 		if err != nil {
 			return atPath(path, err)
 		}
-		var c Card
-		switch kind {
-		case "flip":
-			var v FlipCard
-			err = strictJSON(content, &v)
-			c = v
+		switch c.(type) {
+		case FlipCard:
 			flip = true
-		case "boolean":
-			var v BooleanCard
-			err = strictJSON(content, &v)
-			c = v
-		case "choice":
-			var v ChoiceCard
-			err = strictJSON(content, &v)
-			c = v
-		case "table":
-			var v TableCard
-			err = strictJSON(content, &v)
-			c = v
-		case "input":
-			var v InputCard
-			err = strictJSON(content, &v)
-			c = v
+		case InputCard:
 			input = true
-		default:
-			return problem("invalid_structure", path+".kind", "unknown card kind")
-		}
-		if err != nil {
-			return atPath(path, err)
-		}
-		for _, key := range []string{"question", "source", "sourceQuote"} {
-			if _, ok := fields[key]; !ok {
-				return problem("missing_field", path+"."+key, "required field is missing")
-			}
-		}
-		if kind == "flip" || kind == "boolean" || kind == "input" {
-			if _, ok := fields["answer"]; !ok {
-				return problem("missing_field", path+".answer", "required field is missing")
-			}
 		}
 		f.Cards = append(f.Cards, c)
 	}
@@ -192,6 +138,73 @@ func (f *Fact) UnmarshalJSON(b []byte) error {
 		f.Cards[i] = cards[original]
 	}
 	return nil
+}
+
+func decodeCard(raw json.RawMessage) (Card, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return nil, shapeProblem("", "object", err)
+	}
+	if err := requiredFields(raw, "kind"); err != nil {
+		return nil, atPath("", err)
+	}
+	var kind string
+	if err := json.Unmarshal(fields["kind"], &kind); err != nil {
+		return nil, shapeProblem("kind", "string", err)
+	}
+	delete(fields, "kind")
+	for key, value := range fields {
+		if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			// An unknown field name can itself contain private response text.
+			if !knownCardField(key) {
+				key = "<unknown>"
+			}
+			return nil, problem("null_field", key, "card field is null")
+		}
+	}
+	content, err := json.Marshal(fields)
+	if err != nil {
+		return nil, atPath("", err)
+	}
+	var c Card
+	switch kind {
+	case "flip":
+		var v FlipCard
+		err = strictJSON(content, &v)
+		c = v
+	case "boolean":
+		var v BooleanCard
+		err = strictJSON(content, &v)
+		c = v
+	case "choice":
+		var v ChoiceCard
+		err = strictJSON(content, &v)
+		c = v
+	case "table":
+		var v TableCard
+		err = strictJSON(content, &v)
+		c = v
+	case "input":
+		var v InputCard
+		err = strictJSON(content, &v)
+		c = v
+	default:
+		return nil, problem("invalid_structure", "kind", "unknown card kind")
+	}
+	if err != nil {
+		return nil, atPath("", err)
+	}
+	for _, key := range []string{"question", "source", "sourceQuote"} {
+		if _, ok := fields[key]; !ok {
+			return nil, problem("missing_field", key, "required field is missing")
+		}
+	}
+	if kind == "flip" || kind == "boolean" || kind == "input" {
+		if _, ok := fields["answer"]; !ok {
+			return nil, problem("missing_field", "answer", "required field is missing")
+		}
+	}
+	return c, nil
 }
 
 func knownCardField(key string) bool {
@@ -312,6 +325,9 @@ func validateFacts(facts []Fact, pages int) error {
 				index = f.cardIndices[j]
 			}
 			cardPath := fmt.Sprintf("%s.cards[%d]", path, index)
+			if len(f.cardPaths) == len(f.Cards) {
+				cardPath = fieldPath(path, f.cardPaths[j])
+			}
 			if err := validateCard(c); err != nil {
 				return atPath(cardPath, err)
 			}

@@ -67,11 +67,11 @@ func (facts *responseFacts) UnmarshalJSON(b []byte) error {
 	}
 	decoded := make(responseFacts, 0, len(raw))
 	for i, item := range raw {
-		var fact Fact
-		if err := json.Unmarshal(item, &fact); err != nil {
+		var model modelFact
+		if err := json.Unmarshal(item, &model); err != nil {
 			return atPath(fmt.Sprintf("facts[%d]", i), err)
 		}
-		decoded = append(decoded, fact)
+		decoded = append(decoded, model.expand())
 	}
 	*facts = decoded
 	return nil
@@ -93,7 +93,7 @@ func safeDecodeProblem(err error) error {
 				continue
 			}
 			name := "<unknown>"
-			for _, known := range []string{"facts", "issues", "name", "pages", "cards", "kind", "question", "source", "sourceQuote", "answer", "rightAnswers", "wrongAnswers", "columns", "rows"} {
+			for _, known := range []string{"facts", "issues", "name", "pages", "cards", "recall", "extraCards", "kind", "question", "source", "sourceQuote", "answer", "rightAnswers", "wrongAnswers", "columns", "rows"} {
 				if strings.EqualFold(field, known) {
 					name = known
 					break

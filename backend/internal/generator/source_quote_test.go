@@ -26,8 +26,8 @@ func TestQuotesArePreservedWithoutTextMatching(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := learningFact("F")
-			// Each card keeps its own source and quote, including whitespace and Unicode.
-			f.Cards[1] = InputCard{CardBase{Question: "Recall", Source: "Input source", SourceQuote: tc.quote}, "answer"}
+			// Each pair shares its exact source and quote, including whitespace and Unicode.
+			f.Cards[0] = FlipCard{CardBase{Question: "Recall", Source: "Input source", SourceQuote: tc.quote}, "answer"}
 			published := 0
 			r, err := NewGenerator(stageFixture(f), Options{OnBatch: func(b Batch) {
 				published++
@@ -38,8 +38,8 @@ func TestQuotesArePreservedWithoutTextMatching(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if published != 1 || r.Artifact.Facts[0].Cards[1].Base().SourceQuote != tc.quote || r.Facts[0].Cards[1].(InputCard).SourceQuote != tc.quote || r.Facts[0].Cards[0].(FlipCard).Source == "Input source" {
-				t.Fatal("lost individual source")
+			if published != 1 || r.Artifact.Facts[0].Cards[1].Base().SourceQuote != tc.quote || r.Facts[0].Cards[1].(InputCard).SourceQuote != tc.quote || r.Facts[0].Cards[0].(FlipCard).Source != "Input source" {
+				t.Fatal("lost shared source")
 			}
 		})
 	}
@@ -57,9 +57,9 @@ func TestMalformedResponseRetainedWithoutPublishing(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-func TestFactOrderAndDifferentMandatoryPairArePreserved(t *testing.T) {
+func TestFactOrderAndRecallArePreserved(t *testing.T) {
 	a, b := learningFact("B"), learningFact("A")
-	b.Cards[1] = InputCard{cardBase("Different question"), "Different answer"}
+	b.Cards[0] = FlipCard{cardBase("Different question"), "Different answer"}
 	r, err := NewGenerator(stageFixture(a, b), Options{}).Generate(context.Background(), pdfDocument())
 	if err != nil || len(r.Facts) != 2 || r.Facts[0].Name != "B" || r.Facts[1].Cards[1].(InputCard).Answer != "Different answer" {
 		t.Fatalf("%+v %v", r, err)

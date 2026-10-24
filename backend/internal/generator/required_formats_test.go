@@ -40,18 +40,16 @@ func TestGenerationKeepsAllFormatsWithMandatoryPair(t *testing.T) {
 
 }
 func TestInvalidCardsRejectWholeGeneration(t *testing.T) {
-	for _, defect := range []string{"missing flip", "missing input", "blank answer", "duplicate question"} {
+	for _, defect := range []string{"missing recall", "blank answer", "duplicate question"} {
 		t.Run(defect, func(t *testing.T) {
 			f := requiredFormatsFixture()
 			switch defect {
-			case "missing flip":
+			case "missing recall":
 				f.Cards = f.Cards[:4]
-			case "missing input":
-				f.Cards = f.Cards[1:]
 			case "blank answer":
-				f.Cards[0] = InputCard{cardBase("Recall"), " "}
+				f.Cards[4] = FlipCard{cardBase("Recall"), " "}
 			case "duplicate question":
-				f.Cards = append(f.Cards, f.Cards[0])
+				f.Cards = append(f.Cards, f.Cards[4])
 			}
 			r, e := NewGenerator(stageFixture(f), Options{OnBatch: func(Batch) { t.Fatal("published invalid set") }}).Generate(context.Background(), Document{Text: "A and B"})
 			if e == nil || CardCount(r.Facts) != 0 {

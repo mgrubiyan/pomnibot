@@ -54,11 +54,10 @@ func TestResponseFailureDiagnostics(t *testing.T) {
 		{name: "unknown", content: strings.Replace(directReply(), `"issues":[]`, `"issues":[],"`+privateDiagnosticText+`":1`, 1), category: "invalid_structure", path: "<unknown>", reason: "unknown field"},
 		{name: "fact type", content: strings.Replace(directReply(), `"pages":[1]`, `"pages":"`+privateDiagnosticText+`"`, 1), category: "invalid_structure", path: "facts[0].pages", reason: "expected array"},
 		{name: "fact unknown", content: strings.Replace(directReply(), `"pages":[1]`, `"pages":[1],"`+privateDiagnosticText+`":1`, 1), category: "invalid_structure", path: "facts[0].<unknown>", reason: "unknown field"},
-		{name: "card missing", content: strings.Replace(directReply(), `"kind":"input",`, "", 1), category: "missing_field", path: "facts[0].cards[1].kind", reason: "required field is missing"},
-		{name: "card null", content: strings.Replace(directReply(), `"answer":"Удалить индекс, записать блок, пометить данные"`, `"answer":null`, 1), category: "null_field", path: "facts[0].cards[1].answer", reason: "card field is null"},
-		{name: "card type", content: strings.Replace(directReply(), `"kind":"input"`, `"kind":"boolean"`, 1), category: "invalid_structure", path: "facts[0].cards[1].answer", reason: "expected boolean"},
-		{name: "card kind", content: strings.Replace(directReply(), `"kind":"input"`, `"kind":"`+privateDiagnosticText+`"`, 1), category: "invalid_structure", path: "facts[0].cards[1].kind", reason: "unknown card kind"},
-		{name: "required flip", content: strings.Replace(directReply(), `"kind":"flip"`, `"kind":"input"`, 1), category: "validation", path: "facts[0].cards", reason: "missing required flip card"},
+		{name: "recall missing", content: strings.Replace(directReply(), `"recall":`, `"other":`, 1), category: "missing_field", path: "facts[0].recall", reason: "required field is missing"},
+		{name: "recall null", content: strings.Replace(directReply(), `"answer":"Удалить запись индекса; записать блок; пометить данные."`, `"answer":null`, 1), category: "null_field", path: "facts[0].recall.answer", reason: "required field is null"},
+		{name: "recall type", content: strings.Replace(directReply(), `"answer":"Удалить запись индекса; записать блок; пометить данные."`, `"answer":42`, 1), category: "invalid_structure", path: "facts[0].recall.answer", reason: "expected string"},
+		{name: "extra kind", content: strings.Replace(directReply(), `"extraCards":[]`, `"extraCards":[{"kind":"`+privateDiagnosticText+`"}]`, 1), category: "invalid_structure", path: "facts[0].extraCards[0].kind", reason: "unknown card kind"},
 		{name: "empty facts", content: `{"issues":[],"facts":[]}`, category: "validation", path: "facts", reason: "facts are empty"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -151,36 +150,36 @@ func TestValidationDiagnosticsUseWireIndicesWithoutPrivateValues(t *testing.T) {
 		{"empty pages", "pages", "fact pages are empty", func(f *Fact) { f.Pages = []int{} }},
 		{"outside pages", "pages[0]", "page is outside document range 1..1", func(f *Fact) { f.Pages = []int{2} }},
 		{"duplicate pages", "pages[1]", "duplicate fact page", func(f *Fact) { f.Pages = []int{1, 1} }},
-		{"blank question", "cards[0].question", "question is empty", func(f *Fact) { v := f.Cards[0].(InputCard); v.Question = " "; f.Cards[0] = v }},
-		{"blank source", "cards[3].source", "source is empty", func(f *Fact) { v := f.Cards[3].(BooleanCard); v.Source = " "; f.Cards[3] = v }},
-		{"blank input", "cards[0].answer", "answer is empty", func(f *Fact) { v := f.Cards[0].(InputCard); v.Answer = " "; f.Cards[0] = v }},
-		{"blank flip", "cards[4].answer", "answer is empty", func(f *Fact) { v := f.Cards[4].(FlipCard); v.Answer = " "; f.Cards[4] = v }},
-		{"missing right answers", "cards[2].rightAnswers", "right answers are empty", func(f *Fact) { v := f.Cards[2].(ChoiceCard); v.RightAnswers = []string{}; f.Cards[2] = v }},
-		{"missing wrong answers", "cards[2].wrongAnswers", "wrong answers are empty", func(f *Fact) { v := f.Cards[2].(ChoiceCard); v.WrongAnswers = []string{}; f.Cards[2] = v }},
-		{"blank choice", "cards[2].rightAnswers[1]", "choice answer is empty", func(f *Fact) { v := f.Cards[2].(ChoiceCard); v.RightAnswers[1] = " "; f.Cards[2] = v }},
-		{"duplicate choice", "cards[2].wrongAnswers[0]", "duplicate choice answer", func(f *Fact) {
+		{"blank question", "recall.question", "question is empty", func(f *Fact) { v := f.Cards[4].(FlipCard); v.Question = " "; f.Cards[4] = v }},
+		{"blank source", "extraCards[2].source", "source is empty", func(f *Fact) { v := f.Cards[3].(BooleanCard); v.Source = " "; f.Cards[3] = v }},
+		{"blank input", "recall.answer", "answer is empty", func(f *Fact) { v := f.Cards[4].(FlipCard); v.Answer = " "; f.Cards[4] = v }},
+		{"blank flip", "recall.answer", "answer is empty", func(f *Fact) { v := f.Cards[4].(FlipCard); v.Answer = " "; f.Cards[4] = v }},
+		{"missing right answers", "extraCards[1].rightAnswers", "right answers are empty", func(f *Fact) { v := f.Cards[2].(ChoiceCard); v.RightAnswers = []string{}; f.Cards[2] = v }},
+		{"missing wrong answers", "extraCards[1].wrongAnswers", "wrong answers are empty", func(f *Fact) { v := f.Cards[2].(ChoiceCard); v.WrongAnswers = []string{}; f.Cards[2] = v }},
+		{"blank choice", "extraCards[1].rightAnswers[1]", "choice answer is empty", func(f *Fact) { v := f.Cards[2].(ChoiceCard); v.RightAnswers[1] = " "; f.Cards[2] = v }},
+		{"duplicate choice", "extraCards[1].wrongAnswers[0]", "duplicate choice answer", func(f *Fact) {
 			v := f.Cards[2].(ChoiceCard)
 			v.RightAnswers[0] = privateDiagnosticText
 			v.WrongAnswers[0] = privateDiagnosticText
 			f.Cards[2] = v
 		}},
-		{"short table", "cards[1].columns", "table requires at least two categories", func(f *Fact) { v := f.Cards[1].(TableCard); v.Columns = v.Columns[:1]; f.Cards[1] = v }},
-		{"blank category", "cards[1].columns[0].name", "table category name is empty", func(f *Fact) { v := f.Cards[1].(TableCard); v.Columns[0].Name = " "; f.Cards[1] = v }},
-		{"duplicate category", "cards[1].columns[1].name", "duplicate table category", func(f *Fact) {
+		{"short table", "extraCards[0].columns", "table requires at least two categories", func(f *Fact) { v := f.Cards[1].(TableCard); v.Columns = v.Columns[:1]; f.Cards[1] = v }},
+		{"blank category", "extraCards[0].columns[0].name", "table category name is empty", func(f *Fact) { v := f.Cards[1].(TableCard); v.Columns[0].Name = " "; f.Cards[1] = v }},
+		{"duplicate category", "extraCards[0].columns[1].name", "duplicate table category", func(f *Fact) {
 			v := f.Cards[1].(TableCard)
 			v.Columns[0].Name = privateDiagnosticText
 			v.Columns[1].Name = privateDiagnosticText
 			f.Cards[1] = v
 		}},
-		{"empty rows", "cards[1].columns[1].rows", "table rows are empty", func(f *Fact) { v := f.Cards[1].(TableCard); v.Columns[1].Rows = nil; f.Cards[1] = v }},
-		{"blank row", "cards[1].columns[1].rows[0]", "table row is empty", func(f *Fact) { v := f.Cards[1].(TableCard); v.Columns[1].Rows[0] = " "; f.Cards[1] = v }},
-		{"duplicate row", "cards[1].columns[1].rows[0]", "duplicate table row", func(f *Fact) {
+		{"empty rows", "extraCards[0].columns[1].rows", "table rows are empty", func(f *Fact) { v := f.Cards[1].(TableCard); v.Columns[1].Rows = nil; f.Cards[1] = v }},
+		{"blank row", "extraCards[0].columns[1].rows[0]", "table row is empty", func(f *Fact) { v := f.Cards[1].(TableCard); v.Columns[1].Rows[0] = " "; f.Cards[1] = v }},
+		{"duplicate row", "extraCards[0].columns[1].rows[0]", "duplicate table row", func(f *Fact) {
 			v := f.Cards[1].(TableCard)
 			v.Columns[0].Rows[0] = privateDiagnosticText
 			v.Columns[1].Rows[0] = privateDiagnosticText
 			f.Cards[1] = v
 		}},
-		{"duplicate question", "cards[5].question", "duplicate card question of the same kind", func(f *Fact) { f.Cards = append(f.Cards, f.Cards[0]) }},
+		{"duplicate question", "extraCards[3].question", "duplicate card question of the same kind", func(f *Fact) { f.Cards = append(f.Cards, f.Cards[4]) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			fact := requiredFormatsFixture()
@@ -202,15 +201,15 @@ func TestValidationDiagnosticsUseWireIndicesWithoutPrivateValues(t *testing.T) {
 }
 
 func TestNestedResponseDiagnosticsAndParserCauses(t *testing.T) {
-	b, err := json.Marshal(AIResponse{Facts: []Fact{requiredFormatsFixture()}, Issues: []string{}})
+	b, err := marshalModelFixture(requiredFormatsFixture())
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Go 1.27 adds array indices to UnmarshalTypeError.Field. Go 1.26
 	// exposes the same field path without those optional nested indices.
 	for _, tc := range []struct{ content, path, indexedPath string }{
-		{strings.Replace(string(b), `"rows":["B"]`, `"rows":["B",42]`, 1), "facts[0].cards[1].columns.rows", "facts[0].cards[1].columns[1].rows[1]"},
-		{strings.Replace(string(b), `"rows":["B"]`, `"rows":["B"],"`+privateDiagnosticText+`":1`, 1), "facts[0].cards[1].<unknown>", ""},
+		{strings.Replace(string(b), `"rows":["B"]`, `"rows":["B",42]`, 1), "facts[0].extraCards[0].columns.rows", "facts[0].extraCards[0].columns[1].rows[1]"},
+		{strings.Replace(string(b), `"rows":["B"]`, `"rows":["B"],"`+privateDiagnosticText+`":1`, 1), "facts[0].extraCards[0].<unknown>", ""},
 		{strings.Replace(string(b), `"issues":[]`, `"issues":["ok",42]`, 1), "issues", "issues[1]"},
 	} {
 		p := providerFunc(func(context.Context, providers.Request) (providers.Response, error) {
@@ -354,13 +353,13 @@ func TestDiagnosticOptionalUsageAndSuccessfulAccounting(t *testing.T) {
 }
 
 func TestResponseDiagnosticsPreserveDuplicateFieldDecoding(t *testing.T) {
-	invalidFact := strings.Replace(testFact, `"kind":"flip"`, `"kind":"`+privateDiagnosticText+`"`, 1)
+	invalidFact := strings.Replace(testFact, `"extraCards":[]`, `"extraCards":[{"kind":"`+privateDiagnosticText+`"}]`, 1)
 	for _, tc := range []struct {
 		name, content, path string
 		valid               bool
 	}{
 		{"valid duplicate facts", `{"issues":[],"facts":[` + testFact + `],"facts":[` + testFact + `]}`, "", true},
-		{"invalid earlier facts", `{"issues":[],"facts":[` + invalidFact + `],"facts":[` + testFact + `]}`, "facts[0].cards[0].kind", false},
+		{"invalid earlier facts", `{"issues":[],"facts":[` + invalidFact + `],"facts":[` + testFact + `]}`, "facts[0].extraCards[0].kind", false},
 		{"invalid earlier name", strings.Replace(directReply(), `"name":"Удаление"`, `"name":42,"name":"Удаление"`, 1), "facts[0].name", false},
 		{"invalid earlier issues", strings.Replace(directReply(), `"issues":[]`, `"issues":42,"issues":[]`, 1), "issues", false},
 		{"null issues alias", strings.Replace(directReply(), `"issues":[]`, `"issues":[],"ISSUES":null`, 1), "issues", false},

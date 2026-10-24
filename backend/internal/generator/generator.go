@@ -17,7 +17,7 @@ import (
 )
 
 // PipelineVersion identifies source input, prompt and code validation semantics.
-const PipelineVersion = "direct-generation-v11"
+const PipelineVersion = "direct-generation-v12"
 
 // Generator is safe for concurrent use. The provider owns transport retries.
 type Generator struct {
@@ -103,7 +103,16 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (out Result, err
 	out.Facts = r.Facts
 	out.Artifact.Facts = r.Facts
 	out.Stats.Cards = CardCount(r.Facts)
-	out.Stats.CardsFromModel = out.Stats.Cards
+	for _, fact := range r.Facts {
+		for _, card := range fact.Cards {
+			switch card.(type) {
+			case FlipCard, InputCard:
+				out.Stats.CardsSynthesized++
+			default:
+				out.Stats.CardsFromModel++
+			}
+		}
+	}
 	out.Stats.Facts = len(r.Facts)
 	out.Stats.FirstCardAfter = time.Since(started)
 	g.notify(Batch{Facts: out.Facts})
@@ -128,6 +137,7 @@ func cloneFacts(facts []Fact) []Fact {
 	for i := range out {
 		out[i].Pages = slices.Clone(out[i].Pages)
 		out[i].cardIndices = slices.Clone(out[i].cardIndices)
+		out[i].cardPaths = slices.Clone(out[i].cardPaths)
 		out[i].Cards = slices.Clone(out[i].Cards)
 		for j, c := range out[i].Cards {
 			switch v := c.(type) {
