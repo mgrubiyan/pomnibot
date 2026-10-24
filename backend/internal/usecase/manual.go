@@ -112,8 +112,12 @@ func (s *setServiceImpl) CreateSet(ctx context.Context, userID uuid.UUID, req *c
 	if req == nil || strings.TrimSpace(req.Title) == "" {
 		return nil, fmt.Errorf("%w: title is required", ErrValidation)
 	}
-	if err := validateCreateCard(&req.Card); err != nil {
-		return nil, err
+	var cardReq *contracts.CreateCardRequest
+	if req.Card.IsSet() {
+		cardReq = &req.Card.Value
+		if err := validateCreateCard(cardReq); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return nil, err
@@ -121,7 +125,7 @@ func (s *setServiceImpl) CreateSet(ctx context.Context, userID uuid.UUID, req *c
 	if s.manual == nil {
 		return nil, fmt.Errorf("manual writer is not configured")
 	}
-	id, err := s.manual.CreateSet(ctx, userID, strings.TrimSpace(req.Title), &req.Card)
+	id, err := s.manual.CreateSet(ctx, userID, strings.TrimSpace(req.Title), cardReq)
 	if err != nil {
 		return nil, err
 	}

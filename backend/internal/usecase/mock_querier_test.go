@@ -29,6 +29,7 @@ type mockQuerier struct {
 	getCardTableColumnsFunc         func(ctx context.Context, cardID pgtype.UUID) ([]db.CardTableColumn, error)
 	getCardTableItemsFunc           func(ctx context.Context, cardID pgtype.UUID) ([]db.CardTableItem, error)
 	getCardsBySetIDFunc             func(ctx context.Context, arg db.GetCardsBySetIDParams) ([]db.GetCardsBySetIDRow, error)
+	getFactsBySetIDFunc             func(ctx context.Context, setID pgtype.UUID) ([]db.GetFactsBySetIDRow, error)
 	leaveSetFunc                    func(ctx context.Context, arg db.LeaveSetParams) (int64, error)
 	getFeedCardsForUserFunc         func(ctx context.Context, userID pgtype.UUID) ([]db.GetFeedCardsForUserRow, error)
 	getSetByIDFunc                  func(ctx context.Context, arg db.GetSetByIDParams) (db.GetSetByIDRow, error)
@@ -42,6 +43,15 @@ type mockQuerier struct {
 	recordAnswerFunc                func(ctx context.Context, arg db.RecordAnswerParams) (db.Answer, error)
 	getLastAnswerFunc               func(ctx context.Context, arg db.GetLastAnswerParams) (bool, error)
 	updateCardFunc                  func(ctx context.Context, arg db.UpdateCardParams) (db.UpdateCardRow, error)
+	updateSetTitleFunc              func(ctx context.Context, arg db.UpdateSetTitleParams) (int64, error)
+	setExistsFunc                   func(ctx context.Context, id pgtype.UUID) (bool, error)
+	isFactAuthorFunc                func(ctx context.Context, arg db.IsFactAuthorParams) (bool, error)
+	factExistsFunc                  func(ctx context.Context, id pgtype.UUID) (bool, error)
+	updateFactFunc                  func(ctx context.Context, arg db.UpdateFactParams) (db.Fact, error)
+	deleteFactFunc                  func(ctx context.Context, id pgtype.UUID) (int64, error)
+	getCardsByFactIDFunc            func(ctx context.Context, factID pgtype.UUID) ([]db.GetCardsByFactIDRow, error)
+	updateCardStepFunc              func(ctx context.Context, arg db.UpdateCardStepParams) (int64, error)
+	getMaxCardStepInFactFunc        func(ctx context.Context, factID pgtype.UUID) (int32, error)
 	countCardsByFactIDFunc          func(ctx context.Context, factID pgtype.UUID) (int32, error)
 	getUserFactProgressFunc         func(ctx context.Context, arg db.GetUserFactProgressParams) (db.UserFactProgress, error)
 	upsertFactProgressFunc          func(ctx context.Context, arg db.UpsertFactProgressParams) (db.UserFactProgress, error)
@@ -231,6 +241,13 @@ func (m *mockQuerier) GetCardsBySetID(ctx context.Context, arg db.GetCardsBySetI
 	return nil, nil
 }
 
+func (m *mockQuerier) GetFactsBySetID(ctx context.Context, setID pgtype.UUID) ([]db.GetFactsBySetIDRow, error) {
+	if m.getFactsBySetIDFunc != nil {
+		return m.getFactsBySetIDFunc(ctx, setID)
+	}
+	return nil, nil
+}
+
 func (m *mockQuerier) GetFeedCardsForUser(ctx context.Context, userID pgtype.UUID) ([]db.GetFeedCardsForUserRow, error) {
 	if m.getFeedCardsForUserFunc != nil {
 		return m.getFeedCardsForUserFunc(ctx, userID)
@@ -407,4 +424,67 @@ func (m *mockQuerier) GetCardTableItemsBatch(ctx context.Context, ids []pgtype.U
 		}
 	}
 	return rows, nil
+}
+
+func (m *mockQuerier) UpdateSetTitle(ctx context.Context, arg db.UpdateSetTitleParams) (int64, error) {
+	if m.updateSetTitleFunc != nil {
+		return m.updateSetTitleFunc(ctx, arg)
+	}
+	return 1, nil
+}
+
+func (m *mockQuerier) SetExists(ctx context.Context, id pgtype.UUID) (bool, error) {
+	if m.setExistsFunc != nil {
+		return m.setExistsFunc(ctx, id)
+	}
+	return true, nil
+}
+
+func (m *mockQuerier) IsFactAuthor(ctx context.Context, arg db.IsFactAuthorParams) (bool, error) {
+	if m.isFactAuthorFunc != nil {
+		return m.isFactAuthorFunc(ctx, arg)
+	}
+	return true, nil
+}
+
+func (m *mockQuerier) FactExists(ctx context.Context, id pgtype.UUID) (bool, error) {
+	if m.factExistsFunc != nil {
+		return m.factExistsFunc(ctx, id)
+	}
+	return true, nil
+}
+
+func (m *mockQuerier) UpdateFact(ctx context.Context, arg db.UpdateFactParams) (db.Fact, error) {
+	if m.updateFactFunc != nil {
+		return m.updateFactFunc(ctx, arg)
+	}
+	return db.Fact{ID: arg.ID, Name: arg.Name}, nil
+}
+
+func (m *mockQuerier) DeleteFact(ctx context.Context, id pgtype.UUID) (int64, error) {
+	if m.deleteFactFunc != nil {
+		return m.deleteFactFunc(ctx, id)
+	}
+	return 1, nil
+}
+
+func (m *mockQuerier) GetCardsByFactID(ctx context.Context, factID pgtype.UUID) ([]db.GetCardsByFactIDRow, error) {
+	if m.getCardsByFactIDFunc != nil {
+		return m.getCardsByFactIDFunc(ctx, factID)
+	}
+	return nil, nil
+}
+
+func (m *mockQuerier) UpdateCardStep(ctx context.Context, arg db.UpdateCardStepParams) (int64, error) {
+	if m.updateCardStepFunc != nil {
+		return m.updateCardStepFunc(ctx, arg)
+	}
+	return 1, nil
+}
+
+func (m *mockQuerier) GetMaxCardStepInFact(ctx context.Context, factID pgtype.UUID) (int32, error) {
+	if m.getMaxCardStepInFactFunc != nil {
+		return m.getMaxCardStepInFactFunc(ctx, factID)
+	}
+	return -1, nil
 }

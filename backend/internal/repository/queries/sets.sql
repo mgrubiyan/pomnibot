@@ -73,6 +73,16 @@ SELECT EXISTS(
     SELECT 1 FROM sets WHERE id = $1 AND author_id = $2
 ) AS is_author;
 
+-- name: SetExists :one
+SELECT EXISTS(
+    SELECT 1 FROM sets WHERE id = $1
+) AS exists;
+
+-- name: UpdateSetTitle :execrows
+UPDATE sets
+SET title = $3, updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND author_id = $2;
+
 -- name: DeleteSet :execrows
 DELETE FROM sets WHERE id = $1 AND author_id = $2;
 

@@ -5,8 +5,16 @@ type AnswerQuestionRes interface {
 	answerQuestionRes()
 }
 
+type CreateCardInFactRes interface {
+	createCardInFactRes()
+}
+
 type CreateCardRes interface {
 	createCardRes()
+}
+
+type CreateFactRes interface {
+	createFactRes()
 }
 
 type CreateSetRes interface {
@@ -15,6 +23,10 @@ type CreateSetRes interface {
 
 type DeleteCardRes interface {
 	deleteCardRes()
+}
+
+type DeleteFactRes interface {
+	deleteFactRes()
 }
 
 type DeleteSetRes interface {
@@ -27,6 +39,10 @@ type GetAdminIssuesRes interface {
 
 type GetCardsBySetIDRes interface {
 	getCardsBySetIDRes()
+}
+
+type GetFactsBySetIDRes interface {
+	getFactsBySetIDRes()
 }
 
 type GetFeedQuestionsRes interface {
@@ -73,6 +89,10 @@ type PutProfileRes interface {
 	putProfileRes()
 }
 
+type ReorderCardsRes interface {
+	reorderCardsRes()
+}
+
 type ReportCardIssueRes interface {
 	reportCardIssueRes()
 }
@@ -87,4 +107,12 @@ type RevealCardRes interface {
 
 type UpdateCardRes interface {
 	updateCardRes()
+}
+
+type UpdateFactRes interface {
+	updateFactRes()
+}
+
+type UpdateSetRes interface {
+	updateSetRes()
 }

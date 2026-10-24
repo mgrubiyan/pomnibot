@@ -100,10 +100,10 @@ func TestManualCardsPostgres(t *testing.T) {
 		{Kind: contracts.CardKindChoice, Question: "Choice", Options: []string{"B", "A", "C"}, Answer: contracts.NewStringArrayCardAnswer([]string{"B", "A"})},
 		{Kind: contracts.CardKindTable, Question: "Table", Table: contracts.NewOptTableLayout(table), Answer: contracts.NewTableLayoutCardAnswer(table)},
 	}
-	if _, err := sets.CreateSet(ctx, user11, &contracts.CreateSetRequest{Title: " ", Card: requests[0]}); !errors.Is(err, usecase.ErrValidation) {
+	if _, err := sets.CreateSet(ctx, user11, &contracts.CreateSetRequest{Title: " ", Card: contracts.NewOptCreateCardRequest(requests[0])}); !errors.Is(err, usecase.ErrValidation) {
 		t.Fatalf("blank title: %v", err)
 	}
-	set, err := sets.CreateSet(ctx, user11, &contracts.CreateSetRequest{Title: " Manual ", Card: requests[0]})
+	set, err := sets.CreateSet(ctx, user11, &contracts.CreateSetRequest{Title: " Manual ", Card: contracts.NewOptCreateCardRequest(requests[0])})
 	if err != nil {
 		t.Fatal(err)
 	}

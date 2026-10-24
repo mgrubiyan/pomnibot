@@ -417,7 +417,15 @@ func TestGetCardsBySetIDGivesMembersQuestionsOnly(t *testing.T) {
 		return db.GetSetByIDRow{ID: pgSetID, AuthorID: author}, nil
 	}
 	q.getCardsBySetIDFunc = func(context.Context, db.GetCardsBySetIDParams) ([]db.GetCardsBySetIDRow, error) {
-		return []db.GetCardsBySetIDRow{db.GetCardsBySetIDRow(choice)}, nil
+		return []db.GetCardsBySetIDRow{{
+			ID:          choice.ID,
+			FactID:      choice.FactID,
+			Kind:        choice.Kind,
+			Question:    choice.Question,
+			AnswerText:  choice.AnswerText,
+			Explanation: choice.Explanation,
+			SourceQuote: choice.SourceQuote,
+		}}, nil
 	}
 	svc := usecase.NewSetService(q, usecase.NewUserService(q))
 

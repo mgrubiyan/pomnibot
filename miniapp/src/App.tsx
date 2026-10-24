@@ -39,7 +39,7 @@ type Screen =
     | { name: 'why' }
     | { name: 'add' }
     | { name: 'create-method' }
-    | { name: 'manual'; setId?: string; setTitle?: string }
+    | { name: 'manual'; setId?: string; setTitle?: string; factId?: string }
     | { name: 'join' }
     | {
           name: 'card-issue';
@@ -257,7 +257,7 @@ function App() {
     }
 
     if (screen.name === 'manual') {
-        return <ManualCreate setId={screen.setId} setTitle={screen.setTitle}
+        return <ManualCreate setId={screen.setId} setTitle={screen.setTitle} factId={screen.factId}
             onExit={() => screen.setId ? go({ name: 'set-cards', setId: screen.setId }) : goHome()}
             onDone={setId => go({ name: 'set-cards', setId })} />;
     }
@@ -459,7 +459,7 @@ function App() {
                 setId={screen.setId}
                 currentUser={currentUser}
                 toast={toast}
-                onAddCard={(setTitle) => go({ name: 'manual', setId: screen.setId, setTitle })}
+                onAddCard={(setTitle, factId) => go({ name: 'manual', setId: screen.setId, setTitle, factId })}
                 onBack={() => openSet(screen.setId)}
                 onOpenCard={(card, setTitle) =>
                     go({

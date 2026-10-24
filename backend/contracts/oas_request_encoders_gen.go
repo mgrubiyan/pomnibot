@@ -38,6 +38,34 @@ func encodeCreateCardRequest(
 	return nil
 }
 
+func encodeCreateCardInFactRequest(
+	req *CreateCardRequest,
+	r *http.Request,
+) error {
+	const contentType = "application/json"
+	e := new(jx.Encoder)
+	{
+		req.Encode(e)
+	}
+	encoded := e.Bytes()
+	ht.SetBody(r, bytes.NewReader(encoded), contentType)
+	return nil
+}
+
+func encodeCreateFactRequest(
+	req *CreateFactRequest,
+	r *http.Request,
+) error {
+	const contentType = "application/json"
+	e := new(jx.Encoder)
+	{
+		req.Encode(e)
+	}
+	encoded := e.Bytes()
+	ht.SetBody(r, bytes.NewReader(encoded), contentType)
+	return nil
+}
+
 func encodeCreateSetRequest(
 	req *CreateSetRequest,
 	r *http.Request,
@@ -80,6 +108,20 @@ func encodePutProfileRequest(
 	return nil
 }
 
+func encodeReorderCardsRequest(
+	req *ReorderCardsRequest,
+	r *http.Request,
+) error {
+	const contentType = "application/json"
+	e := new(jx.Encoder)
+	{
+		req.Encode(e)
+	}
+	encoded := e.Bytes()
+	ht.SetBody(r, bytes.NewReader(encoded), contentType)
+	return nil
+}
+
 func encodeReportCardIssueRequest(
 	req *ReportCardIssueRequest,
 	r *http.Request,
@@ -96,6 +138,34 @@ func encodeReportCardIssueRequest(
 
 func encodeUpdateCardRequest(
 	req *UpdateCardRequest,
+	r *http.Request,
+) error {
+	const contentType = "application/json"
+	e := new(jx.Encoder)
+	{
+		req.Encode(e)
+	}
+	encoded := e.Bytes()
+	ht.SetBody(r, bytes.NewReader(encoded), contentType)
+	return nil
+}
+
+func encodeUpdateFactRequest(
+	req *UpdateFactRequest,
+	r *http.Request,
+) error {
+	const contentType = "application/json"
+	e := new(jx.Encoder)
+	{
+		req.Encode(e)
+	}
+	encoded := e.Bytes()
+	ht.SetBody(r, bytes.NewReader(encoded), contentType)
+	return nil
+}
+
+func encodeUpdateSetRequest(
+	req *UpdateSetRequest,
 	r *http.Request,
 ) error {
 	const contentType = "application/json"

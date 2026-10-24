@@ -652,6 +652,8 @@ checks:
         sourceRef:
           type: string
           description: 'where the quote is from: «Лекция 3, стр. 2»'
+        step:
+          type: integer
   timeoutMs: 5000
   repeatable: false
 - id: AnswerQuestion
@@ -839,6 +841,167 @@ checks:
           type: string
   timeoutMs: 5000
   repeatable: false
+- id: UpdateFact
+  name: Update fact name
+  method: PATCH
+  path: /facts/{factId}
+  role: user
+  request:
+    path:
+      factId: sample-id
+    headers:
+      Content-Type: application/json
+  expected:
+    statusCodes:
+    - 204
+  timeoutMs: 5000
+  repeatable: false
+- id: CreateCardInFact
+  name: Create a card in a fact
+  method: POST
+  path: /facts/{factId}/cards
+  role: user
+  request:
+    path:
+      factId: sample-id
+    headers:
+      Content-Type: application/json
+  expected:
+    statusCodes:
+    - 201
+    contentType: application/json
+    requiredFields:
+    - factId
+    - factName
+    - id
+    - kind
+    - question
+    - setId
+    bodySchema:
+      type: object
+      description: answer, explanation and sourceQuote are absent only in a set member's
+        list of the set's cards.
+      required:
+      - id
+      - setId
+      - factId
+      - factName
+      - kind
+      - question
+      properties:
+        id:
+          type: string
+          format: uuid
+        setId:
+          type: string
+          format: uuid
+        factId:
+          type: string
+          format: uuid
+        factName:
+          type: string
+        kind:
+          type: string
+          enum:
+          - choice
+          - flip
+          - input
+          - boolean
+          - table
+        question:
+          type: string
+        options:
+          type: array
+          items:
+            type: string
+          description: choice only
+        table:
+          type: object
+          description: 'Sorting card: lay the terms out across the columns.'
+          required:
+          - columns
+          - items
+          properties:
+            columns:
+              type: array
+              items:
+                type: string
+            items:
+              type: array
+              items:
+                type: object
+                description: A term of the table and the column it belongs to.
+                required:
+                - text
+                - column
+                properties:
+                  text:
+                    type: string
+                  column:
+                    type: string
+        answer:
+          description: ' choice - string[] (all correct option texts); legacy string/integer
+            supported input - string boolean - boolean table - #/components/schemas/TableLayout '
+          oneOf:
+          - type: array
+            minItems: 1
+            uniqueItems: true
+            items:
+              type: string
+          - type: integer
+          - type: string
+          - type: boolean
+          - type: object
+            description: 'Sorting card: lay the terms out across the columns.'
+            required:
+            - columns
+            - items
+            properties:
+              columns:
+                type: array
+                items:
+                  type: string
+              items:
+                type: array
+                items:
+                  type: object
+                  description: A term of the table and the column it belongs to.
+                  required:
+                  - text
+                  - column
+                  properties:
+                    text:
+                      type: string
+                    column:
+                      type: string
+        explanation:
+          type: string
+          description: 2-3 sentences
+        sourceQuote:
+          type: string
+          description: quote from the notes
+        sourceRef:
+          type: string
+          description: 'where the quote is from: «Лекция 3, стр. 2»'
+        step:
+          type: integer
+  timeoutMs: 5000
+  repeatable: false
+- id: ReorderCards
+  name: Reorder cards in a fact
+  method: PUT
+  path: /facts/{factId}/cards/order
+  role: user
+  request:
+    path:
+      factId: sample-id
+    headers:
+      Content-Type: application/json
+  expected:
+    statusCodes:
+    - 204
+  timeoutMs: 5000
+  repeatable: false
 - id: GetSet
   name: Get a card set
   method: GET
@@ -914,6 +1077,23 @@ checks:
           example: 85
   timeoutMs: 5000
   repeatable: true
+- id: UpdateSet
+  name: Update set title
+  method: PATCH
+  path: /sets/{setId}
+  role: user
+  dependsOn:
+  - CreateSet
+  request:
+    path:
+      setId: ${setId}
+    headers:
+      Content-Type: application/json
+  expected:
+    statusCodes:
+    - 204
+  timeoutMs: 5000
+  repeatable: false
 - id: GetCardsBySetID
   name: Get cards
   method: GET
@@ -1034,6 +1214,8 @@ checks:
           sourceRef:
             type: string
             description: 'where the quote is from: «Лекция 3, стр. 2»'
+          step:
+            type: integer
   timeoutMs: 5000
   repeatable: true
 - id: CreateCard
@@ -1163,6 +1345,74 @@ checks:
         sourceRef:
           type: string
           description: 'where the quote is from: «Лекция 3, стр. 2»'
+        step:
+          type: integer
+  timeoutMs: 5000
+  repeatable: false
+- id: GetFactsBySetID
+  name: Get facts of a set
+  method: GET
+  path: /sets/{setId}/facts
+  role: user
+  request:
+    path:
+      setId: ${setId}
+  expected:
+    statusCodes:
+    - 200
+    contentType: application/json
+    bodySchema:
+      type: array
+      items:
+        type: object
+        required:
+        - id
+        - setId
+        - name
+        properties:
+          id:
+            type: string
+            format: uuid
+          setId:
+            type: string
+            format: uuid
+          name:
+            type: string
+  timeoutMs: 5000
+  repeatable: true
+- id: CreateFact
+  name: Create a fact in a set
+  method: POST
+  path: /sets/{setId}/facts
+  role: user
+  request:
+    path:
+      setId: ${setId}
+    headers:
+      Content-Type: application/json
+  expected:
+    statusCodes:
+    - 201
+    contentType: application/json
+    requiredFields:
+    - id
+    - name
+    - setId
+    bodySchema:
+      type: object
+      required:
+      - id
+      - setId
+      - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        setId:
+          type: string
+          format: uuid
+        name:
+          type: string
   timeoutMs: 5000
   repeatable: false
 - id: GetSetIssues
@@ -1370,6 +1620,20 @@ cleanup:
   request:
     path:
       cardId: ${cardId}
+  expected:
+    statusCodes:
+    - 204
+    - 403
+    - 404
+    - 500
+  timeoutMs: 5000
+- id: DeleteFact
+  method: DELETE
+  path: /facts/{factId}
+  role: user
+  request:
+    path:
+      factId: ${factId}
   expected:
     statusCodes:
     - 204

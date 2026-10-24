@@ -17,6 +17,24 @@ import (
 // fields, so each converts to it.
 type storedCard = db.GetCardByIDRow
 
+// setCardOf is a card of a set's list, which also holds the card's place
+// in its fact.
+func setCardOf(r db.GetCardsBySetIDRow) storedCard {
+	return storedCard{
+		ID:          r.ID,
+		SetID:       r.SetID,
+		FactID:      r.FactID,
+		FactName:    r.FactName,
+		Kind:        r.Kind,
+		Question:    r.Question,
+		AnswerText:  r.AnswerText,
+		Explanation: r.Explanation,
+		SourceQuote: r.SourceQuote,
+		SourceRef:   r.SourceRef,
+		UpdatedAt:   r.UpdatedAt,
+	}
+}
+
 // cardDetails are the options of a choice card and the layout of a table
 // card; empty for the other kinds.
 type cardDetails struct {

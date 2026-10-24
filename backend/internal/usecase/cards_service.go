@@ -354,3 +354,114 @@ func (s *cardServiceImpl) ResolveCardIssues(ctx context.Context, userID uuid.UUI
 	}
 	return nil
 }
+
+func (s *cardServiceImpl) CreateCardInFact(ctx context.Context, userID, factID uuid.UUID, req *contracts.CreateCardRequest) (*contracts.Card, error) {
+	if err := validateCreateCard(req); err != nil {
+		return nil, err
+	}
+
+	var pgFactUUID pgtype.UUID
+	if err := pgFactUUID.Scan(factID.String()); err != nil {
+		return nil, fmt.Errorf("%w: invalid fact id", ErrValidation)
+	}
+
+	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
+	isAuthor, err := s.querier.IsFactAuthor(ctx, db.IsFactAuthorParams{
+		ID:       pgFactUUID,
+		AuthorID: pgUserID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("check fact author: %w", err)
+	}
+	if !isAuthor {
+		exists, err := s.querier.FactExists(ctx, pgFactUUID)
+		if err != nil {
+			return nil, fmt.Errorf("check fact exists: %w", err)
+		}
+		if exists {
+			return nil, ErrForbidden
+		}
+		return nil, ErrNotFound
+	}
+
+	maxStep, err := s.querier.GetMaxCardStepInFact(ctx, pgFactUUID)
+	if err != nil {
+		return nil, fmt.Errorf("get max card step: %w", err)
+	}
+	nextStep := maxStep + 1
+
+	cardUUID, err := uuid.NewV7()
+	if err != nil {
+		return nil, fmt.Errorf("generate card uuid: %w", err)
+	}
+	pgCardUUID := pgtype.UUID{Bytes: cardUUID, Valid: true}
+
+	answer := req.Answer.String
+	if req.Answer.Type == contracts.StringArrayCardAnswer {
+		data, _ := json.Marshal(req.Answer.StringArray)
+		answer = string(data)
+	}
+	if req.Kind == contracts.CardKindBoolean {
+		answer = strconv.FormatBool(req.Answer.Bool)
+	}
+
+	created, err := s.querier.CreateCard(ctx, db.CreateCardParams{
+		ID:          pgCardUUID,
+		FactID:      pgFactUUID,
+		Kind:        db.CardKind(req.Kind),
+		Question:    req.Question,
+		AnswerText:  pgtype.Text{String: answer, Valid: true},
+		Explanation: req.Explanation.Value,
+		Step:        nextStep,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create card: %w", err)
+	}
+
+	if req.Kind == contracts.CardKindChoice {
+		for i, v := range req.Options {
+			if _, err := s.querier.CreateCardOption(ctx, db.CreateCardOptionParams{
+				CardID:    pgCardUUID,
+				Position:  int32(i),
+				Text:      v,
+				IsCorrect: v == answer || slices.Contains(req.Answer.StringArray, v),
+			}); err != nil {
+				return nil, fmt.Errorf("create card option: %w", err)
+			}
+		}
+	}
+	if req.Kind == contracts.CardKindTable {
+		for i, v := range req.Table.Value.Columns {
+			if _, err := s.querier.CreateCardTableColumn(ctx, db.CreateCardTableColumnParams{
+				CardID:   pgCardUUID,
+				Position: int32(i),
+				Name:     v,
+			}); err != nil {
+				return nil, fmt.Errorf("create card table column: %w", err)
+			}
+		}
+		for i, v := range req.Table.Value.Items {
+			if _, err := s.querier.CreateCardTableItem(ctx, db.CreateCardTableItemParams{
+				CardID:     pgCardUUID,
+				ItemText:   v.Text,
+				ColumnName: v.Column,
+				Position:   int32(i),
+			}); err != nil {
+				return nil, fmt.Errorf("create card table item: %w", err)
+			}
+		}
+	}
+
+	res := &contracts.Card{
+		ID:          cardUUID,
+		FactId:      factID,
+		Kind:        req.Kind,
+		Question:    created.Question,
+		Answer:      contracts.NewOptCardAnswer(req.Answer),
+		Options:     req.Options,
+		Table:       req.Table,
+		Explanation: contracts.NewOptString(created.Explanation),
+	}
+	res.Step.SetTo(int(nextStep))
+	return res, nil
+}

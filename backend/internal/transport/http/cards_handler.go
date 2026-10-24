@@ -153,3 +153,22 @@ func (h *CardsHandler) CreateCard(ctx context.Context, req *contracts.CreateCard
 	}
 	return res, nil
 }
+
+// CreateCardInFact creates manual card in an existing fact for the authenticated author.
+func (h *CardsHandler) CreateCardInFact(ctx context.Context, req *contracts.CreateCardRequest, params contracts.CreateCardInFactParams) (contracts.CreateCardInFactRes, error) {
+	userID, _ := UserIDFromContext(ctx)
+	res, err := h.cardService.CreateCardInFact(ctx, userID, params.FactId, req)
+	if err != nil {
+		if errors.Is(err, usecase.ErrValidation) {
+			return &contracts.CreateCardInFactBadRequest{Message: err.Error()}, nil
+		}
+		if errors.Is(err, usecase.ErrForbidden) {
+			return &contracts.CreateCardInFactForbidden{Message: err.Error()}, nil
+		}
+		if errors.Is(err, usecase.ErrNotFound) {
+			return &contracts.CreateCardInFactNotFound{Message: err.Error()}, nil
+		}
+		return &contracts.CreateCardInFactInternalServerError{Message: err.Error()}, nil
+	}
+	return res, nil
+}
