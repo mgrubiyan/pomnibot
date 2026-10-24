@@ -100,6 +100,9 @@
 
 .pool {
     flex-wrap: wrap;
+    max-height: 32dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 /* Reduced motion: a press dims the term without moving it. */

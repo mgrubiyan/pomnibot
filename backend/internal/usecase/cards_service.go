@@ -237,6 +237,7 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID uuid.UUID, card
 	if updated.SourceRef.Valid && updated.SourceRef.String != "" {
 		res.SourceRef.SetTo(updated.SourceRef.String)
 	}
+	setCardIllustrations(res, updated.QuestionSvg, updated.ExplanationSvg)
 
 	if len(req.Options) > 0 {
 		res.Options = req.Options

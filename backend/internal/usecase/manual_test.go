@@ -1,7 +1,9 @@
 package usecase
 
 import (
+	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
@@ -55,5 +57,30 @@ func TestValidateCreateCard(t *testing.T) {
 	}
 	if validateCreateCard(nil) == nil {
 		t.Fatal("accepted nil")
+	}
+}
+
+func TestManualCardValidationPreservesGFMSource(t *testing.T) {
+	text := "    $\\frac{1}{2}$  \n"
+	table := contracts.TableLayout{Columns: []string{"A  ", "B"}, Items: []contracts.TableItem{{Text: text, Column: "A  "}, {Text: "| x |\n|---|\n| 2 |", Column: "B"}}}
+	for _, req := range []contracts.CreateCardRequest{
+		{Kind: contracts.CardKindFlip, Question: text, Answer: contracts.NewStringCardAnswer(text)},
+		{Kind: contracts.CardKindChoice, Question: text, Options: []string{text, "Other"}, Answer: contracts.NewStringArrayCardAnswer([]string{text})},
+		{Kind: contracts.CardKindTable, Question: text, Table: contracts.NewOptTableLayout(table), Answer: contracts.NewTableLayoutCardAnswer(table)},
+	} {
+		data, err := json.Marshal(&req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var before contracts.CreateCardRequest
+		if err := json.Unmarshal(data, &before); err != nil {
+			t.Fatal(err)
+		}
+		if err := validateCreateCard(&req); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(req, before) {
+			t.Fatalf("validation changed Markdown: before=%+v after=%+v", before, req)
+		}
 	}
 }

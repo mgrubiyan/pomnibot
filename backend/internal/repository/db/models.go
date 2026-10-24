@@ -108,16 +108,18 @@ type Answer struct {
 }
 
 type Card struct {
-	Kind        CardKind           `json:"kind"`
-	Question    string             `json:"question"`
-	AnswerText  pgtype.Text        `json:"answer_text"`
-	Explanation string             `json:"explanation"`
-	SourceQuote string             `json:"source_quote"`
-	SourceRef   pgtype.Text        `json:"source_ref"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	ID          pgtype.UUID        `json:"id"`
-	FactID      pgtype.UUID        `json:"fact_id"`
-	Step        int32              `json:"step"`
+	Kind           CardKind           `json:"kind"`
+	Question       string             `json:"question"`
+	AnswerText     pgtype.Text        `json:"answer_text"`
+	Explanation    string             `json:"explanation"`
+	SourceQuote    string             `json:"source_quote"`
+	SourceRef      pgtype.Text        `json:"source_ref"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	ID             pgtype.UUID        `json:"id"`
+	FactID         pgtype.UUID        `json:"fact_id"`
+	Step           int32              `json:"step"`
+	QuestionSvg    pgtype.Text        `json:"question_svg"`
+	ExplanationSvg pgtype.Text        `json:"explanation_svg"`
 }
 
 type CardIssue struct {

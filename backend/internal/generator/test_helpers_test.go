@@ -3,6 +3,7 @@ package generator
 import (
 	"context"
 	"encoding/json"
+	"github.com/mgrubiyan/pomnibot/backend/internal/prompts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
@@ -12,7 +13,10 @@ func (p providerFunc) Complete(ctx context.Context, r providers.Request) (provid
 	return p(ctx, r)
 }
 func stageFixture(facts ...Fact) providers.Provider {
-	return providerFunc(func(context.Context, providers.Request) (providers.Response, error) {
+	return providerFunc(func(_ context.Context, req providers.Request) (providers.Response, error) {
+		if req.System == prompts.GeneratorIllustrations {
+			return providers.Response{Content: []byte(`{"illustrations":[]}`), Model: "fixture"}, nil
+		}
 		b, e := marshalModelFixture(facts...)
 		return providers.Response{Content: b, Model: "fixture"}, e
 	})

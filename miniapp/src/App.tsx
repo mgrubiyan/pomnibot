@@ -1,16 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
-import ManualCreate from './screens/ManualCreate';
+import { lazy, useCallback, useEffect, useState } from 'react';
 import AddNote from './screens/AddNote';
 import CreateSet from './screens/CreateSet';
-import CardEdit from './screens/CardEdit';
-import AdminIssues from './screens/AdminIssues';
-import CardIssue from './screens/CardIssue';
-import Feed from './screens/Feed';
 import Home from './screens/Home';
 import JoinSet from './screens/JoinSet';
 import SetScreen from './screens/SetScreen';
-import SetCards from './screens/SetCards';
-import SetIssues from './screens/SetIssues';
 import SetWarnings from './screens/SetWarnings';
 import Share from './screens/Share';
 import Leaderboard from './screens/Leaderboard';
@@ -19,6 +12,14 @@ import { api } from './api';
 import type { Card, CardIssueReason, TodayData, User } from './types';
 import type { CardPatch } from './utils/cards';
 import type { FeedResume } from './utils/feed';
+
+const ManualCreate = lazy(() => import('./screens/ManualCreate'));
+const CardEdit = lazy(() => import('./screens/CardEdit'));
+const AdminIssues = lazy(() => import('./screens/AdminIssues'));
+const CardIssue = lazy(() => import('./screens/CardIssue'));
+const Feed = lazy(() => import('./screens/Feed'));
+const SetCards = lazy(() => import('./screens/SetCards'));
+const SetIssues = lazy(() => import('./screens/SetIssues'));
 
 /** No router yet: browser history is not used. */
 type Screen =

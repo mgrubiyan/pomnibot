@@ -27,12 +27,12 @@ func factSchema() map[string]any {
 	// Use the structured-output subset supported by Claude through OpenRouter.
 	// Each recall expands into flip/input during local publication validation;
 	// validateCard enforces nonempty values, unique answers/rows and table categories.
-	s := map[string]any{"type": "string", "description": "Nonempty text."}
+	s := map[string]any{"type": "string", "description": "Nonempty GFM + math text. Inline LaTeX: $...$; display LaTeX: $$...$$. JSON-escape backslashes."}
 	nonempty := func(v any) map[string]any { a := schemaArray(v); a["minItems"] = 1; return a }
 	variant := func(kind string, fields map[string]any) any {
 		fields["kind"] = map[string]any{"type": "string", "const": kind}
 		fields["question"] = s
-		fields["source"] = map[string]any{"type": "string", "description": "Nonempty source information supporting this specific card, including formulas and conditions."}
+		fields["source"] = map[string]any{"type": "string", "description": "Nonempty GFM + math explanation supporting this card, including LaTeX formulas and conditions."}
 		fields["sourceQuote"] = map[string]any{"type": "string", "description": "Verbatim quote for this card from the supplied text or readable original PDF on the fact pages; empty string if unavailable or not confidently readable."}
 		return schemaObject(fields)
 	}
@@ -51,7 +51,7 @@ func factSchema() map[string]any {
 	recall = schemaObject(props)
 	pages := nonempty(map[string]any{"type": "integer"})
 	pages["description"] = "Source pages for this fact, numbered from 1 across all files."
-	return schemaObject(map[string]any{"name": s, "pages": pages, "recall": recall, "extraCards": cs})
+	return schemaObject(map[string]any{"name": map[string]any{"type": "string", "description": "Nonempty plain-text fact name, without Markdown or math."}, "pages": pages, "recall": recall, "extraCards": cs})
 }
 func stageSchema() json.RawMessage {
 	facts := schemaArray(factSchema())

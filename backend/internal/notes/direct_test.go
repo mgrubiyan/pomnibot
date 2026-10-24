@@ -39,7 +39,7 @@ func TestMakeWithDirectGeneratorPreservesProgressAndSavePayload(t *testing.T) {
 			d := material.Document{Blocks: []material.Block{{ID: "s", Page: 1, Text: text}}}
 			ex := &fakeExtractor{result: ingest.Result{Text: text, Document: d}}
 			calls := 0
-			model := directProvider(func(ctx context.Context, _ providers.Request) (providers.Response, error) {
+			model := directProvider(func(ctx context.Context, req providers.Request) (providers.Response, error) {
 				finish, err := providers.ReserveCall(ctx, .01)
 				if err != nil {
 					return providers.Response{}, err
@@ -49,6 +49,9 @@ func TestMakeWithDirectGeneratorPreservesProgressAndSavePayload(t *testing.T) {
 				finish(usage, true)
 				if failure {
 					return providers.Response{}, errors.New("unavailable")
+				}
+				if req.Source == "" {
+					return providers.Response{Usage: usage, Content: []byte(`{"illustrations":[]}`)}, nil
 				}
 				content := `{"issues":[],"facts":[{"name":"Назначение","pages":[1],"recall":{"question":"Для чего нужен индекс?","answer":"Для ускорения поиска по ключу.","source":"` + text + `","sourceQuote":"` + quote + `"},"extraCards":[]}]}`
 				return providers.Response{Usage: usage, Content: []byte(content)}, nil
@@ -68,7 +71,7 @@ func TestMakeWithDirectGeneratorPreservesProgressAndSavePayload(t *testing.T) {
 				t.Fatalf("obsolete coverage warning: %v", result.Warnings)
 			}
 			r := saver.result
-			if err != nil || calls != 1 || saver.calls != 1 || !generating || progress != 2 || len(r.Facts) != 1 || generator.CardCount(r.Facts) != 2 || r.Budget.Calls != 1 || r.Budget.ReportedUSD != .001 {
+			if err != nil || calls != 2 || saver.calls != 1 || !generating || progress != 2 || len(r.Facts) != 1 || generator.CardCount(r.Facts) != 2 || r.Budget.Calls != 2 || r.Budget.ReportedUSD != .002 {
 				t.Fatalf("lost save/progress/ledger: %+v err=%v", r, err)
 			}
 			for _, card := range r.Facts[0].Cards {

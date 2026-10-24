@@ -808,6 +808,18 @@ func (s *Card) encodeFields(e *jx.Encoder) {
 		}
 	}
 	{
+		if s.QuestionSvg.Set {
+			e.FieldStart("questionSvg")
+			s.QuestionSvg.Encode(e)
+		}
+	}
+	{
+		if s.ExplanationSvg.Set {
+			e.FieldStart("explanationSvg")
+			s.ExplanationSvg.Encode(e)
+		}
+	}
+	{
 		if s.SourceQuote.Set {
 			e.FieldStart("sourceQuote")
 			s.SourceQuote.Encode(e)
@@ -827,7 +839,7 @@ func (s *Card) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfCard = [13]string{
+var jsonFieldsNameOfCard = [15]string{
 	0:  "id",
 	1:  "setId",
 	2:  "factId",
@@ -838,9 +850,11 @@ var jsonFieldsNameOfCard = [13]string{
 	7:  "table",
 	8:  "answer",
 	9:  "explanation",
-	10: "sourceQuote",
-	11: "sourceRef",
-	12: "step",
+	10: "questionSvg",
+	11: "explanationSvg",
+	12: "sourceQuote",
+	13: "sourceRef",
+	14: "step",
 }
 
 // Decode decodes Card from json.
@@ -970,6 +984,26 @@ func (s *Card) Decode(d *jx.Decoder) error {
 				return nil
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"explanation\"")
+			}
+		case "questionSvg":
+			if err := func() error {
+				s.QuestionSvg.Reset()
+				if err := s.QuestionSvg.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"questionSvg\"")
+			}
+		case "explanationSvg":
+			if err := func() error {
+				s.ExplanationSvg.Reset()
+				if err := s.ExplanationSvg.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"explanationSvg\"")
 			}
 		case "sourceQuote":
 			if err := func() error {
@@ -1297,6 +1331,12 @@ func (s *CardReveal) encodeFields(e *jx.Encoder) {
 		e.Str(s.Explanation)
 	}
 	{
+		if s.ExplanationSvg.Set {
+			e.FieldStart("explanationSvg")
+			s.ExplanationSvg.Encode(e)
+		}
+	}
+	{
 		e.FieldStart("sourceQuote")
 		e.Str(s.SourceQuote)
 	}
@@ -1308,11 +1348,12 @@ func (s *CardReveal) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfCardReveal = [4]string{
+var jsonFieldsNameOfCardReveal = [5]string{
 	0: "answer",
 	1: "explanation",
-	2: "sourceQuote",
-	3: "sourceRef",
+	2: "explanationSvg",
+	3: "sourceQuote",
+	4: "sourceRef",
 }
 
 // Decode decodes CardReveal from json.
@@ -1346,8 +1387,18 @@ func (s *CardReveal) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"explanation\"")
 			}
+		case "explanationSvg":
+			if err := func() error {
+				s.ExplanationSvg.Reset()
+				if err := s.ExplanationSvg.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"explanationSvg\"")
+			}
 		case "sourceQuote":
-			requiredBitSet[0] |= 1 << 2
+			requiredBitSet[0] |= 1 << 3
 			if err := func() error {
 				v, err := d.Str()
 				s.SourceQuote = string(v)
@@ -1378,7 +1429,7 @@ func (s *CardReveal) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b00000111,
+		0b00001011,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -3252,6 +3303,12 @@ func (s *FeedCard) encodeFields(e *jx.Encoder) {
 		s.Kind.Encode(e)
 	}
 	{
+		if s.QuestionSvg.Set {
+			e.FieldStart("questionSvg")
+			s.QuestionSvg.Encode(e)
+		}
+	}
+	{
 		e.FieldStart("question")
 		e.Str(s.Question)
 	}
@@ -3273,15 +3330,16 @@ func (s *FeedCard) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfFeedCard = [8]string{
+var jsonFieldsNameOfFeedCard = [9]string{
 	0: "id",
 	1: "setId",
 	2: "factId",
 	3: "factName",
 	4: "kind",
-	5: "question",
-	6: "options",
-	7: "table",
+	5: "questionSvg",
+	6: "question",
+	7: "options",
+	8: "table",
 }
 
 // Decode decodes FeedCard from json.
@@ -3289,7 +3347,7 @@ func (s *FeedCard) Decode(d *jx.Decoder) error {
 	if s == nil {
 		return errors.New("invalid: unable to decode FeedCard to nil")
 	}
-	var requiredBitSet [1]uint8
+	var requiredBitSet [2]uint8
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
@@ -3351,8 +3409,18 @@ func (s *FeedCard) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"kind\"")
 			}
+		case "questionSvg":
+			if err := func() error {
+				s.QuestionSvg.Reset()
+				if err := s.QuestionSvg.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"questionSvg\"")
+			}
 		case "question":
-			requiredBitSet[0] |= 1 << 5
+			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
 				v, err := d.Str()
 				s.Question = string(v)
@@ -3401,8 +3469,9 @@ func (s *FeedCard) Decode(d *jx.Decoder) error {
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
-	for i, mask := range [1]uint8{
-		0b00111111,
+	for i, mask := range [2]uint8{
+		0b01011111,
+		0b00000000,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.

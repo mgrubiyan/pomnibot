@@ -326,7 +326,10 @@ func TestProviderHTTPDiagnosticsOmitBodyAndPreserveTypedCause(t *testing.T) {
 
 func TestDiagnosticOptionalUsageAndSuccessfulAccounting(t *testing.T) {
 	for _, invalid := range []bool{false, true} {
-		p := providerFunc(func(context.Context, providers.Request) (providers.Response, error) {
+		p := providerFunc(func(_ context.Context, req providers.Request) (providers.Response, error) {
+			if req.Source == "" {
+				return providers.Response{Content: []byte(`{"illustrations":[]}`), Cached: true}, nil
+			}
 			content := directReply()
 			if invalid {
 				content = ""

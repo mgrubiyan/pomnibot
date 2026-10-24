@@ -14,6 +14,11 @@ var GeneratorSystem string
 //go:embed generator_generate_goals.md
 var GenerateGoals string
 
+// GeneratorIllustrations enriches validated cards without the original source.
+//
+//go:embed generator_illustrations.md
+var GeneratorIllustrations string
+
 // VisionSystem sets the rules for transcribing handwritten notes.
 //
 //go:embed vision_system.md

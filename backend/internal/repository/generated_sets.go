@@ -128,8 +128,10 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID uuid.UUID, title
 				String: answer,
 				Valid:  answer != "",
 			},
-			Explanation: c.Explanation,
-			SourceQuote: c.SourceQuote,
+			Explanation:    c.Explanation,
+			QuestionSvg:    pgtype.Text{String: c.QuestionSvg, Valid: c.QuestionSvg != ""},
+			ExplanationSvg: pgtype.Text{String: c.ExplanationSvg, Valid: c.ExplanationSvg != ""},
+			SourceQuote:    c.SourceQuote,
 			SourceRef: pgtype.Text{
 				String: c.SourceRef,
 				Valid:  c.SourceRef != "",

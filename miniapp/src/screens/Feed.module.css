@@ -114,8 +114,16 @@
 }
 
 /* The question sits in the middle of the card, the breakdown at the top. */
-.cardCentered {
-    justify-content: center;
+.cardCentered > :first-child {
+    margin-top: auto;
+}
+
+.cardCentered > :last-child {
+    margin-bottom: auto;
+}
+
+.card > * {
+    flex-shrink: 0;
 }
 
 /* Verdict border. A transparent border is there in the normal state
@@ -139,6 +147,7 @@
     display: flex;
     align-items: center;
     width: 100%;
+    gap: 8px;
     min-height: 52px;
     box-sizing: border-box;
     margin: 0;
@@ -201,6 +210,7 @@
 
 .quote {
     margin: 0;
+    white-space: pre-wrap;
     text-wrap: pretty;
 }
 
@@ -252,4 +262,19 @@
 
 .reportError {
     text-align: center;
+}
+
+.answerBody {
+    flex: 1;
+    min-width: 0;
+}
+
+.options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 40dvh;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }

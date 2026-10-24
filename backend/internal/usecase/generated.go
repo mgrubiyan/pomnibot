@@ -32,7 +32,7 @@ func prepareGeneratedSet(title string, result generator.Result, warnings []strin
 				return repository.GeneratedSet{}, fmt.Errorf("nil generated card")
 			}
 			base := raw.Base()
-			c := cards.Card{FactID: id.String(), Question: base.Question, Explanation: base.Source, SourceQuote: base.SourceQuote, SourceRef: ref}
+			c := cards.Card{FactID: id.String(), Question: base.Question, Explanation: base.Source, SourceQuote: base.SourceQuote, SourceRef: ref, QuestionSvg: base.QuestionSvg, ExplanationSvg: base.ExplanationSvg}
 			switch v := raw.(type) {
 			case generator.FlipCard:
 				c.Kind = cards.KindFlip
@@ -53,10 +53,10 @@ func prepareGeneratedSet(title string, result generator.Result, warnings []strin
 				c.Kind = cards.KindTable
 				c.Table = &cards.Table{}
 				for _, col := range v.Columns {
-					name := strings.TrimSpace(col.Name)
+					name := col.Name
 					c.Table.Columns = append(c.Table.Columns, name)
 					for _, row := range col.Rows {
-						c.Table.Items = append(c.Table.Items, cards.TableItem{Text: strings.TrimSpace(row), Column: name})
+						c.Table.Items = append(c.Table.Items, cards.TableItem{Text: row, Column: name})
 					}
 				}
 			default:
