@@ -154,14 +154,17 @@
 
 .option {
     display: flex;
-    align-items: center;
+    /* The ☑/☐ mark sits on the label's first line, not in the middle of
+       a long one. One line (24px) plus the padding and border below is
+       exactly the 52px minimum, so a short option stays centred. */
+    align-items: baseline;
     width: 100%;
     gap: 8px;
     min-height: 52px;
     box-sizing: border-box;
     margin: 0;
-    /* 2px less than the 12/16 the eye sees: the border below takes it. */
-    padding: 10px 14px;
+    /* 2px less at the sides than the 16 the eye sees: the border takes it. */
+    padding: 12px 14px;
     /* A transparent border is always there, so that picking an option
        recolours it instead of moving the label. */
     border: 2px solid transparent;
@@ -196,6 +199,11 @@
 .option > * {
     min-width: 0;
     overflow-wrap: anywhere;
+}
+
+/* The ☑/☐ mark keeps its width however long the label is. */
+.option > [aria-hidden='true'] {
+    flex-shrink: 0;
 }
 
 .option:active {
@@ -334,4 +342,10 @@
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
+}
+
+/* Past 40dvh the list scrolls; without this the options shrink instead
+   and a long label runs into its own border. */
+.options > * {
+    flex-shrink: 0;
 }
