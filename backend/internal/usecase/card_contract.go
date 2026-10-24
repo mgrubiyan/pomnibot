@@ -3,6 +3,8 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
+	"slices"
 	"strconv"
 
 	"github.com/google/uuid"
@@ -148,7 +150,9 @@ func questionCard(c storedCard) (contracts.Card, error) {
 }
 
 // feedCardOf is the card as the feed asks it: the options of a choice card
-// and the terms of a table card without their columns.
+// and the terms of a table card without their columns, both shuffled, since
+// generated cards store the right options first and the terms column by
+// column.
 func feedCardOf(c storedCard, d cardDetails) (contracts.FeedCard, error) {
 	ids, err := parseCardIDs(c)
 	if err != nil {
@@ -164,13 +168,19 @@ func feedCardOf(c storedCard, d cardDetails) (contracts.FeedCard, error) {
 	}
 	switch card.Kind {
 	case contracts.CardKindChoice:
-		card.Options = d.optionTexts()
+		card.Options = shuffled(d.optionTexts())
 	case contracts.CardKindTable:
 		items := make([]string, 0, len(d.table.Items))
 		for _, item := range d.table.Items {
 			items = append(items, item.Text)
 		}
-		card.Table.SetTo(contracts.FeedTable{Columns: d.table.Columns, Items: items})
+		card.Table.SetTo(contracts.FeedTable{Columns: d.table.Columns, Items: shuffled(items)})
 	}
 	return card, nil
+}
+
+func shuffled(items []string) []string {
+	items = slices.Clone(items)
+	rand.Shuffle(len(items), func(i, j int) { items[i], items[j] = items[j], items[i] })
+	return items
 }

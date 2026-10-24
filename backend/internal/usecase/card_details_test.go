@@ -3,6 +3,7 @@ package usecase_test
 import (
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/google/uuid"
@@ -93,7 +94,7 @@ func TestCardListsBatchDetails(t *testing.T) {
 				}
 				count = len(cards)
 				for i, c := range cards {
-					if i%2 == 0 && (len(c.Options) != 3 || c.Options[0] != "Answer") {
+					if i%2 == 0 && (len(c.Options) != 3 || !slices.Contains(c.Options, "Answer")) {
 						t.Fatalf("lost choice details: %+v", c)
 					}
 					if i%2 == 1 && (len(c.Table.Value.Columns) != 1 || len(c.Table.Value.Items) != 1 || c.Table.Value.Items[0] != "Item") {

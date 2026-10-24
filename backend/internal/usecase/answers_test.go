@@ -327,3 +327,58 @@ func TestGetCardsBySetIDGivesMembersQuestionsOnly(t *testing.T) {
 		t.Fatalf("the author must get the whole card: %+v, %v", own, err)
 	}
 }
+
+// Generated choice cards keep the right options first and table terms come
+// column by column, so the feed must not send them in stored order.
+func TestGetFeedQuestionsShufflesOptionsAndTerms(t *testing.T) {
+	choice, table := testCard("choice", `["A"]`), testCard("table", "")
+	q := shuffleDetails{&mockQuerier{
+		getFeedCardsForUserFunc: func(context.Context, pgtype.UUID) ([]db.GetFeedCardsForUserRow, error) {
+			return []db.GetFeedCardsForUserRow{db.GetFeedCardsForUserRow(choice), db.GetFeedCardsForUserRow(table)}, nil
+		},
+	}}
+	svc := usecase.NewHomescreenService(q, usecase.NewUserService(q))
+	firstOption, firstTerm := map[string]bool{}, map[string]bool{}
+	for range 40 {
+		cards, err := svc.GetFeedQuestions(context.Background(), testUser1)
+		if err != nil || len(cards) != 2 || len(cards[0].Options) != 4 || len(cards[1].Table.Value.Items) != 4 {
+			t.Fatalf("GetFeedQuestions() = %+v, %v", cards, err)
+		}
+		firstOption[cards[0].Options[0]] = true
+		firstTerm[cards[1].Table.Value.Items[0]] = true
+	}
+	if len(firstOption) < 2 || len(firstTerm) < 2 {
+		t.Fatalf("stored order kept: first options %v, first terms %v", firstOption, firstTerm)
+	}
+}
+
+type shuffleDetails struct{ *mockQuerier }
+
+func (shuffleDetails) GetCardOptionsBatch(_ context.Context, ids []pgtype.UUID) ([]db.CardOption, error) {
+	var rows []db.CardOption
+	for _, id := range ids {
+		for i, text := range []string{"A", "B", "C", "D"} {
+			rows = append(rows, db.CardOption{CardID: id, Text: text, IsCorrect: i == 0})
+		}
+	}
+	return rows, nil
+}
+
+func (shuffleDetails) GetCardTableColumnsBatch(_ context.Context, ids []pgtype.UUID) ([]db.CardTableColumn, error) {
+	var rows []db.CardTableColumn
+	for _, id := range ids {
+		rows = append(rows, db.CardTableColumn{CardID: id, Name: "X"}, db.CardTableColumn{CardID: id, Name: "Y"})
+	}
+	return rows, nil
+}
+
+func (shuffleDetails) GetCardTableItemsBatch(_ context.Context, ids []pgtype.UUID) ([]db.CardTableItem, error) {
+	var rows []db.CardTableItem
+	for _, id := range ids {
+		for _, item := range []db.CardTableItem{{ItemText: "x1", ColumnName: "X"}, {ItemText: "x2", ColumnName: "X"}, {ItemText: "y1", ColumnName: "Y"}, {ItemText: "y2", ColumnName: "Y"}} {
+			item.CardID = id
+			rows = append(rows, item)
+		}
+	}
+	return rows, nil
+}
