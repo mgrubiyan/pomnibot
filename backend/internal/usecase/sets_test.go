@@ -51,10 +51,10 @@ func TestSetService_UpdateSetTitle(t *testing.T) {
 
 	t.Run("forbidden for non-author", func(t *testing.T) {
 		mock := &mockQuerier{
-			isSetAuthorFunc: func(_ context.Context, arg db.IsSetAuthorParams) (bool, error) {
+			isSetAuthorFunc: func(_ context.Context, _ db.IsSetAuthorParams) (bool, error) {
 				return false, nil
 			},
-			setExistsFunc: func(_ context.Context, id pgtype.UUID) (bool, error) {
+			setExistsFunc: func(_ context.Context, _ pgtype.UUID) (bool, error) {
 				return true, nil
 			},
 		}
@@ -68,10 +68,10 @@ func TestSetService_UpdateSetTitle(t *testing.T) {
 
 	t.Run("not found when set does not exist", func(t *testing.T) {
 		mock := &mockQuerier{
-			isSetAuthorFunc: func(_ context.Context, arg db.IsSetAuthorParams) (bool, error) {
+			isSetAuthorFunc: func(_ context.Context, _ db.IsSetAuthorParams) (bool, error) {
 				return false, nil
 			},
-			setExistsFunc: func(_ context.Context, id pgtype.UUID) (bool, error) {
+			setExistsFunc: func(_ context.Context, _ pgtype.UUID) (bool, error) {
 				return false, nil
 			},
 		}
@@ -111,10 +111,10 @@ func TestSetService_GetCardsBySetID_StepReturned(t *testing.T) {
 	_ = pgCard2.Scan(card2.String())
 
 	mock := &mockQuerier{
-		getSetByIDFunc: func(_ context.Context, arg db.GetSetByIDParams) (db.GetSetByIDRow, error) {
+		getSetByIDFunc: func(_ context.Context, _ db.GetSetByIDParams) (db.GetSetByIDRow, error) {
 			return db.GetSetByIDRow{ID: pgSetUUID, Title: "Set 1"}, nil
 		},
-		getCardsBySetIDFunc: func(_ context.Context, arg db.GetCardsBySetIDParams) ([]db.GetCardsBySetIDRow, error) {
+		getCardsBySetIDFunc: func(_ context.Context, _ db.GetCardsBySetIDParams) ([]db.GetCardsBySetIDRow, error) {
 			return []db.GetCardsBySetIDRow{
 				{
 					ID:       pgCard1,

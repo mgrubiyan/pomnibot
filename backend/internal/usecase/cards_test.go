@@ -35,7 +35,7 @@ func TestCardService_CreateCardInFact(t *testing.T) {
 			isFactAuthorFunc: func(_ context.Context, arg db.IsFactAuthorParams) (bool, error) {
 				return arg.ID == pgFactUUID && arg.AuthorID == pgAuthorUUID, nil
 			},
-			getMaxCardStepInFactFunc: func(_ context.Context, fid pgtype.UUID) (int32, error) {
+			getMaxCardStepInFactFunc: func(_ context.Context, _ pgtype.UUID) (int32, error) {
 				return 2, nil // Already has step 0, 1, 2
 			},
 			createCardFunc: func(_ context.Context, arg db.CreateCardParams) (db.Card, error) {
@@ -69,10 +69,10 @@ func TestCardService_CreateCardInFact(t *testing.T) {
 
 	t.Run("forbidden for non-author", func(t *testing.T) {
 		mock := &mockQuerier{
-			isFactAuthorFunc: func(_ context.Context, arg db.IsFactAuthorParams) (bool, error) {
+			isFactAuthorFunc: func(_ context.Context, _ db.IsFactAuthorParams) (bool, error) {
 				return false, nil
 			},
-			factExistsFunc: func(_ context.Context, id pgtype.UUID) (bool, error) {
+			factExistsFunc: func(_ context.Context, _ pgtype.UUID) (bool, error) {
 				return true, nil
 			},
 		}
@@ -86,7 +86,7 @@ func TestCardService_CreateCardInFact(t *testing.T) {
 
 	t.Run("validation on empty question", func(t *testing.T) {
 		mock := &mockQuerier{
-			isFactAuthorFunc: func(_ context.Context, arg db.IsFactAuthorParams) (bool, error) {
+			isFactAuthorFunc: func(_ context.Context, _ db.IsFactAuthorParams) (bool, error) {
 				return true, nil
 			},
 		}

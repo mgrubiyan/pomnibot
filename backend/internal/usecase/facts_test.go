@@ -55,10 +55,10 @@ func TestFactService_CreateFact(t *testing.T) {
 
 	t.Run("forbidden for non-author", func(t *testing.T) {
 		mock := &mockQuerier{
-			isSetAuthorFunc: func(_ context.Context, arg db.IsSetAuthorParams) (bool, error) {
+			isSetAuthorFunc: func(_ context.Context, _ db.IsSetAuthorParams) (bool, error) {
 				return false, nil
 			},
-			setExistsFunc: func(_ context.Context, id pgtype.UUID) (bool, error) {
+			setExistsFunc: func(_ context.Context, _ pgtype.UUID) (bool, error) {
 				return true, nil
 			},
 		}
@@ -113,10 +113,10 @@ func TestFactService_UpdateFact(t *testing.T) {
 
 	t.Run("forbidden for non-author", func(t *testing.T) {
 		mock := &mockQuerier{
-			isFactAuthorFunc: func(_ context.Context, arg db.IsFactAuthorParams) (bool, error) {
+			isFactAuthorFunc: func(_ context.Context, _ db.IsFactAuthorParams) (bool, error) {
 				return false, nil
 			},
-			factExistsFunc: func(_ context.Context, id pgtype.UUID) (bool, error) {
+			factExistsFunc: func(_ context.Context, _ pgtype.UUID) (bool, error) {
 				return true, nil
 			},
 		}
@@ -187,7 +187,7 @@ func TestFactService_ReorderCards(t *testing.T) {
 			isFactAuthorFunc: func(_ context.Context, arg db.IsFactAuthorParams) (bool, error) {
 				return arg.ID == pgFactUUID && arg.AuthorID == pgAuthorUUID, nil
 			},
-			getCardsByFactIDFunc: func(_ context.Context, factID pgtype.UUID) ([]db.GetCardsByFactIDRow, error) {
+			getCardsByFactIDFunc: func(_ context.Context, _ pgtype.UUID) ([]db.GetCardsByFactIDRow, error) {
 				return []db.GetCardsByFactIDRow{
 					{ID: pgCard1, Step: 0},
 					{ID: pgCard2, Step: 1},
@@ -217,10 +217,10 @@ func TestFactService_ReorderCards(t *testing.T) {
 	t.Run("card not belonging to fact", func(t *testing.T) {
 		unrelatedCard := uuid.New()
 		mock := &mockQuerier{
-			isFactAuthorFunc: func(_ context.Context, arg db.IsFactAuthorParams) (bool, error) {
+			isFactAuthorFunc: func(_ context.Context, _ db.IsFactAuthorParams) (bool, error) {
 				return true, nil
 			},
-			getCardsByFactIDFunc: func(_ context.Context, factID pgtype.UUID) ([]db.GetCardsByFactIDRow, error) {
+			getCardsByFactIDFunc: func(_ context.Context, _ pgtype.UUID) ([]db.GetCardsByFactIDRow, error) {
 				return []db.GetCardsByFactIDRow{
 					{ID: pgCard1, Step: 0},
 					{ID: pgCard2, Step: 1},

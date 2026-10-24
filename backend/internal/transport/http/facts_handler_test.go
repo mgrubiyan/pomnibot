@@ -61,7 +61,7 @@ func TestFactsHandler_CreateFact(t *testing.T) {
 	t.Run("Success returns Fact", func(t *testing.T) {
 		factID := uuid.New()
 		svc := &mockFactService{
-			createFactFunc: func(_ context.Context, uid, sid uuid.UUID, name string) (*contracts.Fact, error) {
+			createFactFunc: func(_ context.Context, _, sid uuid.UUID, name string) (*contracts.Fact, error) {
 				return &contracts.Fact{ID: factID, SetId: sid, Name: name}, nil
 			},
 		}
