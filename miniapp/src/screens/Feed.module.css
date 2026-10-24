@@ -155,8 +155,11 @@
     min-height: 52px;
     box-sizing: border-box;
     margin: 0;
-    padding: 12px 16px;
-    border: 0;
+    /* 2px less than the 12/16 the eye sees: the border below takes it. */
+    padding: 10px 14px;
+    /* A transparent border is always there, so that picking an option
+       recolours it instead of moving the label. */
+    border: 2px solid transparent;
     border-radius: 12px;
     background: var(--background-card);
     color: var(--text-primary);
@@ -171,11 +174,9 @@
         opacity 0.12s var(--ease-out);
 }
 
-/* A picked option in a multiple choice, outlined like a picked table term.
-   An inner outline, not a border: the label must not move when it appears. */
+/* A picked option in a multiple choice, outlined like a picked table term. */
 .option[aria-pressed='true'] {
-    outline: 2px solid var(--text-primary);
-    outline-offset: -2px;
+    border-color: var(--text-primary);
 }
 
 /* Lets a long word in the label wrap inside the button. */
