@@ -1,4 +1,7 @@
-import type { Answer, Card } from '../types';
+import type { Answer, FeedCard } from '../types';
+
+/** What a run needs of a card to group the answers by fact. */
+type RunCard = Pick<FeedCard, 'id' | 'factId' | 'factName'>;
 
 /** How a fact went in a run: errors out of the cards answered on it. */
 export interface FactScore {
@@ -9,7 +12,7 @@ export interface FactScore {
 }
 
 /** Facts of a finished run, the weakest first. */
-export function scoreByFact(cards: Card[], results: Answer[]): FactScore[] {
+export function scoreByFact(cards: RunCard[], results: Answer[]): FactScore[] {
     const factOf = new Map(cards.map((card) => [card.id, { factId: card.factId, factName: card.factName }]));
     const scores = new Map<string, FactScore>();
 
@@ -35,7 +38,7 @@ export function scoreByFact(cards: Card[], results: Answer[]): FactScore[] {
 
 /** Facts of a finished run that had an error, the weakest first: a fact
  *  answered without a mistake has nothing to show. */
-export function factsWithErrors(cards: Card[], results: Answer[]): FactScore[] {
+export function factsWithErrors(cards: RunCard[], results: Answer[]): FactScore[] {
     return scoreByFact(cards, results).filter((fact) => fact.wrong > 0);
 }
 

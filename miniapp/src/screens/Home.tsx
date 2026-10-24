@@ -11,7 +11,7 @@ import {
     Typography,
     type AvatarTextGradient,
 } from '@maxhub/max-ui';
-import type { Card, CardSet, TodayData } from '../types';
+import type { CardSet, FeedCard, TodayData } from '../types';
 import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
@@ -35,7 +35,7 @@ async function loadToday(): Promise<TodayData> {
     return data;
 }
 
-async function loadFeed(): Promise<Card[]> {
+async function loadFeed(): Promise<FeedCard[]> {
     const { data, error } = await api.GET('/feed');
     if (error || !data) {
         throw new Error(error?.message ?? 'Failed to load feed');
@@ -83,7 +83,7 @@ export interface HomeProps {
 export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, removedSetIds, onTodayLoaded, onOpenAdminIssues }: HomeProps) {
     const [status, setStatus] = useState<Status>('loading');
     const [today, setToday] = useState<TodayData | null>(null);
-    const [feedCards, setFeedCards] = useState<Card[]>([]);
+    const [feedCards, setFeedCards] = useState<FeedCard[]>([]);
     const [attempt, setAttempt] = useState(0);
     const [bodyRef, moreBelow] = useMoreBelow<HTMLDivElement>(status === 'ready');
 
