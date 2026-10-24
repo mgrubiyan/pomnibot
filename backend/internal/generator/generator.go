@@ -48,22 +48,33 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (out Result, err
 	}
 	defer func() { out.Budget = providers.BudgetFrom(ctx).Snapshot() }()
 	started := time.Now()
-	defer func() { out.Stats.Total = time.Since(started) }()
+	defer func() {
+		out.Stats.Total = time.Since(started)
+		if err != nil {
+			var detail *diagnosticError
+			if !errors.As(err, &detail) || detail.stage == "" {
+				err = contextualProblem(err, "preflight", g.opts, out.Stats.Total)
+			}
+		}
+	}()
 	if g.opts.MaxTokens < 1 {
-		return out, errors.New("invalid generation output limit")
+		return out, problem("configuration", "maxTokens", "generation output limit must be positive")
 	}
 	switch g.opts.ReasoningEffort {
 	case "low", "medium", "high", "xhigh", "max":
 	default:
-		return out, errors.New("generation requires supported reasoning effort")
+		return out, problem("configuration", "reasoningEffort", "generation requires supported reasoning effort")
 	}
 	pages := max(1, len(doc.PageStarts))
 	nextPage := 1
 	doc.PDFs = slices.Clone(doc.PDFs)
 	for i := range doc.PDFs {
 		pdf := &doc.PDFs[i]
-		if pdf.Pages < 1 || len(pdf.Data) == 0 {
-			return out, errors.New("invalid PDF source")
+		if pdf.Pages < 1 {
+			return out, problem("preflight", fmt.Sprintf("pdfs[%d].pages", i), "PDF page count must be positive")
+		}
+		if len(pdf.Data) == 0 {
+			return out, problem("preflight", fmt.Sprintf("pdfs[%d].data", i), "PDF data is empty")
 		}
 		if pdf.StartPage < 1 {
 			pdf.StartPage = nextPage
@@ -78,21 +89,16 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (out Result, err
 	}
 	pages = max(pages, sourcePages)
 	if len(source) > g.opts.SourceBudget {
-		return out, fmt.Errorf("complete source needs %d bytes, budget is %d: %w", len(source), g.opts.SourceBudget, providers.ErrCapability)
+		detail := problem("limit", "source", fmt.Sprintf("complete source needs %d bytes, budget is %d", len(source), g.opts.SourceBudget))
+		detail.cause = providers.ErrCapability
+		return out, detail
 	}
 	out.Stats.Stages = map[string]StageStats{}
 	out.Stats.CallsByModel = map[string]int{}
 	out.Artifact = &Artifact{Version: PipelineVersion, Stages: map[string]json.RawMessage{}}
-	r, e := g.completeStage(ctx, doc, source, "generation", map[string]any{"task": prompts.GenerateGoals, "title": doc.Title}, &out)
+	r, e := g.completeStage(ctx, doc, source, "generation", map[string]any{"task": prompts.GenerateGoals, "title": doc.Title}, pages, &out)
 	if e != nil {
 		return out, e
-	}
-	out.Coverage.Issues = slices.Clone(r.Issues)
-	if e = validateFacts(r.Facts, pages); e != nil {
-		return out, invalidStage(&out, "generation", e)
-	}
-	if g.opts.MaxFactsPerDoc > 0 && len(r.Facts) > g.opts.MaxFactsPerDoc {
-		return out, invalidStage(&out, "generation", errors.New("generated facts exceed configured fact limit"))
 	}
 	out.Facts = r.Facts
 	out.Artifact.Facts = r.Facts
@@ -121,6 +127,7 @@ func cloneFacts(facts []Fact) []Fact {
 	out := slices.Clone(facts)
 	for i := range out {
 		out[i].Pages = slices.Clone(out[i].Pages)
+		out[i].cardIndices = slices.Clone(out[i].cardIndices)
 		out[i].Cards = slices.Clone(out[i].Cards)
 		for j, c := range out[i].Cards {
 			switch v := c.(type) {
@@ -140,7 +147,7 @@ func cloneFacts(facts []Fact) []Fact {
 	return out
 }
 
-func (g *Generator) completeStage(ctx context.Context, doc Document, source, stage string, input any, out *Result) (reply AIResponse, callErr error) {
+func (g *Generator) completeStage(ctx context.Context, doc Document, source, stage string, input any, pages int, out *Result) (reply AIResponse, callErr error) {
 	began := time.Now()
 	before := providers.BudgetFrom(ctx).Snapshot()
 	payload, _ := json.Marshal(input)
@@ -154,7 +161,7 @@ func (g *Generator) completeStage(ctx context.Context, doc Document, source, sta
 		out.Artifact.Stages[stage] = resp.Content
 	}
 	// Usage includes transport attempts; a failed or truncated answer is still billed.
-	st := StageStats{UnreportedUsageCalls: resp.Usage.UnreportedCalls, ModelCalls: max(1, resp.Usage.Attempts), PromptTokens: resp.Usage.PromptTokens, CompletionTokens: resp.Usage.CompletionTokens, ReasoningTokens: resp.Usage.ReasoningTokens, CostUSD: resp.Usage.CostUSD, Duration: time.Since(began)}
+	st := StageStats{UnreportedUsageCalls: resp.Usage.UnreportedCalls, ModelCalls: max(1, resp.Usage.Attempts), PromptTokens: resp.Usage.PromptTokens, CompletionTokens: resp.Usage.CompletionTokens, ReasoningTokens: resp.Usage.ReasoningTokens, CostUSD: resp.Usage.CostUSD}
 	if resp.Cached {
 		st.ModelCalls = 0
 		st.CacheHits = 1
@@ -172,36 +179,52 @@ func (g *Generator) completeStage(ctx context.Context, doc Document, source, sta
 	if resp.Usage.CacheWriteTokens != nil {
 		st.CacheWriteTokens = *resp.Usage.CacheWriteTokens
 	}
-	if e == nil && (resp.Truncated || !json.Valid(resp.Content) || strictJSON(resp.Content, &reply) != nil || reply.Issues == nil || reply.Facts == nil) {
-		e = errors.New("invalid or unfinished structured response")
-		st.InvalidResponses = 1
+	if e != nil {
+		e = providerProblem(e)
+	} else {
+		e = decodeResponse(resp, &reply)
+		if e != nil {
+			st.InvalidResponses = 1
+		}
 	}
 	st.FailedCalls = resp.Usage.FailedAttempts
 	if e != nil && st.FailedCalls == 0 {
 		st.FailedCalls = 1
 	}
+	// Validate before publishing stage stats so its Error includes failures after
+	// decoding. Keep existing call/billing counters for these validation failures.
+	if e == nil {
+		out.Coverage.Issues = slices.Clone(reply.Issues)
+		e = validateFacts(reply.Facts, pages)
+		if e == nil && g.opts.MaxFactsPerDoc > 0 && len(reply.Facts) > g.opts.MaxFactsPerDoc {
+			e = problem("limit", "facts", fmt.Sprintf("generated %d facts, configured limit is %d", len(reply.Facts), g.opts.MaxFactsPerDoc))
+		}
+		if e != nil {
+			st.InvalidResponses = 1
+		}
+	}
 	st.Model = resp.Model
-	out.Stats.recordStage(stage, st)
+	st.Duration = time.Since(began)
+	if e != nil {
+		detail := contextualProblem(e, stage, g.opts, st.Duration)
+		detail.model, detail.usage = resp.Model, &resp.Usage
+		// A zero-value response on transport failure provides no observation of
+		// response length or finish status. An empty successful response does.
+		if resp.Content != nil || resp.Truncated || st.InvalidResponses > 0 {
+			detail.responseBytes = new(len(resp.Content))
+			detail.truncated = &resp.Truncated
+		}
+		e = detail
+		st.Error = e.Error()
+	}
 	after := providers.BudgetFrom(ctx).Snapshot()
 	after.Calls -= before.Calls
 	after.CommittedUSD -= before.CommittedUSD
 	after.ReportedUSD -= before.ReportedUSD
 	st.Budget = after
-	if e != nil {
-		st.Error = e.Error()
-	}
-	out.Stats.Stages[stage] = st
+	out.Stats.recordStage(stage, st)
 	slog.Info("generation stage completed", "stage", stage, "stats", st)
 	return reply, e
-}
-
-func invalidStage(out *Result, stage string, e error) error {
-	st := out.Stats.Stages[stage]
-	st.Error = e.Error()
-	st.InvalidResponses++
-	out.Stats.Stages[stage] = st
-	out.Stats.InvalidResponses++
-	return fmt.Errorf("generation %s: %w", stage, e)
 }
 
 // generationSource keeps non-PDF extraction intact and the shared prompt prefix stable.
@@ -231,14 +254,17 @@ func generationSource(doc Document) (string, int, error) {
 			starts = []int{0}
 		}
 		previous := -1
-		for _, start := range starts {
-			if start < 0 || start > len(doc.Text) || start <= previous {
-				return "", 0, errors.New("invalid page offsets")
+		for i, start := range starts {
+			if start < 0 || start > len(doc.Text) {
+				return "", 0, problem("preflight", fmt.Sprintf("pageStarts[%d]", i), "page offset is outside source bounds")
+			}
+			if start <= previous {
+				return "", 0, problem("preflight", fmt.Sprintf("pageStarts[%d]", i), "page offsets must be strictly increasing")
 			}
 			previous = start
 		}
 		if starts[0] != 0 {
-			return "", 0, errors.New("page offsets omit source prefix")
+			return "", 0, problem("preflight", "pageStarts[0]", "page offsets omit source prefix")
 		}
 		var blocks []material.Block
 		for i, start := range starts {
@@ -252,7 +278,7 @@ func generationSource(doc Document) (string, int, error) {
 	}
 
 	if len(doc.PDFs) == 0 && (doc.Structure == nil || len(doc.Structure.Blocks) == 0) && strings.TrimSpace(doc.Text) == "" {
-		return "", 0, errors.New("empty document")
+		return "", 0, problem("preflight", "", "document is empty")
 	}
 	data, e := json.Marshal(source)
 	return string(data), pages, e

@@ -3,7 +3,6 @@ package generator
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -20,6 +19,9 @@ type Fact struct {
 	Name  string `json:"name"`
 	Pages []int  `json:"pages"`
 	Cards []Card `json:"cards"`
+
+	// Keep wire indices for diagnostics after the stable difficulty sort.
+	cardIndices []int
 }
 
 // Card is one of the five supported question formats.
@@ -90,12 +92,6 @@ func CardCount(facts []Fact) int {
 	return total
 }
 
-func strictJSON(b []byte, v any) error {
-	d := json.NewDecoder(bytes.NewReader(b))
-	d.DisallowUnknownFields()
-	return d.Decode(v)
-}
-
 // UnmarshalJSON decodes the discriminated union and stably orders card kinds.
 func (f *Fact) UnmarshalJSON(b []byte) error {
 	var wire struct {
@@ -111,24 +107,32 @@ func (f *Fact) UnmarshalJSON(b []byte) error {
 	}
 	*f = Fact{Name: wire.Name, Pages: wire.Pages}
 	flip, input := false, false
-	for _, raw := range wire.Cards {
+	for i, raw := range wire.Cards {
+		path := fmt.Sprintf("cards[%d]", i)
 		var fields map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &fields); err != nil {
-			return err
+			return shapeProblem(path, "object", err)
+		}
+		if err := requiredFields(raw, "kind"); err != nil {
+			return atPath(path, err)
 		}
 		var kind string
 		if err := json.Unmarshal(fields["kind"], &kind); err != nil {
-			return err
+			return shapeProblem(path+".kind", "string", err)
 		}
 		delete(fields, "kind")
 		for key, value := range fields {
 			if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-				return fmt.Errorf("null card field %s", key)
+				// An unknown field name can itself contain private response text.
+				if !knownCardField(key) {
+					key = "<unknown>"
+				}
+				return problem("null_field", path+"."+key, "card field is null")
 			}
 		}
 		content, err := json.Marshal(fields)
 		if err != nil {
-			return err
+			return atPath(path, err)
 		}
 		var c Card
 		switch kind {
@@ -155,31 +159,48 @@ func (f *Fact) UnmarshalJSON(b []byte) error {
 			c = v
 			input = true
 		default:
-			return fmt.Errorf("unknown card kind %q", kind)
+			return problem("invalid_structure", path+".kind", "unknown card kind")
 		}
 		if err != nil {
-			return err
+			return atPath(path, err)
 		}
 		for _, key := range []string{"question", "source", "sourceQuote"} {
 			if _, ok := fields[key]; !ok {
-				return fmt.Errorf("missing card field %s", key)
+				return problem("missing_field", path+"."+key, "required field is missing")
 			}
 		}
 		if kind == "flip" || kind == "boolean" || kind == "input" {
 			if _, ok := fields["answer"]; !ok {
-				return fmt.Errorf("missing answer")
+				return problem("missing_field", path+".answer", "required field is missing")
 			}
 		}
 		f.Cards = append(f.Cards, c)
 	}
 	if !flip {
-		return fmt.Errorf("fact %q needs a flip card", f.Name)
+		return problem("validation", "cards", "missing required flip card")
 	}
 	if !input {
-		return fmt.Errorf("fact %q needs an input card", f.Name)
+		return problem("validation", "cards", "missing required input card")
 	}
-	slices.SortStableFunc(f.Cards, func(a, b Card) int { return cardDifficulty(a) - cardDifficulty(b) })
+	f.cardIndices = make([]int, len(f.Cards))
+	for i := range f.cardIndices {
+		f.cardIndices[i] = i
+	}
+	slices.SortStableFunc(f.cardIndices, func(a, b int) int { return cardDifficulty(f.Cards[a]) - cardDifficulty(f.Cards[b]) })
+	cards := slices.Clone(f.Cards)
+	for i, original := range f.cardIndices {
+		f.Cards[i] = cards[original]
+	}
 	return nil
+}
+
+func knownCardField(key string) bool {
+	switch key {
+	case "question", "source", "sourceQuote", "answer", "rightAnswers", "wrongAnswers", "columns":
+		return true
+	default:
+		return false
+	}
 }
 
 func cardDifficulty(c Card) int {
@@ -225,19 +246,29 @@ func (r *AIResponse) UnmarshalJSON(b []byte) error {
 	if err := requiredFields(b, "facts", "issues"); err != nil {
 		return err
 	}
-	type wire AIResponse
-	return strictJSON(b, (*wire)(r))
+	var wire struct {
+		Facts  responseFacts `json:"facts"`
+		Issues []string      `json:"issues"`
+	}
+	if err := strictJSON(b, &wire); err != nil {
+		return err
+	}
+	*r = AIResponse{Issues: wire.Issues, Facts: wire.Facts}
+	return nil
 }
 
 func requiredFields(b []byte, keys ...string) error {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(b, &fields); err != nil {
-		return err
+		return shapeProblem("", "object", err)
 	}
 	for _, key := range keys {
 		value, ok := fields[key]
-		if !ok || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-			return fmt.Errorf("missing field %s", key)
+		if !ok {
+			return problem("missing_field", key, "required field is missing")
+		}
+		if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			return problem("null_field", key, "required field is null")
 		}
 	}
 	return nil
@@ -247,33 +278,46 @@ func normalized(s string) string { return strings.ToLower(strings.Join(strings.F
 
 func validateFacts(facts []Fact, pages int) error {
 	if len(facts) == 0 {
-		return errors.New("empty facts")
+		return problem("validation", "facts", "facts are empty")
 	}
 	names, questions := map[string]bool{}, map[string]bool{}
-	for _, f := range facts {
+	for i, f := range facts {
+		path := fmt.Sprintf("facts[%d]", i)
 		name := normalized(f.Name)
-		if name == "" || names[name] {
-			return errors.New("invalid or duplicate fact name")
+		if name == "" {
+			return problem("validation", path+".name", "fact name is empty")
+		}
+		if names[name] {
+			return problem("validation", path+".name", "duplicate fact name")
 		}
 		names[name] = true
 		if len(f.Pages) == 0 {
-			return errors.New("empty fact pages")
+			return problem("validation", path+".pages", "fact pages are empty")
 		}
 		seen := map[int]bool{}
-		for _, p := range f.Pages {
-			if p < 1 || p > pages || seen[p] {
-				return errors.New("invalid fact pages")
+		for j, p := range f.Pages {
+			pagePath := fmt.Sprintf("%s.pages[%d]", path, j)
+			if p < 1 || p > pages {
+				return problem("validation", pagePath, fmt.Sprintf("page is outside document range 1..%d", pages))
+			}
+			if seen[p] {
+				return problem("validation", pagePath, "duplicate fact page")
 			}
 			seen[p] = true
 		}
 		flip, input := false, false
-		for _, c := range f.Cards {
+		for j, c := range f.Cards {
+			index := j
+			if len(f.cardIndices) == len(f.Cards) {
+				index = f.cardIndices[j]
+			}
+			cardPath := fmt.Sprintf("%s.cards[%d]", path, index)
 			if err := validateCard(c); err != nil {
-				return err
+				return atPath(cardPath, err)
 			}
 			key := fmt.Sprintf("%T:%s", c, normalized(c.Base().Question))
 			if questions[key] {
-				return errors.New("duplicate card question of the same kind")
+				return problem("validation", cardPath+".question", "duplicate card question of the same kind")
 			}
 			questions[key] = true
 			switch c.(type) {
@@ -283,8 +327,11 @@ func validateFacts(facts []Fact, pages int) error {
 				input = true
 			}
 		}
-		if !flip || !input {
-			return errors.New("fact requires flip and input")
+		if !flip {
+			return problem("validation", path+".cards", "missing required flip card")
+		}
+		if !input {
+			return problem("validation", path+".cards", "missing required input card")
 		}
 	}
 	return nil
@@ -293,55 +340,81 @@ func validateFacts(facts []Fact, pages int) error {
 // validateCard checks content without creating storage models.
 func validateCard(c Card) error {
 	if c == nil {
-		return errors.New("invalid card")
+		return problem("validation", "", "card is null")
 	}
 	base := c.Base()
-	if normalized(base.Question) == "" || normalized(base.Source) == "" {
-		return errors.New("empty card question or source")
+	if normalized(base.Question) == "" {
+		return problem("validation", "question", "question is empty")
+	}
+	if normalized(base.Source) == "" {
+		return problem("validation", "source", "source is empty")
 	}
 	switch v := c.(type) {
 	case FlipCard:
 		if normalized(v.Answer) == "" {
-			return errors.New("empty flip answer")
+			return problem("validation", "answer", "answer is empty")
 		}
 	case BooleanCard:
 	case InputCard:
 		if normalized(v.Answer) == "" {
-			return errors.New("empty input answer")
+			return problem("validation", "answer", "answer is empty")
 		}
 	case ChoiceCard:
-		if len(v.RightAnswers) == 0 || len(v.WrongAnswers) == 0 {
-			return errors.New("choice requires right and wrong answers")
+		if len(v.RightAnswers) == 0 {
+			return problem("validation", "rightAnswers", "right answers are empty")
+		}
+		if len(v.WrongAnswers) == 0 {
+			return problem("validation", "wrongAnswers", "wrong answers are empty")
 		}
 		seen := map[string]bool{}
-		for _, a := range append(slices.Clone(v.RightAnswers), v.WrongAnswers...) {
-			key := normalized(a)
-			if key == "" || seen[key] {
-				return errors.New("empty or duplicate choice answer")
+		for _, answers := range []struct {
+			field  string
+			values []string
+		}{{"rightAnswers", v.RightAnswers}, {"wrongAnswers", v.WrongAnswers}} {
+			for i, a := range answers.values {
+				path := fmt.Sprintf("%s[%d]", answers.field, i)
+				key := normalized(a)
+				if key == "" {
+					return problem("validation", path, "choice answer is empty")
+				}
+				if seen[key] {
+					return problem("validation", path, "duplicate choice answer")
+				}
+				seen[key] = true
 			}
-			seen[key] = true
 		}
 	case TableCard:
 		if len(v.Columns) < 2 {
-			return errors.New("table requires two categories")
+			return problem("validation", "columns", "table requires at least two categories")
 		}
 		names, rows := map[string]bool{}, map[string]bool{}
-		for _, col := range v.Columns {
+		for i, col := range v.Columns {
+			path := fmt.Sprintf("columns[%d]", i)
 			name := strings.TrimSpace(col.Name)
-			if name == "" || names[name] || len(col.Rows) == 0 {
-				return errors.New("empty or duplicate table category")
+			if name == "" {
+				return problem("validation", path+".name", "table category name is empty")
+			}
+			if names[name] {
+				return problem("validation", path+".name", "duplicate table category")
+			}
+			if len(col.Rows) == 0 {
+				return problem("validation", path+".rows", "table rows are empty")
 			}
 			names[name] = true
-			for _, row := range col.Rows {
+			for j, row := range col.Rows {
 				row = strings.TrimSpace(row)
-				if row == "" || rows[row] {
-					return errors.New("empty or duplicate table row")
+				rowPath := fmt.Sprintf("%s.rows[%d]", path, j)
+				if row == "" {
+					return problem("validation", rowPath, "table row is empty")
+				}
+				if rows[row] {
+					return problem("validation", rowPath, "duplicate table row")
 				}
 				rows[row] = true
 			}
 		}
 	default:
-		return errors.New("unknown card kind")
+		return problem("validation", "kind", "unknown card kind")
 	}
 	return nil
 }
