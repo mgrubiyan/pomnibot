@@ -140,7 +140,7 @@ ranked AS (
         u.last_name,
         u.username,
         CAST(LEAST(100, GREATEST(0, ROUND(us.avg_mastery * 100.0))) AS INT) AS percentile,
-        RANK() OVER (ORDER BY us.avg_mastery DESC)::INT AS rank
+        DENSE_RANK() OVER (ORDER BY us.avg_mastery DESC)::INT AS rank
     FROM user_scores us
     JOIN users u ON u.id = us.user_id
 )
@@ -195,7 +195,7 @@ ranked AS (
     SELECT
         us.user_id,
         CAST(LEAST(100, GREATEST(0, ROUND(us.avg_mastery * 100.0))) AS INT) AS percentile,
-        RANK() OVER (ORDER BY us.avg_mastery DESC)::INT AS rank
+        DENSE_RANK() OVER (ORDER BY us.avg_mastery DESC)::INT AS rank
     FROM user_scores us
 )
 SELECT percentile, rank
