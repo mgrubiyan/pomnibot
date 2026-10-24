@@ -5,6 +5,7 @@ export interface TelegramApp {
     contentSafeAreaInset?: Partial<Record<'top' | 'right' | 'bottom' | 'left', number>>;
     ready: () => void;
     expand: () => void;
+    close?: () => void;
     onEvent: (event: string, callback: () => void) => void;
     offEvent: (event: string, callback: () => void) => void;
 }
@@ -33,4 +34,13 @@ export function miniAppAuthorization(sdk: Pick<Window, 'Telegram' | 'WebApp'>): 
 export function telegramApp(): TelegramApp | undefined {
     const app = window.Telegram?.WebApp;
     return app?.initData ? app : undefined;
+}
+
+/** Closes the mini app, when the platform lets it; undefined in a browser. */
+export function closeMiniApp(): (() => void) | undefined {
+    const telegram = telegramApp();
+    if (telegram?.close) return () => telegram.close?.();
+    const max = window.WebApp;
+    if (max?.initData && max.close) return () => max.close?.();
+    return undefined;
 }

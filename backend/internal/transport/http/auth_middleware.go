@@ -21,7 +21,10 @@ func accountFromContext(ctx context.Context) (usecase.Account, bool) {
 }
 
 // AuthMiddleware resolves a verified platform ID to the internal user ID.
-// Missing or invalid credentials retain the shared browser test account.
+// A request without platform credentials keeps the shared browser test
+// account. Credentials that do not hold or have expired are refused with
+// sign_in_expired: passing them on as the test account would record the
+// reader's answers there and show them other people's sets.
 func AuthMiddleware(maxToken, telegramToken string, users usecase.UserService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -35,7 +38,11 @@ func AuthMiddleware(maxToken, telegramToken string, users usecase.UserService) f
 			case ok && raw != "" && strings.EqualFold(scheme, "tma") && telegramToken != "":
 				user, err = validateTelegramInitData(raw, telegramToken, time.Now())
 			}
-			if err != nil || user == nil {
+			if err != nil {
+				writeAuthError(w, http.StatusUnauthorized, "Вход устарел, откройте приложение заново", "sign_in_expired")
+				return
+			}
+			if user == nil {
 				next.ServeHTTP(w, r.WithContext(fallback))
 				return
 			}
