@@ -11,6 +11,26 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getLastAnswer = `-- name: GetLastAnswer :one
+SELECT correct FROM answers
+WHERE user_id = $1 AND card_id = $2
+ORDER BY id DESC
+LIMIT 1
+`
+
+type GetLastAnswerParams struct {
+	UserID pgtype.UUID `json:"user_id"`
+	CardID pgtype.UUID `json:"card_id"`
+}
+
+// The verdict recorded last for the user's answer to the card.
+func (q *Queries) GetLastAnswer(ctx context.Context, arg GetLastAnswerParams) (bool, error) {
+	row := q.db.QueryRow(ctx, getLastAnswer, arg.UserID, arg.CardID)
+	var correct bool
+	err := row.Scan(&correct)
+	return correct, err
+}
+
 const recordAnswer = `-- name: RecordAnswer :one
 INSERT INTO answers (user_id, card_id, correct)
 VALUES ($1, $2, $3)

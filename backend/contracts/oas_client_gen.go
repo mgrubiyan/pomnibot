@@ -30,18 +30,13 @@ func trimTrailingSlashes(u *url.URL) {
 type Invoker interface {
 	// AnswerQuestion invokes AnswerQuestion operation.
 	//
-	// Send answer's text for input kind of questions.
+	// Only the card the feed shows for a due fact is graded and recorded; asked again after that, the
+	// endpoint repeats the recorded verdict. A typed answer need not match word for word: form, word order
+	// and typos do not matter, and answers in other words are judged by a language model. When the model
+	// does not answer in time nothing is recorded and the method is fallback: ask again.
 	//
 	// POST /cards/{cardId}/answer
 	AnswerQuestion(ctx context.Context, request *AnswerQuestionRequest, params AnswerQuestionParams) (AnswerQuestionRes, error)
-	// CheckAnswer invokes CheckAnswer operation.
-	//
-	// The answer need not match word for word: form, word order and typos do not matter, and answers in
-	// other words are judged by a language model. Nothing is recorded: the feed sends results with
-	// SendResults.
-	//
-	// POST /cards/{cardId}/check
-	CheckAnswer(ctx context.Context, request *CheckAnswerRequest, params CheckAnswerParams) (CheckAnswerRes, error)
 	// CreateCard invokes CreateCard operation.
 	//
 	// CreateCard.
@@ -75,13 +70,15 @@ type Invoker interface {
 	GetAdminIssues(ctx context.Context) (GetAdminIssuesRes, error)
 	// GetCardsBySetID invokes GetCardsBySetID operation.
 	//
-	// Get cards.
+	// The author gets whole cards; a member gets only the questions, without answers, options, tables,
+	// explanations and quotes.
 	//
 	// GET /sets/{setId}/cards
 	GetCardsBySetID(ctx context.Context, params GetCardsBySetIDParams) (GetCardsBySetIDRes, error)
 	// GetFeedQuestions invokes GetFeedQuestions operation.
 	//
-	// Get questions of current feed.
+	// Questions only: what answers a card comes back from AnswerQuestion, or from RevealCard for a flip
+	// card.
 	//
 	// GET /feed
 	GetFeedQuestions(ctx context.Context) (GetFeedQuestionsRes, error)
@@ -159,12 +156,13 @@ type Invoker interface {
 	//
 	// POST /cards/{cardId}/issue/resolve
 	ResolveCardIssues(ctx context.Context, params ResolveCardIssuesParams) (ResolveCardIssuesRes, error)
-	// SendResults invokes SendResults operation.
+	// RevealCard invokes RevealCard operation.
 	//
-	// Send set/feed results.
+	// Flip cards only, and only the card of the current feed or one the reader has answered. Recording the
+	// grade is AnswerQuestion's job.
 	//
-	// POST /results
-	SendResults(ctx context.Context, request SendResultsRequest) (SendResultsRes, error)
+	// POST /cards/{cardId}/reveal
+	RevealCard(ctx context.Context, params RevealCardParams) (RevealCardRes, error)
 	// UpdateCard invokes UpdateCard operation.
 	//
 	// Update a card.
@@ -214,7 +212,10 @@ func (c *Client) requestURL(ctx context.Context) *url.URL {
 
 // AnswerQuestion invokes AnswerQuestion operation.
 //
-// Send answer's text for input kind of questions.
+// Only the card the feed shows for a due fact is graded and recorded; asked again after that, the
+// endpoint repeats the recorded verdict. A typed answer need not match word for word: form, word order
+// and typos do not matter, and answers in other words are judged by a language model. When the model
+// does not answer in time nothing is recorded and the method is fallback: ask again.
 //
 // POST /cards/{cardId}/answer
 func (c *Client) AnswerQuestion(ctx context.Context, request *AnswerQuestionRequest, params AnswerQuestionParams) (AnswerQuestionRes, error) {
@@ -307,110 +308,6 @@ func (c *Client) sendAnswerQuestion(ctx context.Context, request *AnswerQuestion
 
 	stage = "DecodeResponse"
 	result, err := decodeAnswerQuestionResponse(resp)
-	if err != nil {
-		return res, errors.Wrap(err, "decode response")
-	}
-
-	return result, nil
-}
-
-// CheckAnswer invokes CheckAnswer operation.
-//
-// The answer need not match word for word: form, word order and typos do not matter, and answers in
-// other words are judged by a language model. Nothing is recorded: the feed sends results with
-// SendResults.
-//
-// POST /cards/{cardId}/check
-func (c *Client) CheckAnswer(ctx context.Context, request *CheckAnswerRequest, params CheckAnswerParams) (CheckAnswerRes, error) {
-	res, err := c.sendCheckAnswer(ctx, request, params)
-	return res, err
-}
-
-func (c *Client) sendCheckAnswer(ctx context.Context, request *CheckAnswerRequest, params CheckAnswerParams) (res CheckAnswerRes, err error) {
-	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("CheckAnswer"),
-		semconv.HTTPRequestMethodKey.String("POST"),
-		semconv.URLTemplateKey.String("/cards/{cardId}/check"),
-	}
-	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
-
-	// Run stopwatch.
-	startTime := time.Now()
-	defer func() {
-		// Use floating point division here for higher precision (instead of Millisecond method).
-		elapsedDuration := time.Since(startTime)
-		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
-	}()
-
-	// Increment request counter.
-	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
-
-	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, CheckAnswerOperation,
-		trace.WithAttributes(otelAttrs...),
-		clientSpanKind,
-	)
-	// Track stage for error reporting.
-	var stage string
-	defer func() {
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, stage)
-			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
-		}
-		span.End()
-	}()
-
-	stage = "BuildURL"
-	u := uri.Clone(c.requestURL(ctx))
-	var pathParts [3]string
-	pathParts[0] = "/cards/"
-	{
-		// Encode "cardId" parameter.
-		e := uri.NewPathEncoder(uri.PathEncoderConfig{
-			Param:   "cardId",
-			Style:   uri.PathStyleSimple,
-			Explode: false,
-		})
-		if err := func() error {
-			return e.EncodeValue(conv.UUIDToString(params.CardId))
-		}(); err != nil {
-			return res, errors.Wrap(err, "encode path")
-		}
-		encoded, err := e.Result()
-		if err != nil {
-			return res, errors.Wrap(err, "encode path")
-		}
-		pathParts[1] = encoded
-	}
-	pathParts[2] = "/check"
-	uri.AddPathParts(u, pathParts[:]...)
-
-	stage = "EncodeRequest"
-	r, err := ht.NewRequest(ctx, "POST", u)
-	if err != nil {
-		return res, errors.Wrap(err, "create request")
-	}
-	if err := encodeCheckAnswerRequest(request, r); err != nil {
-		return res, errors.Wrap(err, "encode request")
-	}
-
-	stage = "SendRequest"
-	resp, err := c.cfg.Client.Do(r)
-	if err != nil {
-		return res, errors.Wrap(err, "do request")
-	}
-	body := resp.Body
-	defer func() {
-		// Drain the body to EOF before closing, so the underlying
-		// connection can be reused by the Transport regardless of the
-		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
-		_, _ = io.Copy(io.Discard, body)
-		_ = body.Close()
-	}()
-
-	stage = "DecodeResponse"
-	result, err := decodeCheckAnswerResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -882,7 +779,8 @@ func (c *Client) sendGetAdminIssues(ctx context.Context) (res GetAdminIssuesRes,
 
 // GetCardsBySetID invokes GetCardsBySetID operation.
 //
-// Get cards.
+// The author gets whole cards; a member gets only the questions, without answers, options, tables,
+// explanations and quotes.
 //
 // GET /sets/{setId}/cards
 func (c *Client) GetCardsBySetID(ctx context.Context, params GetCardsBySetIDParams) (GetCardsBySetIDRes, error) {
@@ -981,7 +879,8 @@ func (c *Client) sendGetCardsBySetID(ctx context.Context, params GetCardsBySetID
 
 // GetFeedQuestions invokes GetFeedQuestions operation.
 //
-// Get questions of current feed.
+// Questions only: what answers a card comes back from AnswerQuestion, or from RevealCard for a flip
+// card.
 //
 // GET /feed
 func (c *Client) GetFeedQuestions(ctx context.Context) (GetFeedQuestionsRes, error) {
@@ -2162,21 +2061,22 @@ func (c *Client) sendResolveCardIssues(ctx context.Context, params ResolveCardIs
 	return result, nil
 }
 
-// SendResults invokes SendResults operation.
+// RevealCard invokes RevealCard operation.
 //
-// Send set/feed results.
+// Flip cards only, and only the card of the current feed or one the reader has answered. Recording the
+// grade is AnswerQuestion's job.
 //
-// POST /results
-func (c *Client) SendResults(ctx context.Context, request SendResultsRequest) (SendResultsRes, error) {
-	res, err := c.sendSendResults(ctx, request)
+// POST /cards/{cardId}/reveal
+func (c *Client) RevealCard(ctx context.Context, params RevealCardParams) (RevealCardRes, error) {
+	res, err := c.sendRevealCard(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendSendResults(ctx context.Context, request SendResultsRequest) (res SendResultsRes, err error) {
+func (c *Client) sendRevealCard(ctx context.Context, params RevealCardParams) (res RevealCardRes, err error) {
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("SendResults"),
+		otelogen.OperationID("RevealCard"),
 		semconv.HTTPRequestMethodKey.String("POST"),
-		semconv.URLTemplateKey.String("/results"),
+		semconv.URLTemplateKey.String("/cards/{cardId}/reveal"),
 	}
 	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
 
@@ -2192,7 +2092,7 @@ func (c *Client) sendSendResults(ctx context.Context, request SendResultsRequest
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, SendResultsOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, RevealCardOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -2209,17 +2109,33 @@ func (c *Client) sendSendResults(ctx context.Context, request SendResultsRequest
 
 	stage = "BuildURL"
 	u := uri.Clone(c.requestURL(ctx))
-	var pathParts [1]string
-	pathParts[0] = "/results"
+	var pathParts [3]string
+	pathParts[0] = "/cards/"
+	{
+		// Encode "cardId" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "cardId",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.UUIDToString(params.CardId))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	pathParts[2] = "/reveal"
 	uri.AddPathParts(u, pathParts[:]...)
 
 	stage = "EncodeRequest"
 	r, err := ht.NewRequest(ctx, "POST", u)
 	if err != nil {
 		return res, errors.Wrap(err, "create request")
-	}
-	if err := encodeSendResultsRequest(request, r); err != nil {
-		return res, errors.Wrap(err, "encode request")
 	}
 
 	stage = "SendRequest"
@@ -2237,7 +2153,7 @@ func (c *Client) sendSendResults(ctx context.Context, request SendResultsRequest
 	}()
 
 	stage = "DecodeResponse"
-	result, err := decodeSendResultsResponse(resp)
+	result, err := decodeRevealCardResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}

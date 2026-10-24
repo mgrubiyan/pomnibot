@@ -79,74 +79,6 @@ func encodeAnswerQuestionResponse(response AnswerQuestionRes, w http.ResponseWri
 	}
 }
 
-func encodeCheckAnswerResponse(response CheckAnswerRes, w http.ResponseWriter, span trace.Span) error {
-	switch response := response.(type) {
-	case *CheckAnswerResponse:
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(200)
-
-		e := new(jx.Encoder)
-		response.Encode(e)
-		if _, err := e.WriteTo(w); err != nil {
-			return errors.Wrap(err, "write")
-		}
-
-		return nil
-
-	case *CheckAnswerBadRequest:
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(400)
-
-		e := new(jx.Encoder)
-		response.Encode(e)
-		if _, err := e.WriteTo(w); err != nil {
-			return errors.Wrap(err, "write")
-		}
-
-		return nil
-
-	case *CheckAnswerForbidden:
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(403)
-
-		e := new(jx.Encoder)
-		response.Encode(e)
-		if _, err := e.WriteTo(w); err != nil {
-			return errors.Wrap(err, "write")
-		}
-
-		return nil
-
-	case *CheckAnswerNotFound:
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(404)
-
-		e := new(jx.Encoder)
-		response.Encode(e)
-		if _, err := e.WriteTo(w); err != nil {
-			return errors.Wrap(err, "write")
-		}
-
-		return nil
-
-	case *CheckAnswerInternalServerError:
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(500)
-		span.SetStatus(codes.Error, http.StatusText(500))
-
-		e := new(jx.Encoder)
-		response.Encode(e)
-		if _, err := e.WriteTo(w); err != nil {
-			return errors.Wrap(err, "write")
-		}
-
-		return nil
-
-	default:
-		return errors.Errorf("unexpected response type: %T", response)
-	}
-}
-
 func encodeCreateCardResponse(response CreateCardRes, w http.ResponseWriter, span trace.Span) error {
 	switch response := response.(type) {
 	case *Card:
@@ -1135,14 +1067,21 @@ func encodeResolveCardIssuesResponse(response ResolveCardIssuesRes, w http.Respo
 	}
 }
 
-func encodeSendResultsResponse(response SendResultsRes, w http.ResponseWriter, span trace.Span) error {
+func encodeRevealCardResponse(response RevealCardRes, w http.ResponseWriter, span trace.Span) error {
 	switch response := response.(type) {
-	case *SendResultsNoContent:
-		w.WriteHeader(204)
+	case *CardReveal:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(200)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
 
 		return nil
 
-	case *SendResultsBadRequest:
+	case *RevealCardBadRequest:
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(400)
 
@@ -1154,7 +1093,7 @@ func encodeSendResultsResponse(response SendResultsRes, w http.ResponseWriter, s
 
 		return nil
 
-	case *SendResultsForbidden:
+	case *RevealCardForbidden:
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(403)
 
@@ -1166,7 +1105,19 @@ func encodeSendResultsResponse(response SendResultsRes, w http.ResponseWriter, s
 
 		return nil
 
-	case *SendResultsInternalServerError:
+	case *RevealCardNotFound:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(404)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	case *RevealCardInternalServerError:
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(500)
 		span.SetStatus(codes.Error, http.StatusText(500))

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -130,10 +129,11 @@ func (s *setServiceImpl) GetCardsBySetID(ctx context.Context, userID uuid.UUID, 
 
 	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
 	// Verify set exists and user has membership
-	if _, err := s.querier.GetSetByID(ctx, db.GetSetByIDParams{
+	set, err := s.querier.GetSetByID(ctx, db.GetSetByIDParams{
 		ID:     pgUUID,
 		UserID: pgUserID,
-	}); err != nil {
+	})
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -146,6 +146,20 @@ func (s *setServiceImpl) GetCardsBySetID(ctx context.Context, userID uuid.UUID, 
 	})
 	if err != nil {
 		return nil, fmt.Errorf("get cards by set id: %w", err)
+	}
+
+	// A member answers these cards in the feed, so the list gives them only
+	// the questions; the author gets whole cards to edit.
+	if set.AuthorID != pgUserID {
+		cards := make([]contracts.Card, 0, len(rows))
+		for _, r := range rows {
+			c, err := questionCard(storedCard(r))
+			if err != nil {
+				return nil, err
+			}
+			cards = append(cards, c)
+		}
+		return cards, nil
 	}
 
 	var choiceIDs, tableIDs []pgtype.UUID
@@ -161,12 +175,15 @@ func (s *setServiceImpl) GetCardsBySetID(ctx context.Context, userID uuid.UUID, 
 	if err != nil {
 		return nil, err
 	}
-	builder := *s
-	builder.querier = details
 
 	cards := make([]contracts.Card, 0, len(rows))
 	for _, r := range rows {
-		c, err := builder.buildCard(ctx, r.ID, r.SetID, r.FactID, r.FactName, string(r.Kind), r.Question, r.AnswerText, r.Explanation, r.SourceQuote, r.SourceRef)
+		card := storedCard(r)
+		d, err := loadDetails(ctx, details, card)
+		if err != nil {
+			return nil, err
+		}
+		c, err := fullCard(card, d)
 		if err != nil {
 			return nil, err
 		}
@@ -335,112 +352,6 @@ func (s *setServiceImpl) SaveGeneratedSet(ctx context.Context, userID uuid.UUID,
 		res.ShareCode.SetTo(set.ShareCode)
 	}
 	return res, nil
-}
-
-func (s *setServiceImpl) buildCard(
-	ctx context.Context,
-	id pgtype.UUID,
-	setID pgtype.UUID,
-	factID pgtype.UUID,
-	factName string,
-	kind string,
-	question string,
-	answerText pgtype.Text,
-	explanation string,
-	sourceQuote string,
-	sourceRef pgtype.Text,
-) (contracts.Card, error) {
-	cardUUID, err := uuid.FromBytes(id.Bytes[:])
-	if err != nil {
-		return contracts.Card{}, fmt.Errorf("parse card uuid: %w", err)
-	}
-	setUUID, err := uuid.FromBytes(setID.Bytes[:])
-	if err != nil {
-		return contracts.Card{}, fmt.Errorf("parse set uuid: %w", err)
-	}
-	factUUID, err := uuid.FromBytes(factID.Bytes[:])
-	if err != nil {
-		return contracts.Card{}, fmt.Errorf("parse fact uuid: %w", err)
-	}
-
-	cardKind := contracts.CardKind(kind)
-	card := contracts.Card{
-		ID:          cardUUID,
-		SetId:       setUUID,
-		FactId:      factUUID,
-		FactName:    factName,
-		Kind:        cardKind,
-		Question:    question,
-		Explanation: explanation,
-		SourceQuote: sourceQuote,
-	}
-
-	if sourceRef.Valid && sourceRef.String != "" {
-		card.SourceRef.SetTo(sourceRef.String)
-	}
-
-	ansStr := ""
-	if answerText.Valid {
-		ansStr = answerText.String
-	}
-
-	// Populate options for choice cards
-	switch cardKind {
-	case contracts.CardKindChoice:
-		opts, err := s.querier.GetCardOptions(ctx, id)
-		if err != nil {
-			return contracts.Card{}, fmt.Errorf("get card options: %w", err)
-		}
-		card.Options = make([]string, 0, len(opts))
-		for _, o := range opts {
-			card.Options = append(card.Options, o.Text)
-		}
-
-		card.Answer = choiceAnswer(opts, ansStr)
-
-	case contracts.CardKindBoolean:
-		b, _ := strconv.ParseBool(ansStr)
-		card.Answer = contracts.CardAnswer{
-			Type: contracts.BoolCardAnswer,
-			Bool: b,
-		}
-	case contracts.CardKindTable:
-		cols, err := s.querier.GetCardTableColumns(ctx, id)
-		if err != nil {
-			return contracts.Card{}, fmt.Errorf("get card table columns: %w", err)
-		}
-		items, err := s.querier.GetCardTableItems(ctx, id)
-		if err != nil {
-			return contracts.Card{}, fmt.Errorf("get card table items: %w", err)
-		}
-
-		tableLayout := contracts.TableLayout{
-			Columns: make([]string, 0, len(cols)),
-			Items:   make([]contracts.TableItem, 0, len(items)),
-		}
-		for _, col := range cols {
-			tableLayout.Columns = append(tableLayout.Columns, col.Name)
-		}
-		for _, item := range items {
-			tableLayout.Items = append(tableLayout.Items, contracts.TableItem{
-				Text:   item.ItemText,
-				Column: item.ColumnName,
-			})
-		}
-		card.Table.SetTo(tableLayout)
-		card.Answer = contracts.CardAnswer{
-			Type:        contracts.TableLayoutCardAnswer,
-			TableLayout: tableLayout,
-		}
-	default:
-		// flip or input
-		card.Answer = contracts.CardAnswer{
-			Type:   contracts.StringCardAnswer,
-			String: ansStr,
-		}
-	}
-
-	return card, nil
 }
 
 func mapSetRowToContract(id pgtype.UUID, title string, author contracts.User, shareCode string, cardsTotal, cardsDue int32) (*contracts.CardSet, error) {

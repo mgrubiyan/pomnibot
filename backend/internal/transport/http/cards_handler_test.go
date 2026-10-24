@@ -18,7 +18,7 @@ type mockCardService struct {
 	updateCardFunc     func(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error)
 	deleteCardFunc     func(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) error
 	answerQuestionFunc func(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error)
-	checkAnswerFunc    func(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error)
+	revealCardFunc     func(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) (*contracts.CardReveal, error)
 	reportIssueFunc    func(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, reason contracts.CardIssueReason) error
 	setIssuesFunc      func(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.SetIssue, error)
 	resolveIssuesFunc  func(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) error
@@ -66,9 +66,9 @@ func (m *mockCardService) AnswerQuestion(ctx context.Context, userID uuid.UUID, 
 	return nil, nil
 }
 
-func (m *mockCardService) CheckAnswer(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error) {
-	if m.checkAnswerFunc != nil {
-		return m.checkAnswerFunc(ctx, userID, cardID, answer)
+func (m *mockCardService) RevealCard(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) (*contracts.CardReveal, error) {
+	if m.revealCardFunc != nil {
+		return m.revealCardFunc(ctx, userID, cardID)
 	}
 	return nil, nil
 }
@@ -82,7 +82,7 @@ func TestCardsHandler_UpdateCard(t *testing.T) {
 		Kind:        contracts.CardKindChoice,
 		Question:    "Updated question?",
 		Options:     []string{"A", "B"},
-		Explanation: "Updated explanation",
+		Explanation: contracts.NewOptString("Updated explanation"),
 		FactId:      uuid.New(),
 		FactName:    "General",
 	}
@@ -510,34 +510,38 @@ func TestCardsHandler_DeleteCard_RelationalIntegrity(t *testing.T) {
 	}
 }
 
-func TestCardsHandler_CheckAnswer(t *testing.T) {
-	cardID := uuid.New()
+func TestCardsHandler_RevealCard(t *testing.T) {
+	flipID, inputID := uuid.New(), uuid.New()
 	ctx := WithUserID(context.Background(), testUserID)
 	svc := &mockCardService{
-		checkAnswerFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error) {
-			if id != cardID {
-				return nil, usecase.ErrNotFound
+		revealCardFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID) (*contracts.CardReveal, error) {
+			if userID != testUserID {
+				t.Fatalf("service got user %s", userID)
 			}
-			if userID != testUserID || answer != "массив упорядочен" {
-				t.Fatalf("service got user %d, answer %q", userID, answer)
+			switch id {
+			case flipID:
+				return &contracts.CardReveal{Answer: contracts.NewStringCardAnswer("отсортированный")}, nil
+			case inputID:
+				return nil, usecase.ErrValidation
 			}
-			return &contracts.CheckAnswerResponse{IsCorrect: true, Method: contracts.CheckAnswerResponseMethodModel}, nil
+			return nil, usecase.ErrNotFound
 		},
 	}
 	h := NewCardsHandler(svc)
 
-	res, err := h.CheckAnswer(ctx, &contracts.CheckAnswerRequest{Answer: "  массив упорядочен "}, contracts.CheckAnswerParams{CardId: cardID})
-	if got, ok := res.(*contracts.CheckAnswerResponse); err != nil || !ok || !got.IsCorrect {
-		t.Errorf("answer: res %#v, err %v; want the service's verdict", res, err)
+	if res, err := h.RevealCard(ctx, contracts.RevealCardParams{CardId: flipID}); err != nil {
+		t.Fatal(err)
+	} else if got, ok := res.(*contracts.CardReveal); !ok || got.Answer.String != "отсортированный" {
+		t.Errorf("flip: res %#v; want the service's reveal", res)
 	}
-	if res, _ := h.CheckAnswer(ctx, &contracts.CheckAnswerRequest{Answer: "  "}, contracts.CheckAnswerParams{CardId: cardID}); res == nil {
-		t.Error("empty answer: no response")
-	} else if _, ok := res.(*contracts.CheckAnswerBadRequest); !ok {
-		t.Errorf("empty answer: res %T, want bad request", res)
+	if res, _ := h.RevealCard(ctx, contracts.RevealCardParams{CardId: inputID}); res == nil {
+		t.Error("input: no response")
+	} else if _, ok := res.(*contracts.RevealCardBadRequest); !ok {
+		t.Errorf("input: res %T, want bad request", res)
 	}
-	if res, _ := h.CheckAnswer(ctx, &contracts.CheckAnswerRequest{Answer: "массив упорядочен"}, contracts.CheckAnswerParams{CardId: uuid.New()}); res == nil {
+	if res, _ := h.RevealCard(ctx, contracts.RevealCardParams{CardId: uuid.New()}); res == nil {
 		t.Error("unknown card: no response")
-	} else if _, ok := res.(*contracts.CheckAnswerNotFound); !ok {
+	} else if _, ok := res.(*contracts.RevealCardNotFound); !ok {
 		t.Errorf("unknown card: res %T, want not found", res)
 	}
 }
@@ -572,8 +576,8 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 							t.Fatalf("expected answer '42', got %s", answer)
 						}
 						return &contracts.AnswerQuestionResponse{
-							IsCorrect:  true,
-							UserAnswer: "42",
+							IsCorrect: true,
+							Method:    contracts.AnswerQuestionResponseMethodLocal,
 						}, nil
 					},
 				}
@@ -584,7 +588,7 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 				if !ok {
 					t.Fatalf("expected *contracts.AnswerQuestionResponse, got %T", res)
 				}
-				if !ans.IsCorrect || ans.UserAnswer != "42" {
+				if !ans.IsCorrect {
 					t.Fatalf("expected correct answer 42, got %+v", ans)
 				}
 			},
@@ -596,7 +600,7 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 			req:    &contracts.AnswerQuestionRequest{Answer: "wrong"},
 			mockSetup: func(t *testing.T) *mockCardService {
 				return &mockCardService{
-					answerQuestionFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error) {
+					answerQuestionFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, _ string) (*contracts.AnswerQuestionResponse, error) {
 						if userID != testUserID {
 							t.Fatalf("unexpected userID: %s", userID)
 						}
@@ -604,8 +608,8 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 							t.Fatalf("expected cardID %s, got %s", cardID, id)
 						}
 						return &contracts.AnswerQuestionResponse{
-							IsCorrect:  false,
-							UserAnswer: answer,
+							IsCorrect: false,
+							Method:    contracts.AnswerQuestionResponseMethodLocal,
 						}, nil
 					},
 				}
@@ -616,7 +620,7 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 				if !ok {
 					t.Fatalf("expected *contracts.AnswerQuestionResponse, got %T", res)
 				}
-				if ans.IsCorrect || ans.UserAnswer != "wrong" {
+				if ans.IsCorrect {
 					t.Fatalf("expected incorrect answer 'wrong', got %+v", ans)
 				}
 			},
@@ -632,7 +636,7 @@ func TestCardsHandler_AnswerQuestion(t *testing.T) {
 						if userID != uuid.Nil {
 							t.Fatalf("expected fallback userID 0, got %d", userID)
 						}
-						return &contracts.AnswerQuestionResponse{IsCorrect: true, UserAnswer: "42"}, nil
+						return &contracts.AnswerQuestionResponse{IsCorrect: true, Method: contracts.AnswerQuestionResponseMethodLocal}, nil
 					},
 				}
 			},

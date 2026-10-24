@@ -138,7 +138,7 @@ func TestManualCardsPostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	got, err := sets.GetCardsBySetID(ctx, user22, set.ID)
+	got, err := sets.GetCardsBySetID(ctx, user11, set.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestManualCardsPostgres(t *testing.T) {
 		t.Fatalf("cards: %d", len(got))
 	}
 	for i, card := range got {
-		if card.Kind != requests[i].Kind || card.Question != requests[i].Question || !reflect.DeepEqual(card.Answer, requests[i].Answer) || card.FactId == uuid.Nil || card.FactName == "" || card.SourceQuote != "" || card.Explanation != "" {
+		if card.Kind != requests[i].Kind || card.Question != requests[i].Question || !reflect.DeepEqual(card.Answer.Value, requests[i].Answer) || card.FactId == uuid.Nil || card.FactName == "" || card.SourceQuote.Value != "" || card.Explanation.Value != "" {
 			t.Fatalf("roundtrip %d: %+v", i, card)
 		}
 		if i == 3 && !reflect.DeepEqual(card.Options, requests[i].Options) {

@@ -5,10 +5,6 @@ type AnswerQuestionRes interface {
 	answerQuestionRes()
 }
 
-type CheckAnswerRes interface {
-	checkAnswerRes()
-}
-
 type CreateCardRes interface {
 	createCardRes()
 }
@@ -85,8 +81,8 @@ type ResolveCardIssuesRes interface {
 	resolveCardIssuesRes()
 }
 
-type SendResultsRes interface {
-	sendResultsRes()
+type RevealCardRes interface {
+	revealCardRes()
 }
 
 type UpdateCardRes interface {

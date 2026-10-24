@@ -28,17 +28,16 @@ type CardService interface {
 	UpdateCard(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error)
 	DeleteCard(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) error
 	AnswerQuestion(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error)
-	CheckAnswer(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error)
+	RevealCard(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) (*contracts.CardReveal, error)
 	ReportCardIssue(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, reason contracts.CardIssueReason) error
 	GetSetIssues(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.SetIssue, error)
 	ResolveCardIssues(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) error
 }
 
-// HomescreenService defines domain operations for today overview, feed, and submitting review results.
+// HomescreenService defines domain operations for today overview and the feed.
 type HomescreenService interface {
 	GetToday(ctx context.Context, userID uuid.UUID) (*contracts.TodayData, error)
-	GetFeedQuestions(ctx context.Context, userID uuid.UUID) ([]contracts.Card, error)
-	SendResults(ctx context.Context, userID uuid.UUID, results []contracts.Answer) error
+	GetFeedQuestions(ctx context.Context, userID uuid.UUID) ([]contracts.FeedCard, error)
 }
 
 // MAXUserParams comes from a verified MAX request or bot update.

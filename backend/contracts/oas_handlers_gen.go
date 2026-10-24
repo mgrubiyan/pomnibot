@@ -35,7 +35,10 @@ func (c *codeRecorder) Unwrap() http.ResponseWriter {
 
 // handleAnswerQuestionRequest handles AnswerQuestion operation.
 //
-// Send answer's text for input kind of questions.
+// Only the card the feed shows for a due fact is graded and recorded; asked again after that, the
+// endpoint repeats the recorded verdict. A typed answer need not match word for word: form, word order
+// and typos do not matter, and answers in other words are judged by a language model. When the model
+// does not answer in time nothing is recorded and the method is fallback: ask again.
 //
 // POST /cards/{cardId}/answer
 func (s *Server) handleAnswerQuestionRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -142,7 +145,7 @@ func (s *Server) handleAnswerQuestionRequest(args [1]string, argsEscaped bool, w
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    AnswerQuestionOperation,
-			OperationSummary: "Send answer's text for input kind of questions",
+			OperationSummary: "Answer a card of the current feed and record the verdict",
 			OperationID:      "AnswerQuestion",
 			Body:             request,
 			RawBody:          rawBody,
@@ -183,166 +186,6 @@ func (s *Server) handleAnswerQuestionRequest(args [1]string, argsEscaped bool, w
 	}
 
 	if err := encodeAnswerQuestionResponse(response, w, span); err != nil {
-		defer recordError("EncodeResponse", err)
-		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
-			s.cfg.ErrorHandler(ctx, w, r, err)
-		}
-		return
-	}
-}
-
-// handleCheckAnswerRequest handles CheckAnswer operation.
-//
-// The answer need not match word for word: form, word order and typos do not matter, and answers in
-// other words are judged by a language model. Nothing is recorded: the feed sends results with
-// SendResults.
-//
-// POST /cards/{cardId}/check
-func (s *Server) handleCheckAnswerRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
-	statusWriter := &codeRecorder{ResponseWriter: w}
-	w = statusWriter
-	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("CheckAnswer"),
-		semconv.HTTPRequestMethodKey.String("POST"),
-		semconv.HTTPRouteKey.String("/cards/{cardId}/check"),
-	}
-	// Add attributes from config.
-	otelAttrs = append(otelAttrs, s.cfg.Attributes...)
-
-	// Start a span for this request.
-	ctx, span := s.cfg.Tracer.Start(r.Context(), CheckAnswerOperation,
-		trace.WithAttributes(otelAttrs...),
-		serverSpanKind,
-	)
-	defer span.End()
-
-	// Add Labeler to context.
-	labeler := &Labeler{attrs: otelAttrs}
-	ctx = contextWithLabeler(ctx, labeler)
-
-	// Run stopwatch.
-	startTime := time.Now()
-	defer func() {
-		elapsedDuration := time.Since(startTime)
-
-		attrSet := labeler.AttributeSet()
-		attrs := attrSet.ToSlice()
-		code := statusWriter.status
-		if code != 0 {
-			codeAttr := semconv.HTTPResponseStatusCode(code)
-			attrs = append(attrs, codeAttr)
-			span.SetAttributes(attrs...)
-		}
-		attrOpt := metric.WithAttributes(attrs...)
-
-		// Increment request counter.
-		s.requests.Add(ctx, 1, attrOpt)
-
-		// Use floating point division here for higher precision (instead of Millisecond method).
-		s.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), attrOpt)
-	}()
-
-	var (
-		recordError = func(stage string, err error) {
-			span.RecordError(err)
-
-			// https://opentelemetry.io/docs/specs/semconv/http/http-spans/#status
-			// Span Status MUST be left unset if HTTP status code was in the 1xx, 2xx or 3xx ranges,
-			// unless there was another error (e.g., network error receiving the response body; or 3xx codes with
-			// max redirects exceeded), in which case status MUST be set to Error.
-			code := statusWriter.status
-			if code < 100 || code >= 500 {
-				span.SetStatus(codes.Error, stage)
-			}
-
-			attrSet := labeler.AttributeSet()
-			attrs := attrSet.ToSlice()
-			if code != 0 {
-				attrs = append(attrs, semconv.HTTPResponseStatusCode(code))
-			}
-
-			s.errors.Add(ctx, 1, metric.WithAttributes(attrs...))
-		}
-		err          error
-		opErrContext = ogenerrors.OperationContext{
-			Name: CheckAnswerOperation,
-			ID:   "CheckAnswer",
-		}
-	)
-	params, err := decodeCheckAnswerParams(args, argsEscaped, r)
-	if err != nil {
-		err = &ogenerrors.DecodeParamsError{
-			OperationContext: opErrContext,
-			Err:              err,
-		}
-		defer recordError("DecodeParams", err)
-		s.cfg.ErrorHandler(ctx, w, r, err)
-		return
-	}
-
-	var rawBody []byte
-	request, rawBody, close, err := s.decodeCheckAnswerRequest(r)
-	if err != nil {
-		err = &ogenerrors.DecodeRequestError{
-			OperationContext: opErrContext,
-			Err:              err,
-		}
-		defer recordError("DecodeRequest", err)
-		s.cfg.ErrorHandler(ctx, w, r, err)
-		return
-	}
-	defer func() {
-		if err := close(); err != nil {
-			recordError("CloseRequest", err)
-		}
-	}()
-
-	var response CheckAnswerRes
-	if m := s.cfg.Middleware; m != nil {
-		mreq := middleware.Request{
-			Context:          ctx,
-			OperationName:    CheckAnswerOperation,
-			OperationSummary: "Check a typed answer by meaning without recording it",
-			OperationID:      "CheckAnswer",
-			Body:             request,
-			RawBody:          rawBody,
-			Params: middleware.Parameters{
-				{
-					Name: "cardId",
-					In:   "path",
-				}: params.CardId,
-			},
-			Raw: r,
-		}
-
-		type (
-			Request  = *CheckAnswerRequest
-			Params   = CheckAnswerParams
-			Response = CheckAnswerRes
-		)
-		response, err = middleware.HookMiddleware[
-			Request,
-			Params,
-			Response,
-		](
-			m,
-			mreq,
-			unpackCheckAnswerParams,
-			func(ctx context.Context, request Request, params Params) (response Response, err error) {
-				response, err = s.h.CheckAnswer(ctx, request, params)
-				return response, err
-			},
-		)
-	} else {
-		response, err = s.h.CheckAnswer(ctx, request, params)
-	}
-	if err != nil {
-		defer recordError("Internal", err)
-		s.cfg.ErrorHandler(ctx, w, r, err)
-		return
-	}
-
-	if err := encodeCheckAnswerResponse(response, w, span); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
@@ -1065,7 +908,8 @@ func (s *Server) handleGetAdminIssuesRequest(args [0]string, argsEscaped bool, w
 
 // handleGetCardsBySetIDRequest handles GetCardsBySetID operation.
 //
-// Get cards.
+// The author gets whole cards; a member gets only the questions, without answers, options, tables,
+// explanations and quotes.
 //
 // GET /sets/{setId}/cards
 func (s *Server) handleGetCardsBySetIDRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -1208,7 +1052,8 @@ func (s *Server) handleGetCardsBySetIDRequest(args [1]string, argsEscaped bool, 
 
 // handleGetFeedQuestionsRequest handles GetFeedQuestions operation.
 //
-// Get questions of current feed.
+// Questions only: what answers a card comes back from AnswerQuestion, or from RevealCard for a flip
+// card.
 //
 // GET /feed
 func (s *Server) handleGetFeedQuestionsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -3006,24 +2851,25 @@ func (s *Server) handleResolveCardIssuesRequest(args [1]string, argsEscaped bool
 	}
 }
 
-// handleSendResultsRequest handles SendResults operation.
+// handleRevealCardRequest handles RevealCard operation.
 //
-// Send set/feed results.
+// Flip cards only, and only the card of the current feed or one the reader has answered. Recording the
+// grade is AnswerQuestion's job.
 //
-// POST /results
-func (s *Server) handleSendResultsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+// POST /cards/{cardId}/reveal
+func (s *Server) handleRevealCardRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
 	w = statusWriter
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("SendResults"),
+		otelogen.OperationID("RevealCard"),
 		semconv.HTTPRequestMethodKey.String("POST"),
-		semconv.HTTPRouteKey.String("/results"),
+		semconv.HTTPRouteKey.String("/cards/{cardId}/reveal"),
 	}
 	// Add attributes from config.
 	otelAttrs = append(otelAttrs, s.cfg.Attributes...)
 
 	// Start a span for this request.
-	ctx, span := s.cfg.Tracer.Start(r.Context(), SendResultsOperation,
+	ctx, span := s.cfg.Tracer.Start(r.Context(), RevealCardOperation,
 		trace.WithAttributes(otelAttrs...),
 		serverSpanKind,
 	)
@@ -3078,45 +2924,45 @@ func (s *Server) handleSendResultsRequest(args [0]string, argsEscaped bool, w ht
 		}
 		err          error
 		opErrContext = ogenerrors.OperationContext{
-			Name: SendResultsOperation,
-			ID:   "SendResults",
+			Name: RevealCardOperation,
+			ID:   "RevealCard",
 		}
 	)
-
-	var rawBody []byte
-	request, rawBody, close, err := s.decodeSendResultsRequest(r)
+	params, err := decodeRevealCardParams(args, argsEscaped, r)
 	if err != nil {
-		err = &ogenerrors.DecodeRequestError{
+		err = &ogenerrors.DecodeParamsError{
 			OperationContext: opErrContext,
 			Err:              err,
 		}
-		defer recordError("DecodeRequest", err)
+		defer recordError("DecodeParams", err)
 		s.cfg.ErrorHandler(ctx, w, r, err)
 		return
 	}
-	defer func() {
-		if err := close(); err != nil {
-			recordError("CloseRequest", err)
-		}
-	}()
 
-	var response SendResultsRes
+	var rawBody []byte
+
+	var response RevealCardRes
 	if m := s.cfg.Middleware; m != nil {
 		mreq := middleware.Request{
 			Context:          ctx,
-			OperationName:    SendResultsOperation,
-			OperationSummary: "Send set/feed results",
-			OperationID:      "SendResults",
-			Body:             request,
+			OperationName:    RevealCardOperation,
+			OperationSummary: "Show the answer of a flip card before the reader grades themselves",
+			OperationID:      "RevealCard",
+			Body:             nil,
 			RawBody:          rawBody,
-			Params:           middleware.Parameters{},
-			Raw:              r,
+			Params: middleware.Parameters{
+				{
+					Name: "cardId",
+					In:   "path",
+				}: params.CardId,
+			},
+			Raw: r,
 		}
 
 		type (
-			Request  = SendResultsRequest
-			Params   = struct{}
-			Response = SendResultsRes
+			Request  = struct{}
+			Params   = RevealCardParams
+			Response = RevealCardRes
 		)
 		response, err = middleware.HookMiddleware[
 			Request,
@@ -3125,14 +2971,14 @@ func (s *Server) handleSendResultsRequest(args [0]string, argsEscaped bool, w ht
 		](
 			m,
 			mreq,
-			nil,
+			unpackRevealCardParams,
 			func(ctx context.Context, request Request, params Params) (response Response, err error) {
-				response, err = s.h.SendResults(ctx, request)
+				response, err = s.h.RevealCard(ctx, params)
 				return response, err
 			},
 		)
 	} else {
-		response, err = s.h.SendResults(ctx, request)
+		response, err = s.h.RevealCard(ctx, params)
 	}
 	if err != nil {
 		defer recordError("Internal", err)
@@ -3140,7 +2986,7 @@ func (s *Server) handleSendResultsRequest(args [0]string, argsEscaped bool, w ht
 		return
 	}
 
-	if err := encodeSendResultsResponse(response, w, span); err != nil {
+	if err := encodeRevealCardResponse(response, w, span); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)

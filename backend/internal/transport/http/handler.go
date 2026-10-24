@@ -131,12 +131,12 @@ func (h *APIHandler) DeleteCard(ctx context.Context, params contracts.DeleteCard
 	return h.UnimplementedHandler.DeleteCard(ctx, params)
 }
 
-// CheckAnswer implements contracts.Handler.CheckAnswer.
-func (h *APIHandler) CheckAnswer(ctx context.Context, req *contracts.CheckAnswerRequest, params contracts.CheckAnswerParams) (contracts.CheckAnswerRes, error) {
+// RevealCard implements contracts.Handler.RevealCard.
+func (h *APIHandler) RevealCard(ctx context.Context, params contracts.RevealCardParams) (contracts.RevealCardRes, error) {
 	if h.cards != nil {
-		return h.cards.CheckAnswer(ctx, req, params)
+		return h.cards.RevealCard(ctx, params)
 	}
-	return h.UnimplementedHandler.CheckAnswer(ctx, req, params)
+	return h.UnimplementedHandler.RevealCard(ctx, params)
 }
 
 // AnswerQuestion implements contracts.Handler.AnswerQuestion.
@@ -191,14 +191,6 @@ func (h *APIHandler) GetFeedQuestions(ctx context.Context) (contracts.GetFeedQue
 		return h.homescreen.GetFeedQuestions(ctx)
 	}
 	return h.UnimplementedHandler.GetFeedQuestions(ctx)
-}
-
-// SendResults implements contracts.Handler.SendResults.
-func (h *APIHandler) SendResults(ctx context.Context, req contracts.SendResultsRequest) (contracts.SendResultsRes, error) {
-	if h.homescreen != nil {
-		return h.homescreen.SendResults(ctx, req)
-	}
-	return h.UnimplementedHandler.SendResults(ctx, req)
 }
 
 // CreateSet delegates manual creation.

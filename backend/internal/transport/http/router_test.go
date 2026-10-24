@@ -326,7 +326,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 					Kind:     contracts.CardKindChoice,
 					Question: "What is 2+2?",
 					Options:  []string{"3", "4", "5"},
-					Answer:   contracts.NewStringCardAnswer("4"),
+					Answer:   contracts.NewOptCardAnswer(contracts.NewStringCardAnswer("4")),
 				},
 			}, nil
 		},
@@ -362,8 +362,8 @@ func TestRouter_E2E_Integration(t *testing.T) {
 				return nil, usecase.ErrNotFound
 			}
 			return &contracts.AnswerQuestionResponse{
-				IsCorrect:  answer == "4",
-				UserAnswer: answer,
+				IsCorrect: answer == "4",
+				Method:    contracts.AnswerQuestionResponseMethodLocal,
 			}, nil
 		},
 	}
@@ -381,28 +381,19 @@ func TestRouter_E2E_Integration(t *testing.T) {
 				DueCount: 7,
 			}, nil
 		},
-		getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID) ([]contracts.Card, error) {
+		getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID) ([]contracts.FeedCard, error) {
 			if userID != testUserID {
 				t.Errorf("expected userID %s, got %s", testUserID, userID)
 			}
-			return []contracts.Card{
+			return []contracts.FeedCard{
 				{
 					ID:       testCardID,
 					SetId:    testSetID,
 					Kind:     contracts.CardKindChoice,
 					Question: "Feed Question",
-					Answer:   contracts.NewStringCardAnswer("Feed Answer"),
+					Options:  []string{"4", "5"},
 				},
 			}, nil
-		},
-		sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.Answer) error {
-			if userID != testUserID {
-				t.Errorf("expected userID %s, got %s", testUserID, userID)
-			}
-			if len(results) != 1 {
-				t.Errorf("expected 1 result, got %d", len(results))
-			}
-			return nil
 		},
 	}
 
@@ -517,7 +508,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 			t.Fatalf("failed to parse json: %v", err)
 		}
-		if !resp.IsCorrect || resp.UserAnswer != "4" {
+		if !resp.IsCorrect || resp.Method != contracts.AnswerQuestionResponseMethodLocal {
 			t.Errorf("unexpected answer response: %+v", resp)
 		}
 	})
@@ -549,16 +540,21 @@ func TestRouter_E2E_Integration(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
 		}
-		var resp []contracts.Card
+		var resp []map[string]any
 		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 			t.Fatalf("failed to parse json: %v", err)
 		}
-		if len(resp) != 1 || resp[0].Question != "Feed Question" {
+		if len(resp) != 1 || resp[0]["question"] != "Feed Question" {
 			t.Errorf("unexpected feed response: %+v", resp)
+		}
+		for _, hidden := range []string{"answer", "explanation", "sourceQuote", "sourceRef"} {
+			if _, ok := resp[0][hidden]; ok {
+				t.Errorf("the feed gives away %q: %s", hidden, rec.Body.String())
+			}
 		}
 	})
 
-	t.Run("POST /api/results with auth returns 204 No Content", func(t *testing.T) {
+	t.Run("POST /api/results is gone: the client cannot report its own verdict", func(t *testing.T) {
 		body := bytes.NewBufferString(fmt.Sprintf(`[{"cardId":"%s","correct":true}]`, testCardID))
 		req := httptest.NewRequest(http.MethodPost, "/api/results", body)
 		req.Header.Set("Authorization", "max "+authHeader)
@@ -566,8 +562,8 @@ func TestRouter_E2E_Integration(t *testing.T) {
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusNoContent {
-			t.Fatalf("expected status 204, got %d: %s", rec.Code, rec.Body.String())
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected status 404, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
 

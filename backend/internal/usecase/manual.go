@@ -142,7 +142,7 @@ func (s *cardServiceImpl) CreateCard(ctx context.Context, userID uuid.UUID, setI
 	if err != nil {
 		return nil, err
 	}
-	return &contracts.Card{ID: id, SetId: setID, Kind: req.Kind, Question: req.Question, Answer: req.Answer, Options: req.Options, Table: req.Table, Explanation: req.Explanation.Value}, nil
+	return &contracts.Card{ID: id, SetId: setID, Kind: req.Kind, Question: req.Question, Answer: contracts.NewOptCardAnswer(req.Answer), Options: req.Options, Table: req.Table, Explanation: contracts.NewOptString(req.Explanation.Value)}, nil
 }
 
 // WithManualCards configures transactional manual card persistence.

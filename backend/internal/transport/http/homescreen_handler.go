@@ -2,13 +2,12 @@ package http
 
 import (
 	"context"
-	"errors"
 
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
-// HomescreenHandler handles homescreen, feed, and results transport operations.
+// HomescreenHandler handles homescreen and feed transport operations.
 type HomescreenHandler struct {
 	homescreenService usecase.HomescreenService
 }
@@ -38,24 +37,8 @@ func (h *HomescreenHandler) GetFeedQuestions(ctx context.Context) (contracts.Get
 		return &contracts.GetFeedQuestionsInternalServerError{Message: internalError(ctx, "GetFeedQuestions", err)}, nil
 	}
 	if cards == nil {
-		cards = []contracts.Card{}
+		cards = []contracts.FeedCard{}
 	}
 	cardsRes := contracts.GetFeedQuestionsOKApplicationJSON(cards)
 	return &cardsRes, nil
-}
-
-// SendResults implements contracts.Handler.SendResults.
-func (h *HomescreenHandler) SendResults(ctx context.Context, req contracts.SendResultsRequest) (contracts.SendResultsRes, error) {
-	if len(req) == 0 {
-		return &contracts.SendResultsBadRequest{Message: "results are required"}, nil
-	}
-	userID, _ := UserIDFromContext(ctx)
-	err := h.homescreenService.SendResults(ctx, userID, []contracts.Answer(req))
-	if err != nil {
-		if errors.Is(err, usecase.ErrValidation) || errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
-			return &contracts.SendResultsBadRequest{Message: err.Error()}, nil
-		}
-		return &contracts.SendResultsInternalServerError{Message: internalError(ctx, "SendResults", err)}, nil
-	}
-	return &contracts.SendResultsNoContent{}, nil
 }

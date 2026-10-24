@@ -39,7 +39,7 @@ func (s *manualCardService) CreateCard(_ context.Context, _ uuid.UUID, setID uui
 	if s.err != nil {
 		return nil, s.err
 	}
-	return &contracts.Card{ID: uuid.New(), SetId: setID, Kind: req.Kind, Question: req.Question, Answer: req.Answer}, nil
+	return &contracts.Card{ID: uuid.New(), SetId: setID, Kind: req.Kind, Question: req.Question, Answer: contracts.NewOptCardAnswer(req.Answer)}, nil
 }
 func TestManualCreationHTTP(t *testing.T) {
 	setID := uuid.NewString()

@@ -72,6 +72,10 @@ func TestCardListsBatchDetails(t *testing.T) {
 				return rows, nil
 			}
 			testUserID := uuid.New()
+			// The author gets whole cards; a member's list is checked elsewhere.
+			q.getSetByIDFunc = func(context.Context, db.GetSetByIDParams) (db.GetSetByIDRow, error) {
+				return db.GetSetByIDRow{ID: set, AuthorID: pgtype.UUID{Bytes: testUserID, Valid: true}}, nil
+			}
 			q.getFeedCardsForUserFunc = func(ctx context.Context, _ pgtype.UUID) ([]db.GetFeedCardsForUserRow, error) {
 				source, _ := q.getCardsBySetIDFunc(ctx, db.GetCardsBySetIDParams{})
 				rows := []db.GetFeedCardsForUserRow{}
@@ -89,10 +93,10 @@ func TestCardListsBatchDetails(t *testing.T) {
 				}
 				count = len(cards)
 				for i, c := range cards {
-					if i%2 == 0 && (len(c.Options) != 3 || c.Options[0] != "Answer" || c.Answer.Type != contracts.StringArrayCardAnswer || len(c.Answer.StringArray) != 2) {
+					if i%2 == 0 && (len(c.Options) != 3 || c.Options[0] != "Answer") {
 						t.Fatalf("lost choice details: %+v", c)
 					}
-					if i%2 == 1 && (len(c.Table.Value.Columns) != 1 || len(c.Table.Value.Items) != 1) {
+					if i%2 == 1 && (len(c.Table.Value.Columns) != 1 || len(c.Table.Value.Items) != 1 || c.Table.Value.Items[0] != "Item") {
 						t.Fatalf("lost table details: %+v", c)
 					}
 				}
@@ -103,7 +107,7 @@ func TestCardListsBatchDetails(t *testing.T) {
 				}
 				count = len(cards)
 				for i, c := range cards {
-					if i%2 == 0 && (len(c.Options) != 3 || c.Options[0] != "Answer" || c.Answer.Type != contracts.StringArrayCardAnswer || len(c.Answer.StringArray) != 2) {
+					if i%2 == 0 && (len(c.Options) != 3 || c.Options[0] != "Answer" || c.Answer.Value.Type != contracts.StringArrayCardAnswer || len(c.Answer.Value.StringArray) != 2) {
 						t.Fatalf("lost choice details: %+v", c)
 					}
 					if i%2 == 1 && (len(c.Table.Value.Columns) != 1 || len(c.Table.Value.Items) != 1) {

@@ -24,20 +24,6 @@ func encodeAnswerQuestionRequest(
 	return nil
 }
 
-func encodeCheckAnswerRequest(
-	req *CheckAnswerRequest,
-	r *http.Request,
-) error {
-	const contentType = "application/json"
-	e := new(jx.Encoder)
-	{
-		req.Encode(e)
-	}
-	encoded := e.Bytes()
-	ht.SetBody(r, bytes.NewReader(encoded), contentType)
-	return nil
-}
-
 func encodeCreateCardRequest(
 	req *CreateCardRequest,
 	r *http.Request,
@@ -96,20 +82,6 @@ func encodePutProfileRequest(
 
 func encodeReportCardIssueRequest(
 	req *ReportCardIssueRequest,
-	r *http.Request,
-) error {
-	const contentType = "application/json"
-	e := new(jx.Encoder)
-	{
-		req.Encode(e)
-	}
-	encoded := e.Bytes()
-	ht.SetBody(r, bytes.NewReader(encoded), contentType)
-	return nil
-}
-
-func encodeSendResultsRequest(
-	req SendResultsRequest,
 	r *http.Request,
 ) error {
 	const contentType = "application/json"

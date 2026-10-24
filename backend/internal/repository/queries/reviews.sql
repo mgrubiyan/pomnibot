@@ -27,3 +27,10 @@ ON CONFLICT (user_id, fact_id) DO UPDATE SET
     last_reviewed_at = EXCLUDED.last_reviewed_at,
     next_review_at = EXCLUDED.next_review_at
 RETURNING *;
+
+-- name: GetLastAnswer :one
+-- The verdict recorded last for the user's answer to the card.
+SELECT correct FROM answers
+WHERE user_id = $1 AND card_id = $2
+ORDER BY id DESC
+LIMIT 1;
