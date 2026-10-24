@@ -422,7 +422,7 @@ export function Feed({
         [card, ask, startFlip],
     );
 
-    const layout = card?.table ? layoutOf(card.table, reveal?.answer) : undefined;
+    const layout = card?.table ? layoutOf(card.table, reveal?.answer, placements[card.id]) : undefined;
     const placement: Placement =
         layout && card ? (placements[card.id] ?? emptyPlacement(layout)) : [];
     const pickedIndex = picked && card && picked.cardId === card.id ? picked.index : null;

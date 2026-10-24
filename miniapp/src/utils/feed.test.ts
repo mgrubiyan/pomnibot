@@ -48,6 +48,24 @@ describe('layoutOf', () => {
         };
         expect(layoutOf(repeated, revealed).items.map((item) => item.column)).toEqual(['Чётные', 'Чётные', 'Простые']);
     });
+
+    it('leaves a repeated term in a column it belongs to, as the backend grades it', () => {
+        const repeated = { columns: ['Чётные', 'Простые'], items: ['2', '4', '2'] };
+        const revealed = {
+            columns: repeated.columns,
+            items: [
+                { text: '2', column: 'Чётные' },
+                { text: '4', column: 'Чётные' },
+                { text: '2', column: 'Простые' },
+            ],
+        };
+        const placed = ['Простые', 'Простые', 'Чётные'];
+        expect(layoutOf(repeated, revealed, placed).items.map((item) => item.column)).toEqual([
+            'Простые',
+            'Чётные',
+            'Чётные',
+        ]);
+    });
 });
 
 describe('patchFeedCard', () => {
