@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -380,6 +381,25 @@ func TestResponseDiagnosticsPreserveDuplicateFieldDecoding(t *testing.T) {
 			}
 			if fields := diagnosticFields(t, err); fields["path"] != tc.path {
 				t.Errorf("path = %v, want %s", fields["path"], tc.path)
+			}
+		})
+	}
+}
+
+func TestTypeDiagnosticsOmitEmbeddedGoStructNames(t *testing.T) {
+	// Go 1.26 exposes CardBase in UnmarshalTypeError.Field for promoted fields;
+	// Go 1.27 exposes the JSON field directly. Neither shape changes the wire path.
+	for _, field := range []string{"CardBase.question", "question", "CardBase.source", "source", "CardBase.sourceQuote", "sourceQuote"} {
+		t.Run(field, func(t *testing.T) {
+			cause := &json.UnmarshalTypeError{Value: "bool", Type: reflect.TypeFor[string](), Field: field}
+			err := atPath("facts[0].recall", safeDecodeProblem(cause))
+			want := "facts[0].recall." + strings.TrimPrefix(field, "CardBase.")
+			if fields := diagnosticFields(t, err); fields["path"] != want {
+				t.Fatalf("%v, want path %s", fields, want)
+			}
+			var got *json.UnmarshalTypeError
+			if !errors.As(err, &got) || got != cause {
+				t.Fatal("lost parser cause")
 			}
 		})
 	}

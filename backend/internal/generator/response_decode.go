@@ -88,6 +88,11 @@ func safeDecodeProblem(err error) error {
 	if errors.As(err, &mismatch) {
 		path := ""
 		for _, field := range strings.Split(mismatch.Field, ".") {
+			// Go 1.26 includes this embedded Go type in promoted field paths.
+			// CardBase has no JSON nesting; Go 1.27 already omits this segment.
+			if field == "CardBase" {
+				continue
+			}
 			if index, e := strconv.Atoi(field); e == nil && index >= 0 {
 				path += fmt.Sprintf("[%d]", index)
 				continue
