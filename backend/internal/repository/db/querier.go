@@ -49,7 +49,8 @@ type Querier interface {
 	GetFactsBySetID(ctx context.Context, setID pgtype.UUID) ([]GetFactsBySetIDRow, error)
 	GetFeedCardsForUser(ctx context.Context, userID pgtype.UUID) ([]GetFeedCardsForUserRow, error)
 	// The verdict recorded last for the user's answer to the card, if it was
-	// recorded after since; the id is a UUIDv7 and holds the time of the answer.
+	// recorded after since_id: ids are UUIDv7 and grow with the time of the
+	// answer, so the bound reads only the user's latest answers by their index.
 	GetLastAnswer(ctx context.Context, arg GetLastAnswerParams) (bool, error)
 	GetMaxCardStepInFact(ctx context.Context, factID pgtype.UUID) (int32, error)
 	GetNextReviewDateForUser(ctx context.Context, userID pgtype.UUID) (pgtype.Timestamptz, error)

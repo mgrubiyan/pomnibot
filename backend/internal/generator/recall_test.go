@@ -31,7 +31,7 @@ func TestRecallExpansionAndAccounting(t *testing.T) {
 		if extra != "" {
 			pairs = 3
 		}
-		if calls != 1 || batches != 1 || len(r.Facts[0].Cards) != pairs*2 {
+		if calls != 2 || batches != 1 || len(r.Facts[0].Cards) != pairs*2 {
 			t.Fatalf("calls=%d batches=%d result=%+v", calls, batches, r)
 		}
 		for i := 0; i < pairs; i++ {

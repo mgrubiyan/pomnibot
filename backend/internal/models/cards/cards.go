@@ -33,17 +33,19 @@ type Fact struct {
 // Card mirrors Card in miniapp/src/types.ts without id and setId, which the
 // storage assigns, and topic, which its fact holds; plus FactID.
 type Card struct {
-	Evidence     []material.Evidence `json:"evidence,omitempty"`
-	FactID       string              `json:"factId"`
-	Kind         Kind                `json:"kind"`
-	Question     string              `json:"question"`
-	RightAnswers []string            `json:"rightAnswers,omitempty"`
-	Options      []string            `json:"options,omitempty"` // choice only, includes all RightAnswers
-	Answer       string              `json:"answer"`            // boolean text; JSON string array for multiple choice answers
-	Explanation  string              `json:"explanation"`
-	SourceQuote  string              `json:"sourceQuote"` // exact text of the normalized notes
-	SourceRef    string              `json:"sourceRef,omitempty"`
-	Table        *Table              `json:"table,omitempty"` // table only; Answer is empty
+	Evidence       []material.Evidence `json:"evidence,omitempty"`
+	FactID         string              `json:"factId"`
+	Kind           Kind                `json:"kind"`
+	Question       string              `json:"question"`
+	RightAnswers   []string            `json:"rightAnswers,omitempty"`
+	Options        []string            `json:"options,omitempty"` // choice only, includes all RightAnswers
+	Answer         string              `json:"answer"`            // boolean text; JSON string array for multiple choice answers
+	Explanation    string              `json:"explanation"`
+	QuestionSvg    string              `json:"questionSvg,omitempty"`
+	ExplanationSvg string              `json:"explanationSvg,omitempty"`
+	SourceQuote    string              `json:"sourceQuote"` // exact text of the normalized notes
+	SourceRef      string              `json:"sourceRef,omitempty"`
+	Table          *Table              `json:"table,omitempty"` // table only; Answer is empty
 }
 
 // Table mirrors TableLayout in miniapp/src/types.ts: terms and the column

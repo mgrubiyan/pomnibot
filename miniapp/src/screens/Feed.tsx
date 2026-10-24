@@ -3,6 +3,8 @@ import { Button, Flex, IconButton, Input, Spinner, Typography } from '@maxhub/ma
 import type { Answer, Card, CardAnswer, CardReveal, FeedCard } from '../types';
 import { api } from '../api';
 import { TableColumns, TablePool } from '../components/TableCard';
+import { StudyContent } from '../components/StudyContent';
+import { StudyIllustration } from '../components/StudyIllustration';
 import type { CardPatch } from '../utils/cards';
 import { layoutOf, rejoinedFeed, resumedCards, revealedCard, type FeedResume } from '../utils/feed';
 import { AnswerCheck, type CheckStage } from '../components/AnswerCheck';
@@ -148,7 +150,7 @@ function optionsOf(card: FeedCard): Option[] {
 }
 
 function answerTextOf(answer: CardAnswer, options?: string[]): string {
-    if (Array.isArray(answer)) return answer.join('; ');
+    if (Array.isArray(answer)) return answer.join('\n\n');
     if (typeof answer === 'boolean') {
         return answer ? 'true' : 'false';
     }
@@ -422,7 +424,7 @@ export function Feed({
         [card, ask, startFlip],
     );
 
-    const layout = card?.table ? layoutOf(card.table, reveal?.answer) : undefined;
+    const layout = card?.table ? layoutOf(card.table, reveal?.answer, placements[card.id]) : undefined;
     const placement: Placement =
         layout && card ? (placements[card.id] ?? emptyPlacement(layout)) : [];
     const pickedIndex = picked && card && picked.cardId === card.id ? picked.index : null;
@@ -665,7 +667,7 @@ export function Feed({
                     <Flex
                         direction="column"
                         align="stretch"
-                        justify={check?.typed ? 'space-between' : 'center'}
+                        justify={check?.typed ? 'space-between' : 'start'}
                         gap={24}
                         inert={showAnswer || flipping}
                         aria-hidden={showAnswer}
@@ -683,9 +685,11 @@ export function Feed({
                                 {TASKS[card.kind]}
                             </Typography.Text>
                             <Typography.Text variant="subheader" asChild>
-                                <h1 className={s.question}>{card.question}</h1>
+                                <StudyContent className={s.question} role="heading" aria-level={1} text={card.question} />
                             </Typography.Text>
                         </Flex>
+
+                        <StudyIllustration svg={card.questionSvg} alt="Иллюстрация к вопросу" />
 
                         {check?.typed ? (
                             <AnswerCheck stage={check.stage} answer={check.typed} />
@@ -744,9 +748,10 @@ export function Feed({
                             </Typography.Text>
                         ) : null}
 
-                        <Typography.Text variant="body-strong" color="secondary">
-                            {card.question}
+                        <Typography.Text variant="body-strong" color="secondary" asChild>
+                            <StudyContent text={card.question} />
                         </Typography.Text>
+                        <StudyIllustration svg={card.questionSvg} alt="Иллюстрация к вопросу" />
 
                         {layout && showAnswer ? (
                             <TableColumns
@@ -767,12 +772,12 @@ export function Feed({
                                     ) : (
                                         <IconCross tone="negative" />
                                     )}
-                                    <Flex direction="column">
+                                    <Flex direction="column" className={s.answerBody}>
                                         <Typography.Text variant="label" color="tertiary">
                                             Ваш ответ
                                         </Typography.Text>
-                                        <Typography.Text variant="body" className={s.answerText}>
-                                            {labelOf(card, given)}
+                                        <Typography.Text variant="body" asChild>
+                                            <StudyContent className={s.answerText} text={labelOf(card, given)} />
                                         </Typography.Text>
                                     </Flex>
                                 </Flex>
@@ -781,12 +786,12 @@ export function Feed({
                             {!layout && reveal && showRightAnswer ? (
                                 <Flex align="center" gap={12} className={s.answerRow}>
                                     <IconCheck tone="positive" />
-                                    <Flex direction="column">
+                                    <Flex direction="column" className={s.answerBody}>
                                         <Typography.Text variant="label" color="tertiary">
                                             Верный ответ
                                         </Typography.Text>
-                                        <Typography.Text variant="body" className={s.answerText}>
-                                            {labelOf(card, answerTextOf(reveal.answer, card.options))}
+                                        <Typography.Text variant="body" asChild>
+                                            <StudyContent className={s.answerText} text={labelOf(card, answerTextOf(reveal.answer, card.options))} />
                                         </Typography.Text>
                                     </Flex>
                                 </Flex>
@@ -797,9 +802,11 @@ export function Feed({
 
                         {reveal?.explanation ? (
                             <Typography.Text variant="body" asChild>
-                                <p className={s.explanation}>{reveal.explanation}</p>
+                                <StudyContent className={s.explanation} text={reveal.explanation} />
                             </Typography.Text>
                         ) : null}
+
+                        <StudyIllustration svg={reveal?.explanationSvg} alt="Иллюстрация к объяснению" />
 
                         {/* A card written by hand may have no quote to show. */}
                         {reveal?.sourceQuote ? (
@@ -903,25 +910,32 @@ export function Feed({
                 </Flex>
             ) : (
                 <Flex direction="column" align="stretch" gap={8}>
-                    {options.map((option) => (
-                        <button
-                            key={option.value}
-                            type="button"
-                            className={s.option}
-                            disabled={check !== null}
-                            aria-pressed={card.kind === 'choice' ? selectedOptions.includes(option.value) : undefined}
-                            onClick={() => card.kind === 'choice'
-                                ? setSelectedOptions((current) => current.includes(option.value)
-                                    ? current.filter((value) => value !== option.value) : [...current, option.value])
-                                : submit(option.value, option.value)}
-                        >
-                            <Typography.Text variant="body">{card.kind === 'choice' ? `${selectedOptions.includes(option.value) ? '☑' : '☐'} ` : ''}{option.label}</Typography.Text>
-                        </button>
-                    ))}
+                    {options.length > 0 ? (
+                        <div className={s.options}>
+                            {options.map((option) => (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    className={s.option}
+                                    disabled={check !== null}
+                                    aria-pressed={card.kind === 'choice' ? selectedOptions.includes(option.value) : undefined}
+                                    onClick={() => card.kind === 'choice'
+                                        ? setSelectedOptions((current) => current.includes(option.value)
+                                            ? current.filter((value) => value !== option.value) : [...current, option.value])
+                                        : submit(option.value, option.value)}
+                                >
+                                    {card.kind === 'choice' ? <span aria-hidden="true">{selectedOptions.includes(option.value) ? '☑' : '☐'}</span> : null}
+                                    <Typography.Text variant="body" asChild>
+                                        <StudyContent text={option.label} inControl />
+                                    </Typography.Text>
+                                </button>
+                            ))}
+                        </div>
+                    ) : null}
 
                     {card.kind === 'choice' ? (
                         <Button size="medium" variant="secondary" stretched disabled={check !== null || selectedOptions.length === 0}
-                            onClick={() => submit(JSON.stringify(selectedOptions), selectedOptions.join('; '))}>
+                            onClick={() => submit(JSON.stringify(selectedOptions), selectedOptions.join('\n\n'))}>
                             {check ? 'Проверяю ответ' : 'Проверить'}
                         </Button>
                     ) : null}

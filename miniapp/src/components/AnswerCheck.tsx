@@ -1,4 +1,5 @@
 import { Flex, Spinner, Typography } from '@maxhub/max-ui';
+import { StudyContent } from './StudyContent';
 import s from './AnswerCheck.module.css';
 
 /** How long the reader has waited: the words change, the wait never ends early. */
@@ -24,7 +25,7 @@ export function AnswerCheck({ stage, answer }: AnswerCheckProps) {
                     Ваш ответ
                 </Typography.Text>
                 <Typography.Text variant="body-strong" asChild>
-                    <p className={s.answer}>{answer}</p>
+                    <StudyContent className={s.answer} text={answer} />
                 </Typography.Text>
             </Flex>
 

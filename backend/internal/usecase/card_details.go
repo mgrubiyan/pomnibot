@@ -72,3 +72,12 @@ func choiceAnswer(options []db.CardOption, stored string) contracts.CardAnswer {
 	}
 	return contracts.NewStringArrayCardAnswer(right)
 }
+
+func setCardIllustrations(card *contracts.Card, question, explanation pgtype.Text) {
+	if question.Valid && question.String != "" {
+		card.QuestionSvg.SetTo(question.String)
+	}
+	if explanation.Valid && explanation.String != "" {
+		card.ExplanationSvg.SetTo(explanation.String)
+	}
+}

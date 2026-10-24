@@ -48,9 +48,32 @@ describe('layoutOf', () => {
         };
         expect(layoutOf(repeated, revealed).items.map((item) => item.column)).toEqual(['Чётные', 'Чётные', 'Простые']);
     });
+
+    it('leaves a repeated term in a column it belongs to, as the backend grades it', () => {
+        const repeated = { columns: ['Чётные', 'Простые'], items: ['2', '4', '2'] };
+        const revealed = {
+            columns: repeated.columns,
+            items: [
+                { text: '2', column: 'Чётные' },
+                { text: '4', column: 'Чётные' },
+                { text: '2', column: 'Простые' },
+            ],
+        };
+        const placed = ['Простые', 'Простые', 'Чётные'];
+        expect(layoutOf(repeated, revealed, placed).items.map((item) => item.column)).toEqual([
+            'Простые',
+            'Чётные',
+            'Чётные',
+        ]);
+    });
 });
 
 describe('patchFeedCard', () => {
+    it('drops an outdated question illustration after an edit', () => {
+        const original = card('1', { questionSvg: '<svg viewBox="0 0 1 1"/>' });
+        expect(patchFeedCard(original, { explanation: 'Новая формула $x$' }).questionSvg).toBeUndefined();
+        expect(patchFeedCard(original).questionSvg).toBe(original.questionSvg);
+    });
     it('takes the edited question and the terms without their columns', () => {
         const patched = patchFeedCard(card('1', { kind: 'table', table: { columns: ['A'], items: ['x'] } }), {
             question: 'Новый вопрос',
@@ -88,6 +111,12 @@ describe('revealedCard', () => {
         expect(whole.answer).toBe('ответ');
         expect(whole.sourceQuote).toBe('цитата');
         expect(whole.table).toBeUndefined();
+    });
+
+    it('keeps question and revealed explanation images in the full card', () => {
+        const whole = revealedCard(card('1', { questionSvg: '<svg viewBox="0 0 1 1"/>' }), { ...reveal, explanationSvg: '<svg viewBox="0 0 2 2"/>' });
+        expect(whole.questionSvg).toBe('<svg viewBox="0 0 1 1"/>');
+        expect(whole.explanationSvg).toBe('<svg viewBox="0 0 2 2"/>');
     });
 
     it('gives a sorting card its placed terms', () => {

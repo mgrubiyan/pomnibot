@@ -1,6 +1,6 @@
 -- name: CreateCard :one
-INSERT INTO cards (id, fact_id, kind, question, answer_text, explanation, source_quote, source_ref, step)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO cards (id, fact_id, kind, question, answer_text, explanation, source_quote, source_ref, step, question_svg, explanation_svg)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
 
 -- name: CreateCardOption :one
@@ -28,6 +28,8 @@ SELECT
     c.question,
     c.answer_text,
     c.explanation,
+    c.question_svg,
+    c.explanation_svg,
     c.source_quote,
     c.source_ref,
     c.updated_at
@@ -50,6 +52,8 @@ SELECT
     c.question,
     c.answer_text,
     c.explanation,
+    c.question_svg,
+    c.explanation_svg,
     c.source_quote,
     c.source_ref,
     c.updated_at
@@ -68,6 +72,8 @@ SELECT
     c.question,
     c.answer_text,
     c.explanation,
+    c.question_svg,
+    c.explanation_svg,
     c.source_quote,
     c.source_ref,
     c.updated_at,
@@ -109,13 +115,15 @@ SET
     explanation = COALESCE($5, explanation),
     source_quote = COALESCE($6, source_quote),
     source_ref = COALESCE($7, source_ref),
+    question_svg = NULL,
+    explanation_svg = NULL,
     updated_at = CURRENT_TIMESTAMP
 FROM facts f
 JOIN sets s ON f.set_id = s.id
 WHERE cards.id = $1
   AND cards.fact_id = f.id
   AND s.author_id = $8
-RETURNING cards.id, cards.fact_id, cards.kind, cards.question, cards.answer_text, cards.explanation, cards.source_quote, cards.source_ref, cards.updated_at;
+RETURNING cards.id, cards.fact_id, cards.kind, cards.question, cards.answer_text, cards.explanation, cards.question_svg, cards.explanation_svg, cards.source_quote, cards.source_ref, cards.updated_at;
 
 -- name: DeleteCard :one
 WITH removed AS (
@@ -163,6 +171,8 @@ ranked_cards AS (
         c.question,
         c.answer_text,
         c.explanation,
+        c.question_svg,
+        c.explanation_svg,
         c.source_quote,
         c.source_ref,
         c.updated_at,
@@ -199,6 +209,8 @@ SELECT
     question,
     answer_text,
     explanation,
+    question_svg,
+    explanation_svg,
     source_quote,
     source_ref,
     updated_at

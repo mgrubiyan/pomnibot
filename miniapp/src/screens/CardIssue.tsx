@@ -3,6 +3,8 @@ import { Button, Flex, Radio, Typography } from '@maxhub/max-ui';
 import type { Card, CardIssueReason } from '../types';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { StudyContent } from '../components/StudyContent';
+import { StudyIllustration } from '../components/StudyIllustration';
 import { ISSUE_REASONS, answerPreview } from '../utils/issues';
 import s from './CardIssue.module.css';
 
@@ -45,11 +47,12 @@ export function CardIssue({ card, setTitle, isOwner = false, onBack, onEdit, onR
                     <Typography.Text variant="label" color="tertiary">
                         Карточка
                     </Typography.Text>
-                    <Typography.Text variant="body-strong" className={s.previewText}>
-                        {card.question}
+                    <Typography.Text variant="body-strong" asChild>
+                        <StudyContent className={s.previewText} text={card.question} />
                     </Typography.Text>
-                    <Typography.Text variant="description" color="secondary" className={s.previewText}>
-                        Ответ: {answerPreview(card)}
+                    <StudyIllustration svg={card.questionSvg} alt="Иллюстрация к вопросу" />
+                    <Typography.Text variant="description" color="secondary" asChild>
+                        <StudyContent className={s.previewText} text={`Ответ: ${answerPreview(card)}`} />
                     </Typography.Text>
                 </Flex>
 

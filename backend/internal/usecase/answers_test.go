@@ -241,7 +241,8 @@ func TestAnswerQuestionRepeatsOnlyARecentVerdict(t *testing.T) {
 	f.inFeed.Store(false)
 	var since time.Time
 	f.getLastAnswerFunc = func(_ context.Context, arg db.GetLastAnswerParams) (bool, error) {
-		since = arg.Since.Time
+		sec, nsec := uuid.UUID(arg.SinceID.Bytes).Time().UnixTime()
+		since = time.Unix(sec, nsec)
 		return false, pgx.ErrNoRows
 	}
 	svc := usecase.NewCardService(f, usecase.NewUserService(f))

@@ -23,6 +23,9 @@ func TestDirectGenerationPublishesOnceAfterValidation(t *testing.T) {
 			if published != 0 || len(req.Schema) == 0 || req.ReasoningEffort == "" || !req.NoFallback {
 				t.Fatal("missing request controls or early publication")
 			}
+			if calls == 2 {
+				return providers.Response{Content: []byte(`{"illustrations":[]}`), Usage: providers.Usage{CostUSD: .01, PromptTokens: 20, CompletionTokens: 10}}, nil
+			}
 			if len(doc.PDFs) > 0 && len(req.PDFs) != 1 {
 				t.Fatal("missing original PDF")
 			}
@@ -37,7 +40,7 @@ func TestDirectGenerationPublishesOnceAfterValidation(t *testing.T) {
 				t.Fatal("partial batch")
 			}
 		}}).Generate(context.Background(), doc)
-		if err != nil || calls != 1 || published != 1 || len(r.Stats.Stages) != 1 || r.Stats.CostUSD != .01 || r.Stats.PromptTokens != 20 || r.Stats.CompletionTokens != 10 {
+		if err != nil || calls != 2 || published != 1 || len(r.Stats.Stages) != 2 || r.Stats.CostUSD != .02 || r.Stats.PromptTokens != 40 || r.Stats.CompletionTokens != 20 {
 			t.Fatalf("%+v %v calls=%d published=%d", r, err, calls, published)
 		}
 		if r.Artifact.Facts[0].Name != r.Facts[0].Name || CardCount(r.Facts) != 2 || r.Artifact.Request == nil || r.Artifact.Response != directReply() {

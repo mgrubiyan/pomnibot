@@ -12,6 +12,17 @@
     overscroll-behavior: contain;
 }
 
+.preview {
+    min-width: 0;
+    border-bottom: 1px solid var(--divider-primary);
+}
+
+.preview summary {
+    padding: 8px 0;
+    font-weight: 600;
+    cursor: pointer;
+}
+
 /* Fields inside the card take the screen background to stand apart from it. */
 .field {
     background: var(--background-surface);

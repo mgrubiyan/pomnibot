@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 )
 
 // modelFact is the private generation contract. Persisted Fact keeps its cards wire format.
@@ -23,8 +24,17 @@ func (r *recall) UnmarshalJSON(b []byte) error {
 	if err := requiredFields(b, "question", "answer", "source", "sourceQuote"); err != nil {
 		return err
 	}
-	type plain recall
-	return strictJSON(b, (*plain)(r))
+	var wire struct {
+		Question    string `json:"question"`
+		Source      string `json:"source"`
+		SourceQuote string `json:"sourceQuote"`
+		Answer      string `json:"answer"`
+	}
+	if err := strictJSON(b, &wire); err != nil {
+		return err
+	}
+	*r = recall{CardBase: CardBase{Question: wire.Question, Source: wire.Source, SourceQuote: wire.SourceQuote}, Answer: wire.Answer}
+	return nil
 }
 
 type modelExtra struct{ card Card }
@@ -56,6 +66,13 @@ func (e *modelExtra) UnmarshalJSON(b []byte) error {
 		}
 		e.card = FlipCard(r)
 		return nil
+	}
+	var fields map[string]json.RawMessage
+	_ = json.Unmarshal(b, &fields)
+	for key := range fields {
+		if strings.EqualFold(key, "questionSvg") || strings.EqualFold(key, "explanationSvg") {
+			return problem("invalid_structure", "<unknown>", "unknown field")
+		}
 	}
 	c, err := decodeCard(b)
 	e.card = c

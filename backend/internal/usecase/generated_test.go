@@ -60,14 +60,14 @@ func TestSaveGeneratedFactsAssignsUUIDsAndConvertsCards(t *testing.T) {
 		},
 	}}
 	base := func(q, s, quote string) generator.CardBase {
-		return generator.CardBase{Question: q, Source: s, SourceQuote: quote}
+		return generator.CardBase{Question: q, Source: s, SourceQuote: quote, QuestionSvg: `<svg viewBox="0 0 1 1"/>`, ExplanationSvg: `<svg viewBox="0 0 2 2"/>`}
 	}
 	r := generator.Result{Facts: []generator.Fact{
 		{Name: "First", Pages: []int{2, 3}, Cards: []generator.Card{
 			generator.FlipCard{CardBase: base("Flip", "Flip source", "Quote 1"), Answer: "A"},
 			generator.BooleanCard{CardBase: base("Boolean", "Boolean source", ""), Answer: false},
 			generator.ChoiceCard{CardBase: base("Choice", "Choice source", "Quote 3"), RightAnswers: []string{"A", "B"}, WrongAnswers: []string{"C"}},
-			generator.TableCard{CardBase: base("Table", "Table source", ""), Columns: []generator.Column{{Name: "X", Rows: []string{"row X"}}, {Name: "Y", Rows: []string{"row Y"}}}},
+			generator.TableCard{CardBase: base("Table", "Table source", ""), Columns: []generator.Column{{Name: "X  ", Rows: []string{"    $\\frac{1}{2}$  \n"}}, {Name: "Y", Rows: []string{"row Y"}}}},
 			generator.InputCard{CardBase: base("Input differs", "Input source", "Quote 5"), Answer: "Different answer"},
 		}},
 		{Name: "Second", Pages: []int{1}, Cards: []generator.Card{generator.FlipCard{CardBase: base("Other", "Other source", ""), Answer: "B"}, generator.InputCard{CardBase: base("Other input", "Other source", ""), Answer: "B"}}},
@@ -93,6 +93,9 @@ func TestSaveGeneratedFactsAssignsUUIDsAndConvertsCards(t *testing.T) {
 		ids[f.ID] = true
 	}
 	for i, c := range saved {
+		if c.QuestionSvg.String != `<svg viewBox="0 0 1 1"/>` || !c.QuestionSvg.Valid || c.ExplanationSvg.String != `<svg viewBox="0 0 2 2"/>` || !c.ExplanationSvg.Valid {
+			t.Fatal("lost generated illustrations")
+		}
 		if !c.ID.Valid || uuid.UUID(c.ID.Bytes).Version() != 7 {
 			t.Fatalf("invalid card UUIDv7 %v", c.ID)
 		}
@@ -117,8 +120,11 @@ func TestSaveGeneratedFactsAssignsUUIDsAndConvertsCards(t *testing.T) {
 	if saved[0].SourceQuote != "Quote 1" || saved[4].SourceQuote != "Quote 5" || saved[1].AnswerText.String != "false" || saved[2].AnswerText.String != `["A","B"]` || saved[3].AnswerText.Valid || saved[4].AnswerText.String != "Different answer" {
 		t.Fatal("lost answer or quote")
 	}
-	if len(options) != 6 || !options[0].IsCorrect || !options[1].IsCorrect || options[2].IsCorrect || len(columns) != 4 || len(items) != 4 || items[0].ColumnName != "X" || items[1].ItemText != "row Y" {
+	if len(options) != 6 || !options[0].IsCorrect || !options[1].IsCorrect || options[2].IsCorrect || len(columns) != 4 || len(items) != 4 || items[0].ColumnName != "X  " || items[1].ItemText != "row Y" {
 		t.Fatal("lost choice/table content")
+	}
+	if items[0].ItemText != "    $\\frac{1}{2}$  \n" {
+		t.Fatalf("changed GFM whitespace: %q", items[0].ItemText)
 	}
 	if len(q.reports) != 2 {
 		t.Fatal("missing private reports")

@@ -1,0 +1,17 @@
+.image {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    max-height: 320px;
+    height: auto;
+    object-fit: contain;
+    box-sizing: border-box;
+    padding: 12px;
+    border-radius: 12px;
+    /* SVGs keep the colors used by their author in either app theme. */
+    background: var(--text-primary-inverse-static);
+}
+
+.image[hidden] {
+    display: none;
+}

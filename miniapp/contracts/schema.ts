@@ -429,21 +429,21 @@ export interface components {
             code?: string;
             message: string;
         };
-        /** @description A term of the table and the column it belongs to. */
+        /** @description A sorting item and its category. Both strings support GFM + math. */
         TableItem: {
             text: string;
             column: string;
         };
-        /** @description Sorting card: lay the terms out across the columns. */
+        /** @description Sorting card: lay terms out across categories. Category names and items support GFM + math, including Markdown tables. This task type is independent of Markdown table formatting. */
         TableLayout: {
             columns: string[];
             items: components["schemas"]["TableItem"][];
         };
         /** @enum {string} */
         CardKind: "choice" | "flip" | "input" | "boolean" | "table";
-        /** @description choice - string[] (all correct option texts); legacy string/integer supported input - string boolean - boolean table - #/components/schemas/TableLayout */
+        /** @description choice - GFM + math string[] (all correct option texts); legacy string/integer supported input/flip - GFM + math string ($...$ inline LaTeX, $$...$$ display LaTeX) boolean - boolean table - #/components/schemas/TableLayout */
         CardAnswer: string[] | number | string | boolean | components["schemas"]["TableLayout"];
-        /** @description answer, explanation and sourceQuote are absent only in a set member's list of the set's cards. */
+        /** @description answer, explanation, explanationSvg and sourceQuote are absent in a set member's list of the set's cards. New generated cards use GFM + math in question, string answers, explanation, choice options and sorting content. Inline LaTeX uses $...$ and display LaTeX uses $$...$$; backslashes are escaped in JSON. Content is stored as source text, without HTML conversion. Existing cards retain their text. factName is plain text; sourceQuote is verbatim and never reformatted. */
         Card: {
             /** Format: uuid */
             id: string;
@@ -453,14 +453,19 @@ export interface components {
             factId: string;
             factName: string;
             kind: components["schemas"]["CardKind"];
+            /** @description GFM + math; inline LaTeX $...$ and display LaTeX $$...$$. */
             question: string;
-            /** @description choice only */
+            /** @description Choice options as GFM + math. */
             options?: string[];
             table?: components["schemas"]["TableLayout"];
             answer?: components["schemas"]["CardAnswer"];
-            /** @description 2-3 sentences */
+            /** @description Explanation as GFM + math, including Markdown tables and LaTeX formulas. */
             explanation?: string;
-            /** @description quote from the notes */
+            /** @description Optional raw static self-contained SVG for the question with viewBox, at most 128 KiB. Omitted when absent. Does not reveal the answer. */
+            questionSvg?: string;
+            /** @description Optional raw static self-contained SVG for the explanation with viewBox, at most 128 KiB. Omitted when absent. */
+            explanationSvg?: string;
+            /** @description Verbatim quote from the notes; preserve all original characters without Markdown or LaTeX conversion. */
             sourceQuote?: string;
             /** @description where the quote is from: «Лекция 3, стр. 2» */
             sourceRef?: string;
@@ -495,8 +500,11 @@ export interface components {
             factId: string;
             factName: string;
             kind: components["schemas"]["CardKind"];
+            /** @description Optional raw static self-contained SVG for the question with viewBox, at most 128 KiB. Omitted when absent. Does not reveal the answer. */
+            questionSvg?: string;
+            /** @description GFM + math; inline LaTeX $...$ and display LaTeX $$...$$. */
             question: string;
-            /** @description choice only */
+            /** @description Choice options as GFM + math. */
             options?: string[];
             table?: components["schemas"]["FeedTable"];
         };
@@ -508,7 +516,10 @@ export interface components {
         /** @description What a feed card hides until it is answered. */
         CardReveal: {
             answer: components["schemas"]["CardAnswer"];
+            /** @description Explanation as GFM + math, including Markdown tables and LaTeX formulas. */
             explanation: string;
+            /** @description Optional raw static self-contained SVG for the explanation with viewBox, at most 128 KiB. Omitted when absent. */
+            explanationSvg?: string;
             sourceQuote: string;
             sourceRef?: string;
         };
@@ -518,22 +529,25 @@ export interface components {
         };
         CreateCardRequest: {
             kind: components["schemas"]["CardKind"];
+            /** @description GFM + math; inline LaTeX $...$ and display LaTeX $$...$$. */
             question: string;
             answer: components["schemas"]["CardAnswer"];
             options?: string[];
             table?: components["schemas"]["TableLayout"];
             explanation?: string;
         };
+        /** @description Editing card content clears both generated SVG illustrations. SVG editing is not supported. */
         UpdateCardRequest: {
             kind?: components["schemas"]["CardKind"];
+            /** @description GFM + math; inline LaTeX $...$ and display LaTeX $$...$$. */
             question?: string;
-            /** @description choice only */
+            /** @description Choice options as GFM + math. */
             options?: string[];
             table?: components["schemas"]["TableLayout"];
             answer?: components["schemas"]["CardAnswer"];
-            /** @description 2-3 sentences */
+            /** @description Explanation as GFM + math, including Markdown tables and LaTeX formulas. */
             explanation?: string;
-            /** @description quote from the notes */
+            /** @description Verbatim quote from the notes; preserve all original characters without Markdown or LaTeX conversion. */
             sourceQuote?: string;
             /** @description where the quote is from: «Лекция 3, стр. 2» */
             sourceRef?: string;
@@ -559,6 +573,7 @@ export interface components {
             /** @description Absent when the set is deleted */
             setTitle?: string;
             kind: components["schemas"]["CardKind"];
+            /** @description GFM + math; inline LaTeX $...$ and display LaTeX $$...$$. */
             question: string;
             /** @description The answer as stored with the card; absent for tables */
             answer?: string;
