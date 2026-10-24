@@ -96,7 +96,8 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID uuid.UUID, title
 		}
 	}
 
-	// The feed selects each fact's step by card UUID order.
+	// The feed selects each fact's step by explicit step order within each fact.
+	factCardSteps := make(map[string]int32)
 	for _, c := range genResult.Cards {
 		cardUUID, err := uuid.NewV7()
 		if err != nil {
@@ -113,6 +114,9 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID uuid.UUID, title
 		if err != nil {
 			return nil, 0, fmt.Errorf("parse generated card fact ID: %w", err)
 		}
+		step := factCardSteps[c.FactID]
+		factCardSteps[c.FactID]++
+
 		createdCard, err := q.CreateCard(ctx, db.CreateCardParams{
 			ID:       cardID,
 			FactID:   pgtype.UUID{Bytes: factID, Valid: true},
@@ -128,6 +132,7 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID uuid.UUID, title
 				String: c.SourceRef,
 				Valid:  c.SourceRef != "",
 			},
+			Step: step,
 		})
 		if err != nil {
 			slog.WarnContext(ctx, "skipping card creation error", "question", c.Question, "error", err)

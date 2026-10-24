@@ -118,6 +118,51 @@ func (s *setServiceImpl) DeleteSet(ctx context.Context, userID uuid.UUID, setID 
 	return nil
 }
 
+func (s *setServiceImpl) UpdateSetTitle(ctx context.Context, userID uuid.UUID, setID uuid.UUID, title string) error {
+	trimmed := strings.TrimSpace(title)
+	if trimmed == "" {
+		return fmt.Errorf("%w: set title cannot be empty", ErrValidation)
+	}
+
+	var pgUUID pgtype.UUID
+	if err := pgUUID.Scan(setID.String()); err != nil {
+		return fmt.Errorf("%w: invalid set id", ErrValidation)
+	}
+
+	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
+	isAuthor, err := s.querier.IsSetAuthor(ctx, db.IsSetAuthorParams{
+		ID:       pgUUID,
+		AuthorID: pgUserID,
+	})
+	if err != nil {
+		return fmt.Errorf("check set author: %w", err)
+	}
+
+	if !isAuthor {
+		exists, err := s.querier.SetExists(ctx, pgUUID)
+		if err != nil {
+			return fmt.Errorf("check set exists: %w", err)
+		}
+		if exists {
+			return ErrForbidden
+		}
+		return ErrNotFound
+	}
+
+	rows, err := s.querier.UpdateSetTitle(ctx, db.UpdateSetTitleParams{
+		ID:       pgUUID,
+		AuthorID: pgUserID,
+		Title:    trimmed,
+	})
+	if err != nil {
+		return fmt.Errorf("update set title: %w", err)
+	}
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *setServiceImpl) GetCardsBySetID(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.Card, error) {
 	var pgUUID pgtype.UUID
 	if err := pgUUID.Scan(setID.String()); err != nil {
@@ -166,6 +211,7 @@ func (s *setServiceImpl) GetCardsBySetID(ctx context.Context, userID uuid.UUID, 
 		if err != nil {
 			return nil, err
 		}
+		c.Step.SetTo(int(r.Step))
 		cards = append(cards, c)
 	}
 

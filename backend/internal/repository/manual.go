@@ -51,7 +51,9 @@ func (s *ManualStore) CreateSet(ctx context.Context, userID uuid.UUID, title str
 			if _, err = q.JoinSet(ctx, db.JoinSetParams{UserID: pgUserID, SetID: set.ID}); err != nil {
 				return err
 			}
-			_, err = insertManualCard(ctx, q, set.ID, req)
+			if req != nil {
+				_, err = insertManualCard(ctx, q, set.ID, req)
+			}
 			return err
 		})
 		var pgErr *pgconn.PgError

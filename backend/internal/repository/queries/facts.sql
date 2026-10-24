@@ -33,3 +33,25 @@ ON CONFLICT (user_id, fact_id) DO NOTHING;
 -- name: GetUserFactProgress :one
 SELECT * FROM user_fact_progress
 WHERE user_id = $1 AND fact_id = $2;
+
+-- name: IsFactAuthor :one
+SELECT EXISTS(
+    SELECT 1 FROM facts f
+    JOIN sets s ON f.set_id = s.id
+    WHERE f.id = $1 AND s.author_id = $2
+) AS is_author;
+
+-- name: FactExists :one
+SELECT EXISTS(
+    SELECT 1 FROM facts WHERE id = $1
+) AS exists;
+
+-- name: UpdateFact :one
+UPDATE facts
+SET name = $2
+WHERE id = $1
+RETURNING *;
+
+-- name: DeleteFact :execrows
+DELETE FROM facts
+WHERE id = $1;

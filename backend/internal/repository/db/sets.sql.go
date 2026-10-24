@@ -487,3 +487,36 @@ func (q *Queries) LockSetForAuthor(ctx context.Context, arg LockSetForAuthorPara
 	err := row.Scan(&id)
 	return id, err
 }
+
+const setExists = `-- name: SetExists :one
+SELECT EXISTS(
+    SELECT 1 FROM sets WHERE id = $1
+) AS exists
+`
+
+func (q *Queries) SetExists(ctx context.Context, id pgtype.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, setExists, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const updateSetTitle = `-- name: UpdateSetTitle :execrows
+UPDATE sets
+SET title = $3, updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND author_id = $2
+`
+
+type UpdateSetTitleParams struct {
+	ID       pgtype.UUID `json:"id"`
+	AuthorID pgtype.UUID `json:"author_id"`
+	Title    string      `json:"title"`
+}
+
+func (q *Queries) UpdateSetTitle(ctx context.Context, arg UpdateSetTitleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateSetTitle, arg.ID, arg.AuthorID, arg.Title)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}

@@ -28,6 +28,18 @@ type Handler interface {
 	//
 	// POST /sets/{setId}/cards
 	CreateCard(ctx context.Context, req *CreateCardRequest, params CreateCardParams) (CreateCardRes, error)
+	// CreateCardInFact implements CreateCardInFact operation.
+	//
+	// Create a card in a fact.
+	//
+	// POST /facts/{factId}/cards
+	CreateCardInFact(ctx context.Context, req *CreateCardRequest, params CreateCardInFactParams) (CreateCardInFactRes, error)
+	// CreateFact implements CreateFact operation.
+	//
+	// Create a fact in a set.
+	//
+	// POST /sets/{setId}/facts
+	CreateFact(ctx context.Context, req *CreateFactRequest, params CreateFactParams) (CreateFactRes, error)
 	// CreateSet implements CreateSet operation.
 	//
 	// CreateSet.
@@ -40,6 +52,12 @@ type Handler interface {
 	//
 	// DELETE /cards/{cardId}
 	DeleteCard(ctx context.Context, params DeleteCardParams) (DeleteCardRes, error)
+	// DeleteFact implements DeleteFact operation.
+	//
+	// Delete a fact.
+	//
+	// DELETE /facts/{factId}
+	DeleteFact(ctx context.Context, params DeleteFactParams) (DeleteFactRes, error)
 	// DeleteSet implements DeleteSet operation.
 	//
 	// Delete a card set.
@@ -59,6 +77,12 @@ type Handler interface {
 	//
 	// GET /sets/{setId}/cards
 	GetCardsBySetID(ctx context.Context, params GetCardsBySetIDParams) (GetCardsBySetIDRes, error)
+	// GetFactsBySetID implements GetFactsBySetID operation.
+	//
+	// Get facts of a set.
+	//
+	// GET /sets/{setId}/facts
+	GetFactsBySetID(ctx context.Context, params GetFactsBySetIDParams) (GetFactsBySetIDRes, error)
 	// GetFeedQuestions implements GetFeedQuestions operation.
 	//
 	// Get questions of current feed.
@@ -126,6 +150,12 @@ type Handler interface {
 	//
 	// PUT /profile
 	PutProfile(ctx context.Context, req *ProfileRequest) (PutProfileRes, error)
+	// ReorderCards implements ReorderCards operation.
+	//
+	// Reorder cards in a fact.
+	//
+	// PUT /facts/{factId}/cards/order
+	ReorderCards(ctx context.Context, req *ReorderCardsRequest, params ReorderCardsParams) (ReorderCardsRes, error)
 	// ReportCardIssue implements ReportCardIssue operation.
 	//
 	// Saves the complaint with a copy of the card as it was reported, so it outlives later edits and the
@@ -151,6 +181,18 @@ type Handler interface {
 	//
 	// PUT /cards/{cardId}
 	UpdateCard(ctx context.Context, req *UpdateCardRequest, params UpdateCardParams) (UpdateCardRes, error)
+	// UpdateFact implements UpdateFact operation.
+	//
+	// Update fact name.
+	//
+	// PATCH /facts/{factId}
+	UpdateFact(ctx context.Context, req *UpdateFactRequest, params UpdateFactParams) (UpdateFactRes, error)
+	// UpdateSet implements UpdateSet operation.
+	//
+	// Update set title.
+	//
+	// PATCH /sets/{setId}
+	UpdateSet(ctx context.Context, req *UpdateSetRequest, params UpdateSetParams) (UpdateSetRes, error)
 }
 
 // Server implements http server based on OpenAPI v3 specification and

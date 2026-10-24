@@ -111,3 +111,16 @@ export const IconPlus = (props: IconProps) => (
         <path d="M12 5v14M5 12h14" />
     </Icon>
 );
+
+export const IconPencil = (props: IconProps) => (
+    <Icon {...props}>
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+    </Icon>
+);
+
+export const IconDrag = (props: IconProps) => (
+    <Icon {...props}>
+        <path d="M4 8h16M4 12h16M4 16h16" />
+    </Icon>
+);

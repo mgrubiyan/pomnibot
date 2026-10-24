@@ -30,6 +30,32 @@ func (q *Queries) CreateFact(ctx context.Context, arg CreateFactParams) (Fact, e
 	return i, err
 }
 
+const deleteFact = `-- name: DeleteFact :execrows
+DELETE FROM facts
+WHERE id = $1
+`
+
+func (q *Queries) DeleteFact(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteFact, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const factExists = `-- name: FactExists :one
+SELECT EXISTS(
+    SELECT 1 FROM facts WHERE id = $1
+) AS exists
+`
+
+func (q *Queries) FactExists(ctx context.Context, id pgtype.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, factExists, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const getFactsBySetID = `-- name: GetFactsBySetID :many
 SELECT f.id, f.set_id, f.name
 FROM facts f
@@ -152,4 +178,43 @@ type InitUserFactProgressParams struct {
 func (q *Queries) InitUserFactProgress(ctx context.Context, arg InitUserFactProgressParams) error {
 	_, err := q.db.Exec(ctx, initUserFactProgress, arg.UserID, arg.SetID)
 	return err
+}
+
+const isFactAuthor = `-- name: IsFactAuthor :one
+SELECT EXISTS(
+    SELECT 1 FROM facts f
+    JOIN sets s ON f.set_id = s.id
+    WHERE f.id = $1 AND s.author_id = $2
+) AS is_author
+`
+
+type IsFactAuthorParams struct {
+	ID       pgtype.UUID `json:"id"`
+	AuthorID pgtype.UUID `json:"author_id"`
+}
+
+func (q *Queries) IsFactAuthor(ctx context.Context, arg IsFactAuthorParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isFactAuthor, arg.ID, arg.AuthorID)
+	var is_author bool
+	err := row.Scan(&is_author)
+	return is_author, err
+}
+
+const updateFact = `-- name: UpdateFact :one
+UPDATE facts
+SET name = $2
+WHERE id = $1
+RETURNING name, id, set_id
+`
+
+type UpdateFactParams struct {
+	ID   pgtype.UUID `json:"id"`
+	Name string      `json:"name"`
+}
+
+func (q *Queries) UpdateFact(ctx context.Context, arg UpdateFactParams) (Fact, error) {
+	row := q.db.QueryRow(ctx, updateFact, arg.ID, arg.Name)
+	var i Fact
+	err := row.Scan(&i.Name, &i.ID, &i.SetID)
+	return i, err
 }

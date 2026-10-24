@@ -240,6 +240,7 @@ type Card struct {
 	SourceQuote string `json:"sourceQuote"`
 	// Where the quote is from: «Лекция 3, стр. 2».
 	SourceRef OptString `json:"sourceRef"`
+	Step      OptInt    `json:"step"`
 }
 
 // GetID returns the value of ID.
@@ -302,6 +303,11 @@ func (s *Card) GetSourceRef() OptString {
 	return s.SourceRef
 }
 
+// GetStep returns the value of Step.
+func (s *Card) GetStep() OptInt {
+	return s.Step
+}
+
 // SetID sets the value of ID.
 func (s *Card) SetID(val uuid.UUID) {
 	s.ID = val
@@ -362,8 +368,14 @@ func (s *Card) SetSourceRef(val OptString) {
 	s.SourceRef = val
 }
 
-func (*Card) createCardRes() {}
-func (*Card) updateCardRes() {}
+// SetStep sets the value of Step.
+func (s *Card) SetStep(val OptInt) {
+	s.Step = val
+}
+
+func (*Card) createCardInFactRes() {}
+func (*Card) createCardRes()       {}
+func (*Card) updateCardRes()       {}
 
 // Choice - string[] (all correct option texts); legacy string/integer supported input - string boolean
 // - boolean table - #/components/schemas/TableLayout.
@@ -922,6 +934,22 @@ type CreateCardForbidden ErrorResponse
 
 func (*CreateCardForbidden) createCardRes() {}
 
+type CreateCardInFactBadRequest ErrorResponse
+
+func (*CreateCardInFactBadRequest) createCardInFactRes() {}
+
+type CreateCardInFactForbidden ErrorResponse
+
+func (*CreateCardInFactForbidden) createCardInFactRes() {}
+
+type CreateCardInFactInternalServerError ErrorResponse
+
+func (*CreateCardInFactInternalServerError) createCardInFactRes() {}
+
+type CreateCardInFactNotFound ErrorResponse
+
+func (*CreateCardInFactNotFound) createCardInFactRes() {}
+
 type CreateCardInternalServerError ErrorResponse
 
 func (*CreateCardInternalServerError) createCardRes() {}
@@ -1000,6 +1028,37 @@ func (s *CreateCardRequest) SetExplanation(val OptString) {
 	s.Explanation = val
 }
 
+type CreateFactBadRequest ErrorResponse
+
+func (*CreateFactBadRequest) createFactRes() {}
+
+type CreateFactForbidden ErrorResponse
+
+func (*CreateFactForbidden) createFactRes() {}
+
+type CreateFactInternalServerError ErrorResponse
+
+func (*CreateFactInternalServerError) createFactRes() {}
+
+type CreateFactNotFound ErrorResponse
+
+func (*CreateFactNotFound) createFactRes() {}
+
+// Ref: #/components/schemas/CreateFactRequest
+type CreateFactRequest struct {
+	Name string `json:"name"`
+}
+
+// GetName returns the value of Name.
+func (s *CreateFactRequest) GetName() string {
+	return s.Name
+}
+
+// SetName sets the value of Name.
+func (s *CreateFactRequest) SetName(val string) {
+	s.Name = val
+}
+
 type CreateSetBadRequest ErrorResponse
 
 func (*CreateSetBadRequest) createSetRes() {}
@@ -1014,8 +1073,8 @@ func (*CreateSetInternalServerError) createSetRes() {}
 
 // Ref: #/components/schemas/CreateSetRequest
 type CreateSetRequest struct {
-	Title string            `json:"title"`
-	Card  CreateCardRequest `json:"card"`
+	Title string               `json:"title"`
+	Card  OptCreateCardRequest `json:"card"`
 }
 
 // GetTitle returns the value of Title.
@@ -1024,7 +1083,7 @@ func (s *CreateSetRequest) GetTitle() string {
 }
 
 // GetCard returns the value of Card.
-func (s *CreateSetRequest) GetCard() CreateCardRequest {
+func (s *CreateSetRequest) GetCard() OptCreateCardRequest {
 	return s.Card
 }
 
@@ -1034,7 +1093,7 @@ func (s *CreateSetRequest) SetTitle(val string) {
 }
 
 // SetCard sets the value of Card.
-func (s *CreateSetRequest) SetCard(val CreateCardRequest) {
+func (s *CreateSetRequest) SetCard(val OptCreateCardRequest) {
 	s.Card = val
 }
 
@@ -1054,6 +1113,23 @@ func (*DeleteCardNoContent) deleteCardRes() {}
 type DeleteCardNotFound ErrorResponse
 
 func (*DeleteCardNotFound) deleteCardRes() {}
+
+type DeleteFactForbidden ErrorResponse
+
+func (*DeleteFactForbidden) deleteFactRes() {}
+
+type DeleteFactInternalServerError ErrorResponse
+
+func (*DeleteFactInternalServerError) deleteFactRes() {}
+
+// DeleteFactNoContent is response for DeleteFact operation.
+type DeleteFactNoContent struct{}
+
+func (*DeleteFactNoContent) deleteFactRes() {}
+
+type DeleteFactNotFound ErrorResponse
+
+func (*DeleteFactNotFound) deleteFactRes() {}
 
 type DeleteSetForbidden ErrorResponse
 
@@ -1102,6 +1178,45 @@ func (s *ErrorResponse) SetMessage(val string) {
 func (*ErrorResponse) getHealthRes()  {}
 func (*ErrorResponse) getProfileRes() {}
 
+// Ref: #/components/schemas/Fact
+type Fact struct {
+	ID    uuid.UUID `json:"id"`
+	SetId uuid.UUID `json:"setId"`
+	Name  string    `json:"name"`
+}
+
+// GetID returns the value of ID.
+func (s *Fact) GetID() uuid.UUID {
+	return s.ID
+}
+
+// GetSetId returns the value of SetId.
+func (s *Fact) GetSetId() uuid.UUID {
+	return s.SetId
+}
+
+// GetName returns the value of Name.
+func (s *Fact) GetName() string {
+	return s.Name
+}
+
+// SetID sets the value of ID.
+func (s *Fact) SetID(val uuid.UUID) {
+	s.ID = val
+}
+
+// SetSetId sets the value of SetId.
+func (s *Fact) SetSetId(val uuid.UUID) {
+	s.SetId = val
+}
+
+// SetName sets the value of Name.
+func (s *Fact) SetName(val string) {
+	s.Name = val
+}
+
+func (*Fact) createFactRes() {}
+
 type GetAdminIssuesForbidden ErrorResponse
 
 func (*GetAdminIssuesForbidden) getAdminIssuesRes() {}
@@ -1129,6 +1244,22 @@ func (*GetCardsBySetIDNotFound) getCardsBySetIDRes() {}
 type GetCardsBySetIDOKApplicationJSON []Card
 
 func (*GetCardsBySetIDOKApplicationJSON) getCardsBySetIDRes() {}
+
+type GetFactsBySetIDForbidden ErrorResponse
+
+func (*GetFactsBySetIDForbidden) getFactsBySetIDRes() {}
+
+type GetFactsBySetIDInternalServerError ErrorResponse
+
+func (*GetFactsBySetIDInternalServerError) getFactsBySetIDRes() {}
+
+type GetFactsBySetIDNotFound ErrorResponse
+
+func (*GetFactsBySetIDNotFound) getFactsBySetIDRes() {}
+
+type GetFactsBySetIDOKApplicationJSON []Fact
+
+func (*GetFactsBySetIDOKApplicationJSON) getFactsBySetIDRes() {}
 
 type GetFeedQuestionsForbidden ErrorResponse
 
@@ -1432,6 +1563,52 @@ func (o OptCardKind) Get() (v CardKind, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptCardKind) Or(d CardKind) CardKind {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptCreateCardRequest returns new OptCreateCardRequest with value set to v.
+func NewOptCreateCardRequest(v CreateCardRequest) OptCreateCardRequest {
+	return OptCreateCardRequest{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptCreateCardRequest is optional CreateCardRequest.
+type OptCreateCardRequest struct {
+	Value CreateCardRequest
+	Set   bool
+}
+
+// IsSet returns true if OptCreateCardRequest was set.
+func (o OptCreateCardRequest) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptCreateCardRequest) Reset() {
+	var v CreateCardRequest
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptCreateCardRequest) SetTo(v CreateCardRequest) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptCreateCardRequest) Get() (v CreateCardRequest, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptCreateCardRequest) Or(d CreateCardRequest) CreateCardRequest {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -1808,6 +1985,42 @@ func (*PutProfileForbidden) putProfileRes() {}
 type PutProfileInternalServerError ErrorResponse
 
 func (*PutProfileInternalServerError) putProfileRes() {}
+
+type ReorderCardsBadRequest ErrorResponse
+
+func (*ReorderCardsBadRequest) reorderCardsRes() {}
+
+type ReorderCardsForbidden ErrorResponse
+
+func (*ReorderCardsForbidden) reorderCardsRes() {}
+
+type ReorderCardsInternalServerError ErrorResponse
+
+func (*ReorderCardsInternalServerError) reorderCardsRes() {}
+
+// ReorderCardsNoContent is response for ReorderCards operation.
+type ReorderCardsNoContent struct{}
+
+func (*ReorderCardsNoContent) reorderCardsRes() {}
+
+type ReorderCardsNotFound ErrorResponse
+
+func (*ReorderCardsNotFound) reorderCardsRes() {}
+
+// Ref: #/components/schemas/ReorderCardsRequest
+type ReorderCardsRequest struct {
+	CardIds []uuid.UUID `json:"cardIds"`
+}
+
+// GetCardIds returns the value of CardIds.
+func (s *ReorderCardsRequest) GetCardIds() []uuid.UUID {
+	return s.CardIds
+}
+
+// SetCardIds sets the value of CardIds.
+func (s *ReorderCardsRequest) SetCardIds(val []uuid.UUID) {
+	s.CardIds = val
+}
 
 type ReportCardIssueBadRequest ErrorResponse
 
@@ -2226,6 +2439,78 @@ func (s *UpdateCardRequest) SetSourceQuote(val OptString) {
 // SetSourceRef sets the value of SourceRef.
 func (s *UpdateCardRequest) SetSourceRef(val OptString) {
 	s.SourceRef = val
+}
+
+type UpdateFactBadRequest ErrorResponse
+
+func (*UpdateFactBadRequest) updateFactRes() {}
+
+type UpdateFactForbidden ErrorResponse
+
+func (*UpdateFactForbidden) updateFactRes() {}
+
+type UpdateFactInternalServerError ErrorResponse
+
+func (*UpdateFactInternalServerError) updateFactRes() {}
+
+// UpdateFactNoContent is response for UpdateFact operation.
+type UpdateFactNoContent struct{}
+
+func (*UpdateFactNoContent) updateFactRes() {}
+
+type UpdateFactNotFound ErrorResponse
+
+func (*UpdateFactNotFound) updateFactRes() {}
+
+// Ref: #/components/schemas/UpdateFactRequest
+type UpdateFactRequest struct {
+	Name string `json:"name"`
+}
+
+// GetName returns the value of Name.
+func (s *UpdateFactRequest) GetName() string {
+	return s.Name
+}
+
+// SetName sets the value of Name.
+func (s *UpdateFactRequest) SetName(val string) {
+	s.Name = val
+}
+
+type UpdateSetBadRequest ErrorResponse
+
+func (*UpdateSetBadRequest) updateSetRes() {}
+
+type UpdateSetForbidden ErrorResponse
+
+func (*UpdateSetForbidden) updateSetRes() {}
+
+type UpdateSetInternalServerError ErrorResponse
+
+func (*UpdateSetInternalServerError) updateSetRes() {}
+
+// UpdateSetNoContent is response for UpdateSet operation.
+type UpdateSetNoContent struct{}
+
+func (*UpdateSetNoContent) updateSetRes() {}
+
+type UpdateSetNotFound ErrorResponse
+
+func (*UpdateSetNotFound) updateSetRes() {}
+
+// Ref: #/components/schemas/UpdateSetRequest
+type UpdateSetRequest struct {
+	Title string `json:"title"`
+}
+
+// GetTitle returns the value of Title.
+func (s *UpdateSetRequest) GetTitle() string {
+	return s.Title
+}
+
+// SetTitle sets the value of Title.
+func (s *UpdateSetRequest) SetTitle(val string) {
+	s.Title = val
 }
 
 // Ref: #/components/schemas/User

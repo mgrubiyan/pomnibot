@@ -32,8 +32,10 @@ type Querier interface {
 	DeleteCardOptions(ctx context.Context, cardID pgtype.UUID) error
 	DeleteCardTableColumns(ctx context.Context, cardID pgtype.UUID) error
 	DeleteCardTableItems(ctx context.Context, cardID pgtype.UUID) error
+	DeleteFact(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeleteSet(ctx context.Context, arg DeleteSetParams) (int64, error)
 	EnsureUser(ctx context.Context, id pgtype.UUID) (User, error)
+	FactExists(ctx context.Context, id pgtype.UUID) (bool, error)
 	GetCardByID(ctx context.Context, arg GetCardByIDParams) (GetCardByIDRow, error)
 	GetCardByIDForAuthor(ctx context.Context, arg GetCardByIDForAuthorParams) (GetCardByIDForAuthorRow, error)
 	GetCardOptions(ctx context.Context, cardID pgtype.UUID) ([]CardOption, error)
@@ -42,9 +44,11 @@ type Querier interface {
 	GetCardTableColumnsBatch(ctx context.Context, cardIds []pgtype.UUID) ([]CardTableColumn, error)
 	GetCardTableItems(ctx context.Context, cardID pgtype.UUID) ([]CardTableItem, error)
 	GetCardTableItemsBatch(ctx context.Context, cardIds []pgtype.UUID) ([]CardTableItem, error)
+	GetCardsByFactID(ctx context.Context, factID pgtype.UUID) ([]GetCardsByFactIDRow, error)
 	GetCardsBySetID(ctx context.Context, arg GetCardsBySetIDParams) ([]GetCardsBySetIDRow, error)
 	GetFactsBySetID(ctx context.Context, setID pgtype.UUID) ([]GetFactsBySetIDRow, error)
 	GetFeedCardsForUser(ctx context.Context, userID pgtype.UUID) ([]GetFeedCardsForUserRow, error)
+	GetMaxCardStepInFact(ctx context.Context, factID pgtype.UUID) (int32, error)
 	GetNextReviewDateForUser(ctx context.Context, userID pgtype.UUID) (pgtype.Timestamptz, error)
 	GetProcessingReport(ctx context.Context, arg GetProcessingReportParams) ([]byte, error)
 	GetSetByID(ctx context.Context, arg GetSetByIDParams) (GetSetByIDRow, error)
@@ -60,6 +64,7 @@ type Querier interface {
 	GetUserSets(ctx context.Context, userID pgtype.UUID) ([]GetUserSetsRow, error)
 	GetUsersWithDueFacts(ctx context.Context, arg GetUsersWithDueFactsParams) ([]pgtype.UUID, error)
 	InitUserFactProgress(ctx context.Context, arg InitUserFactProgressParams) error
+	IsFactAuthor(ctx context.Context, arg IsFactAuthorParams) (bool, error)
 	IsSetAuthor(ctx context.Context, arg IsSetAuthorParams) (bool, error)
 	JoinSet(ctx context.Context, arg JoinSetParams) (UserSet, error)
 	LeaveSet(ctx context.Context, arg LeaveSetParams) (int64, error)
@@ -76,8 +81,12 @@ type Querier interface {
 	RollbackFactStepOnCardIssue(ctx context.Context, arg RollbackFactStepOnCardIssueParams) error
 	SaveProcessingReport(ctx context.Context, arg SaveProcessingReportParams) (int64, error)
 	SaveTelegramProfile(ctx context.Context, arg SaveTelegramProfileParams) (User, error)
+	SetExists(ctx context.Context, id pgtype.UUID) (bool, error)
 	TelegramProfileInput(ctx context.Context, arg TelegramProfileInputParams) (User, error)
 	UpdateCard(ctx context.Context, arg UpdateCardParams) (UpdateCardRow, error)
+	UpdateCardStep(ctx context.Context, arg UpdateCardStepParams) (int64, error)
+	UpdateFact(ctx context.Context, arg UpdateFactParams) (Fact, error)
+	UpdateSetTitle(ctx context.Context, arg UpdateSetTitleParams) (int64, error)
 	UpsertFactProgress(ctx context.Context, arg UpsertFactProgressParams) (UserFactProgress, error)
 	UpsertMAXUser(ctx context.Context, arg UpsertMAXUserParams) (User, error)
 	UpsertTelegramUser(ctx context.Context, arg UpsertTelegramUserParams) (User, error)

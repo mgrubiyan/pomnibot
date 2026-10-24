@@ -1,11 +1,24 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Button, CellList, CellSimple, Flex, Spinner, Typography } from '@maxhub/max-ui';
-import type { Card, CardSet, User } from '../types';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Button, CellList, CellSimple, Flex, IconButton, Spinner, Typography } from '@maxhub/max-ui';
+import type { Card, CardSet, Fact, User } from '../types';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusScreen } from '../components/StatusScreen';
-import { IconOffline } from '../components/Icons';
-import { loadCards, loadSet } from '../utils/sets';
+import { IconOffline, IconPencil, IconPlus, IconTrash } from '../components/Icons';
+import { InputDialog } from '../components/InputDialog';
+import { ConfirmActionDialog } from '../components/ConfirmActionDialog';
+import {
+    createFact,
+    deleteFact,
+    loadCards,
+    loadFacts,
+    loadSet,
+    reorderCards,
+    updateFact,
+    updateSetTitle,
+} from '../utils/sets';
+import { groupCardsByFacts } from '../utils/factGroups';
+import { getFactCardIds, reorderCardsInFact } from '../utils/cardsOrder';
 import s from './SetCards.module.css';
 
 type Status = 'loading' | 'error' | 'ready';
@@ -16,33 +29,58 @@ export interface SetCardsProps {
     /** What happened to a card on the way back here. */
     toast?: { kind: 'removed' | 'edited' } | null;
     onBack: () => void;
-    onAddCard: (setTitle: string) => void;
+    onAddCard: (setTitle: string, factId: string) => void;
     onOpenCard: (card: Card, setTitle: string) => void;
 }
 
-/** Cards of a set. The author opens one to edit or delete it; members only read. */
-export function SetCards({ setId, currentUser, toast, onBack, onAddCard, onOpenCard }: SetCardsProps) {
+/** Cards of a set, organized into facts with title editing and drag-and-drop reordering. */
+export function SetCards({
+    setId,
+    currentUser,
+    toast,
+    onBack,
+    onAddCard,
+    onOpenCard,
+}: SetCardsProps) {
     const [status, setStatus] = useState<Status>('loading');
     const [set, setSet] = useState<CardSet | null>(null);
     const [cards, setCards] = useState<Card[]>([]);
+    const [facts, setFacts] = useState<Fact[]>([]);
     const [attempt, setAttempt] = useState(0);
+
+    // Dialog states
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [isCreatingFact, setIsCreatingFact] = useState(false);
+    const [editingFact, setEditingFact] = useState<Fact | null>(null);
+    const [deletingFact, setDeletingFact] = useState<{
+        factId: string;
+        factName: string;
+        cardCount: number;
+    } | null>(null);
+
+    // Drag-and-drop state for reordering cards within a fact
+    const [draggingState, setDraggingState] = useState<{
+        factId: string;
+        cardId: string;
+    } | null>(null);
+    const dragFactIdRef = useRef<string | null>(null);
+    const dragStartIndexRef = useRef<number | null>(null);
+    const dragCurrentIndexRef = useRef<number | null>(null);
+    const initialFactCardsOrderRef = useRef<Card[]>([]);
 
     useEffect(() => {
         let cancelled = false;
 
-        Promise.all([loadSet(setId), loadCards(setId)])
-            .then(([nextSet, nextCards]) => {
-                if (cancelled) {
-                    return;
-                }
+        Promise.all([loadSet(setId), loadCards(setId), loadFacts(setId)])
+            .then(([nextSet, nextCards, nextFacts]) => {
+                if (cancelled) return;
                 setSet(nextSet);
                 setCards(nextCards);
+                setFacts(nextFacts);
                 setStatus('ready');
             })
             .catch(() => {
-                if (!cancelled) {
-                    setStatus('error');
-                }
+                if (!cancelled) setStatus('error');
             });
 
         return () => {
@@ -55,31 +93,140 @@ export function SetCards({ setId, currentUser, toast, onBack, onAddCard, onOpenC
         setAttempt((current) => current + 1);
     };
 
-    const factGroups = useMemo(() => {
-        const groups: { factId: string; factName: string; cards: Card[] }[] = [];
-        const indexById = new Map<string, number>();
+    const isOwner = Boolean(currentUser && set?.author && set.author.id === currentUser.id);
 
-        for (const card of cards) {
-            const key = card.factId || 'unknown';
-            let groupIndex = indexById.get(key);
-            if (groupIndex === undefined) {
-                groupIndex = groups.length;
-                indexById.set(key, groupIndex);
-                groups.push({
-                    factId: key,
-                    factName: card.factName || 'Факт',
-                    cards: [],
-                });
+    const factGroups = useMemo(() => groupCardsByFacts(facts, cards), [facts, cards]);
+
+    // Handle Set title update
+    const handleSaveTitle = async (newTitle: string) => {
+        if (!set) return;
+        try {
+            await updateSetTitle(setId, newTitle);
+            setSet({ ...set, title: newTitle });
+        } catch (err) {
+            console.error('Failed to update set title:', err);
+        }
+    };
+
+    // Handle Fact creation
+    const handleCreateFact = async (name: string) => {
+        try {
+            const newFact = await createFact(setId, name);
+            setFacts((prev) => [...prev, newFact]);
+        } catch (err) {
+            console.error('Failed to create fact:', err);
+        }
+    };
+
+    // Handle Fact rename
+    const handleUpdateFact = async (newName: string) => {
+        if (!editingFact) return;
+        try {
+            await updateFact(editingFact.id, newName);
+            setFacts((prev) =>
+                prev.map((f) => (f.id === editingFact.id ? { ...f, name: newName } : f)),
+            );
+        } catch (err) {
+            console.error('Failed to update fact:', err);
+        }
+    };
+
+    // Handle Fact deletion
+    const handleDeleteFactConfirm = async () => {
+        if (!deletingFact) return;
+        try {
+            await deleteFact(deletingFact.factId);
+            setFacts((prev) => prev.filter((f) => f.id !== deletingFact.factId));
+            setCards((prev) => prev.filter((c) => c.factId !== deletingFact.factId));
+        } catch (err) {
+            console.error('Failed to delete fact:', err);
+        }
+    };
+
+    // Pointer event handlers for card drag-and-drop
+    const handlePointerDown = (
+        e: React.PointerEvent<HTMLSpanElement>,
+        factId: string,
+        cardId: string,
+        index: number,
+    ) => {
+        e.stopPropagation();
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
+
+        const handleEl = e.currentTarget;
+        handleEl.setPointerCapture(e.pointerId);
+
+        dragFactIdRef.current = factId;
+        dragStartIndexRef.current = index;
+        dragCurrentIndexRef.current = index;
+        initialFactCardsOrderRef.current = cards;
+        setDraggingState({ factId, cardId });
+    };
+
+    const handlePointerMove = (e: React.PointerEvent<HTMLSpanElement>) => {
+        const activeFactId = dragFactIdRef.current;
+        const currentIdx = dragCurrentIndexRef.current;
+        if (!activeFactId || currentIdx === null) return;
+
+        const cardElements = document.querySelectorAll<HTMLElement>(
+            `[data-fact-id="${activeFactId}"][data-card-index]`,
+        );
+        if (cardElements.length === 0) return;
+
+        let targetIndex = -1;
+        for (let i = 0; i < cardElements.length; i++) {
+            const rect = cardElements[i].getBoundingClientRect();
+            if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                targetIndex = i;
+                break;
             }
-            groups[groupIndex].cards.push(card);
         }
 
-        for (const g of groups) {
-            g.cards.sort((a, b) => a.id.localeCompare(b.id));
+        if (targetIndex === -1) {
+            const firstRect = cardElements[0].getBoundingClientRect();
+            const lastRect = cardElements[cardElements.length - 1].getBoundingClientRect();
+            if (e.clientY < firstRect.top) targetIndex = 0;
+            else if (e.clientY > lastRect.bottom) targetIndex = cardElements.length - 1;
         }
 
-        return groups;
-    }, [cards]);
+        if (targetIndex !== -1 && targetIndex !== currentIdx) {
+            dragCurrentIndexRef.current = targetIndex;
+            setCards((prevCards) =>
+                reorderCardsInFact(prevCards, activeFactId, currentIdx, targetIndex),
+            );
+        }
+    };
+
+    const cardsRef = useRef(cards);
+    cardsRef.current = cards;
+
+    const handlePointerUp = async (e: React.PointerEvent<HTMLSpanElement>) => {
+        const activeFactId = dragFactIdRef.current;
+        const startIdx = dragStartIndexRef.current;
+        const finalIdx = dragCurrentIndexRef.current;
+
+        try {
+            e.currentTarget.releasePointerCapture(e.pointerId);
+        } catch {
+            // ignore
+        }
+
+        dragFactIdRef.current = null;
+        dragStartIndexRef.current = null;
+        dragCurrentIndexRef.current = null;
+        setDraggingState(null);
+
+        if (activeFactId && startIdx !== null && finalIdx !== null && startIdx !== finalIdx) {
+            const newIds = getFactCardIds(cardsRef.current, activeFactId);
+            try {
+                await reorderCards(activeFactId, newIds);
+            } catch (err) {
+                console.error('Failed to commit reorder to server:', err);
+                // Revert to initial order
+                setCards(initialFactCardsOrderRef.current);
+            }
+        }
+    };
 
     if (status === 'loading') {
         return (
@@ -111,39 +258,197 @@ export function SetCards({ setId, currentUser, toast, onBack, onAddCard, onOpenC
         );
     }
 
-    // Only the author may change the cards; members have read access.
-    const isOwner = Boolean(currentUser && set.author && set.author.id === currentUser.id);
-
     return (
         <Screen>
-            <ScreenHeader title={`Карточки · ${cards.length}`} subtitle={set.title} onBack={onBack} />
+            <ScreenHeader
+                title={`Карточки · ${cards.length}`}
+                subtitle={!isOwner ? set.title : undefined}
+                onBack={onBack}
+            />
 
             <Flex direction="column" align="stretch" gap={8} className={s.body}>
+                {isOwner && (
+                    <Flex align="center" justify="space-between" className={s.setTitleCard}>
+                        <Flex direction="column" gap={2} className={s.setTitleContent}>
+                            <Typography.Text variant="description" color="tertiary">
+                                Набор
+                            </Typography.Text>
+                            <Typography.Text variant="title" className={s.setTitleText}>
+                                {set.title}
+                            </Typography.Text>
+                        </Flex>
+                        <IconButton
+                            size="small"
+                            variant="ghost"
+                            aria-label="Изменить название"
+                            onClick={() => setIsEditingTitle(true)}
+                        >
+                            <IconPencil size={20} />
+                        </IconButton>
+                    </Flex>
+                )}
+
                 {isOwner ? (
                     <Typography.Text variant="description" color="tertiary" className={s.hint}>
-                        Нажмите на карточку, чтобы исправить или удалить её
+                        Нажмите на карточку, чтобы редактировать её. Тяните за ≡, чтобы изменить
+                        порядок в факте.
                     </Typography.Text>
                 ) : null}
-                {isOwner && <Button size="medium" onClick={() => onAddCard(set.title)}>Добавить карточку</Button>}
-                {factGroups.map((group) => (
-                    <Flex key={group.factId} direction="column" align="stretch" gap={6} className={s.factSection}>
-                        <Typography.Text variant="label-strong" color="secondary" className={s.factHeader}>
-                            {group.factName}
+
+                {isOwner && (
+                    <div className={s.addFactContainer}>
+                        <Button
+                            size="medium"
+                            variant="secondary"
+                            stretched
+                            onClick={() => setIsCreatingFact(true)}
+                        >
+                            <IconPlus size={18} /> Добавить факт
+                        </Button>
+                    </div>
+                )}
+
+                {factGroups.length === 0 && (
+                    <div className={s.emptyFactsState}>
+                        <Typography.Text variant="body" color="secondary">
+                            В наборе пока нет фактов. Создайте факт, чтобы добавлять карточки.
                         </Typography.Text>
-                        <CellList mode="island" filled className={s.list}>
-                            {group.cards.map((card, index) => (
-                                <CellSimple
-                                    key={card.id}
-                                    as={isOwner ? 'button' : undefined}
-                                    separator={index > 0}
-                                    showChevron={isOwner}
-                                    onClick={isOwner ? () => onOpenCard(card, set.title) : undefined}
-                                    title={<span className={s.cardTitle}>{card.question}</span>}
-                                />
-                            ))}
-                        </CellList>
-                    </Flex>
-                ))}
+                    </div>
+                )}
+
+                {factGroups.map((group) => {
+                    const isRealFact = group.factId !== 'orphan';
+                    return (
+                        <Flex
+                            key={group.factId}
+                            direction="column"
+                            align="stretch"
+                            gap={6}
+                            className={s.factSection}
+                        >
+                            <Flex
+                                align="center"
+                                justify="space-between"
+                                className={s.factHeaderRow}
+                            >
+                                <Typography.Text
+                                    variant="label-strong"
+                                    color="secondary"
+                                    className={s.factHeaderTitle}
+                                >
+                                    {group.factName}
+                                </Typography.Text>
+                                {isOwner && isRealFact && (
+                                    <Flex align="center" gap={4} className={s.factActions}>
+                                        <IconButton
+                                            size="small"
+                                            variant="ghost"
+                                            aria-label="Редактировать факт"
+                                            onClick={() =>
+                                                setEditingFact({
+                                                    id: group.factId,
+                                                    setId,
+                                                    name: group.factName,
+                                                })
+                                            }
+                                        >
+                                            <IconPencil size={18} />
+                                        </IconButton>
+                                        <IconButton
+                                            size="small"
+                                            variant="ghost"
+                                            aria-label="Удалить факт"
+                                            onClick={() =>
+                                                setDeletingFact({
+                                                    factId: group.factId,
+                                                    factName: group.factName,
+                                                    cardCount: group.cards.length,
+                                                })
+                                            }
+                                        >
+                                            <IconTrash size={18} />
+                                        </IconButton>
+                                    </Flex>
+                                )}
+                            </Flex>
+
+                            {group.cards.length > 0 ? (
+                                <CellList mode="island" filled className={s.list}>
+                                    {group.cards.map((card, index) => {
+                                        const isDragging =
+                                            draggingState?.cardId === card.id;
+                                        return (
+                                            <div
+                                                key={card.id}
+                                                data-fact-id={group.factId}
+                                                data-card-index={index}
+                                                className={
+                                                    isDragging
+                                                        ? `${s.cardItem} ${s.cardDragging}`
+                                                        : s.cardItem
+                                                }
+                                            >
+                                                <CellSimple
+                                                    as={isOwner ? 'button' : undefined}
+                                                    separator={index > 0}
+                                                    showChevron={isOwner && group.cards.length <= 1}
+                                                    onClick={
+                                                        isOwner
+                                                            ? () => onOpenCard(card, set.title)
+                                                            : undefined
+                                                    }
+                                                    title={
+                                                        <span className={s.cardTitle}>
+                                                            {card.question}
+                                                        </span>
+                                                    }
+                                                    after={
+                                                        isOwner &&
+                                                        isRealFact &&
+                                                        group.cards.length > 1 ? (
+                                                            <span
+                                                                role="button"
+                                                                aria-label="Переместить карточку"
+                                                                className={s.dragHandle}
+                                                                onPointerDown={(e) =>
+                                                                    handlePointerDown(
+                                                                        e,
+                                                                        group.factId,
+                                                                        card.id,
+                                                                        index,
+                                                                    )
+                                                                }
+                                                                onPointerMove={handlePointerMove}
+                                                                onPointerUp={handlePointerUp}
+                                                                onPointerCancel={handlePointerUp}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                ≡
+                                                            </span>
+                                                        ) : undefined
+                                                    }
+                                                />
+                                            </div>
+                                        );
+                                    })}
+                                </CellList>
+                            ) : null}
+
+                            {isOwner && isRealFact && (
+                                <div className={s.factFooter}>
+                                    <Button
+                                        size="small"
+                                        variant="ghost"
+                                        stretched
+                                        onClick={() => onAddCard(set.title, group.factId)}
+                                    >
+                                        + Добавить карточку
+                                    </Button>
+                                </div>
+                            )}
+                        </Flex>
+                    );
+                })}
             </Flex>
 
             {toast ? (
@@ -153,6 +458,71 @@ export function SetCards({ setId, currentUser, toast, onBack, onAddCard, onOpenC
                     </Typography.Text>
                 </div>
             ) : null}
+
+            {/* Dialog to edit Set Title */}
+            {isEditingTitle && (
+                <InputDialog
+                    title="Название набора"
+                    initialValue={set.title}
+                    placeholder="Например, Органическая химия"
+                    confirmLabel="Сохранить"
+                    onConfirm={(newTitle) => {
+                        setIsEditingTitle(false);
+                        handleSaveTitle(newTitle);
+                    }}
+                    onCancel={() => setIsEditingTitle(false)}
+                />
+            )}
+
+            {/* Dialog to create Fact */}
+            {isCreatingFact && (
+                <InputDialog
+                    title="Новый факт"
+                    description="Внутри факта можно создавать связанные карточки и менять их порядок."
+                    placeholder="Например, Основные понятия"
+                    confirmLabel="Создать"
+                    onConfirm={(name) => {
+                        setIsCreatingFact(false);
+                        handleCreateFact(name);
+                    }}
+                    onCancel={() => setIsCreatingFact(false)}
+                />
+            )}
+
+            {/* Dialog to rename Fact */}
+            {editingFact && (
+                <InputDialog
+                    title="Переименовать факт"
+                    initialValue={editingFact.name}
+                    placeholder="Название факта"
+                    confirmLabel="Сохранить"
+                    onConfirm={(newName) => {
+                        setEditingFact(null);
+                        handleUpdateFact(newName);
+                    }}
+                    onCancel={() => setEditingFact(null)}
+                />
+            )}
+
+            {/* Dialog to delete Fact */}
+            {deletingFact && (
+                <ConfirmActionDialog
+                    title="Удалить факт?"
+                    description={
+                        deletingFact.cardCount > 0
+                            ? `Факт «${deletingFact.factName}» и все его карточки (${deletingFact.cardCount}) будут удалены.`
+                            : `Факт «${deletingFact.factName}» будет удалён.`
+                    }
+                    confirmLabel="Удалить"
+                    cancelLabel="Отмена"
+                    isDestructive
+                    onConfirm={() => {
+                        setDeletingFact(null);
+                        handleDeleteFactConfirm();
+                    }}
+                    onCancel={() => setDeletingFact(null)}
+                />
+            )}
         </Screen>
     );
 }

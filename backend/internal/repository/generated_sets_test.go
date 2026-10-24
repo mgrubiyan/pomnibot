@@ -232,6 +232,40 @@ func TestSaveGeneratedSetPreservesPrivateSourceArtifact(t *testing.T) {
 	}
 }
 
+func TestSaveGeneratedSet_StepAssignment(t *testing.T) {
+	ctx := context.Background()
+	tq := newTestQuerier()
+	userID := uuid.New()
+	const title = "Multi Card Fact Set"
+
+	factID := "01900000-0000-7000-8000-000000000001"
+	genResult := repository.GeneratedSet{
+		Facts: []cards.Fact{
+			{ID: factID, Name: "Fact With Multiple Cards"},
+		},
+		Cards: []cards.Card{
+			{FactID: factID, Kind: cards.KindFlip, Question: "Card 1", Answer: "A1"},
+			{FactID: factID, Kind: cards.KindChoice, Question: "Card 2", Answer: "A2"},
+			{FactID: factID, Kind: cards.KindInput, Question: "Card 3", Answer: "A3"},
+		},
+	}
+
+	_, _, err := repository.SaveGeneratedSet(ctx, tq, userID, title, genResult)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(tq.createdCards) != 3 {
+		t.Fatalf("expected 3 created cards, got %d", len(tq.createdCards))
+	}
+
+	for i, c := range tq.createdCards {
+		if c.Step != int32(i) {
+			t.Errorf("card %d expected step %d, got %d", i, i, c.Step)
+		}
+	}
+}
+
 // Offline verification of an actual generation artifact; never contacts a model.
 func TestSaveRecordedGeneration(t *testing.T) {
 	path := os.Getenv("POMNIBOT_SAVED_GENERATION")

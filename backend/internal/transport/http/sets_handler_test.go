@@ -28,6 +28,7 @@ var (
 type mockSetService struct {
 	usecase.SetService
 	getSetFunc             func(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.CardSet, error)
+	updateSetTitleFunc     func(ctx context.Context, userID uuid.UUID, setID uuid.UUID, title string) error
 	deleteSetFunc          func(ctx context.Context, userID uuid.UUID, setID uuid.UUID) error
 	getCardsBySetIDFunc    func(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.Card, error)
 	getSetShareCodeFunc    func(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.CardSet, error)
@@ -800,6 +801,73 @@ func TestSetsHandler_GetSetLeaderboard(t *testing.T) {
 		}
 		if _, ok := res.(*contracts.GetSetLeaderboardInternalServerError); !ok {
 			t.Fatalf("expected *contracts.GetSetLeaderboardInternalServerError, got %T", res)
+		}
+	})
+}
+
+func (m *mockSetService) UpdateSetTitle(ctx context.Context, userID uuid.UUID, setID uuid.UUID, title string) error {
+	if m.updateSetTitleFunc != nil {
+		return m.updateSetTitleFunc(ctx, userID, setID, title)
+	}
+	return nil
+}
+
+func TestSetsHandler_UpdateSet(t *testing.T) {
+	setID := uuid.New()
+	req := &contracts.UpdateSetRequest{Title: "Updated Title"}
+
+	t.Run("Success returns NoContent", func(t *testing.T) {
+		called := false
+		svc := &mockSetService{
+			updateSetTitleFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, title string) error {
+				if userID == testSetsUserID && id == setID && title == "Updated Title" {
+					called = true
+				}
+				return nil
+			},
+		}
+		h := NewSetsHandler(svc)
+		res, err := h.UpdateSet(WithUserID(context.Background(), testSetsUserID), req, contracts.UpdateSetParams{SetId: setID})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if _, ok := res.(*contracts.UpdateSetNoContent); !ok {
+			t.Fatalf("expected UpdateSetNoContent, got %T", res)
+		}
+		if !called {
+			t.Fatal("expected updateSetTitleFunc to be called")
+		}
+	})
+
+	t.Run("Validation error returns BadRequest", func(t *testing.T) {
+		svc := &mockSetService{
+			updateSetTitleFunc: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ string) error {
+				return usecase.ErrValidation
+			},
+		}
+		h := NewSetsHandler(svc)
+		res, err := h.UpdateSet(context.Background(), req, contracts.UpdateSetParams{SetId: setID})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if _, ok := res.(*contracts.UpdateSetBadRequest); !ok {
+			t.Fatalf("expected UpdateSetBadRequest, got %T", res)
+		}
+	})
+
+	t.Run("Forbidden returns Forbidden", func(t *testing.T) {
+		svc := &mockSetService{
+			updateSetTitleFunc: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ string) error {
+				return usecase.ErrForbidden
+			},
+		}
+		h := NewSetsHandler(svc)
+		res, err := h.UpdateSet(context.Background(), req, contracts.UpdateSetParams{SetId: setID})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if _, ok := res.(*contracts.UpdateSetForbidden); !ok {
+			t.Fatalf("expected UpdateSetForbidden, got %T", res)
 		}
 	})
 }

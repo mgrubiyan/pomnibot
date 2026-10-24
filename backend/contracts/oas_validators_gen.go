@@ -324,8 +324,15 @@ func (s *CreateSetRequest) Validate() error {
 
 	var failures []validate.FieldError
 	if err := func() error {
-		if err := s.Card.Validate(); err != nil {
-			return err
+		if value, ok := s.Card.Get(); ok {
+			if err := func() error {
+				if err := value.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return err
+			}
 		}
 		return nil
 	}(); err != nil {
@@ -386,6 +393,14 @@ func (s GetCardsBySetIDOKApplicationJSON) Validate() error {
 	}
 	if len(failures) > 0 {
 		return &validate.Error{Fields: failures}
+	}
+	return nil
+}
+
+func (s GetFactsBySetIDOKApplicationJSON) Validate() error {
+	alias := ([]Fact)(s)
+	if alias == nil {
+		return errors.New("nil is invalid value")
 	}
 	return nil
 }
@@ -572,6 +587,29 @@ func (s ProfileResponsePlatform) Validate() error {
 	default:
 		return errors.Errorf("invalid value: %v", s)
 	}
+}
+
+func (s *ReorderCardsRequest) Validate() error {
+	if s == nil {
+		return validate.ErrNilPointer
+	}
+
+	var failures []validate.FieldError
+	if err := func() error {
+		if s.CardIds == nil {
+			return errors.New("nil is invalid value")
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "cardIds",
+			Error: err,
+		})
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+	return nil
 }
 
 func (s *ReportCardIssueRequest) Validate() error {

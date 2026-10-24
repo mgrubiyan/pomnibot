@@ -48,6 +48,18 @@ type Invoker interface {
 	//
 	// POST /sets/{setId}/cards
 	CreateCard(ctx context.Context, request *CreateCardRequest, params CreateCardParams) (CreateCardRes, error)
+	// CreateCardInFact invokes CreateCardInFact operation.
+	//
+	// Create a card in a fact.
+	//
+	// POST /facts/{factId}/cards
+	CreateCardInFact(ctx context.Context, request *CreateCardRequest, params CreateCardInFactParams) (CreateCardInFactRes, error)
+	// CreateFact invokes CreateFact operation.
+	//
+	// Create a fact in a set.
+	//
+	// POST /sets/{setId}/facts
+	CreateFact(ctx context.Context, request *CreateFactRequest, params CreateFactParams) (CreateFactRes, error)
 	// CreateSet invokes CreateSet operation.
 	//
 	// CreateSet.
@@ -60,6 +72,12 @@ type Invoker interface {
 	//
 	// DELETE /cards/{cardId}
 	DeleteCard(ctx context.Context, params DeleteCardParams) (DeleteCardRes, error)
+	// DeleteFact invokes DeleteFact operation.
+	//
+	// Delete a fact.
+	//
+	// DELETE /facts/{factId}
+	DeleteFact(ctx context.Context, params DeleteFactParams) (DeleteFactRes, error)
 	// DeleteSet invokes DeleteSet operation.
 	//
 	// Delete a card set.
@@ -79,6 +97,12 @@ type Invoker interface {
 	//
 	// GET /sets/{setId}/cards
 	GetCardsBySetID(ctx context.Context, params GetCardsBySetIDParams) (GetCardsBySetIDRes, error)
+	// GetFactsBySetID invokes GetFactsBySetID operation.
+	//
+	// Get facts of a set.
+	//
+	// GET /sets/{setId}/facts
+	GetFactsBySetID(ctx context.Context, params GetFactsBySetIDParams) (GetFactsBySetIDRes, error)
 	// GetFeedQuestions invokes GetFeedQuestions operation.
 	//
 	// Get questions of current feed.
@@ -146,6 +170,12 @@ type Invoker interface {
 	//
 	// PUT /profile
 	PutProfile(ctx context.Context, request *ProfileRequest) (PutProfileRes, error)
+	// ReorderCards invokes ReorderCards operation.
+	//
+	// Reorder cards in a fact.
+	//
+	// PUT /facts/{factId}/cards/order
+	ReorderCards(ctx context.Context, request *ReorderCardsRequest, params ReorderCardsParams) (ReorderCardsRes, error)
 	// ReportCardIssue invokes ReportCardIssue operation.
 	//
 	// Saves the complaint with a copy of the card as it was reported, so it outlives later edits and the
@@ -171,6 +201,18 @@ type Invoker interface {
 	//
 	// PUT /cards/{cardId}
 	UpdateCard(ctx context.Context, request *UpdateCardRequest, params UpdateCardParams) (UpdateCardRes, error)
+	// UpdateFact invokes UpdateFact operation.
+	//
+	// Update fact name.
+	//
+	// PATCH /facts/{factId}
+	UpdateFact(ctx context.Context, request *UpdateFactRequest, params UpdateFactParams) (UpdateFactRes, error)
+	// UpdateSet invokes UpdateSet operation.
+	//
+	// Update set title.
+	//
+	// PATCH /sets/{setId}
+	UpdateSet(ctx context.Context, request *UpdateSetRequest, params UpdateSetParams) (UpdateSetRes, error)
 }
 
 // Client implements OAS client.
@@ -520,6 +562,210 @@ func (c *Client) sendCreateCard(ctx context.Context, request *CreateCardRequest,
 	return result, nil
 }
 
+// CreateCardInFact invokes CreateCardInFact operation.
+//
+// Create a card in a fact.
+//
+// POST /facts/{factId}/cards
+func (c *Client) CreateCardInFact(ctx context.Context, request *CreateCardRequest, params CreateCardInFactParams) (CreateCardInFactRes, error) {
+	res, err := c.sendCreateCardInFact(ctx, request, params)
+	return res, err
+}
+
+func (c *Client) sendCreateCardInFact(ctx context.Context, request *CreateCardRequest, params CreateCardInFactParams) (res CreateCardInFactRes, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("CreateCardInFact"),
+		semconv.HTTPRequestMethodKey.String("POST"),
+		semconv.URLTemplateKey.String("/facts/{factId}/cards"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, CreateCardInFactOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [3]string
+	pathParts[0] = "/facts/"
+	{
+		// Encode "factId" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "factId",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.UUIDToString(params.FactId))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	pathParts[2] = "/cards"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "POST", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeCreateCardInFactRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer func() {
+		// Drain the body to EOF before closing, so the underlying
+		// connection can be reused by the Transport regardless of the
+		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
+		_, _ = io.Copy(io.Discard, body)
+		_ = body.Close()
+	}()
+
+	stage = "DecodeResponse"
+	result, err := decodeCreateCardInFactResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// CreateFact invokes CreateFact operation.
+//
+// Create a fact in a set.
+//
+// POST /sets/{setId}/facts
+func (c *Client) CreateFact(ctx context.Context, request *CreateFactRequest, params CreateFactParams) (CreateFactRes, error) {
+	res, err := c.sendCreateFact(ctx, request, params)
+	return res, err
+}
+
+func (c *Client) sendCreateFact(ctx context.Context, request *CreateFactRequest, params CreateFactParams) (res CreateFactRes, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("CreateFact"),
+		semconv.HTTPRequestMethodKey.String("POST"),
+		semconv.URLTemplateKey.String("/sets/{setId}/facts"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, CreateFactOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [3]string
+	pathParts[0] = "/sets/"
+	{
+		// Encode "setId" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "setId",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.UUIDToString(params.SetId))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	pathParts[2] = "/facts"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "POST", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeCreateFactRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer func() {
+		// Drain the body to EOF before closing, so the underlying
+		// connection can be reused by the Transport regardless of the
+		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
+		_, _ = io.Copy(io.Discard, body)
+		_ = body.Close()
+	}()
+
+	stage = "DecodeResponse"
+	result, err := decodeCreateFactResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
 // CreateSet invokes CreateSet operation.
 //
 // CreateSet.
@@ -694,6 +940,104 @@ func (c *Client) sendDeleteCard(ctx context.Context, params DeleteCardParams) (r
 
 	stage = "DecodeResponse"
 	result, err := decodeDeleteCardResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// DeleteFact invokes DeleteFact operation.
+//
+// Delete a fact.
+//
+// DELETE /facts/{factId}
+func (c *Client) DeleteFact(ctx context.Context, params DeleteFactParams) (DeleteFactRes, error) {
+	res, err := c.sendDeleteFact(ctx, params)
+	return res, err
+}
+
+func (c *Client) sendDeleteFact(ctx context.Context, params DeleteFactParams) (res DeleteFactRes, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("DeleteFact"),
+		semconv.HTTPRequestMethodKey.String("DELETE"),
+		semconv.URLTemplateKey.String("/facts/{factId}"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, DeleteFactOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [2]string
+	pathParts[0] = "/facts/"
+	{
+		// Encode "factId" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "factId",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.UUIDToString(params.FactId))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "DELETE", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer func() {
+		// Drain the body to EOF before closing, so the underlying
+		// connection can be reused by the Transport regardless of the
+		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
+		_, _ = io.Copy(io.Discard, body)
+		_ = body.Close()
+	}()
+
+	stage = "DecodeResponse"
+	result, err := decodeDeleteFactResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -972,6 +1316,105 @@ func (c *Client) sendGetCardsBySetID(ctx context.Context, params GetCardsBySetID
 
 	stage = "DecodeResponse"
 	result, err := decodeGetCardsBySetIDResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// GetFactsBySetID invokes GetFactsBySetID operation.
+//
+// Get facts of a set.
+//
+// GET /sets/{setId}/facts
+func (c *Client) GetFactsBySetID(ctx context.Context, params GetFactsBySetIDParams) (GetFactsBySetIDRes, error) {
+	res, err := c.sendGetFactsBySetID(ctx, params)
+	return res, err
+}
+
+func (c *Client) sendGetFactsBySetID(ctx context.Context, params GetFactsBySetIDParams) (res GetFactsBySetIDRes, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("GetFactsBySetID"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/sets/{setId}/facts"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, GetFactsBySetIDOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [3]string
+	pathParts[0] = "/sets/"
+	{
+		// Encode "setId" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "setId",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.UUIDToString(params.SetId))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	pathParts[2] = "/facts"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer func() {
+		// Drain the body to EOF before closing, so the underlying
+		// connection can be reused by the Transport regardless of the
+		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
+		_, _ = io.Copy(io.Discard, body)
+		_ = body.Close()
+	}()
+
+	stage = "DecodeResponse"
+	result, err := decodeGetFactsBySetIDResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -1960,6 +2403,108 @@ func (c *Client) sendPutProfile(ctx context.Context, request *ProfileRequest) (r
 	return result, nil
 }
 
+// ReorderCards invokes ReorderCards operation.
+//
+// Reorder cards in a fact.
+//
+// PUT /facts/{factId}/cards/order
+func (c *Client) ReorderCards(ctx context.Context, request *ReorderCardsRequest, params ReorderCardsParams) (ReorderCardsRes, error) {
+	res, err := c.sendReorderCards(ctx, request, params)
+	return res, err
+}
+
+func (c *Client) sendReorderCards(ctx context.Context, request *ReorderCardsRequest, params ReorderCardsParams) (res ReorderCardsRes, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("ReorderCards"),
+		semconv.HTTPRequestMethodKey.String("PUT"),
+		semconv.URLTemplateKey.String("/facts/{factId}/cards/order"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, ReorderCardsOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [3]string
+	pathParts[0] = "/facts/"
+	{
+		// Encode "factId" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "factId",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.UUIDToString(params.FactId))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	pathParts[2] = "/cards/order"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "PUT", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeReorderCardsRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer func() {
+		// Drain the body to EOF before closing, so the underlying
+		// connection can be reused by the Transport regardless of the
+		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
+		_, _ = io.Copy(io.Discard, body)
+		_ = body.Close()
+	}()
+
+	stage = "DecodeResponse"
+	result, err := decodeReorderCardsResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
 // ReportCardIssue invokes ReportCardIssue operation.
 //
 // Saves the complaint with a copy of the card as it was reported, so it outlives later edits and the
@@ -2339,6 +2884,208 @@ func (c *Client) sendUpdateCard(ctx context.Context, request *UpdateCardRequest,
 
 	stage = "DecodeResponse"
 	result, err := decodeUpdateCardResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// UpdateFact invokes UpdateFact operation.
+//
+// Update fact name.
+//
+// PATCH /facts/{factId}
+func (c *Client) UpdateFact(ctx context.Context, request *UpdateFactRequest, params UpdateFactParams) (UpdateFactRes, error) {
+	res, err := c.sendUpdateFact(ctx, request, params)
+	return res, err
+}
+
+func (c *Client) sendUpdateFact(ctx context.Context, request *UpdateFactRequest, params UpdateFactParams) (res UpdateFactRes, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("UpdateFact"),
+		semconv.HTTPRequestMethodKey.String("PATCH"),
+		semconv.URLTemplateKey.String("/facts/{factId}"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, UpdateFactOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [2]string
+	pathParts[0] = "/facts/"
+	{
+		// Encode "factId" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "factId",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.UUIDToString(params.FactId))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "PATCH", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeUpdateFactRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer func() {
+		// Drain the body to EOF before closing, so the underlying
+		// connection can be reused by the Transport regardless of the
+		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
+		_, _ = io.Copy(io.Discard, body)
+		_ = body.Close()
+	}()
+
+	stage = "DecodeResponse"
+	result, err := decodeUpdateFactResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// UpdateSet invokes UpdateSet operation.
+//
+// Update set title.
+//
+// PATCH /sets/{setId}
+func (c *Client) UpdateSet(ctx context.Context, request *UpdateSetRequest, params UpdateSetParams) (UpdateSetRes, error) {
+	res, err := c.sendUpdateSet(ctx, request, params)
+	return res, err
+}
+
+func (c *Client) sendUpdateSet(ctx context.Context, request *UpdateSetRequest, params UpdateSetParams) (res UpdateSetRes, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("UpdateSet"),
+		semconv.HTTPRequestMethodKey.String("PATCH"),
+		semconv.URLTemplateKey.String("/sets/{setId}"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, UpdateSetOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [2]string
+	pathParts[0] = "/sets/"
+	{
+		// Encode "setId" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "setId",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.UUIDToString(params.SetId))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "PATCH", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeUpdateSetRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer func() {
+		// Drain the body to EOF before closing, so the underlying
+		// connection can be reused by the Transport regardless of the
+		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
+		_, _ = io.Copy(io.Discard, body)
+		_ = body.Close()
+	}()
+
+	stage = "DecodeResponse"
+	result, err := decodeUpdateSetResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
