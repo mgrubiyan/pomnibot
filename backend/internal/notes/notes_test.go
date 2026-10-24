@@ -57,18 +57,20 @@ func (f *fakeGenerator) Generate(ctx context.Context, doc generator.Document, on
 }
 
 type fakeSaver struct {
-	mu     sync.Mutex
-	titles []string
-	err    error
+	mu       sync.Mutex
+	titles   []string
+	warnings []string
+	err      error
 }
 
-func (f *fakeSaver) SaveGeneratedSet(_ context.Context, _ uuid.UUID, title string, _ generator.Result) (*contracts.CardSet, error) {
+func (f *fakeSaver) SaveGeneratedSet(_ context.Context, _ uuid.UUID, title string, _ generator.Result, warnings []string) (*contracts.CardSet, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.titles = append(f.titles, title)
+	f.warnings = warnings
 	return &contracts.CardSet{ID: uuid.New(), Title: title}, nil
 }
 
@@ -92,6 +94,9 @@ func TestMake_SavesSetNamedAfterFile(t *testing.T) {
 	}
 	if !slices.Equal(res.Warnings, []string{"Страница 2 размыта"}) {
 		t.Errorf("warnings = %q, want the extractor's", res.Warnings)
+	}
+	if !slices.Equal(saver.warnings, res.Warnings) {
+		t.Fatalf("saved warnings = %q, want %q", saver.warnings, res.Warnings)
 	}
 	if !slices.Equal(cardsSeen, []int{1}) {
 		t.Errorf("Cards progress = %v, want [1]", cardsSeen)
@@ -303,8 +308,8 @@ func TestMake_SlotsAtLeastOne(t *testing.T) {
 
 func TestWithWarnings(t *testing.T) {
 	got := WithWarnings("Готово", []string{"1", "2", "3", "4", "5"})
-	if !strings.Contains(got, "⚠️ 1\n⚠️ 2\n⚠️ 3") || !strings.Contains(got, "…и ещё 2") || strings.Contains(got, "⚠️ 4") {
-		t.Errorf("WithWarnings = %q, want three warnings and «…и ещё 2»", got)
+	if got != "Готово\n\n⚠️ Есть замечания к набору — их можно посмотреть в мини-приложении." {
+		t.Errorf("WithWarnings = %q, want a compact notice", got)
 	}
 	if got := WithWarnings("Готово", nil); got != "Готово" {
 		t.Errorf("WithWarnings without warnings = %q", got)
@@ -315,16 +320,21 @@ func TestMakeWarnsWhenSourceBlocksRemainUnassigned(t *testing.T) {
 	gen := &fakeGenerator{generate: func(context.Context, generator.Document, func(generator.Batch)) (generator.Result, error) {
 		r := oneCard("")
 		r.Coverage.Unassigned = []string{"b"}
+		r.Coverage.Issues = []string{"Пропущена формула"}
 		return r, nil
 	}}
-	extractor := &fakeExtractor{result: ingest.Result{Text: "Митоз.", Document: material.Document{Blocks: []material.Block{{ID: "b", Text: "Митоз."}}}}}
-	m := New(extractor, gen, &fakeSaver{}, 1)
+	extractor := &fakeExtractor{result: ingest.Result{Text: "Митоз.", Warnings: []string{"Размытая страница"}, Document: material.Document{Blocks: []material.Block{{ID: "b", Text: "Митоз."}}}}}
+	saver := &fakeSaver{}
+	m := New(extractor, gen, saver, 1)
 	res, err := m.Make(context.Background(), Request{UserID: uuid.New(), Files: file("lecture.pdf")}, Progress{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Warnings) == 0 || !strings.Contains(res.Warnings[0], "Набор частичный") {
+	if len(res.Warnings) != 3 || !strings.Contains(res.Warnings[0], "Набор частичный") {
 		t.Fatalf("hidden partial result: %+v", res)
+	}
+	if !slices.Equal(saver.warnings, res.Warnings) || !slices.Equal(res.Warnings[1:], []string{"Пропущена формула", "Размытая страница"}) {
+		t.Fatalf("saved warnings = %q, returned = %q", saver.warnings, res.Warnings)
 	}
 }
 

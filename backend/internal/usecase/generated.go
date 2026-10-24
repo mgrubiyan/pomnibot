@@ -14,8 +14,8 @@ import (
 )
 
 // prepareGeneratedSet assigns UUIDv7s sequentially so database reads retain fact order.
-func prepareGeneratedSet(title string, result generator.Result) (repository.GeneratedSet, error) {
-	out := repository.GeneratedSet{Report: result}
+func prepareGeneratedSet(title string, result generator.Result, warnings []string) (repository.GeneratedSet, error) {
+	out := repository.GeneratedSet{Report: result, Warnings: slices.Clone(warnings)}
 	for _, fact := range result.Facts {
 		id, err := uuid.NewV7()
 		if err != nil {

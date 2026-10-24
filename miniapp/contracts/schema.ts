@@ -484,6 +484,8 @@ export interface components {
             author: components["schemas"]["User"];
             /** @example 123456 */
             shareCode?: string;
+            /** @description Processing and recognition remarks, visible only to the set author */
+            warnings?: string[];
             /**
              * @description User's rank place in the set rating (1-based)
              * @example 1

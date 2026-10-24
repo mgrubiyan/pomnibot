@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"slices"
 	"sync"
 	"testing"
 
@@ -46,6 +47,7 @@ func (q *testQuerier) CreateSet(_ context.Context, arg db.CreateSetParams) (db.S
 		Title:     arg.Title,
 		AuthorID:  arg.AuthorID,
 		ShareCode: arg.ShareCode,
+		Warnings:  arg.Warnings,
 	}, nil
 }
 
@@ -252,7 +254,7 @@ func TestSaveRecordedGeneration(t *testing.T) {
 	r.Artifact = &generator.Artifact{Version: generator.PipelineVersion}
 	q := newTestQuerier()
 	svc := usecase.NewSetService(q, usecase.NewUserService(q))
-	set, err := svc.SaveGeneratedSet(context.Background(), uuid.New(), "Recorded lecture", r)
+	set, err := svc.SaveGeneratedSet(context.Background(), uuid.New(), "Recorded lecture", r, nil)
 	count := 0
 	if set != nil {
 		count = set.CardsTotal
@@ -291,4 +293,16 @@ func TestSaveGeneratedSetKeepsAllCorrectOptionsAndSharedFact(t *testing.T) {
 
 func (q *testQuerier) EnsureUser(_ context.Context, id pgtype.UUID) (db.User, error) {
 	return db.User{ID: id}, nil
+}
+
+func TestSaveGeneratedSetWarnings(t *testing.T) {
+	for _, warnings := range [][]string{nil, {"Страница 2 размыта", "Не описана функция", "Пропущен слайд", "Пропущена формула"}} {
+		set, _, err := repository.SaveGeneratedSet(t.Context(), newTestQuerier(), uuid.New(), "Лекция", repository.GeneratedSet{Warnings: warnings})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(set.Warnings, warnings) || set.Warnings == nil {
+			t.Fatalf("saved warnings = %#v, want %#v (non-nil)", set.Warnings, warnings)
+		}
+	}
 }

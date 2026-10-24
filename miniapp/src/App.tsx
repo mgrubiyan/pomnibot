@@ -11,6 +11,7 @@ import JoinSet from './screens/JoinSet';
 import SetScreen from './screens/SetScreen';
 import SetCards from './screens/SetCards';
 import SetIssues from './screens/SetIssues';
+import SetWarnings from './screens/SetWarnings';
 import Share from './screens/Share';
 import Leaderboard from './screens/Leaderboard';
 import WhyItWorks from './screens/WhyItWorks';
@@ -24,6 +25,7 @@ type Screen =
     | { name: 'set'; setId: string }
     | { name: 'set-cards'; setId: string }
     | { name: 'set-issues'; setId: string }
+    | { name: 'set-warnings'; setId: string }
     | { name: 'admin-issues' }
     | {
           name: 'feed';
@@ -441,6 +443,17 @@ function App() {
         return <AdminIssues onBack={goHome} />;
     }
 
+    if (screen.name === 'set-warnings') {
+        return (
+            <SetWarnings
+                key={screen.setId}
+                setId={screen.setId}
+                currentUser={currentUser}
+                onBack={() => openSet(screen.setId)}
+            />
+        );
+    }
+
     if (screen.name === 'set-issues') {
         const issues: Screen = { name: 'set-issues', setId: screen.setId };
         return (
@@ -487,6 +500,7 @@ function App() {
                 onStart={(setId, setTitle) => go({ name: 'feed', setId, setTitle })}
                 onRemove={removeSet}
                 onOpenCards={(setId) => go({ name: 'set-cards', setId })}
+                onOpenWarnings={(setId) => go({ name: 'set-warnings', setId })}
                 onOpenIssues={(setId) => go({ name: 'set-issues', setId })}
                 onShare={(setId, setTitle) => go({ name: 'share', setId, setTitle })}
                 onOpenLeaderboard={(setId, setTitle) =>

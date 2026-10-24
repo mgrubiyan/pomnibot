@@ -109,7 +109,7 @@ func TestBot_DocumentInProgressDoesNotBlockOthers(t *testing.T) {
 	var savedMu sync.Mutex
 	var saved []string
 	setSvc := &mockSetService{
-		saveGeneratedSetFunc: func(_ context.Context, _ uuid.UUID, title string, _ generator.Result) (*contracts.CardSet, error) {
+		saveGeneratedSetFunc: func(_ context.Context, _ uuid.UUID, title string, _ generator.Result, _ []string) (*contracts.CardSet, error) {
 			savedMu.Lock()
 			saved = append(saved, title)
 			savedMu.Unlock()
@@ -205,7 +205,7 @@ func TestMAXUsesInternalIDForNotes(t *testing.T) {
 	}
 	testID900 := uuid.MustParse("00000000-0000-0000-0000-000000000900")
 	var savedID uuid.UUID
-	sets := &mockSetService{saveGeneratedSetFunc: func(_ context.Context, id uuid.UUID, title string, _ generator.Result) (*contracts.CardSet, error) {
+	sets := &mockSetService{saveGeneratedSetFunc: func(_ context.Context, id uuid.UUID, title string, _ generator.Result, _ []string) (*contracts.CardSet, error) {
 		savedID = id
 		return &contracts.CardSet{ID: uuid.New(), Title: title}, nil
 	}}

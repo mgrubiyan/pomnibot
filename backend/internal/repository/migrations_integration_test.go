@@ -46,8 +46,12 @@ func TestProcessingReportsMigrationPostgres(t *testing.T) {
 					t.Fatal(err)
 				}
 				var version, applied int
-				if err := pool.QueryRow(ctx, "SELECT MAX(version_id), COUNT(*) FILTER (WHERE version_id = 14 AND is_applied) FROM goose_db_version").Scan(&version, &applied); err != nil || version != 14 || applied != 1 {
+				if err := pool.QueryRow(ctx, "SELECT MAX(version_id), COUNT(*) FILTER (WHERE version_id IN (14, 15) AND is_applied) FROM goose_db_version").Scan(&version, &applied); err != nil || version != 15 || applied != 2 {
 					t.Fatalf("migration version=%d applications=%d error=%v", version, applied, err)
+				}
+				var nonemptyWarnings int
+				if err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM sets WHERE warnings IS NULL OR cardinality(warnings) != 0").Scan(&nonemptyWarnings); err != nil || nonemptyWarnings != 0 {
+					t.Fatalf("existing sets have nonempty warnings: %d, error=%v", nonemptyWarnings, err)
 				}
 				var reports int
 				if err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM set_processing_reports").Scan(&reports); err != nil || reports != 0 {

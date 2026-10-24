@@ -98,7 +98,7 @@ func (generatorStub) Generate(context.Context, generator.Document, func(generato
 
 type saverStub struct{}
 
-func (saverStub) SaveGeneratedSet(context.Context, uuid.UUID, string, generator.Result) (*contracts.CardSet, error) {
+func (saverStub) SaveGeneratedSet(context.Context, uuid.UUID, string, generator.Result, []string) (*contracts.CardSet, error) {
 	return &contracts.CardSet{}, nil
 }
 
@@ -354,10 +354,10 @@ func (f generatingFunc) Generate(ctx context.Context, doc generator.Document, on
 	return f(ctx, doc, onBatch)
 }
 
-type savingFunc func(context.Context, uuid.UUID, string, generator.Result) (*contracts.CardSet, error)
+type savingFunc func(context.Context, uuid.UUID, string, generator.Result, []string) (*contracts.CardSet, error)
 
-func (f savingFunc) SaveGeneratedSet(ctx context.Context, id uuid.UUID, title string, result generator.Result) (*contracts.CardSet, error) {
-	return f(ctx, id, title, result)
+func (f savingFunc) SaveGeneratedSet(ctx context.Context, id uuid.UUID, title string, result generator.Result, warnings []string) (*contracts.CardSet, error) {
+	return f(ctx, id, title, result, warnings)
 }
 
 func TestTelegramUsesSharedMakerAndInternalUserID(t *testing.T) {
@@ -395,7 +395,7 @@ func TestTelegramUsesSharedMakerAndInternalUserID(t *testing.T) {
 	unblock := make(chan struct{})
 	var savedIDs []uuid.UUID
 	maker := notes.New(extractorFunc(func(context.Context, []ingest.File) (ingest.Result, error) {
-		return ingest.Result{Text: "material"}, nil
+		return ingest.Result{Text: "material", Warnings: []string{"Размытая страница"}}, nil
 	}),
 		generatingFunc(func(ctx context.Context, _ generator.Document, onBatch func(generator.Batch)) (generator.Result, error) {
 			started <- struct{}{}
@@ -407,7 +407,10 @@ func TestTelegramUsesSharedMakerAndInternalUserID(t *testing.T) {
 			facts := []generator.Fact{{Name: "Fact", Pages: []int{1}, Cards: []generator.Card{generator.FlipCard{CardBase: generator.CardBase{Question: "Question", Source: "source"}, Answer: "Answer"}}}}
 			onBatch(generator.Batch{Facts: facts})
 			return generator.Result{Facts: facts}, nil
-		}), savingFunc(func(_ context.Context, id uuid.UUID, title string, _ generator.Result) (*contracts.CardSet, error) {
+		}), savingFunc(func(_ context.Context, id uuid.UUID, title string, _ generator.Result, warnings []string) (*contracts.CardSet, error) {
+			if len(warnings) != 1 || warnings[0] != "Размытая страница" {
+				t.Errorf("lost warnings: %q", warnings)
+			}
 			savedIDs = append(savedIDs, id)
 			return &contracts.CardSet{Title: title, ShareCode: contracts.NewOptString("123456")}, nil
 		}), 1)
@@ -447,7 +450,11 @@ func TestTelegramUsesSharedMakerAndInternalUserID(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if !strings.Contains(statuses[len(statuses)-1], "123456") {
+	last := statuses[len(statuses)-1]
+	if !strings.Contains(last, notes.TextRemarksInMiniApp) || strings.Contains(last, "Размытая страница") {
+		t.Fatalf("unexpected warning notice: %q", last)
+	}
+	if !strings.Contains(last, "123456") {
 		t.Fatalf("missing share code: %v", statuses)
 	}
 }
