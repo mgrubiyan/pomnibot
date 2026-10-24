@@ -118,3 +118,10 @@ export const IconPencil = (props: IconProps) => (
         <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
     </Icon>
 );
+
+export const IconAlert = (props: IconProps) => (
+    <Icon {...props}>
+        <path d="M10.3 3.9 2.1 18a2 2 0 0 0 1.7 3h16.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+        <path d="M12 9v4m0 4h.01" />
+    </Icon>
+ );
