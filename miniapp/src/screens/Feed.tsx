@@ -493,10 +493,28 @@ export function Feed({
         onExit();
     };
 
+    // When the next review comes, known only once the answers are saved:
+    // FSRS may bring cards back in minutes, and Result says so.
+    const [nextReviewAt, setNextReviewAt] = useState<string | null>(null);
+
     useEffect(() => {
-        if (!card && results.length > 0) {
-            void submitResults(results);
+        if (card || results.length === 0) {
+            return;
         }
+        let cancelled = false;
+        void submitResults(results)
+            .then(() => api.GET('/'))
+            .then(({ data }) => {
+                if (!cancelled && data) {
+                    setNextReviewAt(data.nextReviewAt ?? null);
+                }
+            })
+            .catch(() => {
+                // Result just goes without the line.
+            });
+        return () => {
+            cancelled = true;
+        };
     }, [card, results, submitResults]);
 
     if (status === 'loading') {
@@ -538,6 +556,7 @@ export function Feed({
                     setTitle={setTitle}
                     cards={cards}
                     results={results}
+                    nextReviewAt={nextReviewAt}
                     onExit={handleExit}
                     onShare={onShare}
                 />
