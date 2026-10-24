@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, CellList, CellSimple, Flex, IconButton, Spinner, Typography } from '@maxhub/max-ui';
 import type { Card, CardSet, Fact, User } from '../types';
 import { Screen } from '../components/Screen';
@@ -64,9 +64,14 @@ export function SetCards({
         cardId: string;
     } | null>(null);
     const dragFactIdRef = useRef<string | null>(null);
+    const dragCardIdRef = useRef<string | null>(null);
     const dragStartIndexRef = useRef<number | null>(null);
     const dragCurrentIndexRef = useRef<number | null>(null);
     const initialFactCardsOrderRef = useRef<Card[]>([]);
+    const activePointerIdRef = useRef<number | null>(null);
+    const latestClientYRef = useRef<number | null>(null);
+    const autoScrollRafRef = useRef<number | null>(null);
+    const bodyRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -143,6 +148,124 @@ export function SetCards({
         }
     };
 
+    const cardsRef = useRef(cards);
+    useEffect(() => {
+        cardsRef.current = cards;
+    }, [cards]);
+
+    const stopAutoScroll = useCallback(() => {
+        if (autoScrollRafRef.current !== null) {
+            cancelAnimationFrame(autoScrollRafRef.current);
+            autoScrollRafRef.current = null;
+        }
+    }, []);
+
+    const cleanupDrag = useCallback(() => {
+        stopAutoScroll();
+        activePointerIdRef.current = null;
+        latestClientYRef.current = null;
+        dragCardIdRef.current = null;
+        setDraggingState(null);
+    }, [stopAutoScroll]);
+
+    // Lock page scrolling and text selection while dragging
+    useEffect(() => {
+        if (!draggingState) return;
+
+        const originalUserSelect = document.body.style.userSelect;
+        const originalWebkitUserSelect = document.body.style.webkitUserSelect;
+        const originalTouchAction = document.body.style.touchAction;
+
+        document.body.style.userSelect = 'none';
+        document.body.style.webkitUserSelect = 'none';
+        document.body.style.touchAction = 'none';
+
+        return () => {
+            document.body.style.userSelect = originalUserSelect;
+            document.body.style.webkitUserSelect = originalWebkitUserSelect;
+            document.body.style.touchAction = originalTouchAction;
+        };
+    }, [draggingState]);
+
+    const updateCardPosition = useCallback((clientY: number) => {
+        const activeFactId = dragFactIdRef.current;
+        const draggingCardId = dragCardIdRef.current;
+        if (!activeFactId || !draggingCardId) return;
+
+        const cardElements = document.querySelectorAll<HTMLElement>(
+            `[data-fact-id="${activeFactId}"][data-card-index]`,
+        );
+        if (cardElements.length === 0) return;
+
+        let targetIndex = -1;
+        for (let i = 0; i < cardElements.length; i++) {
+            const rect = cardElements[i].getBoundingClientRect();
+            if (clientY >= rect.top && clientY <= rect.bottom) {
+                targetIndex = i;
+                break;
+            }
+        }
+
+        if (targetIndex === -1) {
+            const firstRect = cardElements[0].getBoundingClientRect();
+            const lastRect = cardElements[cardElements.length - 1].getBoundingClientRect();
+            if (clientY < firstRect.top) targetIndex = 0;
+            else if (clientY > lastRect.bottom) targetIndex = cardElements.length - 1;
+        }
+
+        if (targetIndex !== -1) {
+            setCards((prevCards) => {
+                const factCards = prevCards.filter((c) => c.factId === activeFactId);
+                const fromIdx = factCards.findIndex((c) => c.id === draggingCardId);
+                if (fromIdx === -1 || fromIdx === targetIndex) return prevCards;
+                dragCurrentIndexRef.current = targetIndex;
+                return reorderCardsInFact(prevCards, activeFactId, fromIdx, targetIndex);
+            });
+        }
+    }, []);
+
+    const startAutoScroll = useCallback(() => {
+        if (autoScrollRafRef.current !== null) return;
+
+        const checkAndScroll = () => {
+            const container = bodyRef.current;
+            const clientY = latestClientYRef.current;
+
+            if (container && clientY !== null) {
+                const rect = container.getBoundingClientRect();
+                const EDGE_THRESHOLD = 50;
+                const MAX_SPEED = 10;
+
+                let scrollDelta = 0;
+                if (clientY < rect.top + EDGE_THRESHOLD) {
+                    const intensity = Math.min(
+                        1,
+                        Math.max(0, (rect.top + EDGE_THRESHOLD - clientY) / EDGE_THRESHOLD),
+                    );
+                    scrollDelta = -Math.max(2, intensity * MAX_SPEED);
+                } else if (clientY > rect.bottom - EDGE_THRESHOLD) {
+                    const intensity = Math.min(
+                        1,
+                        Math.max(0, (clientY - (rect.bottom - EDGE_THRESHOLD)) / EDGE_THRESHOLD),
+                    );
+                    scrollDelta = Math.max(2, intensity * MAX_SPEED);
+                }
+
+                if (scrollDelta !== 0) {
+                    const prevScrollTop = container.scrollTop;
+                    container.scrollTop += scrollDelta;
+                    if (container.scrollTop !== prevScrollTop) {
+                        updateCardPosition(clientY);
+                    }
+                }
+            }
+
+            autoScrollRafRef.current = requestAnimationFrame(checkAndScroll);
+        };
+
+        autoScrollRafRef.current = requestAnimationFrame(checkAndScroll);
+    }, [updateCardPosition]);
+
     // Pointer event handlers for card drag-and-drop
     const handlePointerDown = (
         e: React.PointerEvent<HTMLSpanElement>,
@@ -153,80 +276,74 @@ export function SetCards({
         e.stopPropagation();
         if (e.button !== 0 && e.pointerType === 'mouse') return;
 
-        const handleEl = e.currentTarget;
-        handleEl.setPointerCapture(e.pointerId);
-
         dragFactIdRef.current = factId;
+        dragCardIdRef.current = cardId;
         dragStartIndexRef.current = index;
         dragCurrentIndexRef.current = index;
-        initialFactCardsOrderRef.current = cards;
+        initialFactCardsOrderRef.current = cardsRef.current;
+        activePointerIdRef.current = e.pointerId;
+        latestClientYRef.current = e.clientY;
+
         setDraggingState({ factId, cardId });
+        startAutoScroll();
     };
 
-    const handlePointerMove = (e: React.PointerEvent<HTMLSpanElement>) => {
-        const activeFactId = dragFactIdRef.current;
-        const currentIdx = dragCurrentIndexRef.current;
-        if (!activeFactId || currentIdx === null) return;
+    useEffect(() => {
+        if (!draggingState) return;
 
-        const cardElements = document.querySelectorAll<HTMLElement>(
-            `[data-fact-id="${activeFactId}"][data-card-index]`,
-        );
-        if (cardElements.length === 0) return;
+        const onPointerMove = (e: PointerEvent) => {
+            if (activePointerIdRef.current !== null && e.pointerId !== activePointerIdRef.current) return;
+            e.preventDefault();
+            latestClientYRef.current = e.clientY;
+            updateCardPosition(e.clientY);
+        };
 
-        let targetIndex = -1;
-        for (let i = 0; i < cardElements.length; i++) {
-            const rect = cardElements[i].getBoundingClientRect();
-            if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
-                targetIndex = i;
-                break;
+        const onPointerUp = async (e: PointerEvent) => {
+            if (activePointerIdRef.current !== null && e.pointerId !== activePointerIdRef.current) return;
+            const activeFactId = dragFactIdRef.current;
+            const startIdx = dragStartIndexRef.current;
+            const finalIdx = dragCurrentIndexRef.current;
+
+            cleanupDrag();
+
+            dragFactIdRef.current = null;
+            dragStartIndexRef.current = null;
+            dragCurrentIndexRef.current = null;
+
+            if (activeFactId && startIdx !== null && finalIdx !== null && startIdx !== finalIdx) {
+                const newIds = getFactCardIds(cardsRef.current, activeFactId);
+                try {
+                    await reorderCards(activeFactId, newIds);
+                } catch (err) {
+                    console.error('Failed to commit reorder to server:', err);
+                    // Revert to initial order
+                    setCards(initialFactCardsOrderRef.current);
+                }
             }
-        }
+        };
 
-        if (targetIndex === -1) {
-            const firstRect = cardElements[0].getBoundingClientRect();
-            const lastRect = cardElements[cardElements.length - 1].getBoundingClientRect();
-            if (e.clientY < firstRect.top) targetIndex = 0;
-            else if (e.clientY > lastRect.bottom) targetIndex = cardElements.length - 1;
-        }
+        const onPointerCancel = (e: PointerEvent) => {
+            if (activePointerIdRef.current !== null && e.pointerId !== activePointerIdRef.current) return;
+            cleanupDrag();
 
-        if (targetIndex !== -1 && targetIndex !== currentIdx) {
-            dragCurrentIndexRef.current = targetIndex;
-            setCards((prevCards) =>
-                reorderCardsInFact(prevCards, activeFactId, currentIdx, targetIndex),
-            );
-        }
-    };
+            dragFactIdRef.current = null;
+            dragStartIndexRef.current = null;
+            dragCurrentIndexRef.current = null;
 
-    const cardsRef = useRef(cards);
-    cardsRef.current = cards;
+            // Revert order on cancel without server call
+            setCards(initialFactCardsOrderRef.current);
+        };
 
-    const handlePointerUp = async (e: React.PointerEvent<HTMLSpanElement>) => {
-        const activeFactId = dragFactIdRef.current;
-        const startIdx = dragStartIndexRef.current;
-        const finalIdx = dragCurrentIndexRef.current;
+        window.addEventListener('pointermove', onPointerMove, { passive: false });
+        window.addEventListener('pointerup', onPointerUp);
+        window.addEventListener('pointercancel', onPointerCancel);
 
-        try {
-            e.currentTarget.releasePointerCapture(e.pointerId);
-        } catch {
-            // ignore
-        }
-
-        dragFactIdRef.current = null;
-        dragStartIndexRef.current = null;
-        dragCurrentIndexRef.current = null;
-        setDraggingState(null);
-
-        if (activeFactId && startIdx !== null && finalIdx !== null && startIdx !== finalIdx) {
-            const newIds = getFactCardIds(cardsRef.current, activeFactId);
-            try {
-                await reorderCards(activeFactId, newIds);
-            } catch (err) {
-                console.error('Failed to commit reorder to server:', err);
-                // Revert to initial order
-                setCards(initialFactCardsOrderRef.current);
-            }
-        }
-    };
+        return () => {
+            window.removeEventListener('pointermove', onPointerMove);
+            window.removeEventListener('pointerup', onPointerUp);
+            window.removeEventListener('pointercancel', onPointerCancel);
+        };
+    }, [cleanupDrag, draggingState, updateCardPosition]);
 
     if (status === 'loading') {
         return (
@@ -266,7 +383,7 @@ export function SetCards({
                 onBack={onBack}
             />
 
-            <Flex direction="column" align="stretch" gap={8} className={s.body}>
+            <Flex ref={bodyRef} direction="column" align="stretch" gap={8} className={s.body}>
                 {isOwner && (
                     <Flex align="center" justify="space-between" className={s.setTitleCard}>
                         <Flex direction="column" gap={2} className={s.setTitleContent}>
@@ -418,9 +535,6 @@ export function SetCards({
                                                                         index,
                                                                     )
                                                                 }
-                                                                onPointerMove={handlePointerMove}
-                                                                onPointerUp={handlePointerUp}
-                                                                onPointerCancel={handlePointerUp}
                                                                 onClick={(e) => e.stopPropagation()}
                                                             >
                                                                 ≡
