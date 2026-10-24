@@ -1195,7 +1195,7 @@ func (*DeleteSetNotFound) deleteSetRes() {}
 
 // Ref: #/components/schemas/ErrorResponse
 type ErrorResponse struct {
-	// Machine-readable error code, including profile_required.
+	// Machine-readable error code, including profile_required and sign_in_expired.
 	Code    OptString `json:"code"`
 	Message string    `json:"message"`
 }

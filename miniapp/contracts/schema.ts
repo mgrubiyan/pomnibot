@@ -425,7 +425,7 @@ export interface components {
             status: string;
         };
         ErrorResponse: {
-            /** @description Machine-readable error code, including profile_required */
+            /** @description Machine-readable error code, including profile_required and sign_in_expired */
             code?: string;
             message: string;
         };

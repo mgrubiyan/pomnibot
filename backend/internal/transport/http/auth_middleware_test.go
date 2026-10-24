@@ -87,15 +87,19 @@ func generateValidInitData(params map[string]string, botToken string) string {
 
 func TestAuthMiddleware(t *testing.T) {
 	for _, tc := range []struct {
-		name, scheme                   string
-		invalid, dbFailure, incomplete bool
-		status                         int
-		wantID                         uuid.UUID
+		name, scheme                            string
+		invalid, expired, dbFailure, incomplete bool
+		status                                  int
+		wantID                                  uuid.UUID
 	}{
 		{name: "max", scheme: "max", status: 200, wantID: testAuthMaxID},
 		{name: "telegram", scheme: "tma", status: 200, wantID: testAuthTgID},
 		{name: "missing", status: 200}, {name: "unknown", scheme: "Bearer", status: 200},
-		{name: "invalid", scheme: "tma", invalid: true, status: 200},
+		// A signature that does not hold or has expired is refused instead of
+		// passing the request on as the shared test account.
+		{name: "invalid", scheme: "tma", invalid: true, status: 401},
+		{name: "invalid max", scheme: "max", invalid: true, status: 401},
+		{name: "expired", scheme: "max", expired: true, status: 401},
 		{name: "database failure", scheme: "max", dbFailure: true, status: 500},
 		{name: "incomplete", scheme: "tma", incomplete: true, status: 403},
 	} {
@@ -140,7 +144,11 @@ func TestAuthMiddleware(t *testing.T) {
 					t.Fatalf("name=%s", name)
 				}
 			})
-			raw := generateValidInitData(map[string]string{"auth_date": fmt.Sprint(time.Now().Unix()), "user": `{"id":42,"first_name":"Remote","username":"same"}`}, "secret")
+			signedAt := time.Now()
+			if tc.expired {
+				signedAt = signedAt.Add(-2 * time.Hour)
+			}
+			raw := generateValidInitData(map[string]string{"auth_date": fmt.Sprint(signedAt.Unix()), "user": `{"id":42,"first_name":"Remote","username":"same"}`}, "secret")
 			if tc.invalid {
 				raw += "tamper"
 			}
@@ -155,13 +163,16 @@ func TestAuthMiddleware(t *testing.T) {
 				t.Fatalf("%d: %s", response.Code, response.Body.String())
 			}
 			wantCalls := 0
-			if tc.scheme == "max" || tc.scheme == "tma" && !tc.invalid {
+			if (tc.scheme == "max" || tc.scheme == "tma") && !tc.invalid && !tc.expired {
 				wantCalls = 1
 			}
 			if calls != wantCalls {
 				t.Fatalf("upsert calls=%d, want %d", calls, wantCalls)
 			}
 			if tc.incomplete && !strings.Contains(response.Body.String(), "profile_required") {
+				t.Fatal(response.Body.String())
+			}
+			if tc.status == 401 && !strings.Contains(response.Body.String(), "sign_in_expired") {
 				t.Fatal(response.Body.String())
 			}
 			if called != (tc.status == 200) {
