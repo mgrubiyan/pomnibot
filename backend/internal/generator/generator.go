@@ -207,13 +207,9 @@ func (g *Generator) completeStage(ctx context.Context, doc Document, source, sta
 	st.Duration = time.Since(began)
 	if e != nil {
 		detail := contextualProblem(e, stage, g.opts, st.Duration)
-		detail.model, detail.usage = resp.Model, &resp.Usage
 		// A zero-value response on transport failure provides no observation of
 		// response length or finish status. An empty successful response does.
-		if resp.Content != nil || resp.Truncated || st.InvalidResponses > 0 {
-			detail.responseBytes = new(len(resp.Content))
-			detail.truncated = &resp.Truncated
-		}
+		detail.addResponse(resp, resp.Content != nil || resp.Truncated || st.InvalidResponses > 0)
 		e = detail
 		st.Error = e.Error()
 	}

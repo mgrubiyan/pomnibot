@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
@@ -14,20 +15,10 @@ import (
 // reasons and paths constructed by this package. Never render the cause: provider
 // and JSON errors can contain document text or arbitrary response fields.
 type diagnosticError struct {
-	cause           error
-	stage           string
-	category        string
-	reason          string
-	path            string
-	jsonOffset      int64
-	providerStatus  int
-	model           string
-	truncated       *bool
-	responseBytes   *int
-	maxTokens       int
-	reasoningEffort string
-	usage           *providers.Usage
-	duration        *time.Duration
+	cause                         error
+	stage, category, reason, path string
+	attrs                         []slog.Attr
+	jsonOffset                    int64
 }
 
 var _ slog.LogValuer = (*diagnosticError)(nil)
@@ -99,9 +90,9 @@ func providerProblem(err error) *diagnosticError {
 	detail := &diagnosticError{category: category, reason: reason, cause: err}
 	var status interface{ StatusCode() int }
 	if errors.As(err, &status) {
-		detail.providerStatus = status.StatusCode()
-		if detail.providerStatus > 0 {
-			detail.reason += fmt.Sprintf(" (HTTP status %d)", detail.providerStatus)
+		if code := status.StatusCode(); code > 0 {
+			detail.reason += fmt.Sprintf(" (HTTP status %d)", code)
+			detail.attrs = append(detail.attrs, slog.Int("provider_status", code))
 		}
 	}
 	return detail
@@ -114,8 +105,15 @@ func contextualProblem(err error, stage string, opts Options, duration time.Dura
 	}
 	cp := *detail
 	cp.cause = err
-	cp.stage, cp.maxTokens, cp.reasoningEffort = stage, opts.MaxTokens, opts.ReasoningEffort
-	cp.duration = &duration
+	cp.stage = stage
+	cp.attrs = append(slices.Clone(detail.attrs), slog.Duration("duration", duration))
+	if opts.MaxTokens > 0 {
+		cp.attrs = append(cp.attrs, slog.Int("max_tokens", opts.MaxTokens))
+	}
+	switch opts.ReasoningEffort {
+	case "low", "medium", "high", "xhigh", "max":
+		cp.attrs = append(cp.attrs, slog.String("reasoning_effort", opts.ReasoningEffort))
+	}
 	return &cp
 }
 
@@ -140,59 +138,41 @@ func (e *diagnosticError) LogValue() slog.Value {
 	if e.jsonOffset > 0 {
 		attrs = append(attrs, slog.Int64("json_offset", e.jsonOffset))
 	}
-	if e.providerStatus > 0 {
-		attrs = append(attrs, slog.Int("provider_status", e.providerStatus))
+	return slog.GroupValue(append(attrs, e.attrs...)...)
+}
+
+func (e *diagnosticError) addResponse(resp providers.Response, observed bool) {
+	if resp.Model != "" {
+		e.attrs = append(e.attrs, slog.String("model", resp.Model))
 	}
-	if e.model != "" {
-		attrs = append(attrs, slog.String("model", e.model))
+	if observed {
+		e.attrs = append(e.attrs, slog.Bool("truncated", resp.Truncated), slog.Int("response_bytes", len(resp.Content)))
 	}
-	if e.truncated != nil {
-		attrs = append(attrs, slog.Bool("truncated", *e.truncated))
-	}
-	if e.responseBytes != nil {
-		attrs = append(attrs, slog.Int("response_bytes", *e.responseBytes))
-	}
-	if e.maxTokens > 0 {
-		attrs = append(attrs, slog.Int("max_tokens", e.maxTokens))
-	}
-	// Only known enum values are safe even when Options is supplied directly.
-	switch e.reasoningEffort {
-	case "low", "medium", "high", "xhigh", "max":
-		attrs = append(attrs, slog.String("reasoning_effort", e.reasoningEffort))
-	}
-	if e.duration != nil {
-		attrs = append(attrs, slog.Duration("duration", *e.duration))
-	}
-	if u := e.usage; u != nil {
-		if u.Attempts > 0 {
-			attrs = append(attrs, slog.Int("attempts", u.Attempts))
-		}
-		if u.FailedAttempts > 0 {
-			attrs = append(attrs, slog.Int("failed_attempts", u.FailedAttempts))
-		}
-		// Providers expose no presence bit for ordinary token counts. A positive
-		// count is evidence; zero alone may mean unreported, even on success.
-		if u.PromptTokens > 0 {
-			attrs = append(attrs, slog.Int("prompt_tokens", u.PromptTokens))
-		}
-		if u.CompletionTokens > 0 {
-			attrs = append(attrs, slog.Int("completion_tokens", u.CompletionTokens))
-		}
-		if u.ReasoningTokens != nil {
-			attrs = append(attrs, slog.Int("reasoning_tokens", *u.ReasoningTokens))
-		}
-		if u.CachedTokens != nil {
-			attrs = append(attrs, slog.Int("cached_tokens", *u.CachedTokens))
-		}
-		if u.CacheWriteTokens != nil {
-			attrs = append(attrs, slog.Int("cache_write_tokens", *u.CacheWriteTokens))
-		}
-		if u.CostUSD > 0 {
-			attrs = append(attrs, slog.Float64("cost_usd", u.CostUSD))
-		}
-		if u.UnreportedCalls > 0 {
-			attrs = append(attrs, slog.Int("unreported_usage_calls", u.UnreportedCalls))
+	u := resp.Usage
+	// These provider counters have no presence bit: zero can mean unreported.
+	for _, counter := range []struct {
+		key   string
+		value int
+	}{
+		{"attempts", u.Attempts}, {"failed_attempts", u.FailedAttempts},
+		{"prompt_tokens", u.PromptTokens}, {"completion_tokens", u.CompletionTokens},
+		{"unreported_usage_calls", u.UnreportedCalls},
+	} {
+		if counter.value > 0 {
+			e.attrs = append(e.attrs, slog.Int(counter.key, counter.value))
 		}
 	}
-	return slog.GroupValue(attrs...)
+	for _, counter := range []struct {
+		key   string
+		value *int
+	}{
+		{"reasoning_tokens", u.ReasoningTokens}, {"cached_tokens", u.CachedTokens}, {"cache_write_tokens", u.CacheWriteTokens},
+	} {
+		if counter.value != nil {
+			e.attrs = append(e.attrs, slog.Int(counter.key, *counter.value))
+		}
+	}
+	if u.CostUSD > 0 {
+		e.attrs = append(e.attrs, slog.Float64("cost_usd", u.CostUSD))
+	}
 }
