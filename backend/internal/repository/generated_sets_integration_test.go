@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
+	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
@@ -21,7 +24,7 @@ func TestGeneratedSetOrderAndChoiceIssuesPostgres(t *testing.T) {
 	q := db.New(pool)
 	users := usecase.NewUserService(q)
 	sets := usecase.NewSetService(q, users)
-	cards := usecase.NewCardService(q, users)
+	cards := usecase.NewCardService(q, users, usecase.WithTransactions(repository.NewManualStore(pool)))
 	owner, reader := uuid.New(), uuid.New()
 	pgReader := pgtype.UUID{Bytes: reader, Valid: true}
 	result := generator.Result{Artifact: &generator.Artifact{Version: generator.PipelineVersion}}
@@ -163,6 +166,14 @@ func TestGeneratedSetOrderAndChoiceIssuesPostgres(t *testing.T) {
 	var recorded int
 	if err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM answers WHERE user_id=$1 AND card_id=$2", reader, choiceID).Scan(&recorded); err != nil || recorded != 1 {
 		t.Fatalf("recorded answers=%d error=%v", recorded, err)
+	}
+	// Only a recent verdict is repeated: none was recorded after now.
+	if _, err := q.GetLastAnswer(ctx, db.GetLastAnswerParams{
+		UserID: pgReader,
+		CardID: pgtype.UUID{Bytes: choiceID, Valid: true},
+		Since:  pgtype.Timestamptz{Time: time.Now().Add(time.Second), Valid: true},
+	}); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("an older verdict was repeated: %v", err)
 	}
 	progress, err := q.GetUserFactProgress(ctx, db.GetUserFactProgressParams{UserID: pgReader, FactID: facts[0].ID})
 	if err != nil || progress.Step != 3 {

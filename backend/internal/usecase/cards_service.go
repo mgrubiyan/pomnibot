@@ -24,6 +24,7 @@ type cardServiceImpl struct {
 	grader      AnswerGrader
 	issues      IssueNotifier
 	locks       *answerLocks
+	tx          Transactor
 }
 
 // CardServiceOption configures NewCardService.
@@ -34,6 +35,17 @@ type CardServiceOption func(*cardServiceImpl)
 // word order and typos are forgiven, other words are not.
 func WithGrader(g AnswerGrader) CardServiceOption {
 	return func(s *cardServiceImpl) { s.grader = g }
+}
+
+// Transactor runs writes in one database transaction.
+type Transactor interface {
+	InTx(ctx context.Context, fn func(db.Querier) error) error
+}
+
+// WithTransactions records an answer and the fact's next review in one
+// transaction. Without it they are written one after the other.
+func WithTransactions(t Transactor) CardServiceOption {
+	return func(s *cardServiceImpl) { s.tx = t }
 }
 
 // NewCardService creates a new CardService implementation backed by db.Querier.

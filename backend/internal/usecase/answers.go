@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"hash/fnv"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -23,18 +23,55 @@ import (
 // the reader cannot see at all (as after their sign-in expired) stops the run.
 var errNotInFeed = fmt.Errorf("%w: the card is not in the feed", ErrConflict)
 
+// replayWindow is how long a recorded verdict is repeated to a card that
+// left the feed: long enough for a lost response to be retried, too short
+// for an answer from an earlier pass to stand in for a new one.
+const replayWindow = 2 * time.Minute
+
 // answerLocks serialize the answers of one reader to one fact, so a double
-// tap or an overlapping retry is not recorded twice. One process serves the
-// API, so locks in memory are enough.
-type answerLocks [256]sync.Mutex
+// tap or an overlapping retry is not recorded twice. Each reader and fact
+// has its own lock, so nobody waits for another reader's model call. One
+// process serves the API, so locks in memory are enough.
+type answerLocks struct {
+	mu   sync.Mutex
+	held map[answerKey]*answerLock
+}
+
+type answerKey struct {
+	user uuid.UUID
+	fact [16]byte
+}
+
+// answerLock is forgotten once nobody holds or waits for it.
+type answerLock struct {
+	mu    sync.Mutex
+	users int
+}
 
 func (l *answerLocks) lock(userID uuid.UUID, factID pgtype.UUID) func() {
-	h := fnv.New32a()
-	_, _ = h.Write(userID[:])
-	_, _ = h.Write(factID.Bytes[:])
-	m := &l[h.Sum32()%uint32(len(l))]
-	m.Lock()
-	return m.Unlock
+	key := answerKey{user: userID, fact: factID.Bytes}
+	l.mu.Lock()
+	if l.held == nil {
+		l.held = make(map[answerKey]*answerLock)
+	}
+	k := l.held[key]
+	if k == nil {
+		k = &answerLock{}
+		l.held[key] = k
+	}
+	k.users++
+	l.mu.Unlock()
+
+	k.mu.Lock()
+	return func() {
+		k.mu.Unlock()
+		l.mu.Lock()
+		k.users--
+		if k.users == 0 {
+			delete(l.held, key)
+		}
+		l.mu.Unlock()
+	}
 }
 
 // AnswerQuestion grades and records the answer to the card the feed asks of
@@ -83,15 +120,22 @@ func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID uuid.UUID, 
 		return res, nil
 	}
 
-	if _, err := s.querier.RecordAnswer(ctx, db.RecordAnswerParams{
-		UserID:  pgUserID,
-		CardID:  card.ID,
-		Correct: v.Correct,
+	// Recorded together with the fact's next review, so a failed write
+	// leaves the card in the feed with nothing recorded for the retry.
+	if err := s.inTx(ctx, func(q db.Querier) error {
+		if _, err := q.RecordAnswer(ctx, db.RecordAnswerParams{
+			UserID:  pgUserID,
+			CardID:  card.ID,
+			Correct: v.Correct,
+		}); err != nil {
+			return fmt.Errorf("record answer: %w", err)
+		}
+		if err := processFactAnswer(ctx, q, pgUserID, card.FactID, v.Correct); err != nil {
+			return fmt.Errorf("process fact answer: %w", err)
+		}
+		return nil
 	}); err != nil {
-		return nil, fmt.Errorf("record answer: %w", err)
-	}
-	if err := processFactAnswer(ctx, s.querier, pgUserID, card.FactID, v.Correct); err != nil {
-		return nil, fmt.Errorf("process fact answer: %w", err)
+		return nil, err
 	}
 
 	if v.Reason != "" {
@@ -157,10 +201,23 @@ func (s *cardServiceImpl) inFeed(ctx context.Context, userID, cardID pgtype.UUID
 	return false, nil
 }
 
-// lastAnswer is the verdict recorded for the reader's last answer to the
-// card; errNotInFeed when they have never answered it.
+// inTx runs the writes in one transaction, or straight on the querier when
+// the service has no transactions.
+func (s *cardServiceImpl) inTx(ctx context.Context, fn func(db.Querier) error) error {
+	if s.tx == nil {
+		return fn(s.querier)
+	}
+	return s.tx.InTx(ctx, fn)
+}
+
+// lastAnswer is the verdict recorded for the reader's answer to the card
+// within the replay window; errNotInFeed when there is none.
 func (s *cardServiceImpl) lastAnswer(ctx context.Context, userID, cardID pgtype.UUID) (bool, error) {
-	correct, err := s.querier.GetLastAnswer(ctx, db.GetLastAnswerParams{UserID: userID, CardID: cardID})
+	correct, err := s.querier.GetLastAnswer(ctx, db.GetLastAnswerParams{
+		UserID: userID,
+		CardID: cardID,
+		Since:  pgtype.Timestamptz{Time: time.Now().Add(-replayWindow), Valid: true},
+	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, errNotInFeed
 	}
@@ -189,7 +246,12 @@ func (s *cardServiceImpl) grade(ctx context.Context, card storedCard, details ca
 		want, _ := strconv.ParseBool(card.AnswerText.String)
 		return local(given == want), nil
 	case contracts.CardKindChoice:
-		return local(cards.MatchChoiceAnswer(card.AnswerText.String, answer)), nil
+		// The options the reveal shows as right, so the verdict agrees with it.
+		right, err := json.Marshal(choiceAnswer(details.options, card.AnswerText.String).StringArray)
+		if err != nil {
+			return grader.Verdict{}, fmt.Errorf("marshal choice answer: %w", err)
+		}
+		return local(cards.MatchChoiceAnswer(string(right), answer)), nil
 	case contracts.CardKindTable:
 		var placed []contracts.TableItem
 		if err := json.Unmarshal([]byte(answer), &placed); err != nil {
@@ -206,22 +268,21 @@ func (s *cardServiceImpl) grade(ctx context.Context, card storedCard, details ca
 	}
 }
 
-// tableMatches: every term of the layout is placed once, in its column.
+// tableMatches: every term of the layout is placed in its column, as many
+// times as the layout has it there.
 func tableMatches(want contracts.TableLayout, placed []contracts.TableItem) bool {
 	if len(placed) != len(want.Items) {
 		return false
 	}
-	columns := make(map[string]string, len(placed))
-	for _, item := range placed {
-		if _, twice := columns[item.Text]; twice {
-			return false
-		}
-		columns[item.Text] = item.Column
-	}
+	left := make(map[contracts.TableItem]int, len(want.Items))
 	for _, item := range want.Items {
-		if column, ok := columns[item.Text]; !ok || column != item.Column {
+		left[item]++
+	}
+	for _, item := range placed {
+		if left[item] == 0 {
 			return false
 		}
+		left[item]--
 	}
 	return true
 }

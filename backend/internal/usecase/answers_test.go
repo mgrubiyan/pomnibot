@@ -152,6 +152,52 @@ func TestAnswerQuestionGradesTableByPlaces(t *testing.T) {
 	}
 }
 
+// A term may appear twice, in one column or in two: each place counts once.
+func TestAnswerQuestionGradesRepeatedTerms(t *testing.T) {
+	card := testCard("table", "")
+	for _, tc := range []struct {
+		given string
+		want  bool
+	}{
+		{`[{"text":"2","column":"Y"},{"text":"2","column":"X"},{"text":"x","column":"X"}]`, true},
+		{`[{"text":"2","column":"X"},{"text":"2","column":"X"},{"text":"x","column":"X"}]`, false},
+	} {
+		f := newAnswerFixture(card)
+		f.getCardTableColumnsFunc = func(context.Context, pgtype.UUID) ([]db.CardTableColumn, error) {
+			return []db.CardTableColumn{{Name: "X"}, {Name: "Y"}}, nil
+		}
+		f.getCardTableItemsFunc = func(context.Context, pgtype.UUID) ([]db.CardTableItem, error) {
+			return []db.CardTableItem{
+				{ItemText: "2", ColumnName: "X"},
+				{ItemText: "x", ColumnName: "X"},
+				{ItemText: "2", ColumnName: "Y"},
+			}, nil
+		}
+		svc := usecase.NewCardService(f, usecase.NewUserService(f))
+		res, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(card.ID.Bytes), tc.given)
+		if err != nil || res.IsCorrect != tc.want {
+			t.Fatalf("%s: %+v, %v; want correct=%v", tc.given, res, err, tc.want)
+		}
+	}
+}
+
+// A choice card is graded by the options marked right, the answer its
+// reveal shows, even when the stored answer text differs from them.
+func TestAnswerQuestionGradesChoiceByTheRevealedOptions(t *testing.T) {
+	f := newAnswerFixture(testCard("choice", "A "))
+	f.getCardOptionsFunc = func(context.Context, pgtype.UUID) ([]db.CardOption, error) {
+		return []db.CardOption{{Text: "A", IsCorrect: true}, {Text: "B"}}, nil
+	}
+	svc := usecase.NewCardService(f, usecase.NewUserService(f))
+	res, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(f.card.ID.Bytes), `["A"]`)
+	if err != nil || !res.IsCorrect {
+		t.Fatalf("AnswerQuestion() = %+v, %v; want correct", res, err)
+	}
+	if got := res.Reveal.Value.Answer.StringArray; len(got) != 1 || got[0] != "A" {
+		t.Fatalf("reveal = %v, want [A]", got)
+	}
+}
+
 // A card the feed does not ask now is not graded: neither a card of a
 // fact that is not due nor an easier card of a due fact.
 func TestAnswerQuestionOnlyGradesTheFeedCard(t *testing.T) {
@@ -185,6 +231,68 @@ func TestAnswerQuestionRepeatsTheRecordedVerdict(t *testing.T) {
 	}
 	if f.recorded.Load() != 1 {
 		t.Fatalf("recorded %d answers, want 1", f.recorded.Load())
+	}
+}
+
+// Only a verdict recorded moments ago is repeated: a lost response retried.
+// An answer from an earlier pass is not the verdict for this one.
+func TestAnswerQuestionRepeatsOnlyARecentVerdict(t *testing.T) {
+	f := newAnswerFixture(testCard("boolean", "true"))
+	f.inFeed.Store(false)
+	var since time.Time
+	f.getLastAnswerFunc = func(_ context.Context, arg db.GetLastAnswerParams) (bool, error) {
+		since = arg.Since.Time
+		return false, pgx.ErrNoRows
+	}
+	svc := usecase.NewCardService(f, usecase.NewUserService(f))
+	_, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(f.card.ID.Bytes), "true")
+	if !errors.Is(err, usecase.ErrConflict) {
+		t.Fatalf("err = %v, want ErrConflict", err)
+	}
+	if ago := time.Since(since); ago < 30*time.Second || ago > 5*time.Minute {
+		t.Fatalf("verdicts are repeated from %v ago, want a few minutes at most", ago)
+	}
+}
+
+// fakeTx notes whether writes run inside it and whether it rolled back.
+type fakeTx struct {
+	q                  db.Querier
+	active, rolledBack bool
+}
+
+func (t *fakeTx) InTx(_ context.Context, fn func(db.Querier) error) error {
+	t.active = true
+	defer func() { t.active = false }()
+	err := fn(t.q)
+	t.rolledBack = err != nil
+	return err
+}
+
+// The answer and the fact's new review date are written together: when the
+// second write fails the answer is not left recorded, so the retry the
+// client makes grades the card once more instead of recording it twice.
+func TestAnswerQuestionWritesInOneTransaction(t *testing.T) {
+	f := newAnswerFixture(testCard("boolean", "true"))
+	tx := &fakeTx{q: f}
+	record := f.recordAnswerFunc
+	f.recordAnswerFunc = func(ctx context.Context, arg db.RecordAnswerParams) (db.Answer, error) {
+		if !tx.active {
+			t.Error("the answer was recorded outside the transaction")
+		}
+		return record(ctx, arg)
+	}
+	f.upsertFactProgressFunc = func(context.Context, db.UpsertFactProgressParams) (db.UserFactProgress, error) {
+		if !tx.active {
+			t.Error("the progress was written outside the transaction")
+		}
+		return db.UserFactProgress{}, errors.New("connection reset")
+	}
+	svc := usecase.NewCardService(f, usecase.NewUserService(f), usecase.WithTransactions(tx))
+	if _, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(f.card.ID.Bytes), "true"); err == nil {
+		t.Fatal("a failed write must fail the answer")
+	}
+	if !tx.rolledBack {
+		t.Fatal("the transaction was not rolled back")
 	}
 }
 

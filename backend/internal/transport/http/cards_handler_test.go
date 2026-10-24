@@ -2,8 +2,8 @@ package http
 
 import (
 	"context"
-	"fmt"
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
