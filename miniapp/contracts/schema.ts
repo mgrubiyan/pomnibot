@@ -662,6 +662,11 @@ export interface components {
             isAdmin?: boolean;
         };
         AnswerQuestionRequest: {
+            /**
+             * Format: uuid
+             * @description Unique submission ID, reused for retries and renewed for each new review
+             */
+            attemptId: string;
             /** @description input: the typed answer; choice: a JSON-encoded array of the selected option texts; boolean: true or false; table: a JSON-encoded array of TableItem, every term with the column it was put in; flip: true when the reader knew the answer, false when not */
             answer: string;
         };

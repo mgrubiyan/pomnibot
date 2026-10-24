@@ -494,7 +494,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 	})
 
 	t.Run("POST /api/cards/{cardId}/answer with auth returns 200", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"answer":"4"}`)
+		body := bytes.NewBufferString(`{"answer":"4","attemptId":"01900000-0000-7000-8000-000000000001"}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/cards/"+testCardID.String()+"/answer", body)
 		req.Header.Set("Authorization", "max "+authHeader)
 		req.Header.Set("Content-Type", "application/json")

@@ -38,7 +38,7 @@ type CardService interface {
 	CreateCardInFact(ctx context.Context, userID, factID uuid.UUID, req *contracts.CreateCardRequest) (*contracts.Card, error)
 	UpdateCard(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error)
 	DeleteCard(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) error
-	AnswerQuestion(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error)
+	AnswerQuestion(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string, attemptID uuid.UUID) (*contracts.AnswerQuestionResponse, error)
 	RevealCard(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) (*contracts.CardReveal, error)
 	ReportCardIssue(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, reason contracts.CardIssueReason) error
 	GetSetIssues(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.SetIssue, error)

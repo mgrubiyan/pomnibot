@@ -36,6 +36,7 @@ type Querier interface {
 	DeleteSet(ctx context.Context, arg DeleteSetParams) (int64, error)
 	EnsureUser(ctx context.Context, id pgtype.UUID) (User, error)
 	FactExists(ctx context.Context, id pgtype.UUID) (bool, error)
+	GetAnswerByAttempt(ctx context.Context, arg GetAnswerByAttemptParams) (bool, error)
 	GetCardByID(ctx context.Context, arg GetCardByIDParams) (GetCardByIDRow, error)
 	GetCardByIDForAuthor(ctx context.Context, arg GetCardByIDForAuthorParams) (GetCardByIDForAuthorRow, error)
 	GetCardOptions(ctx context.Context, cardID pgtype.UUID) ([]CardOption, error)

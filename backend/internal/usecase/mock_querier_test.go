@@ -9,6 +9,7 @@ import (
 )
 
 type mockQuerier struct {
+	getAnswerByAttemptFunc func(context.Context, db.GetAnswerByAttemptParams) (bool, error)
 	db.Querier
 	countTotalDueCardsForUserFunc   func(ctx context.Context, userID pgtype.UUID) (int32, error)
 	getNextReviewDateForUserFunc    func(ctx context.Context, userID pgtype.UUID) (pgtype.Timestamptz, error)
@@ -495,4 +496,11 @@ func (m *mockQuerier) GetMaxCardStepInFact(ctx context.Context, factID pgtype.UU
 		return m.getMaxCardStepInFactFunc(ctx, factID)
 	}
 	return -1, nil
+}
+
+func (m *mockQuerier) GetAnswerByAttempt(ctx context.Context, arg db.GetAnswerByAttemptParams) (bool, error) {
+	if m.getAnswerByAttemptFunc != nil {
+		return m.getAnswerByAttemptFunc(ctx, arg)
+	}
+	return false, pgx.ErrNoRows
 }

@@ -473,13 +473,18 @@ func (s *AnswerQuestionRequest) Encode(e *jx.Encoder) {
 // encodeFields encodes fields.
 func (s *AnswerQuestionRequest) encodeFields(e *jx.Encoder) {
 	{
+		e.FieldStart("attemptId")
+		json.EncodeUUID(e, s.AttemptId)
+	}
+	{
 		e.FieldStart("answer")
 		e.Str(s.Answer)
 	}
 }
 
-var jsonFieldsNameOfAnswerQuestionRequest = [1]string{
-	0: "answer",
+var jsonFieldsNameOfAnswerQuestionRequest = [2]string{
+	0: "attemptId",
+	1: "answer",
 }
 
 // Decode decodes AnswerQuestionRequest from json.
@@ -491,8 +496,20 @@ func (s *AnswerQuestionRequest) Decode(d *jx.Decoder) error {
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
-		case "answer":
+		case "attemptId":
 			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				v, err := json.DecodeUUID(d)
+				s.AttemptId = v
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"attemptId\"")
+			}
+		case "answer":
+			requiredBitSet[0] |= 1 << 1
 			if err := func() error {
 				v, err := d.Str()
 				s.Answer = string(v)
@@ -513,7 +530,7 @@ func (s *AnswerQuestionRequest) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b00000001,
+		0b00000011,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.

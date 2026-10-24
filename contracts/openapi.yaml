@@ -1452,7 +1452,12 @@ components:
       type: object
       required:
         - answer
+        - attemptId
       properties:
+        attemptId:
+          type: string
+          format: uuid
+          description: Unique submission ID, reused for retries and renewed for each new review
         answer:
           type: string
           description: >-

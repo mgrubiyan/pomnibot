@@ -67,8 +67,9 @@ Content-Type: application/json
 { "code": "12ab" }
 
 ### ---------- Answer ----------
-# Засчитывается только карточка, которая сейчас в ленте; повторный ответ
-# возвращает записанный вердикт. input — текст, choice — JSON-массив
+# Засчитывается карточка из ленты, включая раннее повторение. Повтор запроса
+# с тем же attemptId возвращает записанный вердикт; для нового повторения
+# нужен новый attemptId. input — текст, choice — JSON-массив
 # выбранных вариантов, boolean и flip — true/false, table — JSON-массив
 # {text, column}.
 # d6b86b0d… «Республика»
@@ -76,19 +77,19 @@ Content-Type: application/json
 POST {{host}}/cards/d6b86b0d-e286-4396-93f2-93aaa55816af/answer
 Content-Type: application/json
 
-{ "answer": "Республика" }
+{ "answer": "Республика", "attemptId": "01900000-0000-7000-8000-000000000001" }
 
 ### верно с опечаткой/регистром
 POST {{host}}/cards/d6b86b0d-e286-4396-93f2-93aaa55816af/answer
 Content-Type: application/json
 
-{ "answer": "республика " }
+{ "answer": "республика ", "attemptId": "01900000-0000-7000-8000-000000000002" }
 
 ### неверно
 POST {{host}}/cards/d6b86b0d-e286-4396-93f2-93aaa55816af/answer
 Content-Type: application/json
 
-{ "answer": "монархия" }
+{ "answer": "монархия", "attemptId": "01900000-0000-7000-8000-000000000003" }
 
 ### 400: пустое тело
 POST {{host}}/cards/d6b86b0d-e286-4396-93f2-93aaa55816af/answer
@@ -100,7 +101,7 @@ Content-Type: application/json
 POST {{host}}/cards/00000000-0000-4000-8000-000000000000/answer
 Content-Type: application/json
 
-{ "answer": "x" }
+{ "answer": "x", "attemptId": "01900000-0000-7000-8000-000000000004" }
 
 ### ---------- Reveal (только flip, до самооценки) ----------
 POST {{host}}/cards/2a89de89-0bcb-47d8-adb1-b9a09e3e4991/reveal

@@ -23,9 +23,7 @@ import (
 // the reader cannot see at all (as after their sign-in expired) stops the run.
 var errNotInFeed = fmt.Errorf("%w: the card is not in the feed", ErrConflict)
 
-// replayWindow is how long a recorded verdict is repeated to a card that
-// left the feed: long enough for a lost response to be retried, too short
-// for an answer from an earlier pass to stand in for a new one.
+// replayWindow allows a recently answered flip card to be revealed again.
 const replayWindow = 2 * time.Minute
 
 // answerLocks serialize the answers of one reader to one fact, so a double
@@ -75,9 +73,9 @@ func (l *answerLocks) lock(userID uuid.UUID, factID pgtype.UUID) func() {
 }
 
 // AnswerQuestion grades and records the answer to the card the feed asks of
-// the reader now. Once it is recorded the card leaves the feed, and asking
-// again repeats the recorded verdict instead of grading anew.
-func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error) {
+// the reader now. Retries with the same attempt ID repeat its verdict; a new
+// review uses a new ID, even when it asks the same card immediately.
+func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string, attemptID uuid.UUID) (*contracts.AnswerQuestionResponse, error) {
 	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return nil, err
 	}
@@ -90,7 +88,11 @@ func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID uuid.UUID, 
 	defer unlock()
 
 	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
-	correct, err := s.lastAnswer(ctx, pgUserID, card.ID)
+	correct, err := s.querier.GetAnswerByAttempt(ctx, db.GetAnswerByAttemptParams{
+		UserID:    pgUserID,
+		CardID:    card.ID,
+		AttemptID: pgtype.UUID{Bytes: attemptID, Valid: true},
+	})
 	if err == nil {
 		return &contracts.AnswerQuestionResponse{
 			IsCorrect: correct,
@@ -98,8 +100,8 @@ func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID uuid.UUID, 
 			Reveal:    contracts.NewOptCardReveal(revealOf(card, details)),
 		}, nil
 	}
-	if !errors.Is(err, errNotInFeed) {
-		return nil, err
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("get answer by attempt: %w", err)
 	}
 
 	inFeed, err := s.inFeed(ctx, pgUserID, card.ID, card.SetID)
@@ -128,9 +130,10 @@ func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID uuid.UUID, 
 	// leaves the card in the feed with nothing recorded for the retry.
 	if err := s.inTx(ctx, func(q db.Querier) error {
 		if _, err := q.RecordAnswer(ctx, db.RecordAnswerParams{
-			UserID:  pgUserID,
-			CardID:  card.ID,
-			Correct: v.Correct,
+			UserID:    pgUserID,
+			CardID:    card.ID,
+			Correct:   v.Correct,
+			AttemptID: pgtype.UUID{Bytes: attemptID, Valid: true},
 		}); err != nil {
 			return fmt.Errorf("record answer: %w", err)
 		}

@@ -91,11 +91,11 @@ function refusalOf(status: number): Refusal | null {
  * when the backend gave up on the model (fallback): the reader keeps waiting
  * for a real verdict.
  */
-async function sendAnswer(cardId: string, answer: string): Promise<Checked | Refusal | typeof LOST | null> {
+async function sendAnswer(cardId: string, answer: string, attemptId: string): Promise<Checked | Refusal | typeof LOST | null> {
     try {
         const { data, response } = await api.POST('/cards/{cardId}/answer', {
             params: { path: { cardId } },
-            body: { answer },
+            body: { answer, attemptId },
         });
         const refusal = refusalOf(response.status);
         if (refusal) {
@@ -339,8 +339,12 @@ export function Feed({
      * none. A card the feed no longer asks is skipped without a result; a
      * backend that keeps failing stops the run.
      */
+    // Keep the submission identity when a failed run reloads the same card.
+    const answerAttempts = useRef(new Map<string, string>());
     const ask = useCallback(
         (cardId: string, answer: string, typed: string | null, onVerdict: (result: Checked) => void) => {
+            const attemptId = answerAttempts.current.get(cardId) ?? crypto.randomUUID();
+            answerAttempts.current.set(cardId, attemptId);
             const run = checkRunRef.current + 1;
             checkRunRef.current = run;
             setCheck({ stage: 'checking', typed });
@@ -351,7 +355,7 @@ export function Feed({
                 if (checkRunRef.current !== run) {
                     return; // the reader moved on
                 }
-                void sendAnswer(cardId, answer).then((result) => {
+                void sendAnswer(cardId, answer, attemptId).then((result) => {
                     if (checkRunRef.current !== run) {
                         return;
                     }
@@ -457,7 +461,9 @@ export function Feed({
             return;
         }
         const cardId = card.id;
-        const run = checkRunRef.current + 1;
+        const attemptId = answerAttempts.current.get(cardId) ?? crypto.randomUUID();
+            answerAttempts.current.set(cardId, attemptId);
+            const run = checkRunRef.current + 1;
         checkRunRef.current = run;
         setOpening(true);
 

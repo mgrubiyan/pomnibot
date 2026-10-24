@@ -159,15 +159,27 @@ func (*AnswerQuestionNotFound) answerQuestionRes() {}
 
 // Ref: #/components/schemas/AnswerQuestionRequest
 type AnswerQuestionRequest struct {
+	// Unique submission ID, reused for retries and renewed for each new review.
+	AttemptId uuid.UUID `json:"attemptId"`
 	// Input: the typed answer; choice: a JSON-encoded array of the selected option texts; boolean: true or
 	// false; table: a JSON-encoded array of TableItem, every term with the column it was put in; flip:
 	// true when the reader knew the answer, false when not.
 	Answer string `json:"answer"`
 }
 
+// GetAttemptId returns the value of AttemptId.
+func (s *AnswerQuestionRequest) GetAttemptId() uuid.UUID {
+	return s.AttemptId
+}
+
 // GetAnswer returns the value of Answer.
 func (s *AnswerQuestionRequest) GetAnswer() string {
 	return s.Answer
+}
+
+// SetAttemptId sets the value of AttemptId.
+func (s *AnswerQuestionRequest) SetAttemptId(val uuid.UUID) {
+	s.AttemptId = val
 }
 
 // SetAnswer sets the value of Answer.

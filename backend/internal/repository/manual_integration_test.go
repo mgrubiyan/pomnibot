@@ -179,7 +179,7 @@ func TestManualCardsPostgres(t *testing.T) {
 	if len(feed) != 4 {
 		t.Fatalf("new cards missing from member feed: %d", len(feed))
 	}
-	if _, err = svc.AnswerQuestion(ctx, user22, got[1].ID, "Answer"); err != nil {
+	if _, err = svc.AnswerQuestion(ctx, user22, got[1].ID, "Answer", uuid.New()); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []uuid.UUID{user22, user33} {

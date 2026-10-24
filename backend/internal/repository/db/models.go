@@ -101,10 +101,11 @@ func (ns NullCardKind) Value() (driver.Value, error) {
 }
 
 type Answer struct {
-	Correct bool        `json:"correct"`
-	ID      pgtype.UUID `json:"id"`
-	UserID  pgtype.UUID `json:"user_id"`
-	CardID  pgtype.UUID `json:"card_id"`
+	Correct   bool        `json:"correct"`
+	ID        pgtype.UUID `json:"id"`
+	UserID    pgtype.UUID `json:"user_id"`
+	CardID    pgtype.UUID `json:"card_id"`
+	AttemptID pgtype.UUID `json:"attempt_id"`
 }
 
 type Card struct {
