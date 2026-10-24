@@ -59,7 +59,7 @@ interface Checked {
     reveal: CardReveal;
 }
 
-/** The feed no longer asks the card: it was deleted or changed meanwhile. */
+/** The feed no longer asks the card, as when its fact moved on through another card meanwhile. */
 const GONE = 'gone';
 /**
  * The backend refused the card for another reason, as when the reader's
