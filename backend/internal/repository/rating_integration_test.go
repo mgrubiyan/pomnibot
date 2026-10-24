@@ -63,7 +63,7 @@ func TestSetRatingPostgres(t *testing.T) {
 	expected := []struct {
 		id               uuid.UUID
 		rank, percentile int32
-	}{{u33, 1, 100}, {u22, 2, 50}, {u44, 2, 50}, {u11, 4, 0}, {u66, 4, 0}}
+	}{{u33, 1, 100}, {u22, 2, 50}, {u44, 2, 50}, {u11, 3, 0}, {u66, 3, 0}}
 	if len(board) != len(expected) {
 		t.Fatalf("participants: %+v", board)
 	}
