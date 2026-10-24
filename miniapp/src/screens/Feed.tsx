@@ -752,7 +752,8 @@ export function Feed({
                             </Typography.Text>
                         ) : null}
 
-                        {reveal ? (
+                        {/* A card written by hand may have no quote to show. */}
+                        {reveal?.sourceQuote ? (
                             <figure className={s.source}>
                                 <Flex direction="column" align="stretch" gap={4}>
                                     <Typography.Text variant="label-strong" color="tertiary" asChild>
