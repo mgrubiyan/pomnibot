@@ -290,7 +290,7 @@ func TestOversizedInputDoesNotClaimDocumentBudgetExhaustion(t *testing.T) {
 	}
 }
 
-func TestGenerationPriceCeilingMatchesConservativeReservation(t *testing.T) {
+func TestGenerationPriceCeilingMatchesReservation(t *testing.T) {
 	c := clientFor(t, func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Provider struct {
@@ -306,10 +306,6 @@ func TestGenerationPriceCeilingMatchesConservativeReservation(t *testing.T) {
 		_, _ = fmt.Fprint(w, `{"choices":[{"message":{"content":"{}"},"finish_reason":"stop"}],"usage":{"cost":0.001}}`)
 	})
 	req := providers.Request{User: "whole source"}
-	want := float64(c.inputBound(req))*.1/1e6 + 8000*.5/1e6
-	if math.Abs(c.costBound(req)-want) > 1e-12 {
-		t.Fatalf("reservation does not cover enforced prices: got=%g want=%g", c.costBound(req), want)
-	}
 	b := providers.NewBudget(providers.BudgetLimits{USD: .15, Calls: 1})
 	if _, err := c.Complete(providers.WithBudget(context.Background(), b), req); err != nil {
 		t.Fatal(err)
@@ -438,7 +434,7 @@ func TestRetryWithoutUsageRetainsReservationAndMarksUnknownUsage(t *testing.T) {
 	req := providers.Request{Source: "whole source", NoFallback: true, ReasoningEffort: "medium"}
 	b := providers.NewBudget(providers.BudgetLimits{USD: .03})
 	r, e := c.Complete(providers.WithBudget(context.Background(), b), req)
-	if e != nil || r.Usage.UnreportedCalls != 1 || r.Usage.Attempts != 2 || r.Usage.FailedAttempts != 1 || math.Abs(b.Snapshot().CommittedUSD-(c.costBound(req)+.001)) > 1e-12 {
+	if e != nil || r.Usage.UnreportedCalls != 1 || r.Usage.Attempts != 2 || r.Usage.FailedAttempts != 1 || math.Abs(b.Snapshot().CommittedUSD-(estimateFor(t, c, req).ReservedUSD+.001)) > 1e-12 {
 		t.Fatalf("%+v %v budget %+v", r, e, b.Snapshot())
 	}
 }

@@ -297,19 +297,8 @@ func (e *responseError) status() int {
 	}
 }
 
-func (c *Client) call(ctx context.Context, req providers.Request) (result providers.Response, callErr error) {
-	totalPages, totalBytes := 0, 0
-	for _, pdf := range req.PDFs {
-		totalPages += pdf.Pages
-		totalBytes += len(pdf.Data)
-		if pdf.TextBytes < 0 || pdf.Pages < 1 || pdf.Pages > 100 || len(pdf.Data) > 32<<20 {
-			return result, providers.ErrCapability
-		}
-	}
-	if totalPages > 100 || totalBytes > 32<<20 {
-		return result, providers.ErrCapability
-	}
-	result.Model = c.cfg.Model
+// requestBody builds the exact messages used by both transport and cost estimation.
+func (c *Client) requestBody(ctx context.Context, req providers.Request) (chatRequest, error) {
 	var user any = req.User
 	if images := providers.RequestImages(req); len(images) > 0 {
 		parts := []part{{Type: "text", Text: req.User}}
@@ -356,7 +345,7 @@ func (c *Client) call(ctx context.Context, req providers.Request) (result provid
 		effort = ""
 	case "", "low", "medium", "high", "xhigh", "max":
 	default:
-		return result, errors.New("openrouter: unsupported request effort")
+		return chatRequest{}, errors.New("openrouter: unsupported request effort")
 	}
 	body.Reasoning.Enabled = effort != ""
 	body.Reasoning.Effort = effort
@@ -371,6 +360,26 @@ func (c *Client) call(ctx context.Context, req providers.Request) (result provid
 	}
 	if len(req.Schema) > 0 {
 		body.ResponseFormat = &responseFormat{Type: "json_schema", JSONSchema: schema{Strict: true, Name: "answer", Schema: req.Schema}}
+	}
+	return body, nil
+}
+
+func (c *Client) call(ctx context.Context, req providers.Request) (result providers.Response, callErr error) {
+	totalPages, totalBytes := 0, 0
+	for _, pdf := range req.PDFs {
+		totalPages += pdf.Pages
+		totalBytes += len(pdf.Data)
+		if pdf.TextBytes < 0 || pdf.Pages < 1 || pdf.Pages > 100 || len(pdf.Data) > 32<<20 {
+			return result, providers.ErrCapability
+		}
+	}
+	if totalPages > 100 || totalBytes > 32<<20 {
+		return result, providers.ErrCapability
+	}
+	result.Model = c.cfg.Model
+	body, err := c.requestBody(ctx, req)
+	if err != nil {
+		return result, err
 	}
 	data, err := json.Marshal(body)
 	if err != nil {
@@ -388,8 +397,12 @@ func (c *Client) call(ctx context.Context, req providers.Request) (result provid
 	}
 	charge := providers.Usage{}
 	chargeKnown := false
-	finish, reserveErr := providers.ReserveCall(ctx, c.costBound(req))
+	estimate := c.estimateCost(req, body)
+	costLog := slog.With(estimate.attributes()...).With("requested_model", body.Model)
+	costLog.Info("openrouter: cost estimate")
+	finish, reserveErr := providers.ReserveCall(ctx, estimate.ReservedUSD)
 	if reserveErr != nil {
+		costLog.Info("openrouter: cost reservation rejected", "error", reserveErr)
 		return result, reserveErr
 	}
 	defer func() {
@@ -409,7 +422,7 @@ func (c *Client) call(ctx context.Context, req providers.Request) (result provid
 		return result, transportError{}
 	}
 	defer func() { _ = resp.Body.Close() }()
-	log := slog.With(trace.attributes()...).With("status", resp.StatusCode, "protocol", resp.Proto,
+	log := costLog.With(trace.attributes()...).With("status", resp.StatusCode, "protocol", resp.Proto,
 		"request_id", resp.Header.Get("X-Request-Id"), "generation_id", resp.Header.Get("X-Generation-Id"), "cf_ray", resp.Header.Get("Cf-Ray"))
 	if resp.StatusCode != http.StatusOK {
 		return result, &APIError{Status: resp.StatusCode, retryAfter: retryDelay(resp.Header.Get("Retry-After"))}
@@ -430,6 +443,9 @@ func (c *Client) call(ctx context.Context, req providers.Request) (result provid
 		if err == nil && json.Unmarshal(data, &cr) != nil {
 			err = errResponseJSON
 		}
+	}
+	if cr.Usage.PromptTokens > estimate.ReservedInputTokens {
+		log.Warn("openrouter: input token reservation underestimated", "prompt_tokens", cr.Usage.PromptTokens)
 	}
 	if cr.Usage.Cost != nil {
 		chargeKnown = true
@@ -501,16 +517,8 @@ func retryDelay(s string) time.Duration {
 	return 0
 }
 
-// costBound deliberately counts every UTF-8 byte as a token, plus a generous
-// image allowance. Routing enforces the corresponding price ceiling. Unknown
-// image formats are charged by encoded size instead of assuming cheap vision.
-func (c *Client) costBound(r providers.Request) float64 {
-	multiplier := 1.0
-	if len(r.PDFs) > 0 || r.Source != "" {
-		multiplier = 1.25
-	}
-	return float64(c.inputBound(r))*maxPromptPrice*multiplier/1e6 + float64(max(c.cfg.MaxTokens, r.MaxTokens))*maxCompletionPrice/1e6
-}
+// inputBound retains the conservative byte/vision allowance for the input tier
+// guard and requests outside the calibrated corpus. It is not a token count.
 func (c *Client) inputBound(r providers.Request) int {
 	tokens := len(r.Source) + len(r.System) + len(r.User) + len(r.Schema) + 2048
 	for _, pdf := range r.PDFs {

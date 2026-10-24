@@ -63,7 +63,8 @@ func (b *Budget) Snapshot() BudgetSnapshot { b.mu.Lock(); defer b.mu.Unlock(); r
 
 // ReserveCall must run at the transport attempt, inside any retries/fallback.
 // Unknown/lost responses retain their full reservation; they are never free.
-// A supplied bound must cover the provider's configured price and output cap.
+// The reservation must use the provider's configured prices and output cap.
+// Input token estimates may be empirical; this ledger cannot guarantee a spend cap.
 func ReserveCall(ctx context.Context, bound float64) (func(Usage, bool), error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
