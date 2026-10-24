@@ -117,6 +117,7 @@ type Card struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	ID          pgtype.UUID        `json:"id"`
 	FactID      pgtype.UUID        `json:"fact_id"`
+	Step        int32              `json:"step"`
 }
 
 type CardIssue struct {

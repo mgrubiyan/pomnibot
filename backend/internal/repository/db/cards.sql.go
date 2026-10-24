@@ -23,9 +23,9 @@ func (q *Queries) CountCardsByFactID(ctx context.Context, factID pgtype.UUID) (i
 }
 
 const createCard = `-- name: CreateCard :one
-INSERT INTO cards (id, fact_id, kind, question, answer_text, explanation, source_quote, source_ref)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING kind, question, answer_text, explanation, source_quote, source_ref, updated_at, id, fact_id
+INSERT INTO cards (id, fact_id, kind, question, answer_text, explanation, source_quote, source_ref, step)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING kind, question, answer_text, explanation, source_quote, source_ref, updated_at, id, fact_id, step
 `
 
 type CreateCardParams struct {
@@ -37,6 +37,7 @@ type CreateCardParams struct {
 	Explanation string      `json:"explanation"`
 	SourceQuote string      `json:"source_quote"`
 	SourceRef   pgtype.Text `json:"source_ref"`
+	Step        int32       `json:"step"`
 }
 
 func (q *Queries) CreateCard(ctx context.Context, arg CreateCardParams) (Card, error) {
@@ -49,6 +50,7 @@ func (q *Queries) CreateCard(ctx context.Context, arg CreateCardParams) (Card, e
 		arg.Explanation,
 		arg.SourceQuote,
 		arg.SourceRef,
+		arg.Step,
 	)
 	var i Card
 	err := row.Scan(
@@ -61,6 +63,7 @@ func (q *Queries) CreateCard(ctx context.Context, arg CreateCardParams) (Card, e
 		&i.UpdatedAt,
 		&i.ID,
 		&i.FactID,
+		&i.Step,
 	)
 	return i, err
 }
@@ -515,6 +518,39 @@ func (q *Queries) GetCardTableItemsBatch(ctx context.Context, cardIds []pgtype.U
 	return items, nil
 }
 
+const getCardsByFactID = `-- name: GetCardsByFactID :many
+SELECT c.id, c.fact_id, c.step
+FROM cards c
+WHERE c.fact_id = $1
+ORDER BY c.step ASC, c.id ASC
+`
+
+type GetCardsByFactIDRow struct {
+	ID     pgtype.UUID `json:"id"`
+	FactID pgtype.UUID `json:"fact_id"`
+	Step   int32       `json:"step"`
+}
+
+func (q *Queries) GetCardsByFactID(ctx context.Context, factID pgtype.UUID) ([]GetCardsByFactIDRow, error) {
+	rows, err := q.db.Query(ctx, getCardsByFactID, factID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCardsByFactIDRow
+	for rows.Next() {
+		var i GetCardsByFactIDRow
+		if err := rows.Scan(&i.ID, &i.FactID, &i.Step); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCardsBySetID = `-- name: GetCardsBySetID :many
 SELECT
     c.id,
@@ -527,7 +563,8 @@ SELECT
     c.explanation,
     c.source_quote,
     c.source_ref,
-    c.updated_at
+    c.updated_at,
+    c.step
 FROM cards c
 JOIN facts f ON c.fact_id = f.id
 WHERE f.set_id = $1
@@ -536,7 +573,7 @@ WHERE f.set_id = $1
       WHERE s.id = f.set_id
         AND (s.author_id = $2 OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = $2))
   )
-ORDER BY f.id ASC, c.id ASC
+ORDER BY f.id ASC, c.step ASC, c.id ASC
 `
 
 type GetCardsBySetIDParams struct {
@@ -556,6 +593,7 @@ type GetCardsBySetIDRow struct {
 	SourceQuote string             `json:"source_quote"`
 	SourceRef   pgtype.Text        `json:"source_ref"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	Step        int32              `json:"step"`
 }
 
 func (q *Queries) GetCardsBySetID(ctx context.Context, arg GetCardsBySetIDParams) ([]GetCardsBySetIDRow, error) {
@@ -579,6 +617,7 @@ func (q *Queries) GetCardsBySetID(ctx context.Context, arg GetCardsBySetIDParams
 			&i.SourceQuote,
 			&i.SourceRef,
 			&i.UpdatedAt,
+			&i.Step,
 		); err != nil {
 			return nil, err
 		}
@@ -621,7 +660,7 @@ ranked_cards AS (
         udf.step,
         ROW_NUMBER() OVER (
             PARTITION BY c.fact_id
-            ORDER BY c.id ASC
+            ORDER BY c.step ASC, c.id ASC
         ) - 1 AS card_idx,
         COUNT(*) OVER (PARTITION BY c.fact_id) AS total_cards
     FROM cards c
@@ -704,6 +743,19 @@ func (q *Queries) GetFeedCardsForUser(ctx context.Context, userID pgtype.UUID) (
 	return items, nil
 }
 
+const getMaxCardStepInFact = `-- name: GetMaxCardStepInFact :one
+SELECT COALESCE(MAX(step), -1)::INT AS max_step
+FROM cards
+WHERE fact_id = $1
+`
+
+func (q *Queries) GetMaxCardStepInFact(ctx context.Context, factID pgtype.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, getMaxCardStepInFact, factID)
+	var max_step int32
+	err := row.Scan(&max_step)
+	return max_step, err
+}
+
 const updateCard = `-- name: UpdateCard :one
 UPDATE cards
 SET
@@ -769,4 +821,24 @@ func (q *Queries) UpdateCard(ctx context.Context, arg UpdateCardParams) (UpdateC
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const updateCardStep = `-- name: UpdateCardStep :execrows
+UPDATE cards
+SET step = $2, updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND fact_id = $3
+`
+
+type UpdateCardStepParams struct {
+	ID     pgtype.UUID `json:"id"`
+	Step   int32       `json:"step"`
+	FactID pgtype.UUID `json:"fact_id"`
+}
+
+func (q *Queries) UpdateCardStep(ctx context.Context, arg UpdateCardStepParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateCardStep, arg.ID, arg.Step, arg.FactID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

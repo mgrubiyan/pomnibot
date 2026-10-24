@@ -125,7 +125,7 @@ func TestPlatformUsersMigrationAndSharedLearning(t *testing.T) {
 	writer := repository.NewManualStore(pool)
 	sets := usecase.NewSetService(q, users, writer)
 	cards := usecase.NewCardService(q, users, usecase.WithManualCards(writer))
-	set, err := sets.CreateSet(ctx, maxAccount.User.ID, &contracts.CreateSetRequest{Title: "Shared MAX set", Card: contracts.CreateCardRequest{Kind: contracts.CardKindFlip, Question: "Question", Answer: contracts.NewStringCardAnswer("Answer")}})
+	set, err := sets.CreateSet(ctx, maxAccount.User.ID, &contracts.CreateSetRequest{Title: "Shared MAX set", Card: contracts.NewOptCreateCardRequest(contracts.CreateCardRequest{Kind: contracts.CardKindFlip, Question: "Question", Answer: contracts.NewStringCardAnswer("Answer")})})
 	if err != nil {
 		t.Fatal(err)
 	}

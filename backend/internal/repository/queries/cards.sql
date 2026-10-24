@@ -1,6 +1,6 @@
 -- name: CreateCard :one
-INSERT INTO cards (id, fact_id, kind, question, answer_text, explanation, source_quote, source_ref)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO cards (id, fact_id, kind, question, answer_text, explanation, source_quote, source_ref, step)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING *;
 
 -- name: CreateCardOption :one
@@ -70,7 +70,8 @@ SELECT
     c.explanation,
     c.source_quote,
     c.source_ref,
-    c.updated_at
+    c.updated_at,
+    c.step
 FROM cards c
 JOIN facts f ON c.fact_id = f.id
 WHERE f.set_id = $1
@@ -79,7 +80,7 @@ WHERE f.set_id = $1
       WHERE s.id = f.set_id
         AND (s.author_id = @user_id OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = @user_id))
   )
-ORDER BY f.id ASC, c.id ASC;
+ORDER BY f.id ASC, c.step ASC, c.id ASC;
 
 -- name: GetCardOptions :many
 SELECT *
@@ -169,7 +170,7 @@ ranked_cards AS (
         udf.step,
         ROW_NUMBER() OVER (
             PARTITION BY c.fact_id
-            ORDER BY c.id ASC
+            ORDER BY c.step ASC, c.id ASC
         ) - 1 AS card_idx,
         COUNT(*) OVER (PARTITION BY c.fact_id) AS total_cards
     FROM cards c
@@ -207,6 +208,22 @@ ORDER BY due_time ASC, fact_id ASC;
 
 -- name: CountCardsByFactID :one
 SELECT COUNT(*)::INT FROM cards WHERE fact_id = $1;
+
+-- name: GetCardsByFactID :many
+SELECT c.id, c.fact_id, c.step
+FROM cards c
+WHERE c.fact_id = $1
+ORDER BY c.step ASC, c.id ASC;
+
+-- name: UpdateCardStep :execrows
+UPDATE cards
+SET step = $2, updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND fact_id = $3;
+
+-- name: GetMaxCardStepInFact :one
+SELECT COALESCE(MAX(step), -1)::INT AS max_step
+FROM cards
+WHERE fact_id = $1;
 
 -- name: GetCardOptionsBatch :many
 SELECT * FROM card_options

@@ -42,6 +42,24 @@ func (UnimplementedHandler) CreateCard(ctx context.Context, req *CreateCardReque
 	return r, ht.ErrNotImplemented
 }
 
+// CreateCardInFact implements CreateCardInFact operation.
+//
+// Create a card in a fact.
+//
+// POST /facts/{factId}/cards
+func (UnimplementedHandler) CreateCardInFact(ctx context.Context, req *CreateCardRequest, params CreateCardInFactParams) (r CreateCardInFactRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// CreateFact implements CreateFact operation.
+//
+// Create a fact in a set.
+//
+// POST /sets/{setId}/facts
+func (UnimplementedHandler) CreateFact(ctx context.Context, req *CreateFactRequest, params CreateFactParams) (r CreateFactRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // CreateSet implements CreateSet operation.
 //
 // CreateSet.
@@ -57,6 +75,15 @@ func (UnimplementedHandler) CreateSet(ctx context.Context, req *CreateSetRequest
 //
 // DELETE /cards/{cardId}
 func (UnimplementedHandler) DeleteCard(ctx context.Context, params DeleteCardParams) (r DeleteCardRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// DeleteFact implements DeleteFact operation.
+//
+// Delete a fact.
+//
+// DELETE /facts/{factId}
+func (UnimplementedHandler) DeleteFact(ctx context.Context, params DeleteFactParams) (r DeleteFactRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
@@ -85,6 +112,15 @@ func (UnimplementedHandler) GetAdminIssues(ctx context.Context) (r GetAdminIssue
 //
 // GET /sets/{setId}/cards
 func (UnimplementedHandler) GetCardsBySetID(ctx context.Context, params GetCardsBySetIDParams) (r GetCardsBySetIDRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// GetFactsBySetID implements GetFactsBySetID operation.
+//
+// Get facts of a set.
+//
+// GET /sets/{setId}/facts
+func (UnimplementedHandler) GetFactsBySetID(ctx context.Context, params GetFactsBySetIDParams) (r GetFactsBySetIDRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
@@ -188,6 +224,15 @@ func (UnimplementedHandler) PutProfile(ctx context.Context, req *ProfileRequest)
 	return r, ht.ErrNotImplemented
 }
 
+// ReorderCards implements ReorderCards operation.
+//
+// Reorder cards in a fact.
+//
+// PUT /facts/{factId}/cards/order
+func (UnimplementedHandler) ReorderCards(ctx context.Context, req *ReorderCardsRequest, params ReorderCardsParams) (r ReorderCardsRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // ReportCardIssue implements ReportCardIssue operation.
 //
 // Saves the complaint with a copy of the card as it was reported, so it outlives later edits and the
@@ -222,5 +267,23 @@ func (UnimplementedHandler) SendResults(ctx context.Context, req SendResultsRequ
 //
 // PUT /cards/{cardId}
 func (UnimplementedHandler) UpdateCard(ctx context.Context, req *UpdateCardRequest, params UpdateCardParams) (r UpdateCardRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// UpdateFact implements UpdateFact operation.
+//
+// Update fact name.
+//
+// PATCH /facts/{factId}
+func (UnimplementedHandler) UpdateFact(ctx context.Context, req *UpdateFactRequest, params UpdateFactParams) (r UpdateFactRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// UpdateSet implements UpdateSet operation.
+//
+// Update set title.
+//
+// PATCH /sets/{setId}
+func (UnimplementedHandler) UpdateSet(ctx context.Context, req *UpdateSetRequest, params UpdateSetParams) (r UpdateSetRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
