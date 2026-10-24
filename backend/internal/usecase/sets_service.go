@@ -185,27 +185,16 @@ func (s *setServiceImpl) GetCardsBySetID(ctx context.Context, userID uuid.UUID, 
 		return nil, fmt.Errorf("get set by id: %w", err)
 	}
 
+	if set.AuthorID != pgUserID {
+		return nil, ErrForbidden
+	}
+
 	rows, err := s.querier.GetCardsBySetID(ctx, db.GetCardsBySetIDParams{
 		SetID:  pgUUID,
 		UserID: pgUserID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("get cards by set id: %w", err)
-	}
-
-	// A member answers these cards in the feed, so the list gives them only
-	// the questions; the author gets whole cards to edit.
-	if set.AuthorID != pgUserID {
-		cards := make([]contracts.Card, 0, len(rows))
-		for _, r := range rows {
-			c, err := questionCard(setCardOf(r))
-			if err != nil {
-				return nil, err
-			}
-			c.Step.SetTo(int(r.Step))
-			cards = append(cards, c)
-		}
-		return cards, nil
 	}
 
 	var choiceIDs, tableIDs []pgtype.UUID

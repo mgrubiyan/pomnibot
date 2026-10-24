@@ -6,6 +6,7 @@ import App from './App';
 import { StatusScreen } from './components/StatusScreen';
 import { MaxUIRoot } from './components/MaxUIRoot';
 import { ProfileGate } from './components/ProfileGate';
+import { SignInGate } from './components/SignInGate';
 import { telegramApp } from './platform';
 
 const telegram = telegramApp();
@@ -22,11 +23,13 @@ if (telegram) {
 createRoot(document.getElementById('root')!).render(
     <StrictMode>
         <MaxUIRoot>
-            <ProfileGate>
-                <Suspense fallback={<StatusScreen icon={null} title="Открываем экран" text="Одну секунду…" />}>
-                    <App />
-                </Suspense>
-            </ProfileGate>
+            <SignInGate>
+                <ProfileGate>
+                    <Suspense fallback={<StatusScreen icon={null} title="Открываем экран" text="Одну секунду…" />}>
+                        <App />
+                    </Suspense>
+                </ProfileGate>
+            </SignInGate>
         </MaxUIRoot>
     </StrictMode>
 );

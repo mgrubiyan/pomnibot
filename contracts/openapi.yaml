@@ -388,8 +388,7 @@ paths:
         - Sets
       summary: Get cards
       description: >-
-        The author gets whole cards; a member gets only the questions, without
-        answers, options, tables, explanations and quotes.
+        Only the author can get cards of a set; other users receive 403 Forbidden.
       operationId: GetCardsBySetID
       parameters:
         - name: setId
@@ -827,7 +826,7 @@ components:
       type: apiKey
       in: header
       name: Authorization
-      description: 'max <original MAX initData> or tma <original Telegram initData>; invalid credentials use test user 0'
+      description: 'max <original MAX initData> or tma <original Telegram initData>. Without it the request uses test user 0; credentials that do not hold or are older than an hour get 401 with code sign_in_expired.'
   responses:
     BadRequest:
       description: Bad request / validation error
@@ -900,7 +899,7 @@ components:
       properties:
         code:
           type: string
-          description: Machine-readable error code, including profile_required
+          description: Machine-readable error code, including profile_required and sign_in_expired
         message:
           type: string
 

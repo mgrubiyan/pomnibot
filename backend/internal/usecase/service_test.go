@@ -610,19 +610,21 @@ func TestSetService_GetCardsBySetID_Authorization(t *testing.T) {
 	var pgSetUUID pgtype.UUID
 	_ = pgSetUUID.Scan(setUUID.String())
 
+	authorID := testUser3
+	authorUUID := pgtype.UUID{Bytes: authorID, Valid: true}
 	memberID := testUser1
 	nonMemberID := testOther
 	memberUUID := pgtype.UUID{Bytes: memberID, Valid: true}
 
 	mock := &mockQuerier{
 		getSetByIDFunc: func(_ context.Context, arg db.GetSetByIDParams) (db.GetSetByIDRow, error) {
-			if arg.UserID == memberUUID && arg.ID == pgSetUUID {
-				return db.GetSetByIDRow{ID: pgSetUUID, Title: "Set 1"}, nil
+			if (arg.UserID == authorUUID || arg.UserID == memberUUID) && arg.ID == pgSetUUID {
+				return db.GetSetByIDRow{ID: pgSetUUID, AuthorID: authorUUID, Title: "Set 1"}, nil
 			}
 			return db.GetSetByIDRow{}, pgx.ErrNoRows
 		},
 		getCardsBySetIDFunc: func(_ context.Context, arg db.GetCardsBySetIDParams) ([]db.GetCardsBySetIDRow, error) {
-			if arg.UserID == memberUUID && arg.SetID == pgSetUUID {
+			if arg.UserID == authorUUID && arg.SetID == pgSetUUID {
 				return []db.GetCardsBySetIDRow{
 					{
 						ID:       pgtype.UUID{Bytes: [16]byte{1}, Valid: true},
@@ -638,13 +640,19 @@ func TestSetService_GetCardsBySetID_Authorization(t *testing.T) {
 
 	svc := usecase.NewSetService(mock, usecase.NewUserService(mock))
 
-	// Member succeeds
-	cardsByID, err := svc.GetCardsBySetID(context.Background(), memberID, setUUID)
+	// Author succeeds
+	cardsByID, err := svc.GetCardsBySetID(context.Background(), authorID, setUUID)
 	if err != nil {
-		t.Fatalf("unexpected error for member: %v", err)
+		t.Fatalf("unexpected error for author: %v", err)
 	}
 	if len(cardsByID) != 1 {
 		t.Fatalf("expected 1 card, got %d", len(cardsByID))
+	}
+
+	// Member (non-author) fails with ErrForbidden
+	_, err = svc.GetCardsBySetID(context.Background(), memberID, setUUID)
+	if !errors.Is(err, usecase.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden for member, got %v", err)
 	}
 
 	// Non-member fails with ErrNotFound

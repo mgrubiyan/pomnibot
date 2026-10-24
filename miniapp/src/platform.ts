@@ -5,6 +5,7 @@ export interface TelegramApp {
     contentSafeAreaInset?: Partial<Record<'top' | 'right' | 'bottom' | 'left', number>>;
     ready: () => void;
     expand: () => void;
+    close?: () => void;
     /** Bot API 7.7+. */
     disableVerticalSwipes?: () => void;
     /** Bot API 6.1+ (bottom bar 7.10+); colors as #RRGGBB. */
@@ -39,4 +40,13 @@ export function miniAppAuthorization(sdk: Pick<Window, 'Telegram' | 'WebApp'>): 
 export function telegramApp(): TelegramApp | undefined {
     const app = window.Telegram?.WebApp;
     return app?.initData ? app : undefined;
+}
+
+/** Closes the mini app, when the platform lets it; undefined in a browser. */
+export function closeMiniApp(): (() => void) | undefined {
+    const telegram = telegramApp();
+    if (telegram?.close) return () => telegram.close?.();
+    const max = window.WebApp;
+    if (max?.initData && max.close) return () => max.close?.();
+    return undefined;
 }
