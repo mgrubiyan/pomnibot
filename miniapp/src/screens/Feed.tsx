@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Flex, IconButton, Input, Spinner, Typography } from '@maxhub/max-ui';
-import type { Answer, Card } from '../types';
+import type { Answer, Card, CardAnswer, CardReveal, FeedCard } from '../types';
 import { api } from '../api';
 import { TableColumns, TablePool } from '../components/TableCard';
-import { visibleCards, type CardPatch } from '../utils/cards';
+import type { CardPatch } from '../utils/cards';
+import { layoutOf, rejoinedFeed, resumedCards, revealedCard, type FeedResume } from '../utils/feed';
 import { AnswerCheck, type CheckStage } from '../components/AnswerCheck';
 import {
     correctCount,
@@ -46,48 +47,84 @@ const CARD_OUT_MS = 150;
 /** With reduced motion the card changes without turning or sliding. */
 const motionAllowed = () => !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/** Answers are compared loosely: case, extra spaces and ё do not matter. */
-const norm = (value: string) => value.trim().toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ');
-
 /** The reader always waits for the verdict; past these marks only the words change. */
 const CHECK_LONGER_MS = 8_000;
 const CHECK_ALMOST_MS = 12_000;
 /** A lost request or a silent model: ask again after this pause. */
 const CHECK_RETRY_MS = 2_000;
+/** Requests lost in a row before the run stops on the error screen. */
+const CHECK_LOST_LIMIT = 3;
 
 interface Checked {
     correct: boolean;
     reason: string | null;
+    reveal: CardReveal;
+}
+
+/** The feed no longer asks the card, as when its fact moved on through another card meanwhile. */
+const GONE = 'gone';
+/**
+ * The backend refused the card for another reason, as when the reader's
+ * sign-in expired and the card is no longer theirs: the run stops instead of
+ * skipping every card that follows.
+ */
+const FAILED = 'failed';
+
+type Refusal = typeof GONE | typeof FAILED;
+
+/** No answer from the backend: the request was lost or the backend failed. */
+const LOST = 'lost';
+
+function refusalOf(status: number): Refusal | null {
+    if (status === 409) {
+        return GONE;
+    }
+    return status >= 400 && status < 500 ? FAILED : null;
 }
 
 /**
- * A typed answer in other words than the card's goes to the backend, which
+ * Every answer goes to the backend, which grades and records it: the feed
+ * holds no answers. A typed one need not match word for word — the backend
  * forgives word forms and typos and asks a model about the meaning. Null
- * when there is no verdict yet: the request was lost, or the backend gave
- * up on the model (fallback) — the reader keeps waiting for a real one.
+ * when the backend gave up on the model (fallback): the reader keeps waiting
+ * for a real verdict.
  */
-async function checkAnswer(cardId: string, answer: string): Promise<Checked | null> {
+async function sendAnswer(cardId: string, answer: string): Promise<Checked | Refusal | typeof LOST | null> {
     try {
-        const { data } = await api.POST('/cards/{cardId}/check', {
+        const { data, response } = await api.POST('/cards/{cardId}/answer', {
             params: { path: { cardId } },
             body: { answer },
         });
-        if (!data || data.method === 'fallback') {
+        const refusal = refusalOf(response.status);
+        if (refusal) {
+            return refusal;
+        }
+        if (!data) {
+            return LOST;
+        }
+        if (data.method === 'fallback' || !data.reveal) {
             return null;
         }
-        return { correct: data.isCorrect, reason: data.reason ?? null };
+        return { correct: data.isCorrect, reason: data.reason ?? null, reveal: data.reveal };
     } catch {
-        return null;
+        return LOST;
     }
 }
 
-function shuffle<T>(items: readonly T[]): T[] {
-    const next = [...items];
-    for (let i = next.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [next[i], next[j]] = [next[j], next[i]];
+/** The answer of a flip card, which the reader then grades themselves. */
+async function fetchReveal(cardId: string): Promise<CardReveal | Refusal | typeof LOST> {
+    try {
+        const { data, response } = await api.POST('/cards/{cardId}/reveal', {
+            params: { path: { cardId } },
+        });
+        const refusal = refusalOf(response.status);
+        if (refusal) {
+            return refusal;
+        }
+        return data ?? LOST;
+    } catch {
+        return LOST;
     }
-    return next;
 }
 
 /** What the card asks of the reader, said above the question. */
@@ -99,41 +136,40 @@ const TASKS: Record<Card['kind'], string> = {
     table: 'Разложите по колонкам',
 };
 
-function optionsOf(card: Card): Option[] {
+function optionsOf(card: FeedCard): Option[] {
     if (card.kind === 'boolean') {
         return BOOLEAN_OPTIONS;
     }
     if (card.kind === 'choice') {
-        return shuffle(
-            (card.options ?? []).map((option) => ({ label: option, value: option })),
-        );
+        // In the order the backend shuffled them.
+        return (card.options ?? []).map((option) => ({ label: option, value: option }));
     }
     return [];
 }
 
-function answerTextOf(card: Card): string {
-    if (Array.isArray(card.answer)) return card.answer.join('; ');
-    if (typeof card.answer === 'boolean') {
-        return card.answer ? 'true' : 'false';
+function answerTextOf(answer: CardAnswer, options?: string[]): string {
+    if (Array.isArray(answer)) return answer.join('; ');
+    if (typeof answer === 'boolean') {
+        return answer ? 'true' : 'false';
     }
-    if (typeof card.answer === 'number' && card.options) {
-        return card.options[card.answer] ?? String(card.answer);
+    if (typeof answer === 'number' && options) {
+        return options[answer] ?? String(answer);
     }
-    if (typeof card.answer === 'object' && card.answer !== null) {
+    if (typeof answer === 'object' && answer !== null) {
         return '';
     }
-    return String(card.answer ?? '');
+    return String(answer ?? '');
 }
 
 /** Boolean cards store 'true' / 'false', which must never reach the screen. */
-function labelOf(card: Card, value: string): string {
+function labelOf(card: FeedCard, value: string): string {
     if (card.kind !== 'boolean') {
         return value;
     }
     return value === 'true' ? 'Верно' : 'Неверно';
 }
 
-async function loadCards(setId?: string): Promise<Card[]> {
+async function loadCards(setId?: string): Promise<FeedCard[]> {
     const { data, error } = await api.GET('/feed');
     if (error || !data) {
         throw new Error(error?.message ?? 'Failed to load feed');
@@ -144,7 +180,6 @@ async function loadCards(setId?: string): Promise<Card[]> {
     return data;
 }
 
-
 export interface FeedProps {
     /** When set, only the cards of this set are shown. */
     setId?: string;
@@ -153,15 +188,14 @@ export interface FeedProps {
     /** Cards deleted and edited during this session. */
     removedCardIds: string[];
     cardPatches: Record<string, CardPatch>;
-    initialIndex?: number;
-    initialResults?: Answer[];
+    resume?: FeedResume;
     onExit: () => void;
     onBack?: () => void;
     /**
-     * Opens the complaint about the card; the feed comes back at the same card.
+     * Opens the complaint about the card, whole now that it is answered.
      * Resolves to false when the complaint screen could not be opened.
      */
-    onReportCard: (card: Card, currentIndex: number, currentResults: Answer[]) => Promise<boolean>;
+    onReportCard: (card: Card, resume: FeedResume) => Promise<boolean>;
     /** Opens sharing from the result screen; absent for the daily mix. */
     onShare?: () => void;
 }
@@ -171,24 +205,29 @@ export function Feed({
     setTitle,
     removedCardIds,
     cardPatches,
-    initialIndex = 0,
-    initialResults = [],
+    resume,
     onExit,
     onBack,
     onReportCard,
     onShare,
 }: FeedProps) {
-    const [status, setStatus] = useState<Status>('loading');
-    const [cards, setCards] = useState<Card[]>([]);
-    const [index, setIndex] = useState(initialIndex);
-    const [results, setResults] = useState<Answer[]>(initialResults);
+    const [status, setStatus] = useState<Status>(resume ? 'ready' : 'loading');
+    const [cards, setCards] = useState<FeedCard[]>(() =>
+        resume ? resumedCards(resume, removedCardIds, cardPatches) : [],
+    );
+    const [index, setIndex] = useState(resume?.index ?? 0);
+    const [results, setResults] = useState<Answer[]>(resume?.results ?? []);
 
     const [given, setGiven] = useState<string | null>(null);
     const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
     const [verdict, setVerdict] = useState<Verdict | null>(null);
-    // A typed answer being checked by meaning, and why it counts or not.
-    const [check, setCheck] = useState<{ stage: CheckStage; answer: string } | null>(null);
+    // An answer the backend is grading — a typed one stays on the card while
+    // it waits — and why it counts or not.
+    const [check, setCheck] = useState<{ stage: CheckStage; typed: string | null } | null>(null);
     const [reason, setReason] = useState<string | null>(null);
+    // What the card hid until it was answered or, for a flip card, opened.
+    const [reveal, setReveal] = useState<CardReveal | null>(null);
+    const [opening, setOpening] = useState(false);
     // Every attempt gets a number, so a late answer from an abandoned one
     // — the reader stopped waiting, moved on or retried — is dropped.
     const checkRunRef = useRef(0);
@@ -208,17 +247,22 @@ export function Feed({
     // The card on its way out is still the current one, so the index
     // only moves on once it has left.
     const [leaving, setLeaving] = useState(false);
-    // One entry per card the user moved on from — the result screen
-    // is built from it, and later the backend will save each one.
 
     const [attempt, setAttempt] = useState(0);
+    // The cards a stopped run has gone through: their answers are recorded,
+    // so the reloaded feed no longer holds them.
+    const passedRef = useRef<FeedCard[]>([]);
 
     const card = cards[index];
     const options = useMemo(() => (card ? optionsOf(card) : []), [card]);
 
     // Reloading goes through an attempt counter: the button handler flips
-    // the status, the effect only fetches the data.
+    // the status, the effect only fetches the data. A resumed run keeps its
+    // own cards.
     useEffect(() => {
+        if (resume && attempt === 0) {
+            return;
+        }
         let cancelled = false;
 
         loadCards(setId)
@@ -226,9 +270,7 @@ export function Feed({
                 if (cancelled) {
                     return;
                 }
-                setCards(visibleCards(next, setId, removedCardIds, cardPatches).map((item) =>
-                    item.table ? { ...item, table: { ...item.table, items: shuffle(item.table.items) } } : item,
-                ));
+                setCards(rejoinedFeed(passedRef.current, next, removedCardIds, cardPatches));
                 setStatus('ready');
             })
             .catch(() => {
@@ -240,9 +282,13 @@ export function Feed({
         return () => {
             cancelled = true;
         };
-    }, [attempt, setId, removedCardIds, cardPatches]);
+    }, [attempt, resume, setId, removedCardIds, cardPatches]);
 
     const retry = () => {
+        passedRef.current = cards.slice(0, index);
+        // The reloaded feed shuffles the terms anew, so a layout kept by
+        // their places would put them in columns the reader never chose.
+        setPlacements({});
         setStatus('loading');
         setAttempt((current) => current + 1);
     };
@@ -258,36 +304,80 @@ export function Feed({
         return () => window.clearTimeout(timer);
     }, [flipping]);
 
-    const askCheck = useCallback(
-        (cardId: string, answer: string) => {
+    const reset = useCallback(() => {
+        checkRunRef.current += 1;
+        setCheck(null);
+        setReason(null);
+        setReveal(null);
+        setOpening(false);
+        setGiven(null);
+        setVerdict(null);
+        setRevealed(false);
+        setDraft('');
+        setSelectedOptions([]);
+        setPicked(null);
+        setFlipping(false);
+    }, []);
+
+    const showNext = useCallback(() => {
+        setIndex((current) => current + 1);
+        reset();
+    }, [reset]);
+
+    // The card is answered anew once the run is retried.
+    const stop = useCallback(() => {
+        reset();
+        setStatus('error');
+    }, [reset]);
+
+    /**
+     * Sends the answer and waits for the verdict, asking again while there is
+     * none. A card the feed no longer asks is skipped without a result; a
+     * backend that keeps failing stops the run.
+     */
+    const ask = useCallback(
+        (cardId: string, answer: string, typed: string | null, onVerdict: (result: Checked) => void) => {
             const run = checkRunRef.current + 1;
             checkRunRef.current = run;
-            setCheck({ stage: 'checking', answer });
+            setCheck({ stage: 'checking', typed });
             setCheckRun(run);
 
+            let lost = 0;
             const attempt = () => {
                 if (checkRunRef.current !== run) {
                     return; // the reader moved on
                 }
-                void checkAnswer(cardId, answer).then((result) => {
+                void sendAnswer(cardId, answer).then((result) => {
                     if (checkRunRef.current !== run) {
                         return;
                     }
-                    if (!result) {
+                    lost = result === LOST ? lost + 1 : 0;
+                    if (lost >= CHECK_LOST_LIMIT) {
+                        stop();
+                        return;
+                    }
+                    if (!result || result === LOST) {
                         // No verdict yet: the reader keeps waiting, we ask again.
                         window.setTimeout(attempt, CHECK_RETRY_MS);
                         return;
                     }
                     setCheck(null);
+                    if (result === GONE) {
+                        showNext();
+                        return;
+                    }
+                    if (result === FAILED) {
+                        stop();
+                        return;
+                    }
                     setReason(result.reason);
-                    setGiven(answer);
-                    setVerdict(result.correct ? 'correct' : 'wrong');
-                    startFlip();
+                    setReveal(result.reveal);
+                    onVerdict(result);
                 });
             };
             attempt();
         },
-        [startFlip],
+        [showNext, stop],
     );
 
     // Leaving the feed drops a check that is still waiting or retrying.
@@ -315,43 +405,24 @@ export function Feed({
         };
     }, [checkRun]);
 
+    /** Answers a choice, true-or-false or typed card; shown is what the reader picked. */
     const submit = useCallback(
-        (value: string) => {
+        (answer: string, shown: string) => {
             if (!card) {
-                return;
-            }
-            const expected = Array.isArray(card.answer) ? card.answer : [answerTextOf(card)];
-            const exact = card.kind === 'choice'
-                ? selectedOptions.length === expected.length && expected.every((answer) => selectedOptions.includes(answer))
-                : norm(value) === norm(answerTextOf(card));
-            if (card.kind !== 'input' || exact) {
-                setGiven(value);
-                setVerdict(exact ? 'correct' : 'wrong');
-                startFlip();
                 return;
             }
             // The card stays face up while the answer is being checked:
             // the breakdown has nothing to show until the verdict is in.
-            // Other words: the card turns once the backend has judged them.
-            askCheck(card.id, value);
+            ask(card.id, answer, card.kind === 'input' ? shown : null, (result) => {
+                setGiven(shown);
+                setVerdict(result.correct ? 'correct' : 'wrong');
+                startFlip();
+            });
         },
-        [card, askCheck, startFlip, selectedOptions],
+        [card, ask, startFlip],
     );
 
-    const reset = useCallback(() => {
-        checkRunRef.current += 1;
-        setCheck(null);
-        setReason(null);
-        setGiven(null);
-        setVerdict(null);
-        setRevealed(false);
-        setDraft('');
-        setSelectedOptions([]);
-        setPicked(null);
-        setFlipping(false);
-    }, []);
-
-    const layout = card?.table;
+    const layout = card?.table ? layoutOf(card.table, reveal?.answer, placements[card.id]) : undefined;
     const placement: Placement =
         layout && card ? (placements[card.id] ?? emptyPlacement(layout)) : [];
     const pickedIndex = picked && card && picked.cardId === card.id ? picked.index : null;
@@ -375,24 +446,70 @@ export function Feed({
         setPlacements((current) => ({ ...current, [card.id]: next }));
     };
 
-    const reveal = () => {
-        setRevealed(true);
-        startFlip();
+    // A flip card asks the backend for its answer; the reader grades
+    // themselves once they have seen it.
+    const openFlip = () => {
+        if (!card || opening) {
+            return;
+        }
+        const cardId = card.id;
+        const run = checkRunRef.current + 1;
+        checkRunRef.current = run;
+        setOpening(true);
+
+        let lost = 0;
+        const attempt = () => {
+            if (checkRunRef.current !== run) {
+                return;
+            }
+            void fetchReveal(cardId).then((result) => {
+                if (checkRunRef.current !== run) {
+                    return;
+                }
+                if (result === LOST) {
+                    lost += 1;
+                    if (lost >= CHECK_LOST_LIMIT) {
+                        stop();
+                    } else {
+                        window.setTimeout(attempt, CHECK_RETRY_MS);
+                    }
+                    return;
+                }
+                setOpening(false);
+                if (result === GONE) {
+                    showNext();
+                    return;
+                }
+                if (result === FAILED) {
+                    stop();
+                    return;
+                }
+                setReveal(result);
+                setRevealed(true);
+                startFlip();
+            });
+        };
+        attempt();
+    };
+
+    const grade = (knew: boolean) => {
+        if (!card) {
+            return;
+        }
+        ask(card.id, String(knew), null, (result) => setVerdict(result.correct ? 'correct' : 'wrong'));
     };
 
     const checkTable = () => {
-        if (!layout) {
+        if (!card || !layout) {
             return;
         }
-        setRevealed(true);
-        setVerdict(correctCount(layout, placement) === layout.items.length ? 'correct' : 'wrong');
-        startFlip();
+        const placed = layout.items.map((item, itemIndex) => ({ text: item.text, column: placement[itemIndex] ?? '' }));
+        ask(card.id, JSON.stringify(placed), null, (result) => {
+            setRevealed(true);
+            setVerdict(result.correct ? 'correct' : 'wrong');
+            startFlip();
+        });
     };
-
-    const showNext = useCallback(() => {
-        setIndex((current) => current + 1);
-        reset();
-    }, [reset]);
 
     const goNext = () => {
         if (card && verdict) {
@@ -421,89 +538,21 @@ export function Feed({
         return () => window.clearTimeout(timer);
     }, [leaving, showNext]);
 
-    const submittedCardIdsRef = useRef<Set<string>>(new Set());
-    const inFlightRef = useRef<Promise<void> | null>(null);
-    const [isLeaving, setIsLeaving] = useState(false);
+    // Every answer is recorded as it is given, so leaving sends nothing.
+    const handleBack = onBack ?? onExit;
 
-    const submitResults = useCallback(
-        async (currentResults: Answer[]): Promise<void> => {
-            if (inFlightRef.current) {
-                try {
-                    await inFlightRef.current;
-                } catch {
-                    // ignore
-                }
-            }
-            const unsubmitted = currentResults.filter(
-                (r) => !submittedCardIdsRef.current.has(r.cardId),
-            );
-            if (unsubmitted.length === 0) {
-                return;
-            }
-            const validResults = setId
-                ? unsubmitted.filter((r) => cards.some((c) => c.id === r.cardId))
-                : unsubmitted;
-            if (validResults.length === 0) {
-                return;
-            }
-            for (const r of validResults) {
-                submittedCardIdsRef.current.add(r.cardId);
-            }
-            const promise = api
-                .POST('/results', {
-                    body: validResults,
-                })
-                .then(() => {})
-                .catch((err: unknown) => {
-                    console.error('Failed to submit results:', err);
-                })
-                .finally(() => {
-                    inFlightRef.current = null;
-                });
-            inFlightRef.current = promise;
-            await promise;
-        },
-        [cards, setId],
-    );
-
-    const handleBack = async () => {
-        if (isLeaving) {
-            return;
-        }
-        setIsLeaving(true);
-        try {
-            await submitResults(results);
-        } finally {
-            if (onBack) {
-                onBack();
-            } else {
-                onExit();
-            }
-        }
-    };
-
-    const handleExit = async () => {
-        if (inFlightRef.current) {
-            try {
-                await inFlightRef.current;
-            } catch {
-                // ignore
-            }
-        }
-        onExit();
-    };
-
-    // When the next review comes, known only once the answers are saved:
-    // FSRS may bring cards back in minutes, and Result says so.
+    // When the next review comes: FSRS may bring cards back in minutes,
+    // and Result says so. Asked once the run is over, when every answer
+    // has been recorded.
+    const finished = !card && results.length > 0;
     const [nextReviewAt, setNextReviewAt] = useState<string | null>(null);
 
     useEffect(() => {
-        if (card || results.length === 0) {
+        if (!finished) {
             return;
         }
         let cancelled = false;
-        void submitResults(results)
-            .then(() => api.GET('/'))
+        api.GET('/')
             .then(({ data }) => {
                 if (!cancelled && data) {
                     setNextReviewAt(data.nextReviewAt ?? null);
@@ -515,7 +564,7 @@ export function Feed({
         return () => {
             cancelled = true;
         };
-    }, [card, results, submitResults]);
+    }, [finished]);
 
     if (status === 'loading') {
         return (
@@ -557,7 +606,7 @@ export function Feed({
                     cards={cards}
                     results={results}
                     nextReviewAt={nextReviewAt}
-                    onExit={handleExit}
+                    onExit={onExit}
                     onShare={onShare}
                 />
             );
@@ -568,7 +617,7 @@ export function Feed({
                 title="На сегодня всё"
                 text="Карточки вернутся, когда подойдёт срок повторения"
                 action={
-                    <Button size="medium" variant="secondary" stretched onClick={handleExit}>
+                    <Button size="medium" variant="secondary" stretched onClick={onExit}>
                         {setId ? 'К набору' : 'На главную'}
                     </Button>
                 }
@@ -576,16 +625,34 @@ export function Feed({
         );
     }
 
-    const showAnswer = given !== null || revealed;
+    const showAnswer = (given !== null || revealed) && reveal !== null;
     // A flip card has no answer of its own, so the right one is always
     // shown — after «Знал» the screen would otherwise hold no answer.
     const hasGiven = given !== null && card.kind !== 'flip';
     const showRightAnswer = !hasGiven || verdict === 'wrong';
-    // The buttons are off while the card is turning or leaving.
-    const busy = flipping || leaving;
+    // The buttons are off while the card is turning or leaving, and while
+    // the backend grades the answer.
+    const busy = flipping || leaving || check !== null;
     // A flip card has nothing to pick from, so the side itself opens
     // the answer — the button below stays for keyboard and screen readers.
-    const tapToReveal = card.kind === 'flip' && !showAnswer;
+    const tapToReveal = card.kind === 'flip' && !showAnswer && !opening;
+
+    const openReport = async () => {
+        if (!reveal) {
+            return;
+        }
+        setReport({ cardId: card.id, stage: 'opening' });
+        // An answered card is done: the run comes back at the next one.
+        const answered = verdict !== null;
+        const resumeAt: FeedResume = {
+            cards,
+            index: answered ? index + 1 : index,
+            results: answered ? [...results, { cardId: card.id, correct: verdict === 'correct' }] : results,
+        };
+        if (!(await onReportCard(revealedCard(card, reveal), resumeAt))) {
+            setReport({ cardId: card.id, stage: 'failed' });
+        }
+    };
 
     return (
         <Screen>
@@ -596,7 +663,6 @@ export function Feed({
                             size="small"
                             variant="ghost"
                             aria-label="Назад"
-                            disabled={isLeaving}
                             onClick={handleBack}
                         >
                             <IconChevronLeft size={20} />
@@ -619,22 +685,22 @@ export function Feed({
 
             <div key={card.id} className={cx(s.flip, leaving && s.leaving)}>
                 <div className={cx(s.flipInner, showAnswer && s.flipped)}>
-                    {/* While the answer is being checked the card carries three
+                    {/* While a typed answer is being checked the card carries three
                         blocks — question, answer, what the check is doing —
                         spread top to bottom instead of one question in the middle. */}
                     <Flex
                         direction="column"
                         align="stretch"
-                        justify={check ? 'space-between' : 'start'}
+                        justify={check?.typed ? 'space-between' : 'start'}
                         gap={24}
                         inert={showAnswer || flipping}
                         aria-hidden={showAnswer}
-                        onClick={tapToReveal ? reveal : undefined}
+                        onClick={tapToReveal ? openFlip : undefined}
                         className={cx(
                             s.face,
                             s.faceFront,
                             s.card,
-                            !check && s.cardCentered,
+                            !check?.typed && s.cardCentered,
                             tapToReveal && s.tappable,
                         )}
                     >
@@ -647,8 +713,8 @@ export function Feed({
                             </Typography.Text>
                         </Flex>
 
-                        {check ? (
-                            <AnswerCheck stage={check.stage} answer={check.answer} />
+                        {check?.typed ? (
+                            <AnswerCheck stage={check.stage} answer={check.typed} />
                         ) : null}
 
                         {layout ? (
@@ -708,7 +774,7 @@ export function Feed({
                             {card.question}
                         </Typography.Text>
 
-                        {layout ? (
+                        {layout && showAnswer ? (
                             <TableColumns
                                 layout={layout}
                                 placement={placement}
@@ -738,7 +804,7 @@ export function Feed({
                                 </Flex>
                             ) : null}
 
-                            {!layout && showRightAnswer ? (
+                            {!layout && reveal && showRightAnswer ? (
                                 <Flex align="flex-start" gap={12} className={s.answerRow}>
                                     <IconCheck tone="positive" className={s.answerIcon} />
                                     <Flex direction="column">
@@ -746,7 +812,7 @@ export function Feed({
                                             Верный ответ
                                         </Typography.Text>
                                         <Typography.Text variant="body" className={s.answerText}>
-                                            {labelOf(card, answerTextOf(card))}
+                                            {labelOf(card, answerTextOf(reveal.answer, card.options))}
                                         </Typography.Text>
                                     </Flex>
                                 </Flex>
@@ -755,30 +821,33 @@ export function Feed({
 
                         <div className={s.divider} />
 
-                        {card.explanation ? (
+                        {reveal?.explanation ? (
                             <Typography.Text variant="body" asChild>
-                                <p className={s.explanation}>{card.explanation}</p>
+                                <p className={s.explanation}>{reveal.explanation}</p>
                             </Typography.Text>
                         ) : null}
 
-                        <figure className={s.source}>
-                            <Flex direction="column" align="stretch" gap={4}>
-                                <Typography.Text variant="label-strong" color="tertiary" asChild>
-                                    <figcaption>
-                                        <Flex align="flex-start" gap={4}>
-                                            <IconDoc size={14} tone="muted" className={s.sourceIcon} />
-                                            <span>
-                                                Из вашего конспекта
-                                                {card.sourceRef ? ` · ${card.sourceRef}` : ''}
-                                            </span>
-                                        </Flex>
-                                    </figcaption>
-                                </Typography.Text>
-                                <Typography.Text variant="description" color="tertiary" asChild>
-                                    <blockquote className={s.quote}>«{card.sourceQuote}»</blockquote>
-                                </Typography.Text>
-                            </Flex>
-                        </figure>
+                        {/* A card written by hand may have no quote to show. */}
+                        {reveal?.sourceQuote ? (
+                            <figure className={s.source}>
+                                <Flex direction="column" align="stretch" gap={4}>
+                                    <Typography.Text variant="label-strong" color="tertiary" asChild>
+                                        <figcaption>
+                                            <Flex align="flex-start" gap={4}>
+                                                <IconDoc size={14} tone="muted" className={s.sourceIcon} />
+                                                <span>
+                                                    Из вашего конспекта
+                                                    {reveal.sourceRef ? ` · ${reveal.sourceRef}` : ''}
+                                                </span>
+                                            </Flex>
+                                        </figcaption>
+                                    </Typography.Text>
+                                    <Typography.Text variant="description" color="tertiary" asChild>
+                                        <blockquote className={s.quote}>«{reveal.sourceQuote}»</blockquote>
+                                    </Typography.Text>
+                                </Flex>
+                            </figure>
+                        ) : null}
                     </Flex>
                 </div>
             </div>
@@ -791,9 +860,9 @@ export function Feed({
                                 size="medium"
                                 variant="secondary"
                                 stretched
-                                disabled={flipping}
+                                disabled={busy}
                                 iconBefore={<IconCross size={20} tone="negative" />}
-                                onClick={() => setVerdict('wrong')}
+                                onClick={() => grade(false)}
                             >
                                 Не знал
                             </Button>
@@ -801,9 +870,9 @@ export function Feed({
                                 size="medium"
                                 variant="secondary"
                                 stretched
-                                disabled={flipping}
+                                disabled={busy}
                                 iconBefore={<IconCheck size={20} tone="positive" />}
-                                onClick={() => setVerdict('correct')}
+                                onClick={() => grade(true)}
                             >
                                 Знал
                             </Button>
@@ -826,12 +895,7 @@ export function Feed({
                         stretched
                         disabled={busy || (report?.cardId === card.id && report.stage === 'opening')}
                         iconBefore={<IconFlag size={16} tone="muted" />}
-                        onClick={async () => {
-                            setReport({ cardId: card.id, stage: 'opening' });
-                            if (!(await onReportCard(card, index, results))) {
-                                setReport({ cardId: card.id, stage: 'failed' });
-                            }
-                        }}
+                        onClick={openReport}
                     >
                         <Typography.Text variant="description" color="tertiary">
                             Ошибка в карточке
@@ -857,10 +921,10 @@ export function Feed({
                         size="medium"
                         variant="secondary"
                         stretched
-                        disabled={placedCount(placement) < layout.items.length}
+                        disabled={check !== null || placedCount(placement) < layout.items.length}
                         onClick={checkTable}
                     >
-                        Проверить
+                        {check ? 'Проверяю ответ' : 'Проверить'}
                     </Button>
                 </Flex>
             ) : (
@@ -870,20 +934,21 @@ export function Feed({
                             key={option.value}
                             type="button"
                             className={s.option}
+                            disabled={check !== null}
                             aria-pressed={card.kind === 'choice' ? selectedOptions.includes(option.value) : undefined}
                             onClick={() => card.kind === 'choice'
                                 ? setSelectedOptions((current) => current.includes(option.value)
                                     ? current.filter((value) => value !== option.value) : [...current, option.value])
-                                : submit(option.value)}
+                                : submit(option.value, option.value)}
                         >
                             <Typography.Text variant="body">{card.kind === 'choice' ? `${selectedOptions.includes(option.value) ? '☑' : '☐'} ` : ''}{option.label}</Typography.Text>
                         </button>
                     ))}
 
                     {card.kind === 'choice' ? (
-                        <Button size="medium" variant="secondary" stretched disabled={selectedOptions.length === 0}
-                            onClick={() => submit(selectedOptions.join('; '))}>
-                            Проверить
+                        <Button size="medium" variant="secondary" stretched disabled={check !== null || selectedOptions.length === 0}
+                            onClick={() => submit(JSON.stringify(selectedOptions), selectedOptions.join('; '))}>
+                            {check ? 'Проверяю ответ' : 'Проверить'}
                         </Button>
                     ) : null}
 
@@ -899,7 +964,7 @@ export function Feed({
                                 onKeyDown={(event) => {
                                     // A held key repeats, and Enter also ends an IME composition.
                                     if (event.key !== 'Enter' || event.repeat || event.nativeEvent.isComposing) return;
-                                    if (draft.trim().length > 0) submit(draft);
+                                    if (draft.trim().length > 0) submit(draft, draft);
                                 }}
                             />
                             <Button
@@ -907,14 +972,14 @@ export function Feed({
                                 variant="secondary"
                                 stretched
                                 disabled={draft.trim().length === 0}
-                                onClick={() => submit(draft)}
+                                onClick={() => submit(draft, draft)}
                             >
                                 Ответить
                             </Button>
                         </>
                     ) : null}
 
-                    {check ? (
+                    {card.kind === 'input' && check ? (
                         <Button size="medium" variant="secondary" stretched disabled>
                             Проверяю ответ
                         </Button>
@@ -925,9 +990,10 @@ export function Feed({
                             size="medium"
                             variant="secondary"
                             stretched
-                            onClick={reveal}
+                            disabled={opening}
+                            onClick={openFlip}
                         >
-                            Показать ответ
+                            {opening ? 'Открываю ответ' : 'Показать ответ'}
                         </Button>
                     ) : null}
                 </Flex>

@@ -13,6 +13,7 @@ import (
 type SetService interface {
 	CreateSet(context.Context, uuid.UUID, *contracts.CreateSetRequest) (*contracts.CardSet, error)
 	GetSet(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.CardSet, error)
+	UpdateSetTitle(ctx context.Context, userID uuid.UUID, setID uuid.UUID, title string) error
 	DeleteSet(ctx context.Context, userID uuid.UUID, setID uuid.UUID) error
 	GetCardsBySetID(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.Card, error)
 	GetSetShareCode(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.CardSet, error)
@@ -22,23 +23,32 @@ type SetService interface {
 	SaveGeneratedSet(ctx context.Context, userID uuid.UUID, title string, genResult generator.Result, warnings []string) (*contracts.CardSet, error)
 }
 
+// FactService defines domain operations on facts within card sets.
+type FactService interface {
+	GetFactsBySetID(ctx context.Context, userID, setID uuid.UUID) ([]contracts.Fact, error)
+	CreateFact(ctx context.Context, userID, setID uuid.UUID, name string) (*contracts.Fact, error)
+	UpdateFact(ctx context.Context, userID, factID uuid.UUID, name string) error
+	DeleteFact(ctx context.Context, userID, factID uuid.UUID) error
+	ReorderCards(ctx context.Context, userID, factID uuid.UUID, cardIDs []uuid.UUID) error
+}
+
 // CardService defines domain operations on individual cards.
 type CardService interface {
 	CreateCard(context.Context, uuid.UUID, uuid.UUID, *contracts.CreateCardRequest) (*contracts.Card, error)
+	CreateCardInFact(ctx context.Context, userID, factID uuid.UUID, req *contracts.CreateCardRequest) (*contracts.Card, error)
 	UpdateCard(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error)
 	DeleteCard(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) error
 	AnswerQuestion(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error)
-	CheckAnswer(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error)
+	RevealCard(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) (*contracts.CardReveal, error)
 	ReportCardIssue(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, reason contracts.CardIssueReason) error
 	GetSetIssues(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.SetIssue, error)
 	ResolveCardIssues(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) error
 }
 
-// HomescreenService defines domain operations for today overview, feed, and submitting review results.
+// HomescreenService defines domain operations for today overview and the feed.
 type HomescreenService interface {
 	GetToday(ctx context.Context, userID uuid.UUID) (*contracts.TodayData, error)
-	GetFeedQuestions(ctx context.Context, userID uuid.UUID) ([]contracts.Card, error)
-	SendResults(ctx context.Context, userID uuid.UUID, results []contracts.Answer) error
+	GetFeedQuestions(ctx context.Context, userID uuid.UUID) ([]contracts.FeedCard, error)
 }
 
 // MAXUserParams comes from a verified MAX request or bot update.

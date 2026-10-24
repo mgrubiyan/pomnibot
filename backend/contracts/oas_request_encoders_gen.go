@@ -24,8 +24,8 @@ func encodeAnswerQuestionRequest(
 	return nil
 }
 
-func encodeCheckAnswerRequest(
-	req *CheckAnswerRequest,
+func encodeCreateCardRequest(
+	req *CreateCardRequest,
 	r *http.Request,
 ) error {
 	const contentType = "application/json"
@@ -38,8 +38,22 @@ func encodeCheckAnswerRequest(
 	return nil
 }
 
-func encodeCreateCardRequest(
+func encodeCreateCardInFactRequest(
 	req *CreateCardRequest,
+	r *http.Request,
+) error {
+	const contentType = "application/json"
+	e := new(jx.Encoder)
+	{
+		req.Encode(e)
+	}
+	encoded := e.Bytes()
+	ht.SetBody(r, bytes.NewReader(encoded), contentType)
+	return nil
+}
+
+func encodeCreateFactRequest(
+	req *CreateFactRequest,
 	r *http.Request,
 ) error {
 	const contentType = "application/json"
@@ -94,6 +108,20 @@ func encodePutProfileRequest(
 	return nil
 }
 
+func encodeReorderCardsRequest(
+	req *ReorderCardsRequest,
+	r *http.Request,
+) error {
+	const contentType = "application/json"
+	e := new(jx.Encoder)
+	{
+		req.Encode(e)
+	}
+	encoded := e.Bytes()
+	ht.SetBody(r, bytes.NewReader(encoded), contentType)
+	return nil
+}
+
 func encodeReportCardIssueRequest(
 	req *ReportCardIssueRequest,
 	r *http.Request,
@@ -108,8 +136,8 @@ func encodeReportCardIssueRequest(
 	return nil
 }
 
-func encodeSendResultsRequest(
-	req SendResultsRequest,
+func encodeUpdateCardRequest(
+	req *UpdateCardRequest,
 	r *http.Request,
 ) error {
 	const contentType = "application/json"
@@ -122,8 +150,22 @@ func encodeSendResultsRequest(
 	return nil
 }
 
-func encodeUpdateCardRequest(
-	req *UpdateCardRequest,
+func encodeUpdateFactRequest(
+	req *UpdateFactRequest,
+	r *http.Request,
+) error {
+	const contentType = "application/json"
+	e := new(jx.Encoder)
+	{
+		req.Encode(e)
+	}
+	encoded := e.Bytes()
+	ht.SetBody(r, bytes.NewReader(encoded), contentType)
+	return nil
+}
+
+func encodeUpdateSetRequest(
+	req *UpdateSetRequest,
 	r *http.Request,
 ) error {
 	const contentType = "application/json"

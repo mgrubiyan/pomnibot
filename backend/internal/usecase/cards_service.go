@@ -13,7 +13,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
-	"github.com/mgrubiyan/pomnibot/backend/internal/grader"
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 )
@@ -24,6 +23,8 @@ type cardServiceImpl struct {
 	userService UserService
 	grader      AnswerGrader
 	issues      IssueNotifier
+	locks       *answerLocks
+	tx          Transactor
 }
 
 // CardServiceOption configures NewCardService.
@@ -36,10 +37,22 @@ func WithGrader(g AnswerGrader) CardServiceOption {
 	return func(s *cardServiceImpl) { s.grader = g }
 }
 
+// Transactor runs writes in one database transaction.
+type Transactor interface {
+	InTx(ctx context.Context, fn func(db.Querier) error) error
+}
+
+// WithTransactions records an answer and the fact's next review in one
+// transaction. Without it they are written one after the other.
+func WithTransactions(t Transactor) CardServiceOption {
+	return func(s *cardServiceImpl) { s.tx = t }
+}
+
 // NewCardService creates a new CardService implementation backed by db.Querier.
 func NewCardService(querier db.Querier, userService UserService, opts ...CardServiceOption) CardService {
 	s := &cardServiceImpl{
 		grader:      LocalAnswerGrader{},
+		locks:       &answerLocks{},
 		querier:     querier,
 		userService: userService,
 	}
@@ -217,8 +230,8 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID uuid.UUID, card
 		FactName:    existing.FactName,
 		Kind:        cardKind,
 		Question:    updated.Question,
-		Explanation: updated.Explanation,
-		SourceQuote: updated.SourceQuote,
+		Explanation: contracts.NewOptString(updated.Explanation),
+		SourceQuote: contracts.NewOptString(updated.SourceQuote),
 	}
 
 	if updated.SourceRef.Valid && updated.SourceRef.String != "" {
@@ -231,23 +244,14 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID uuid.UUID, card
 
 	if req.Table.IsSet() {
 		res.Table.SetTo(req.Table.Value)
-		res.Answer = contracts.CardAnswer{
-			Type:        contracts.TableLayoutCardAnswer,
-			TableLayout: req.Table.Value,
-		}
+		res.Answer.SetTo(contracts.NewTableLayoutCardAnswer(req.Table.Value))
 	} else if cardKind == contracts.CardKindChoice {
-		res.Answer = contracts.NewStringArrayCardAnswer(cards.ChoiceAnswers(updated.AnswerText.String))
+		res.Answer.SetTo(contracts.NewStringArrayCardAnswer(cards.ChoiceAnswers(updated.AnswerText.String)))
 	} else if cardKind == contracts.CardKindBoolean {
 		b, _ := strconv.ParseBool(updated.AnswerText.String)
-		res.Answer = contracts.CardAnswer{
-			Type: contracts.BoolCardAnswer,
-			Bool: b,
-		}
+		res.Answer.SetTo(contracts.NewBoolCardAnswer(b))
 	} else {
-		res.Answer = contracts.CardAnswer{
-			Type:   contracts.StringCardAnswer,
-			String: updated.AnswerText.String,
-		}
+		res.Answer.SetTo(contracts.NewStringCardAnswer(updated.AnswerText.String))
 	}
 
 	return res, nil
@@ -351,88 +355,113 @@ func (s *cardServiceImpl) ResolveCardIssues(ctx context.Context, userID uuid.UUI
 	return nil
 }
 
-func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error) {
-	var pgCardID pgtype.UUID
-	if err := pgCardID.Scan(cardID.String()); err != nil {
-		return nil, fmt.Errorf("%w: invalid card id", ErrValidation)
-	}
-
-	if err := s.userService.EnsureUser(ctx, userID); err != nil {
+func (s *cardServiceImpl) CreateCardInFact(ctx context.Context, userID, factID uuid.UUID, req *contracts.CreateCardRequest) (*contracts.Card, error) {
+	if err := validateCreateCard(req); err != nil {
 		return nil, err
 	}
 
+	var pgFactUUID pgtype.UUID
+	if err := pgFactUUID.Scan(factID.String()); err != nil {
+		return nil, fmt.Errorf("%w: invalid fact id", ErrValidation)
+	}
+
 	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
-	card, err := s.querier.GetCardByID(ctx, db.GetCardByIDParams{
-		ID:     pgCardID,
-		UserID: pgUserID,
+	isAuthor, err := s.querier.IsFactAuthor(ctx, db.IsFactAuthorParams{
+		ID:       pgFactUUID,
+		AuthorID: pgUserID,
 	})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
+		return nil, fmt.Errorf("check fact author: %w", err)
+	}
+	if !isAuthor {
+		exists, err := s.querier.FactExists(ctx, pgFactUUID)
+		if err != nil {
+			return nil, fmt.Errorf("check fact exists: %w", err)
 		}
-		return nil, fmt.Errorf("get card by id: %w", err)
+		if exists {
+			return nil, ErrForbidden
+		}
+		return nil, ErrNotFound
 	}
 
-	isCorrect := s.gradeCard(ctx, card, answer).Correct
+	maxStep, err := s.querier.GetMaxCardStepInFact(ctx, pgFactUUID)
+	if err != nil {
+		return nil, fmt.Errorf("get max card step: %w", err)
+	}
+	nextStep := maxStep + 1
 
-	_, err = s.querier.RecordAnswer(ctx, db.RecordAnswerParams{
-		UserID:  pgUserID,
-		CardID:  pgCardID,
-		Correct: isCorrect,
+	cardUUID, err := uuid.NewV7()
+	if err != nil {
+		return nil, fmt.Errorf("generate card uuid: %w", err)
+	}
+	pgCardUUID := pgtype.UUID{Bytes: cardUUID, Valid: true}
+
+	answer := req.Answer.String
+	if req.Answer.Type == contracts.StringArrayCardAnswer {
+		data, _ := json.Marshal(req.Answer.StringArray)
+		answer = string(data)
+	}
+	if req.Kind == contracts.CardKindBoolean {
+		answer = strconv.FormatBool(req.Answer.Bool)
+	}
+
+	created, err := s.querier.CreateCard(ctx, db.CreateCardParams{
+		ID:          pgCardUUID,
+		FactID:      pgFactUUID,
+		Kind:        db.CardKind(req.Kind),
+		Question:    req.Question,
+		AnswerText:  pgtype.Text{String: answer, Valid: true},
+		Explanation: req.Explanation.Value,
+		Step:        nextStep,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("record answer: %w", err)
+		return nil, fmt.Errorf("create card: %w", err)
 	}
 
-	if err := processFactAnswer(ctx, s.querier, pgUserID, card.FactID, isCorrect); err != nil {
-		return nil, fmt.Errorf("process fact answer: %w", err)
-	}
-
-	return &contracts.AnswerQuestionResponse{
-		IsCorrect:  isCorrect,
-		UserAnswer: answer,
-	}, nil
-}
-
-// CheckAnswer grades a typed answer by meaning without recording it: the feed
-// sends its results with SendResults.
-func (s *cardServiceImpl) CheckAnswer(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.CheckAnswerResponse, error) {
-	var pgCardID pgtype.UUID
-	if err := pgCardID.Scan(cardID.String()); err != nil {
-		return nil, fmt.Errorf("%w: invalid card id", ErrValidation)
-	}
-	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
-	card, err := s.querier.GetCardByID(ctx, db.GetCardByIDParams{ID: pgCardID, UserID: pgUserID})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
+	if req.Kind == contracts.CardKindChoice {
+		for i, v := range req.Options {
+			if _, err := s.querier.CreateCardOption(ctx, db.CreateCardOptionParams{
+				CardID:    pgCardUUID,
+				Position:  int32(i),
+				Text:      v,
+				IsCorrect: v == answer || slices.Contains(req.Answer.StringArray, v),
+			}); err != nil {
+				return nil, fmt.Errorf("create card option: %w", err)
+			}
 		}
-		return nil, fmt.Errorf("get card by id: %w", err)
+	}
+	if req.Kind == contracts.CardKindTable {
+		for i, v := range req.Table.Value.Columns {
+			if _, err := s.querier.CreateCardTableColumn(ctx, db.CreateCardTableColumnParams{
+				CardID:   pgCardUUID,
+				Position: int32(i),
+				Name:     v,
+			}); err != nil {
+				return nil, fmt.Errorf("create card table column: %w", err)
+			}
+		}
+		for i, v := range req.Table.Value.Items {
+			if _, err := s.querier.CreateCardTableItem(ctx, db.CreateCardTableItemParams{
+				CardID:     pgCardUUID,
+				ItemText:   v.Text,
+				ColumnName: v.Column,
+				Position:   int32(i),
+			}); err != nil {
+				return nil, fmt.Errorf("create card table item: %w", err)
+			}
+		}
 	}
 
-	v := s.gradeCard(ctx, card, answer)
-	res := &contracts.CheckAnswerResponse{
-		IsCorrect: v.Correct,
-		Method:    contracts.CheckAnswerResponseMethod(v.Method),
+	res := &contracts.Card{
+		ID:          cardUUID,
+		FactId:      factID,
+		Kind:        req.Kind,
+		Question:    created.Question,
+		Answer:      contracts.NewOptCardAnswer(req.Answer),
+		Options:     req.Options,
+		Table:       req.Table,
+		Explanation: contracts.NewOptString(created.Explanation),
 	}
-	if v.Reason != "" {
-		res.Reason = contracts.NewOptString(v.Reason)
-	}
+	res.Step.SetTo(int(nextStep))
 	return res, nil
-}
-
-func gradeInput(card db.GetCardByIDRow, answer string) grader.Input {
-	return grader.Input{
-		Question: card.Question,
-		Expected: card.AnswerText.String,
-		Quote:    card.SourceQuote,
-		Given:    answer,
-	}
-}
-
-func (s *cardServiceImpl) gradeCard(ctx context.Context, card db.GetCardByIDRow, answer string) grader.Verdict {
-	if card.Kind == "choice" {
-		return grader.Verdict{Correct: cards.MatchChoiceAnswer(card.AnswerText.String, answer), Method: grader.MethodLocal}
-	}
-	return s.grader.Check(ctx, gradeInput(card, answer))
 }

@@ -15,21 +15,14 @@ var _ Handler = UnimplementedHandler{}
 
 // AnswerQuestion implements AnswerQuestion operation.
 //
-// Send answer's text for input kind of questions.
+// Only the card the feed shows for a due fact is graded and recorded; asked again after that, the
+// endpoint repeats the recorded verdict. A typed answer need not match word for word: form, word order
+// and typos do not matter, and answers in other words are judged by a language model. When the model
+// does not answer in time nothing is recorded and the method is fallback: ask again. A card the feed
+// does not ask and the reader has never answered gets 409.
 //
 // POST /cards/{cardId}/answer
 func (UnimplementedHandler) AnswerQuestion(ctx context.Context, req *AnswerQuestionRequest, params AnswerQuestionParams) (r AnswerQuestionRes, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
-// CheckAnswer implements CheckAnswer operation.
-//
-// The answer need not match word for word: form, word order and typos do not matter, and answers in
-// other words are judged by a language model. Nothing is recorded: the feed sends results with
-// SendResults.
-//
-// POST /cards/{cardId}/check
-func (UnimplementedHandler) CheckAnswer(ctx context.Context, req *CheckAnswerRequest, params CheckAnswerParams) (r CheckAnswerRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
@@ -39,6 +32,24 @@ func (UnimplementedHandler) CheckAnswer(ctx context.Context, req *CheckAnswerReq
 //
 // POST /sets/{setId}/cards
 func (UnimplementedHandler) CreateCard(ctx context.Context, req *CreateCardRequest, params CreateCardParams) (r CreateCardRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// CreateCardInFact implements CreateCardInFact operation.
+//
+// Create a card in a fact.
+//
+// POST /facts/{factId}/cards
+func (UnimplementedHandler) CreateCardInFact(ctx context.Context, req *CreateCardRequest, params CreateCardInFactParams) (r CreateCardInFactRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// CreateFact implements CreateFact operation.
+//
+// Create a fact in a set.
+//
+// POST /sets/{setId}/facts
+func (UnimplementedHandler) CreateFact(ctx context.Context, req *CreateFactRequest, params CreateFactParams) (r CreateFactRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
@@ -57,6 +68,15 @@ func (UnimplementedHandler) CreateSet(ctx context.Context, req *CreateSetRequest
 //
 // DELETE /cards/{cardId}
 func (UnimplementedHandler) DeleteCard(ctx context.Context, params DeleteCardParams) (r DeleteCardRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// DeleteFact implements DeleteFact operation.
+//
+// Delete a fact.
+//
+// DELETE /facts/{factId}
+func (UnimplementedHandler) DeleteFact(ctx context.Context, params DeleteFactParams) (r DeleteFactRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
@@ -81,16 +101,27 @@ func (UnimplementedHandler) GetAdminIssues(ctx context.Context) (r GetAdminIssue
 
 // GetCardsBySetID implements GetCardsBySetID operation.
 //
-// Get cards.
+// The author gets whole cards; a member gets only the questions, without answers, options, tables,
+// explanations and quotes.
 //
 // GET /sets/{setId}/cards
 func (UnimplementedHandler) GetCardsBySetID(ctx context.Context, params GetCardsBySetIDParams) (r GetCardsBySetIDRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
+// GetFactsBySetID implements GetFactsBySetID operation.
+//
+// Get facts of a set.
+//
+// GET /sets/{setId}/facts
+func (UnimplementedHandler) GetFactsBySetID(ctx context.Context, params GetFactsBySetIDParams) (r GetFactsBySetIDRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // GetFeedQuestions implements GetFeedQuestions operation.
 //
-// Get questions of current feed.
+// Questions only: what answers a card comes back from AnswerQuestion, or from RevealCard for a flip
+// card.
 //
 // GET /feed
 func (UnimplementedHandler) GetFeedQuestions(ctx context.Context) (r GetFeedQuestionsRes, _ error) {
@@ -188,6 +219,15 @@ func (UnimplementedHandler) PutProfile(ctx context.Context, req *ProfileRequest)
 	return r, ht.ErrNotImplemented
 }
 
+// ReorderCards implements ReorderCards operation.
+//
+// Reorder cards in a fact.
+//
+// PUT /facts/{factId}/cards/order
+func (UnimplementedHandler) ReorderCards(ctx context.Context, req *ReorderCardsRequest, params ReorderCardsParams) (r ReorderCardsRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // ReportCardIssue implements ReportCardIssue operation.
 //
 // Saves the complaint with a copy of the card as it was reported, so it outlives later edits and the
@@ -207,12 +247,13 @@ func (UnimplementedHandler) ResolveCardIssues(ctx context.Context, params Resolv
 	return r, ht.ErrNotImplemented
 }
 
-// SendResults implements SendResults operation.
+// RevealCard implements RevealCard operation.
 //
-// Send set/feed results.
+// Flip cards only, and only the card of the current feed or one the reader has answered. Recording the
+// grade is AnswerQuestion's job.
 //
-// POST /results
-func (UnimplementedHandler) SendResults(ctx context.Context, req SendResultsRequest) (r SendResultsRes, _ error) {
+// POST /cards/{cardId}/reveal
+func (UnimplementedHandler) RevealCard(ctx context.Context, params RevealCardParams) (r RevealCardRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
@@ -222,5 +263,23 @@ func (UnimplementedHandler) SendResults(ctx context.Context, req SendResultsRequ
 //
 // PUT /cards/{cardId}
 func (UnimplementedHandler) UpdateCard(ctx context.Context, req *UpdateCardRequest, params UpdateCardParams) (r UpdateCardRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// UpdateFact implements UpdateFact operation.
+//
+// Update fact name.
+//
+// PATCH /facts/{factId}
+func (UnimplementedHandler) UpdateFact(ctx context.Context, req *UpdateFactRequest, params UpdateFactParams) (r UpdateFactRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// UpdateSet implements UpdateSet operation.
+//
+// Update set title.
+//
+// PATCH /sets/{setId}
+func (UnimplementedHandler) UpdateSet(ctx context.Context, req *UpdateSetRequest, params UpdateSetParams) (r UpdateSetRes, _ error) {
 	return r, ht.ErrNotImplemented
 }

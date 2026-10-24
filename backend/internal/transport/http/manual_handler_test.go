@@ -39,7 +39,7 @@ func (s *manualCardService) CreateCard(_ context.Context, _ uuid.UUID, setID uui
 	if s.err != nil {
 		return nil, s.err
 	}
-	return &contracts.Card{ID: uuid.New(), SetId: setID, Kind: req.Kind, Question: req.Question, Answer: req.Answer}, nil
+	return &contracts.Card{ID: uuid.New(), SetId: setID, Kind: req.Kind, Question: req.Question, Answer: contracts.NewOptCardAnswer(req.Answer)}, nil
 }
 func TestManualCreationHTTP(t *testing.T) {
 	setID := uuid.NewString()
@@ -57,7 +57,7 @@ func TestManualCreationHTTP(t *testing.T) {
 		{"card forbidden hidden", "/api/sets/" + setID + "/cards", `{"kind":"flip","question":"Q","answer":"A"}`, usecase.ErrForbidden, 404},
 		{"card persistence failure", "/api/sets/" + setID + "/cards", `{"kind":"flip","question":"Q","answer":"A"}`, errors.New("db failure"), 500},
 		{"missing answer", "/api/sets/" + setID + "/cards", `{"kind":"boolean","question":"Q"}`, nil, 400},
-		{"missing first card", "/api/sets", `{"title":"Manual"}`, nil, 400},
+		{"empty set created", "/api/sets", `{"title":"Manual"}`, nil, 201},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			sets := &manualSetService{err: tt.err}

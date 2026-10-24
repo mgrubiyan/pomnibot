@@ -11,6 +11,30 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getLastAnswer = `-- name: GetLastAnswer :one
+SELECT correct FROM answers
+WHERE user_id = $1 AND card_id = $2
+  AND id >= $3::uuid
+ORDER BY id DESC
+LIMIT 1
+`
+
+type GetLastAnswerParams struct {
+	UserID  pgtype.UUID `json:"user_id"`
+	CardID  pgtype.UUID `json:"card_id"`
+	SinceID pgtype.UUID `json:"since_id"`
+}
+
+// The verdict recorded last for the user's answer to the card, if it was
+// recorded after since_id: ids are UUIDv7 and grow with the time of the
+// answer, so the bound reads only the user's latest answers by their index.
+func (q *Queries) GetLastAnswer(ctx context.Context, arg GetLastAnswerParams) (bool, error) {
+	row := q.db.QueryRow(ctx, getLastAnswer, arg.UserID, arg.CardID, arg.SinceID)
+	var correct bool
+	err := row.Scan(&correct)
+	return correct, err
+}
+
 const recordAnswer = `-- name: RecordAnswer :one
 INSERT INTO answers (user_id, card_id, correct)
 VALUES ($1, $2, $3)

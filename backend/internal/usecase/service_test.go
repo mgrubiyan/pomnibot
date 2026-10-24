@@ -11,8 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
-	"github.com/mgrubiyan/pomnibot/backend/internal/grader"
-	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
@@ -253,111 +251,6 @@ func TestSetService_DeleteSet(t *testing.T) {
 	}
 }
 
-func TestCardService_AnswerQuestion(t *testing.T) {
-	cardUUID := uuid.New()
-	var pgUUID pgtype.UUID
-	_ = pgUUID.Scan(cardUUID.String())
-	userUUID := pgtype.UUID{Bytes: testUser1, Valid: true}
-	factUUID := pgtype.UUID{Bytes: testFact1, Valid: true}
-
-	recorded := false
-	progressUpdated := false
-
-	mock := &mockQuerier{
-		getCardByIDFunc: func(_ context.Context, arg db.GetCardByIDParams) (db.GetCardByIDRow, error) {
-			if arg.UserID != userUUID {
-				return db.GetCardByIDRow{}, pgx.ErrNoRows
-			}
-			return db.GetCardByIDRow{
-				ID:          pgUUID,
-				FactID:      factUUID,
-				Kind:        "choice",
-				Question:    "What is C++?",
-				AnswerText:  pgtype.Text{String: "A programming language", Valid: true},
-				Explanation: "Because it is.",
-				SourceQuote: "C++ is a language.",
-			}, nil
-		},
-		recordAnswerFunc: func(_ context.Context, arg db.RecordAnswerParams) (db.Answer, error) {
-			recorded = true
-			if !arg.Correct {
-				t.Fatalf("expected correct answer, got incorrect")
-			}
-			return db.Answer{}, nil
-		},
-		upsertFactProgressFunc: func(_ context.Context, _ db.UpsertFactProgressParams) (db.UserFactProgress, error) {
-			progressUpdated = true
-			return db.UserFactProgress{}, nil
-		},
-	}
-
-	svc := usecase.NewCardService(mock, usecase.NewUserService(mock))
-
-	res, err := svc.AnswerQuestion(context.Background(), testUser1, cardUUID, "A programming language")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !res.IsCorrect || res.UserAnswer != "A programming language" {
-		t.Fatalf("unexpected answer response: %+v", res)
-	}
-	if !recorded || !progressUpdated {
-		t.Fatal("expected answer recording and progress update")
-	}
-}
-
-type fakeModel struct{ calls int }
-
-func (m *fakeModel) Complete(context.Context, providers.Request) (providers.Response, error) {
-	m.calls++
-	return providers.Response{Content: []byte(`{"correct": true, "reason": "Упорядоченный — то же, что отсортированный."}`)}, nil
-}
-
-// A typed answer is checked by meaning and nothing is recorded: the feed
-// sends results itself.
-func TestCardService_CheckAnswer(t *testing.T) {
-	cardUUID := uuid.New()
-	var pgUUID pgtype.UUID
-	_ = pgUUID.Scan(cardUUID.String())
-	userUUID := pgtype.UUID{Bytes: testUser1, Valid: true}
-	factUUID := pgtype.UUID{Bytes: testFact1, Valid: true}
-
-	mock := &mockQuerier{
-		getCardByIDFunc: func(_ context.Context, arg db.GetCardByIDParams) (db.GetCardByIDRow, error) {
-			if arg.UserID != userUUID {
-				return db.GetCardByIDRow{}, pgx.ErrNoRows
-			}
-			return db.GetCardByIDRow{
-				ID:          pgUUID,
-				FactID:      factUUID,
-				Kind:        "input",
-				Question:    "На каком массиве применим бинарный поиск?",
-				AnswerText:  pgtype.Text{String: "на отсортированном массиве", Valid: true},
-				SourceQuote: "Бинарный поиск работает только на отсортированном массиве",
-			}, nil
-		},
-		recordAnswerFunc: func(context.Context, db.RecordAnswerParams) (db.Answer, error) {
-			t.Fatal("a check must not record the answer")
-			return db.Answer{}, nil
-		},
-	}
-	model := &fakeModel{}
-	svc := usecase.NewCardService(mock, usecase.NewUserService(mock), usecase.WithGrader(&grader.Grader{Model: model}))
-
-	res, err := svc.CheckAnswer(context.Background(), testUser1, cardUUID, "массив должен быть упорядочен")
-	if err != nil || !res.IsCorrect || res.Method != contracts.CheckAnswerResponseMethodModel || res.Reason.Value == "" {
-		t.Fatalf("CheckAnswer() = %+v, %v; want correct by the model with a reason", res, err)
-	}
-
-	res, err = svc.CheckAnswer(context.Background(), testUser1, cardUUID, "Отсортированный массив.")
-	if err != nil || !res.IsCorrect || res.Method != contracts.CheckAnswerResponseMethodLocal || model.calls != 1 {
-		t.Fatalf("CheckAnswer() = %+v, %v, model calls %d; want correct locally", res, err, model.calls)
-	}
-
-	if _, err := svc.CheckAnswer(context.Background(), testUser2, cardUUID, "что угодно"); !errors.Is(err, usecase.ErrNotFound) {
-		t.Fatalf("someone else's card: err = %v, want ErrNotFound", err)
-	}
-}
-
 func TestHomescreenService_GetToday(t *testing.T) {
 	futureTime := time.Now().Add(24 * time.Hour)
 	mock := &mockQuerier{
@@ -424,51 +317,6 @@ func TestHomescreenService_GetToday_NoNextReview(t *testing.T) {
 	}
 	if today.NextReviewAt.Set && !today.NextReviewAt.Null {
 		t.Fatalf("expected NextReviewAt to be unset or null, got %+v", today.NextReviewAt)
-	}
-}
-
-func TestHomescreenService_SendResults(t *testing.T) {
-	cardUUID := uuid.New()
-	var pgUUID pgtype.UUID
-	_ = pgUUID.Scan(cardUUID.String())
-	userUUID := pgtype.UUID{Bytes: testUser1, Valid: true}
-	factUUID := pgtype.UUID{Bytes: testFact1, Valid: true}
-
-	count := 0
-
-	mock := &mockQuerier{
-		getCardByIDFunc: func(_ context.Context, arg db.GetCardByIDParams) (db.GetCardByIDRow, error) {
-			if arg.UserID != userUUID {
-				return db.GetCardByIDRow{}, pgx.ErrNoRows
-			}
-			return db.GetCardByIDRow{
-				ID:     pgUUID,
-				FactID: factUUID,
-			}, nil
-		},
-		recordAnswerFunc: func(_ context.Context, _ db.RecordAnswerParams) (db.Answer, error) {
-			count++
-			return db.Answer{}, nil
-		},
-		upsertFactProgressFunc: func(_ context.Context, _ db.UpsertFactProgressParams) (db.UserFactProgress, error) {
-			return db.UserFactProgress{}, nil
-		},
-	}
-
-	svc := usecase.NewHomescreenService(mock, usecase.NewUserService(mock))
-
-	results := []contracts.Answer{
-		{
-			CardId:  cardUUID,
-			Correct: true,
-		},
-	}
-
-	if err := svc.SendResults(context.Background(), testUser1, results); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if count != 1 {
-		t.Fatalf("expected 1 result recorded, got %d", count)
 	}
 }
 
@@ -592,13 +440,13 @@ func TestCardService_UpdateCard_FieldsAndKinds(t *testing.T) {
 		if res.FactName != "Initial Fact" {
 			t.Errorf("expected fact name Initial Fact, got %s", res.FactName)
 		}
-		if res.Explanation != "Yes, it is the first stage." {
-			t.Errorf("expected updated explanation, got %s", res.Explanation)
+		if res.Explanation.Value != "Yes, it is the first stage." {
+			t.Errorf("expected updated explanation, got %s", res.Explanation.Value)
 		}
 		if updatedArg.AnswerText.String != "true" {
 			t.Errorf("expected db AnswerText 'true', got %s", updatedArg.AnswerText.String)
 		}
-		if !res.Answer.Bool {
+		if !res.Answer.Value.Bool {
 			t.Errorf("expected Bool answer true")
 		}
 	})

@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
-	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
 var (
@@ -18,8 +17,7 @@ var (
 
 type mockHomescreenService struct {
 	getTodayFunc         func(ctx context.Context, userID uuid.UUID) (*contracts.TodayData, error)
-	getFeedQuestionsFunc func(ctx context.Context, userID uuid.UUID) ([]contracts.Card, error)
-	sendResultsFunc      func(ctx context.Context, userID uuid.UUID, results []contracts.Answer) error
+	getFeedQuestionsFunc func(ctx context.Context, userID uuid.UUID) ([]contracts.FeedCard, error)
 }
 
 func (m *mockHomescreenService) GetToday(ctx context.Context, userID uuid.UUID) (*contracts.TodayData, error) {
@@ -29,18 +27,11 @@ func (m *mockHomescreenService) GetToday(ctx context.Context, userID uuid.UUID) 
 	return nil, nil
 }
 
-func (m *mockHomescreenService) GetFeedQuestions(ctx context.Context, userID uuid.UUID) ([]contracts.Card, error) {
+func (m *mockHomescreenService) GetFeedQuestions(ctx context.Context, userID uuid.UUID) ([]contracts.FeedCard, error) {
 	if m.getFeedQuestionsFunc != nil {
 		return m.getFeedQuestionsFunc(ctx, userID)
 	}
 	return nil, nil
-}
-
-func (m *mockHomescreenService) SendResults(ctx context.Context, userID uuid.UUID, results []contracts.Answer) error {
-	if m.sendResultsFunc != nil {
-		return m.sendResultsFunc(ctx, userID, results)
-	}
-	return nil
 }
 
 func TestHomescreenHandler_GetToday(t *testing.T) {
@@ -209,7 +200,7 @@ func TestHomescreenHandler_GetToday(t *testing.T) {
 
 func TestHomescreenHandler_GetFeedQuestions(t *testing.T) {
 	factUUID := uuid.New()
-	card1 := contracts.Card{
+	card1 := contracts.FeedCard{
 		ID:       uuid.New(),
 		SetId:    uuid.New(),
 		FactId:   factUUID,
@@ -217,7 +208,7 @@ func TestHomescreenHandler_GetFeedQuestions(t *testing.T) {
 		Kind:     contracts.CardKindInput,
 		Question: "What is a goroutine?",
 	}
-	card2 := contracts.Card{
+	card2 := contracts.FeedCard{
 		ID:       uuid.New(),
 		SetId:    uuid.New(),
 		FactId:   factUUID,
@@ -239,11 +230,11 @@ func TestHomescreenHandler_GetFeedQuestions(t *testing.T) {
 			ctx:  WithUserID(context.Background(), testHomeUserID),
 			mockSetup: func(t *testing.T) *mockHomescreenService {
 				return &mockHomescreenService{
-					getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID) ([]contracts.Card, error) {
+					getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID) ([]contracts.FeedCard, error) {
 						if userID != testHomeUserID {
 							t.Fatalf("unexpected userID: %s", userID)
 						}
-						return []contracts.Card{card1, card2}, nil
+						return []contracts.FeedCard{card1, card2}, nil
 					},
 				}
 			},
@@ -266,7 +257,7 @@ func TestHomescreenHandler_GetFeedQuestions(t *testing.T) {
 			ctx:  WithUserID(context.Background(), testHomeUserID),
 			mockSetup: func(_ *testing.T) *mockHomescreenService {
 				return &mockHomescreenService{
-					getFeedQuestionsFunc: func(_ context.Context, _ uuid.UUID) ([]contracts.Card, error) {
+					getFeedQuestionsFunc: func(_ context.Context, _ uuid.UUID) ([]contracts.FeedCard, error) {
 						return nil, nil
 					},
 				}
@@ -290,11 +281,11 @@ func TestHomescreenHandler_GetFeedQuestions(t *testing.T) {
 			ctx:  context.Background(),
 			mockSetup: func(t *testing.T) *mockHomescreenService {
 				return &mockHomescreenService{
-					getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID) ([]contracts.Card, error) {
+					getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID) ([]contracts.FeedCard, error) {
 						if userID != uuid.Nil {
 							t.Fatalf("expected fallback userID 0, got %d", userID)
 						}
-						return []contracts.Card{}, nil
+						return []contracts.FeedCard{}, nil
 					},
 				}
 			},
@@ -305,12 +296,12 @@ func TestHomescreenHandler_GetFeedQuestions(t *testing.T) {
 			ctx:  WithUserID(context.Background(), testHomeUser54321),
 			mockSetup: func(t *testing.T) *mockHomescreenService {
 				return &mockHomescreenService{
-					getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID) ([]contracts.Card, error) {
+					getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID) ([]contracts.FeedCard, error) {
 						if userID != testHomeUser54321 {
 							t.Fatalf("expected userID 54321, got %d", userID)
 						}
 						// User 54321 has only card2 due
-						return []contracts.Card{card2}, nil
+						return []contracts.FeedCard{card2}, nil
 					},
 				}
 			},
@@ -330,7 +321,7 @@ func TestHomescreenHandler_GetFeedQuestions(t *testing.T) {
 			ctx:  WithUserID(context.Background(), testHomeUserID),
 			mockSetup: func(t *testing.T) *mockHomescreenService {
 				return &mockHomescreenService{
-					getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID) ([]contracts.Card, error) {
+					getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID) ([]contracts.FeedCard, error) {
 						if userID != testHomeUserID {
 							t.Fatalf("unexpected userID: %s", userID)
 						}
@@ -369,247 +360,6 @@ func TestHomescreenHandler_GetFeedQuestions(t *testing.T) {
 			case *contracts.GetFeedQuestionsInternalServerError:
 				if _, ok := res.(*contracts.GetFeedQuestionsInternalServerError); !ok {
 					t.Fatalf("expected *contracts.GetFeedQuestionsInternalServerError, got %T", res)
-				}
-			default:
-				t.Fatalf("unhandled wantResType: %T", tc.wantResType)
-			}
-
-			if tc.checkResFunc != nil {
-				tc.checkResFunc(t, res)
-			}
-		})
-	}
-}
-
-func TestHomescreenHandler_SendResults(t *testing.T) {
-	cardID1 := uuid.New()
-	cardID2 := uuid.New()
-	validResults := contracts.SendResultsRequest{
-		contracts.Answer{CardId: cardID1, Correct: true},
-		contracts.Answer{CardId: cardID2, Correct: false},
-	}
-
-	tests := []struct {
-		name         string
-		ctx          context.Context
-		req          contracts.SendResultsRequest
-		mockSetup    func(t *testing.T) *mockHomescreenService
-		wantResType  any
-		checkResFunc func(t *testing.T, res contracts.SendResultsRes)
-	}{
-		{
-			name: "Success submits results and returns SendResultsNoContent",
-			ctx:  WithUserID(context.Background(), testHomeUserID),
-			req:  validResults,
-			mockSetup: func(t *testing.T) *mockHomescreenService {
-				return &mockHomescreenService{
-					sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.Answer) error {
-						if userID != testHomeUserID {
-							t.Fatalf("unexpected userID: %s", userID)
-						}
-						if len(results) != 2 {
-							t.Fatalf("expected 2 results, got %d", len(results))
-						}
-						if results[0].CardId != cardID1 || !results[0].Correct {
-							t.Fatalf("unexpected first result: %+v", results[0])
-						}
-						if results[1].CardId != cardID2 || results[1].Correct {
-							t.Fatalf("unexpected second result: %+v", results[1])
-						}
-						return nil
-					},
-				}
-			},
-			wantResType: (*contracts.SendResultsNoContent)(nil),
-		},
-		{
-			name: "Context without UserID falls back to 0",
-			ctx:  context.Background(),
-			req:  validResults,
-			mockSetup: func(t *testing.T) *mockHomescreenService {
-				return &mockHomescreenService{
-					sendResultsFunc: func(_ context.Context, userID uuid.UUID, _ []contracts.Answer) error {
-						if userID != uuid.Nil {
-							t.Fatalf("expected fallback userID 0, got %d", userID)
-						}
-						return nil
-					},
-				}
-			},
-			wantResType: (*contracts.SendResultsNoContent)(nil),
-		},
-		{
-			name: "Nil results slice returns SendResultsBadRequest",
-			ctx:  WithUserID(context.Background(), testHomeUserID),
-			req:  nil,
-			mockSetup: func(_ *testing.T) *mockHomescreenService {
-				return &mockHomescreenService{}
-			},
-			wantResType: (*contracts.SendResultsBadRequest)(nil),
-			checkResFunc: func(t *testing.T, res contracts.SendResultsRes) {
-				badReq, ok := res.(*contracts.SendResultsBadRequest)
-				if !ok {
-					t.Fatalf("expected *contracts.SendResultsBadRequest, got %T", res)
-				}
-				if badReq.Message == "" {
-					t.Fatalf("expected non-empty error message")
-				}
-			},
-		},
-		{
-			name: "Empty results slice returns SendResultsBadRequest",
-			ctx:  WithUserID(context.Background(), testHomeUserID),
-			req:  contracts.SendResultsRequest{},
-			mockSetup: func(_ *testing.T) *mockHomescreenService {
-				return &mockHomescreenService{}
-			},
-			wantResType: (*contracts.SendResultsBadRequest)(nil),
-			checkResFunc: func(t *testing.T, res contracts.SendResultsRes) {
-				badReq, ok := res.(*contracts.SendResultsBadRequest)
-				if !ok {
-					t.Fatalf("expected *contracts.SendResultsBadRequest, got %T", res)
-				}
-				if badReq.Message == "" {
-					t.Fatalf("expected non-empty error message")
-				}
-			},
-		},
-		{
-			name: "Validation error from service maps to SendResultsBadRequest",
-			ctx:  WithUserID(context.Background(), testHomeUserID),
-			req:  validResults,
-			mockSetup: func(t *testing.T) *mockHomescreenService {
-				return &mockHomescreenService{
-					sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.Answer) error {
-						if userID != testHomeUserID {
-							t.Fatalf("unexpected userID: %s", userID)
-						}
-						if len(results) != len(validResults) {
-							t.Fatalf("expected %d results, got %d", len(validResults), len(results))
-						}
-						return usecase.ErrValidation
-					},
-				}
-			},
-			wantResType: (*contracts.SendResultsBadRequest)(nil),
-			checkResFunc: func(t *testing.T, res contracts.SendResultsRes) {
-				badReq, ok := res.(*contracts.SendResultsBadRequest)
-				if !ok {
-					t.Fatalf("expected *contracts.SendResultsBadRequest, got %T", res)
-				}
-				if badReq.Message != usecase.ErrValidation.Error() {
-					t.Fatalf("expected %q, got %q", usecase.ErrValidation.Error(), badReq.Message)
-				}
-			},
-		},
-		{
-			name: "Relational isolation error (ErrNotFound) maps to SendResultsBadRequest",
-			ctx:  WithUserID(context.Background(), testHomeUserID),
-			req:  validResults,
-			mockSetup: func(t *testing.T) *mockHomescreenService {
-				return &mockHomescreenService{
-					sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.Answer) error {
-						if userID != testHomeUserID {
-							t.Fatalf("unexpected userID: %s", userID)
-						}
-						if len(results) != len(validResults) {
-							t.Fatalf("expected %d results, got %d", len(validResults), len(results))
-						}
-						return usecase.ErrNotFound
-					},
-				}
-			},
-			wantResType: (*contracts.SendResultsBadRequest)(nil),
-			checkResFunc: func(t *testing.T, res contracts.SendResultsRes) {
-				badReq, ok := res.(*contracts.SendResultsBadRequest)
-				if !ok {
-					t.Fatalf("expected *contracts.SendResultsBadRequest, got %T", res)
-				}
-				if badReq.Message != usecase.ErrNotFound.Error() {
-					t.Fatalf("expected %q, got %q", usecase.ErrNotFound.Error(), badReq.Message)
-				}
-			},
-		},
-		{
-			name: "Relational isolation error (ErrForbidden) maps to SendResultsBadRequest",
-			ctx:  WithUserID(context.Background(), testHomeUserID),
-			req:  validResults,
-			mockSetup: func(t *testing.T) *mockHomescreenService {
-				return &mockHomescreenService{
-					sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.Answer) error {
-						if userID != testHomeUserID {
-							t.Fatalf("unexpected userID: %s", userID)
-						}
-						if len(results) != len(validResults) {
-							t.Fatalf("expected %d results, got %d", len(validResults), len(results))
-						}
-						return usecase.ErrForbidden
-					},
-				}
-			},
-			wantResType: (*contracts.SendResultsBadRequest)(nil),
-			checkResFunc: func(t *testing.T, res contracts.SendResultsRes) {
-				badReq, ok := res.(*contracts.SendResultsBadRequest)
-				if !ok {
-					t.Fatalf("expected *contracts.SendResultsBadRequest, got %T", res)
-				}
-				if badReq.Message != usecase.ErrForbidden.Error() {
-					t.Fatalf("expected %q, got %q", usecase.ErrForbidden.Error(), badReq.Message)
-				}
-			},
-		},
-		{
-			name: "Unexpected internal error maps to SendResultsInternalServerError",
-			ctx:  WithUserID(context.Background(), testHomeUserID),
-			req:  validResults,
-			mockSetup: func(t *testing.T) *mockHomescreenService {
-				return &mockHomescreenService{
-					sendResultsFunc: func(_ context.Context, userID uuid.UUID, results []contracts.Answer) error {
-						if userID != testHomeUserID {
-							t.Fatalf("unexpected userID: %s", userID)
-						}
-						if len(results) != len(validResults) {
-							t.Fatalf("expected %d results, got %d", len(validResults), len(results))
-						}
-						return errors.New("disk write failure")
-					},
-				}
-			},
-			wantResType: (*contracts.SendResultsInternalServerError)(nil),
-			checkResFunc: func(t *testing.T, res contracts.SendResultsRes) {
-				errResp, ok := res.(*contracts.SendResultsInternalServerError)
-				if !ok {
-					t.Fatalf("expected *contracts.SendResultsInternalServerError, got %T", res)
-				}
-				if errResp.Message != "disk write failure" {
-					t.Fatalf("expected 'disk write failure', got %q", errResp.Message)
-				}
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			svc := tc.mockSetup(t)
-			handler := NewHomescreenHandler(svc)
-
-			res, err := handler.SendResults(tc.ctx, tc.req)
-			if err != nil {
-				t.Fatalf("unexpected error from handler: %v", err)
-			}
-
-			switch tc.wantResType.(type) {
-			case *contracts.SendResultsNoContent:
-				if _, ok := res.(*contracts.SendResultsNoContent); !ok {
-					t.Fatalf("expected *contracts.SendResultsNoContent, got %T", res)
-				}
-			case *contracts.SendResultsBadRequest:
-				if _, ok := res.(*contracts.SendResultsBadRequest); !ok {
-					t.Fatalf("expected *contracts.SendResultsBadRequest, got %T", res)
-				}
-			case *contracts.SendResultsInternalServerError:
-				if _, ok := res.(*contracts.SendResultsInternalServerError); !ok {
-					t.Fatalf("expected *contracts.SendResultsInternalServerError, got %T", res)
 				}
 			default:
 				t.Fatalf("unhandled wantResType: %T", tc.wantResType)

@@ -47,6 +47,28 @@ func (h *SetsHandler) DeleteSet(ctx context.Context, params contracts.DeleteSetP
 	return &contracts.DeleteSetNoContent{}, nil
 }
 
+// UpdateSet implements contracts.Handler.UpdateSet.
+func (h *SetsHandler) UpdateSet(ctx context.Context, req *contracts.UpdateSetRequest, params contracts.UpdateSetParams) (contracts.UpdateSetRes, error) {
+	userID, _ := UserIDFromContext(ctx)
+	if req == nil {
+		return &contracts.UpdateSetBadRequest{Message: "request body required"}, nil
+	}
+	err := h.setService.UpdateSetTitle(ctx, userID, params.SetId, req.Title)
+	if err != nil {
+		if errors.Is(err, usecase.ErrValidation) {
+			return &contracts.UpdateSetBadRequest{Message: err.Error()}, nil
+		}
+		if errors.Is(err, usecase.ErrForbidden) {
+			return &contracts.UpdateSetForbidden{Message: err.Error()}, nil
+		}
+		if errors.Is(err, usecase.ErrNotFound) {
+			return &contracts.UpdateSetNotFound{Message: err.Error()}, nil
+		}
+		return &contracts.UpdateSetInternalServerError{Message: internalError(ctx, "UpdateSet", err)}, nil
+	}
+	return &contracts.UpdateSetNoContent{}, nil
+}
+
 // GetCardsBySetID implements contracts.Handler.GetCardsBySetID.
 func (h *SetsHandler) GetCardsBySetID(ctx context.Context, params contracts.GetCardsBySetIDParams) (contracts.GetCardsBySetIDRes, error) {
 	userID, _ := UserIDFromContext(ctx)

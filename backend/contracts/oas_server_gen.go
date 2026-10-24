@@ -10,24 +10,32 @@ import (
 type Handler interface {
 	// AnswerQuestion implements AnswerQuestion operation.
 	//
-	// Send answer's text for input kind of questions.
+	// Only the card the feed shows for a due fact is graded and recorded; asked again after that, the
+	// endpoint repeats the recorded verdict. A typed answer need not match word for word: form, word order
+	// and typos do not matter, and answers in other words are judged by a language model. When the model
+	// does not answer in time nothing is recorded and the method is fallback: ask again. A card the feed
+	// does not ask and the reader has never answered gets 409.
 	//
 	// POST /cards/{cardId}/answer
 	AnswerQuestion(ctx context.Context, req *AnswerQuestionRequest, params AnswerQuestionParams) (AnswerQuestionRes, error)
-	// CheckAnswer implements CheckAnswer operation.
-	//
-	// The answer need not match word for word: form, word order and typos do not matter, and answers in
-	// other words are judged by a language model. Nothing is recorded: the feed sends results with
-	// SendResults.
-	//
-	// POST /cards/{cardId}/check
-	CheckAnswer(ctx context.Context, req *CheckAnswerRequest, params CheckAnswerParams) (CheckAnswerRes, error)
 	// CreateCard implements CreateCard operation.
 	//
 	// CreateCard.
 	//
 	// POST /sets/{setId}/cards
 	CreateCard(ctx context.Context, req *CreateCardRequest, params CreateCardParams) (CreateCardRes, error)
+	// CreateCardInFact implements CreateCardInFact operation.
+	//
+	// Create a card in a fact.
+	//
+	// POST /facts/{factId}/cards
+	CreateCardInFact(ctx context.Context, req *CreateCardRequest, params CreateCardInFactParams) (CreateCardInFactRes, error)
+	// CreateFact implements CreateFact operation.
+	//
+	// Create a fact in a set.
+	//
+	// POST /sets/{setId}/facts
+	CreateFact(ctx context.Context, req *CreateFactRequest, params CreateFactParams) (CreateFactRes, error)
 	// CreateSet implements CreateSet operation.
 	//
 	// CreateSet.
@@ -40,6 +48,12 @@ type Handler interface {
 	//
 	// DELETE /cards/{cardId}
 	DeleteCard(ctx context.Context, params DeleteCardParams) (DeleteCardRes, error)
+	// DeleteFact implements DeleteFact operation.
+	//
+	// Delete a fact.
+	//
+	// DELETE /facts/{factId}
+	DeleteFact(ctx context.Context, params DeleteFactParams) (DeleteFactRes, error)
 	// DeleteSet implements DeleteSet operation.
 	//
 	// Delete a card set.
@@ -55,13 +69,21 @@ type Handler interface {
 	GetAdminIssues(ctx context.Context) (GetAdminIssuesRes, error)
 	// GetCardsBySetID implements GetCardsBySetID operation.
 	//
-	// Get cards.
+	// The author gets whole cards; a member gets only the questions, without answers, options, tables,
+	// explanations and quotes.
 	//
 	// GET /sets/{setId}/cards
 	GetCardsBySetID(ctx context.Context, params GetCardsBySetIDParams) (GetCardsBySetIDRes, error)
+	// GetFactsBySetID implements GetFactsBySetID operation.
+	//
+	// Get facts of a set.
+	//
+	// GET /sets/{setId}/facts
+	GetFactsBySetID(ctx context.Context, params GetFactsBySetIDParams) (GetFactsBySetIDRes, error)
 	// GetFeedQuestions implements GetFeedQuestions operation.
 	//
-	// Get questions of current feed.
+	// Questions only: what answers a card comes back from AnswerQuestion, or from RevealCard for a flip
+	// card.
 	//
 	// GET /feed
 	GetFeedQuestions(ctx context.Context) (GetFeedQuestionsRes, error)
@@ -126,6 +148,12 @@ type Handler interface {
 	//
 	// PUT /profile
 	PutProfile(ctx context.Context, req *ProfileRequest) (PutProfileRes, error)
+	// ReorderCards implements ReorderCards operation.
+	//
+	// Reorder cards in a fact.
+	//
+	// PUT /facts/{factId}/cards/order
+	ReorderCards(ctx context.Context, req *ReorderCardsRequest, params ReorderCardsParams) (ReorderCardsRes, error)
 	// ReportCardIssue implements ReportCardIssue operation.
 	//
 	// Saves the complaint with a copy of the card as it was reported, so it outlives later edits and the
@@ -139,18 +167,31 @@ type Handler interface {
 	//
 	// POST /cards/{cardId}/issue/resolve
 	ResolveCardIssues(ctx context.Context, params ResolveCardIssuesParams) (ResolveCardIssuesRes, error)
-	// SendResults implements SendResults operation.
+	// RevealCard implements RevealCard operation.
 	//
-	// Send set/feed results.
+	// Flip cards only, and only the card of the current feed or one the reader has answered. Recording the
+	// grade is AnswerQuestion's job.
 	//
-	// POST /results
-	SendResults(ctx context.Context, req SendResultsRequest) (SendResultsRes, error)
+	// POST /cards/{cardId}/reveal
+	RevealCard(ctx context.Context, params RevealCardParams) (RevealCardRes, error)
 	// UpdateCard implements UpdateCard operation.
 	//
 	// Update a card.
 	//
 	// PUT /cards/{cardId}
 	UpdateCard(ctx context.Context, req *UpdateCardRequest, params UpdateCardParams) (UpdateCardRes, error)
+	// UpdateFact implements UpdateFact operation.
+	//
+	// Update fact name.
+	//
+	// PATCH /facts/{factId}
+	UpdateFact(ctx context.Context, req *UpdateFactRequest, params UpdateFactParams) (UpdateFactRes, error)
+	// UpdateSet implements UpdateSet operation.
+	//
+	// Update set title.
+	//
+	// PATCH /sets/{setId}
+	UpdateSet(ctx context.Context, req *UpdateSetRequest, params UpdateSetParams) (UpdateSetRes, error)
 }
 
 // Server implements http server based on OpenAPI v3 specification and

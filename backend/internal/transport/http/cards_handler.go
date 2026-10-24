@@ -111,26 +111,29 @@ func (h *CardsHandler) AnswerQuestion(ctx context.Context, req *contracts.Answer
 		if errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
 			return &contracts.AnswerQuestionNotFound{Message: err.Error()}, nil
 		}
+		if errors.Is(err, usecase.ErrConflict) {
+			return &contracts.AnswerQuestionConflict{Message: err.Error()}, nil
+		}
 		return &contracts.AnswerQuestionInternalServerError{Message: internalError(ctx, "AnswerQuestion", err)}, nil
 	}
 	return res, nil
 }
 
-// CheckAnswer implements contracts.Handler.CheckAnswer.
-func (h *CardsHandler) CheckAnswer(ctx context.Context, req *contracts.CheckAnswerRequest, params contracts.CheckAnswerParams) (contracts.CheckAnswerRes, error) {
-	if req == nil || strings.TrimSpace(req.Answer) == "" {
-		return &contracts.CheckAnswerBadRequest{Message: "answer is required"}, nil
-	}
+// RevealCard implements contracts.Handler.RevealCard.
+func (h *CardsHandler) RevealCard(ctx context.Context, params contracts.RevealCardParams) (contracts.RevealCardRes, error) {
 	userID, _ := UserIDFromContext(ctx)
-	res, err := h.cardService.CheckAnswer(ctx, userID, params.CardId, strings.TrimSpace(req.Answer))
+	res, err := h.cardService.RevealCard(ctx, userID, params.CardId)
 	if err != nil {
 		if errors.Is(err, usecase.ErrValidation) {
-			return &contracts.CheckAnswerBadRequest{Message: err.Error()}, nil
+			return &contracts.RevealCardBadRequest{Message: err.Error()}, nil
 		}
 		if errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
-			return &contracts.CheckAnswerNotFound{Message: err.Error()}, nil
+			return &contracts.RevealCardNotFound{Message: err.Error()}, nil
 		}
-		return &contracts.CheckAnswerInternalServerError{Message: internalError(ctx, "CheckAnswer", err)}, nil
+		if errors.Is(err, usecase.ErrConflict) {
+			return &contracts.RevealCardConflict{Message: err.Error()}, nil
+		}
+		return &contracts.RevealCardInternalServerError{Message: internalError(ctx, "RevealCard", err)}, nil
 	}
 	return res, nil
 }
@@ -147,6 +150,25 @@ func (h *CardsHandler) CreateCard(ctx context.Context, req *contracts.CreateCard
 			return &contracts.CreateCardNotFound{Message: err.Error()}, nil
 		}
 		return &contracts.CreateCardInternalServerError{Message: err.Error()}, nil
+	}
+	return res, nil
+}
+
+// CreateCardInFact creates manual card in an existing fact for the authenticated author.
+func (h *CardsHandler) CreateCardInFact(ctx context.Context, req *contracts.CreateCardRequest, params contracts.CreateCardInFactParams) (contracts.CreateCardInFactRes, error) {
+	userID, _ := UserIDFromContext(ctx)
+	res, err := h.cardService.CreateCardInFact(ctx, userID, params.FactId, req)
+	if err != nil {
+		if errors.Is(err, usecase.ErrValidation) {
+			return &contracts.CreateCardInFactBadRequest{Message: err.Error()}, nil
+		}
+		if errors.Is(err, usecase.ErrForbidden) {
+			return &contracts.CreateCardInFactForbidden{Message: err.Error()}, nil
+		}
+		if errors.Is(err, usecase.ErrNotFound) {
+			return &contracts.CreateCardInFactNotFound{Message: err.Error()}, nil
+		}
+		return &contracts.CreateCardInFactInternalServerError{Message: err.Error()}, nil
 	}
 	return res, nil
 }

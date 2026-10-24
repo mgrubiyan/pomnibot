@@ -14,6 +14,7 @@ type APIHandler struct {
 	users      usecase.UserService
 	sets       *SetsHandler
 	cards      *CardsHandler
+	facts      *FactsHandler
 	homescreen *HomescreenHandler
 	admin      usecase.AdminService
 }
@@ -71,6 +72,14 @@ func (h *APIHandler) DeleteSet(ctx context.Context, params contracts.DeleteSetPa
 		return h.sets.DeleteSet(ctx, params)
 	}
 	return h.UnimplementedHandler.DeleteSet(ctx, params)
+}
+
+// UpdateSet implements contracts.Handler.UpdateSet.
+func (h *APIHandler) UpdateSet(ctx context.Context, req *contracts.UpdateSetRequest, params contracts.UpdateSetParams) (contracts.UpdateSetRes, error) {
+	if h.sets != nil {
+		return h.sets.UpdateSet(ctx, req, params)
+	}
+	return h.UnimplementedHandler.UpdateSet(ctx, req, params)
 }
 
 // GetCardsBySetID implements contracts.Handler.GetCardsBySetID.
@@ -131,12 +140,12 @@ func (h *APIHandler) DeleteCard(ctx context.Context, params contracts.DeleteCard
 	return h.UnimplementedHandler.DeleteCard(ctx, params)
 }
 
-// CheckAnswer implements contracts.Handler.CheckAnswer.
-func (h *APIHandler) CheckAnswer(ctx context.Context, req *contracts.CheckAnswerRequest, params contracts.CheckAnswerParams) (contracts.CheckAnswerRes, error) {
+// RevealCard implements contracts.Handler.RevealCard.
+func (h *APIHandler) RevealCard(ctx context.Context, params contracts.RevealCardParams) (contracts.RevealCardRes, error) {
 	if h.cards != nil {
-		return h.cards.CheckAnswer(ctx, req, params)
+		return h.cards.RevealCard(ctx, params)
 	}
-	return h.UnimplementedHandler.CheckAnswer(ctx, req, params)
+	return h.UnimplementedHandler.RevealCard(ctx, params)
 }
 
 // AnswerQuestion implements contracts.Handler.AnswerQuestion.
@@ -193,14 +202,6 @@ func (h *APIHandler) GetFeedQuestions(ctx context.Context) (contracts.GetFeedQue
 	return h.UnimplementedHandler.GetFeedQuestions(ctx)
 }
 
-// SendResults implements contracts.Handler.SendResults.
-func (h *APIHandler) SendResults(ctx context.Context, req contracts.SendResultsRequest) (contracts.SendResultsRes, error) {
-	if h.homescreen != nil {
-		return h.homescreen.SendResults(ctx, req)
-	}
-	return h.UnimplementedHandler.SendResults(ctx, req)
-}
-
 // CreateSet delegates manual creation.
 func (h *APIHandler) CreateSet(ctx context.Context, req *contracts.CreateSetRequest) (contracts.CreateSetRes, error) {
 	if h.sets != nil {
@@ -215,4 +216,52 @@ func (h *APIHandler) CreateCard(ctx context.Context, req *contracts.CreateCardRe
 		return h.cards.CreateCard(ctx, req, params)
 	}
 	return h.UnimplementedHandler.CreateCard(ctx, req, params)
+}
+
+// CreateCardInFact delegates card creation in a fact.
+func (h *APIHandler) CreateCardInFact(ctx context.Context, req *contracts.CreateCardRequest, params contracts.CreateCardInFactParams) (contracts.CreateCardInFactRes, error) {
+	if h.cards != nil {
+		return h.cards.CreateCardInFact(ctx, req, params)
+	}
+	return h.UnimplementedHandler.CreateCardInFact(ctx, req, params)
+}
+
+// CreateFact delegates fact creation.
+func (h *APIHandler) CreateFact(ctx context.Context, req *contracts.CreateFactRequest, params contracts.CreateFactParams) (contracts.CreateFactRes, error) {
+	if h.facts != nil {
+		return h.facts.CreateFact(ctx, req, params)
+	}
+	return h.UnimplementedHandler.CreateFact(ctx, req, params)
+}
+
+// UpdateFact delegates fact update.
+func (h *APIHandler) UpdateFact(ctx context.Context, req *contracts.UpdateFactRequest, params contracts.UpdateFactParams) (contracts.UpdateFactRes, error) {
+	if h.facts != nil {
+		return h.facts.UpdateFact(ctx, req, params)
+	}
+	return h.UnimplementedHandler.UpdateFact(ctx, req, params)
+}
+
+// DeleteFact delegates fact deletion.
+func (h *APIHandler) DeleteFact(ctx context.Context, params contracts.DeleteFactParams) (contracts.DeleteFactRes, error) {
+	if h.facts != nil {
+		return h.facts.DeleteFact(ctx, params)
+	}
+	return h.UnimplementedHandler.DeleteFact(ctx, params)
+}
+
+// ReorderCards delegates cards reordering.
+func (h *APIHandler) ReorderCards(ctx context.Context, req *contracts.ReorderCardsRequest, params contracts.ReorderCardsParams) (contracts.ReorderCardsRes, error) {
+	if h.facts != nil {
+		return h.facts.ReorderCards(ctx, req, params)
+	}
+	return h.UnimplementedHandler.ReorderCards(ctx, req, params)
+}
+
+// GetFactsBySetID delegates facts retrieval.
+func (h *APIHandler) GetFactsBySetID(ctx context.Context, params contracts.GetFactsBySetIDParams) (contracts.GetFactsBySetIDRes, error) {
+	if h.facts != nil {
+		return h.facts.GetFactsBySetID(ctx, params)
+	}
+	return h.UnimplementedHandler.GetFactsBySetID(ctx, params)
 }

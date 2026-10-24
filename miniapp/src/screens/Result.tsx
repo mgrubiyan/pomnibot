@@ -1,5 +1,5 @@
 import { Button, Flex, Typography } from '@maxhub/max-ui';
-import type { Answer, Card } from '../types';
+import type { Answer, FeedCard } from '../types';
 import { Screen } from '../components/Screen';
 import { IconCalendar, IconCheck } from '../components/Icons';
 import { errorsLabel } from '../utils/plural';
@@ -10,7 +10,7 @@ import s from './Result.module.css';
 export interface ResultProps {
     /** The set that was gone through; none for the daily mix from Home. */
     setTitle?: string;
-    cards: Card[];
+    cards: FeedCard[];
     results: Answer[];
     /** Read after the answers are saved; null until then or if there is none. */
     nextReviewAt?: string | null;

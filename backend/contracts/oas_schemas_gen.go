@@ -136,35 +136,13 @@ func (s *AdminCardIssue) SetCreatedAt(val time.Time) {
 	s.CreatedAt = val
 }
 
-// Ref: #/components/schemas/Answer
-type Answer struct {
-	CardId  uuid.UUID `json:"cardId"`
-	Correct bool      `json:"correct"`
-}
-
-// GetCardId returns the value of CardId.
-func (s *Answer) GetCardId() uuid.UUID {
-	return s.CardId
-}
-
-// GetCorrect returns the value of Correct.
-func (s *Answer) GetCorrect() bool {
-	return s.Correct
-}
-
-// SetCardId sets the value of CardId.
-func (s *Answer) SetCardId(val uuid.UUID) {
-	s.CardId = val
-}
-
-// SetCorrect sets the value of Correct.
-func (s *Answer) SetCorrect(val bool) {
-	s.Correct = val
-}
-
 type AnswerQuestionBadRequest ErrorResponse
 
 func (*AnswerQuestionBadRequest) answerQuestionRes() {}
+
+type AnswerQuestionConflict ErrorResponse
+
+func (*AnswerQuestionConflict) answerQuestionRes() {}
 
 type AnswerQuestionForbidden ErrorResponse
 
@@ -180,7 +158,9 @@ func (*AnswerQuestionNotFound) answerQuestionRes() {}
 
 // Ref: #/components/schemas/AnswerQuestionRequest
 type AnswerQuestionRequest struct {
-	// Typed answer, or a JSON-encoded array of selected option texts for choice.
+	// Input: the typed answer; choice: a JSON-encoded array of the selected option texts; boolean: true or
+	// false; table: a JSON-encoded array of TableItem, every term with the column it was put in; flip:
+	// true when the reader knew the answer, false when not.
 	Answer string `json:"answer"`
 }
 
@@ -196,8 +176,14 @@ func (s *AnswerQuestionRequest) SetAnswer(val string) {
 
 // Ref: #/components/schemas/AnswerQuestionResponse
 type AnswerQuestionResponse struct {
-	IsCorrect  bool   `json:"isCorrect"`
-	UserAnswer string `json:"userAnswer"`
+	IsCorrect bool `json:"isCorrect"`
+	// Why the answer counts or what it lacks, when a model judged it.
+	Reason OptString `json:"reason"`
+	// Local: graded without a model (a typed answer matched up to form and typos, or surely wrong); model:
+	// judged by meaning; fallback: the model did not answer in time, nothing was recorded, ask again.
+	Method AnswerQuestionResponseMethod `json:"method"`
+	// Absent when the method is fallback.
+	Reveal OptCardReveal `json:"reveal"`
 }
 
 // GetIsCorrect returns the value of IsCorrect.
@@ -205,9 +191,19 @@ func (s *AnswerQuestionResponse) GetIsCorrect() bool {
 	return s.IsCorrect
 }
 
-// GetUserAnswer returns the value of UserAnswer.
-func (s *AnswerQuestionResponse) GetUserAnswer() string {
-	return s.UserAnswer
+// GetReason returns the value of Reason.
+func (s *AnswerQuestionResponse) GetReason() OptString {
+	return s.Reason
+}
+
+// GetMethod returns the value of Method.
+func (s *AnswerQuestionResponse) GetMethod() AnswerQuestionResponseMethod {
+	return s.Method
+}
+
+// GetReveal returns the value of Reveal.
+func (s *AnswerQuestionResponse) GetReveal() OptCardReveal {
+	return s.Reveal
 }
 
 // SetIsCorrect sets the value of IsCorrect.
@@ -215,13 +211,74 @@ func (s *AnswerQuestionResponse) SetIsCorrect(val bool) {
 	s.IsCorrect = val
 }
 
-// SetUserAnswer sets the value of UserAnswer.
-func (s *AnswerQuestionResponse) SetUserAnswer(val string) {
-	s.UserAnswer = val
+// SetReason sets the value of Reason.
+func (s *AnswerQuestionResponse) SetReason(val OptString) {
+	s.Reason = val
+}
+
+// SetMethod sets the value of Method.
+func (s *AnswerQuestionResponse) SetMethod(val AnswerQuestionResponseMethod) {
+	s.Method = val
+}
+
+// SetReveal sets the value of Reveal.
+func (s *AnswerQuestionResponse) SetReveal(val OptCardReveal) {
+	s.Reveal = val
 }
 
 func (*AnswerQuestionResponse) answerQuestionRes() {}
 
+// Local: graded without a model (a typed answer matched up to form and typos, or surely wrong); model:
+// judged by meaning; fallback: the model did not answer in time, nothing was recorded, ask again.
+type AnswerQuestionResponseMethod string
+
+const (
+	AnswerQuestionResponseMethodLocal    AnswerQuestionResponseMethod = "local"
+	AnswerQuestionResponseMethodModel    AnswerQuestionResponseMethod = "model"
+	AnswerQuestionResponseMethodFallback AnswerQuestionResponseMethod = "fallback"
+)
+
+// AllValues returns all AnswerQuestionResponseMethod values.
+func (AnswerQuestionResponseMethod) AllValues() []AnswerQuestionResponseMethod {
+	return []AnswerQuestionResponseMethod{
+		AnswerQuestionResponseMethodLocal,
+		AnswerQuestionResponseMethodModel,
+		AnswerQuestionResponseMethodFallback,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s AnswerQuestionResponseMethod) MarshalText() ([]byte, error) {
+	switch s {
+	case AnswerQuestionResponseMethodLocal:
+		return []byte(s), nil
+	case AnswerQuestionResponseMethodModel:
+		return []byte(s), nil
+	case AnswerQuestionResponseMethodFallback:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *AnswerQuestionResponseMethod) UnmarshalText(data []byte) error {
+	switch AnswerQuestionResponseMethod(data) {
+	case AnswerQuestionResponseMethodLocal:
+		*s = AnswerQuestionResponseMethodLocal
+		return nil
+	case AnswerQuestionResponseMethodModel:
+		*s = AnswerQuestionResponseMethodModel
+		return nil
+	case AnswerQuestionResponseMethodFallback:
+		*s = AnswerQuestionResponseMethodFallback
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+// Answer, explanation and sourceQuote are absent only in a set member's list of the set's cards.
 // Ref: #/components/schemas/Card
 type Card struct {
 	ID       uuid.UUID `json:"id"`
@@ -233,13 +290,14 @@ type Card struct {
 	// Choice only.
 	Options []string       `json:"options"`
 	Table   OptTableLayout `json:"table"`
-	Answer  CardAnswer     `json:"answer"`
+	Answer  OptCardAnswer  `json:"answer"`
 	// 2-3 sentences.
-	Explanation string `json:"explanation"`
+	Explanation OptString `json:"explanation"`
 	// Quote from the notes.
-	SourceQuote string `json:"sourceQuote"`
+	SourceQuote OptString `json:"sourceQuote"`
 	// Where the quote is from: «Лекция 3, стр. 2».
 	SourceRef OptString `json:"sourceRef"`
+	Step      OptInt    `json:"step"`
 }
 
 // GetID returns the value of ID.
@@ -283,23 +341,28 @@ func (s *Card) GetTable() OptTableLayout {
 }
 
 // GetAnswer returns the value of Answer.
-func (s *Card) GetAnswer() CardAnswer {
+func (s *Card) GetAnswer() OptCardAnswer {
 	return s.Answer
 }
 
 // GetExplanation returns the value of Explanation.
-func (s *Card) GetExplanation() string {
+func (s *Card) GetExplanation() OptString {
 	return s.Explanation
 }
 
 // GetSourceQuote returns the value of SourceQuote.
-func (s *Card) GetSourceQuote() string {
+func (s *Card) GetSourceQuote() OptString {
 	return s.SourceQuote
 }
 
 // GetSourceRef returns the value of SourceRef.
 func (s *Card) GetSourceRef() OptString {
 	return s.SourceRef
+}
+
+// GetStep returns the value of Step.
+func (s *Card) GetStep() OptInt {
+	return s.Step
 }
 
 // SetID sets the value of ID.
@@ -343,17 +406,17 @@ func (s *Card) SetTable(val OptTableLayout) {
 }
 
 // SetAnswer sets the value of Answer.
-func (s *Card) SetAnswer(val CardAnswer) {
+func (s *Card) SetAnswer(val OptCardAnswer) {
 	s.Answer = val
 }
 
 // SetExplanation sets the value of Explanation.
-func (s *Card) SetExplanation(val string) {
+func (s *Card) SetExplanation(val OptString) {
 	s.Explanation = val
 }
 
 // SetSourceQuote sets the value of SourceQuote.
-func (s *Card) SetSourceQuote(val string) {
+func (s *Card) SetSourceQuote(val OptString) {
 	s.SourceQuote = val
 }
 
@@ -362,8 +425,14 @@ func (s *Card) SetSourceRef(val OptString) {
 	s.SourceRef = val
 }
 
-func (*Card) createCardRes() {}
-func (*Card) updateCardRes() {}
+// SetStep sets the value of Step.
+func (s *Card) SetStep(val OptInt) {
+	s.Step = val
+}
+
+func (*Card) createCardInFactRes() {}
+func (*Card) createCardRes()       {}
+func (*Card) updateCardRes()       {}
 
 // Choice - string[] (all correct option texts); legacy string/integer supported input - string boolean
 // - boolean table - #/components/schemas/TableLayout.
@@ -689,6 +758,57 @@ func (s *CardKind) UnmarshalText(data []byte) error {
 	}
 }
 
+// What a feed card hides until it is answered.
+// Ref: #/components/schemas/CardReveal
+type CardReveal struct {
+	Answer      CardAnswer `json:"answer"`
+	Explanation string     `json:"explanation"`
+	SourceQuote string     `json:"sourceQuote"`
+	SourceRef   OptString  `json:"sourceRef"`
+}
+
+// GetAnswer returns the value of Answer.
+func (s *CardReveal) GetAnswer() CardAnswer {
+	return s.Answer
+}
+
+// GetExplanation returns the value of Explanation.
+func (s *CardReveal) GetExplanation() string {
+	return s.Explanation
+}
+
+// GetSourceQuote returns the value of SourceQuote.
+func (s *CardReveal) GetSourceQuote() string {
+	return s.SourceQuote
+}
+
+// GetSourceRef returns the value of SourceRef.
+func (s *CardReveal) GetSourceRef() OptString {
+	return s.SourceRef
+}
+
+// SetAnswer sets the value of Answer.
+func (s *CardReveal) SetAnswer(val CardAnswer) {
+	s.Answer = val
+}
+
+// SetExplanation sets the value of Explanation.
+func (s *CardReveal) SetExplanation(val string) {
+	s.Explanation = val
+}
+
+// SetSourceQuote sets the value of SourceQuote.
+func (s *CardReveal) SetSourceQuote(val string) {
+	s.SourceQuote = val
+}
+
+// SetSourceRef sets the value of SourceRef.
+func (s *CardReveal) SetSourceRef(val OptString) {
+	s.SourceRef = val
+}
+
+func (*CardReveal) revealCardRes() {}
+
 // Ref: #/components/schemas/CardSet
 type CardSet struct {
 	ID uuid.UUID `json:"id"`
@@ -802,130 +922,6 @@ func (*CardSet) getSetRes()             {}
 func (*CardSet) getSetShareCodeRes()    {}
 func (*CardSet) joinSetByShareCodeRes() {}
 
-type CheckAnswerBadRequest ErrorResponse
-
-func (*CheckAnswerBadRequest) checkAnswerRes() {}
-
-type CheckAnswerForbidden ErrorResponse
-
-func (*CheckAnswerForbidden) checkAnswerRes() {}
-
-type CheckAnswerInternalServerError ErrorResponse
-
-func (*CheckAnswerInternalServerError) checkAnswerRes() {}
-
-type CheckAnswerNotFound ErrorResponse
-
-func (*CheckAnswerNotFound) checkAnswerRes() {}
-
-// Ref: #/components/schemas/CheckAnswerRequest
-type CheckAnswerRequest struct {
-	// Typed answer, or a JSON-encoded array of selected option texts for choice.
-	Answer string `json:"answer"`
-}
-
-// GetAnswer returns the value of Answer.
-func (s *CheckAnswerRequest) GetAnswer() string {
-	return s.Answer
-}
-
-// SetAnswer sets the value of Answer.
-func (s *CheckAnswerRequest) SetAnswer(val string) {
-	s.Answer = val
-}
-
-// Ref: #/components/schemas/CheckAnswerResponse
-type CheckAnswerResponse struct {
-	IsCorrect bool `json:"isCorrect"`
-	// Why the answer counts or what it lacks, when a model judged it.
-	Reason OptString `json:"reason"`
-	// Local: matched up to form and typos, or surely wrong; model: judged by meaning; fallback: the model
-	// did not answer in time, local verdict.
-	Method CheckAnswerResponseMethod `json:"method"`
-}
-
-// GetIsCorrect returns the value of IsCorrect.
-func (s *CheckAnswerResponse) GetIsCorrect() bool {
-	return s.IsCorrect
-}
-
-// GetReason returns the value of Reason.
-func (s *CheckAnswerResponse) GetReason() OptString {
-	return s.Reason
-}
-
-// GetMethod returns the value of Method.
-func (s *CheckAnswerResponse) GetMethod() CheckAnswerResponseMethod {
-	return s.Method
-}
-
-// SetIsCorrect sets the value of IsCorrect.
-func (s *CheckAnswerResponse) SetIsCorrect(val bool) {
-	s.IsCorrect = val
-}
-
-// SetReason sets the value of Reason.
-func (s *CheckAnswerResponse) SetReason(val OptString) {
-	s.Reason = val
-}
-
-// SetMethod sets the value of Method.
-func (s *CheckAnswerResponse) SetMethod(val CheckAnswerResponseMethod) {
-	s.Method = val
-}
-
-func (*CheckAnswerResponse) checkAnswerRes() {}
-
-// Local: matched up to form and typos, or surely wrong; model: judged by meaning; fallback: the model
-// did not answer in time, local verdict.
-type CheckAnswerResponseMethod string
-
-const (
-	CheckAnswerResponseMethodLocal    CheckAnswerResponseMethod = "local"
-	CheckAnswerResponseMethodModel    CheckAnswerResponseMethod = "model"
-	CheckAnswerResponseMethodFallback CheckAnswerResponseMethod = "fallback"
-)
-
-// AllValues returns all CheckAnswerResponseMethod values.
-func (CheckAnswerResponseMethod) AllValues() []CheckAnswerResponseMethod {
-	return []CheckAnswerResponseMethod{
-		CheckAnswerResponseMethodLocal,
-		CheckAnswerResponseMethodModel,
-		CheckAnswerResponseMethodFallback,
-	}
-}
-
-// MarshalText implements encoding.TextMarshaler.
-func (s CheckAnswerResponseMethod) MarshalText() ([]byte, error) {
-	switch s {
-	case CheckAnswerResponseMethodLocal:
-		return []byte(s), nil
-	case CheckAnswerResponseMethodModel:
-		return []byte(s), nil
-	case CheckAnswerResponseMethodFallback:
-		return []byte(s), nil
-	default:
-		return nil, errors.Errorf("invalid value: %q", s)
-	}
-}
-
-// UnmarshalText implements encoding.TextUnmarshaler.
-func (s *CheckAnswerResponseMethod) UnmarshalText(data []byte) error {
-	switch CheckAnswerResponseMethod(data) {
-	case CheckAnswerResponseMethodLocal:
-		*s = CheckAnswerResponseMethodLocal
-		return nil
-	case CheckAnswerResponseMethodModel:
-		*s = CheckAnswerResponseMethodModel
-		return nil
-	case CheckAnswerResponseMethodFallback:
-		*s = CheckAnswerResponseMethodFallback
-		return nil
-	default:
-		return errors.Errorf("invalid value: %q", data)
-	}
-}
-
 type CreateCardBadRequest ErrorResponse
 
 func (*CreateCardBadRequest) createCardRes() {}
@@ -933,6 +929,22 @@ func (*CreateCardBadRequest) createCardRes() {}
 type CreateCardForbidden ErrorResponse
 
 func (*CreateCardForbidden) createCardRes() {}
+
+type CreateCardInFactBadRequest ErrorResponse
+
+func (*CreateCardInFactBadRequest) createCardInFactRes() {}
+
+type CreateCardInFactForbidden ErrorResponse
+
+func (*CreateCardInFactForbidden) createCardInFactRes() {}
+
+type CreateCardInFactInternalServerError ErrorResponse
+
+func (*CreateCardInFactInternalServerError) createCardInFactRes() {}
+
+type CreateCardInFactNotFound ErrorResponse
+
+func (*CreateCardInFactNotFound) createCardInFactRes() {}
 
 type CreateCardInternalServerError ErrorResponse
 
@@ -1012,6 +1024,37 @@ func (s *CreateCardRequest) SetExplanation(val OptString) {
 	s.Explanation = val
 }
 
+type CreateFactBadRequest ErrorResponse
+
+func (*CreateFactBadRequest) createFactRes() {}
+
+type CreateFactForbidden ErrorResponse
+
+func (*CreateFactForbidden) createFactRes() {}
+
+type CreateFactInternalServerError ErrorResponse
+
+func (*CreateFactInternalServerError) createFactRes() {}
+
+type CreateFactNotFound ErrorResponse
+
+func (*CreateFactNotFound) createFactRes() {}
+
+// Ref: #/components/schemas/CreateFactRequest
+type CreateFactRequest struct {
+	Name string `json:"name"`
+}
+
+// GetName returns the value of Name.
+func (s *CreateFactRequest) GetName() string {
+	return s.Name
+}
+
+// SetName sets the value of Name.
+func (s *CreateFactRequest) SetName(val string) {
+	s.Name = val
+}
+
 type CreateSetBadRequest ErrorResponse
 
 func (*CreateSetBadRequest) createSetRes() {}
@@ -1026,8 +1069,8 @@ func (*CreateSetInternalServerError) createSetRes() {}
 
 // Ref: #/components/schemas/CreateSetRequest
 type CreateSetRequest struct {
-	Title string            `json:"title"`
-	Card  CreateCardRequest `json:"card"`
+	Title string               `json:"title"`
+	Card  OptCreateCardRequest `json:"card"`
 }
 
 // GetTitle returns the value of Title.
@@ -1036,7 +1079,7 @@ func (s *CreateSetRequest) GetTitle() string {
 }
 
 // GetCard returns the value of Card.
-func (s *CreateSetRequest) GetCard() CreateCardRequest {
+func (s *CreateSetRequest) GetCard() OptCreateCardRequest {
 	return s.Card
 }
 
@@ -1046,7 +1089,7 @@ func (s *CreateSetRequest) SetTitle(val string) {
 }
 
 // SetCard sets the value of Card.
-func (s *CreateSetRequest) SetCard(val CreateCardRequest) {
+func (s *CreateSetRequest) SetCard(val OptCreateCardRequest) {
 	s.Card = val
 }
 
@@ -1066,6 +1109,23 @@ func (*DeleteCardNoContent) deleteCardRes() {}
 type DeleteCardNotFound ErrorResponse
 
 func (*DeleteCardNotFound) deleteCardRes() {}
+
+type DeleteFactForbidden ErrorResponse
+
+func (*DeleteFactForbidden) deleteFactRes() {}
+
+type DeleteFactInternalServerError ErrorResponse
+
+func (*DeleteFactInternalServerError) deleteFactRes() {}
+
+// DeleteFactNoContent is response for DeleteFact operation.
+type DeleteFactNoContent struct{}
+
+func (*DeleteFactNoContent) deleteFactRes() {}
+
+type DeleteFactNotFound ErrorResponse
+
+func (*DeleteFactNotFound) deleteFactRes() {}
 
 type DeleteSetForbidden ErrorResponse
 
@@ -1114,6 +1174,166 @@ func (s *ErrorResponse) SetMessage(val string) {
 func (*ErrorResponse) getHealthRes()  {}
 func (*ErrorResponse) getProfileRes() {}
 
+// Ref: #/components/schemas/Fact
+type Fact struct {
+	ID    uuid.UUID `json:"id"`
+	SetId uuid.UUID `json:"setId"`
+	Name  string    `json:"name"`
+}
+
+// GetID returns the value of ID.
+func (s *Fact) GetID() uuid.UUID {
+	return s.ID
+}
+
+// GetSetId returns the value of SetId.
+func (s *Fact) GetSetId() uuid.UUID {
+	return s.SetId
+}
+
+// GetName returns the value of Name.
+func (s *Fact) GetName() string {
+	return s.Name
+}
+
+// SetID sets the value of ID.
+func (s *Fact) SetID(val uuid.UUID) {
+	s.ID = val
+}
+
+// SetSetId sets the value of SetId.
+func (s *Fact) SetSetId(val uuid.UUID) {
+	s.SetId = val
+}
+
+// SetName sets the value of Name.
+func (s *Fact) SetName(val string) {
+	s.Name = val
+}
+
+func (*Fact) createFactRes() {}
+
+// A card as the feed asks it, with nothing that gives the answer away.
+// Ref: #/components/schemas/FeedCard
+type FeedCard struct {
+	ID       uuid.UUID `json:"id"`
+	SetId    uuid.UUID `json:"setId"`
+	FactId   uuid.UUID `json:"factId"`
+	FactName string    `json:"factName"`
+	Kind     CardKind  `json:"kind"`
+	Question string    `json:"question"`
+	// Choice only.
+	Options []string     `json:"options"`
+	Table   OptFeedTable `json:"table"`
+}
+
+// GetID returns the value of ID.
+func (s *FeedCard) GetID() uuid.UUID {
+	return s.ID
+}
+
+// GetSetId returns the value of SetId.
+func (s *FeedCard) GetSetId() uuid.UUID {
+	return s.SetId
+}
+
+// GetFactId returns the value of FactId.
+func (s *FeedCard) GetFactId() uuid.UUID {
+	return s.FactId
+}
+
+// GetFactName returns the value of FactName.
+func (s *FeedCard) GetFactName() string {
+	return s.FactName
+}
+
+// GetKind returns the value of Kind.
+func (s *FeedCard) GetKind() CardKind {
+	return s.Kind
+}
+
+// GetQuestion returns the value of Question.
+func (s *FeedCard) GetQuestion() string {
+	return s.Question
+}
+
+// GetOptions returns the value of Options.
+func (s *FeedCard) GetOptions() []string {
+	return s.Options
+}
+
+// GetTable returns the value of Table.
+func (s *FeedCard) GetTable() OptFeedTable {
+	return s.Table
+}
+
+// SetID sets the value of ID.
+func (s *FeedCard) SetID(val uuid.UUID) {
+	s.ID = val
+}
+
+// SetSetId sets the value of SetId.
+func (s *FeedCard) SetSetId(val uuid.UUID) {
+	s.SetId = val
+}
+
+// SetFactId sets the value of FactId.
+func (s *FeedCard) SetFactId(val uuid.UUID) {
+	s.FactId = val
+}
+
+// SetFactName sets the value of FactName.
+func (s *FeedCard) SetFactName(val string) {
+	s.FactName = val
+}
+
+// SetKind sets the value of Kind.
+func (s *FeedCard) SetKind(val CardKind) {
+	s.Kind = val
+}
+
+// SetQuestion sets the value of Question.
+func (s *FeedCard) SetQuestion(val string) {
+	s.Question = val
+}
+
+// SetOptions sets the value of Options.
+func (s *FeedCard) SetOptions(val []string) {
+	s.Options = val
+}
+
+// SetTable sets the value of Table.
+func (s *FeedCard) SetTable(val OptFeedTable) {
+	s.Table = val
+}
+
+// The columns of a sorting card and the terms to lay out, without their places.
+// Ref: #/components/schemas/FeedTable
+type FeedTable struct {
+	Columns []string `json:"columns"`
+	Items   []string `json:"items"`
+}
+
+// GetColumns returns the value of Columns.
+func (s *FeedTable) GetColumns() []string {
+	return s.Columns
+}
+
+// GetItems returns the value of Items.
+func (s *FeedTable) GetItems() []string {
+	return s.Items
+}
+
+// SetColumns sets the value of Columns.
+func (s *FeedTable) SetColumns(val []string) {
+	s.Columns = val
+}
+
+// SetItems sets the value of Items.
+func (s *FeedTable) SetItems(val []string) {
+	s.Items = val
+}
+
 type GetAdminIssuesForbidden ErrorResponse
 
 func (*GetAdminIssuesForbidden) getAdminIssuesRes() {}
@@ -1142,6 +1362,22 @@ type GetCardsBySetIDOKApplicationJSON []Card
 
 func (*GetCardsBySetIDOKApplicationJSON) getCardsBySetIDRes() {}
 
+type GetFactsBySetIDForbidden ErrorResponse
+
+func (*GetFactsBySetIDForbidden) getFactsBySetIDRes() {}
+
+type GetFactsBySetIDInternalServerError ErrorResponse
+
+func (*GetFactsBySetIDInternalServerError) getFactsBySetIDRes() {}
+
+type GetFactsBySetIDNotFound ErrorResponse
+
+func (*GetFactsBySetIDNotFound) getFactsBySetIDRes() {}
+
+type GetFactsBySetIDOKApplicationJSON []Fact
+
+func (*GetFactsBySetIDOKApplicationJSON) getFactsBySetIDRes() {}
+
 type GetFeedQuestionsForbidden ErrorResponse
 
 func (*GetFeedQuestionsForbidden) getFeedQuestionsRes() {}
@@ -1150,7 +1386,7 @@ type GetFeedQuestionsInternalServerError ErrorResponse
 
 func (*GetFeedQuestionsInternalServerError) getFeedQuestionsRes() {}
 
-type GetFeedQuestionsOKApplicationJSON []Card
+type GetFeedQuestionsOKApplicationJSON []FeedCard
 
 func (*GetFeedQuestionsOKApplicationJSON) getFeedQuestionsRes() {}
 
@@ -1444,6 +1680,144 @@ func (o OptCardKind) Get() (v CardKind, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptCardKind) Or(d CardKind) CardKind {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptCardReveal returns new OptCardReveal with value set to v.
+func NewOptCardReveal(v CardReveal) OptCardReveal {
+	return OptCardReveal{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptCardReveal is optional CardReveal.
+type OptCardReveal struct {
+	Value CardReveal
+	Set   bool
+}
+
+// IsSet returns true if OptCardReveal was set.
+func (o OptCardReveal) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptCardReveal) Reset() {
+	var v CardReveal
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptCardReveal) SetTo(v CardReveal) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptCardReveal) Get() (v CardReveal, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptCardReveal) Or(d CardReveal) CardReveal {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptCreateCardRequest returns new OptCreateCardRequest with value set to v.
+func NewOptCreateCardRequest(v CreateCardRequest) OptCreateCardRequest {
+	return OptCreateCardRequest{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptCreateCardRequest is optional CreateCardRequest.
+type OptCreateCardRequest struct {
+	Value CreateCardRequest
+	Set   bool
+}
+
+// IsSet returns true if OptCreateCardRequest was set.
+func (o OptCreateCardRequest) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptCreateCardRequest) Reset() {
+	var v CreateCardRequest
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptCreateCardRequest) SetTo(v CreateCardRequest) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptCreateCardRequest) Get() (v CreateCardRequest, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptCreateCardRequest) Or(d CreateCardRequest) CreateCardRequest {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptFeedTable returns new OptFeedTable with value set to v.
+func NewOptFeedTable(v FeedTable) OptFeedTable {
+	return OptFeedTable{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptFeedTable is optional FeedTable.
+type OptFeedTable struct {
+	Value FeedTable
+	Set   bool
+}
+
+// IsSet returns true if OptFeedTable was set.
+func (o OptFeedTable) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptFeedTable) Reset() {
+	var v FeedTable
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptFeedTable) SetTo(v FeedTable) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptFeedTable) Get() (v FeedTable, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptFeedTable) Or(d FeedTable) FeedTable {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -1821,6 +2195,42 @@ type PutProfileInternalServerError ErrorResponse
 
 func (*PutProfileInternalServerError) putProfileRes() {}
 
+type ReorderCardsBadRequest ErrorResponse
+
+func (*ReorderCardsBadRequest) reorderCardsRes() {}
+
+type ReorderCardsForbidden ErrorResponse
+
+func (*ReorderCardsForbidden) reorderCardsRes() {}
+
+type ReorderCardsInternalServerError ErrorResponse
+
+func (*ReorderCardsInternalServerError) reorderCardsRes() {}
+
+// ReorderCardsNoContent is response for ReorderCards operation.
+type ReorderCardsNoContent struct{}
+
+func (*ReorderCardsNoContent) reorderCardsRes() {}
+
+type ReorderCardsNotFound ErrorResponse
+
+func (*ReorderCardsNotFound) reorderCardsRes() {}
+
+// Ref: #/components/schemas/ReorderCardsRequest
+type ReorderCardsRequest struct {
+	CardIds []uuid.UUID `json:"cardIds"`
+}
+
+// GetCardIds returns the value of CardIds.
+func (s *ReorderCardsRequest) GetCardIds() []uuid.UUID {
+	return s.CardIds
+}
+
+// SetCardIds sets the value of CardIds.
+func (s *ReorderCardsRequest) SetCardIds(val []uuid.UUID) {
+	s.CardIds = val
+}
+
 type ReportCardIssueBadRequest ErrorResponse
 
 func (*ReportCardIssueBadRequest) reportCardIssueRes() {}
@@ -1874,24 +2284,25 @@ type ResolveCardIssuesNotFound ErrorResponse
 
 func (*ResolveCardIssuesNotFound) resolveCardIssuesRes() {}
 
-type SendResultsBadRequest ErrorResponse
+type RevealCardBadRequest ErrorResponse
 
-func (*SendResultsBadRequest) sendResultsRes() {}
+func (*RevealCardBadRequest) revealCardRes() {}
 
-type SendResultsForbidden ErrorResponse
+type RevealCardConflict ErrorResponse
 
-func (*SendResultsForbidden) sendResultsRes() {}
+func (*RevealCardConflict) revealCardRes() {}
 
-type SendResultsInternalServerError ErrorResponse
+type RevealCardForbidden ErrorResponse
 
-func (*SendResultsInternalServerError) sendResultsRes() {}
+func (*RevealCardForbidden) revealCardRes() {}
 
-// SendResultsNoContent is response for SendResults operation.
-type SendResultsNoContent struct{}
+type RevealCardInternalServerError ErrorResponse
 
-func (*SendResultsNoContent) sendResultsRes() {}
+func (*RevealCardInternalServerError) revealCardRes() {}
 
-type SendResultsRequest []Answer
+type RevealCardNotFound ErrorResponse
+
+func (*RevealCardNotFound) revealCardRes() {}
 
 // Ref: #/components/schemas/SetIssue
 type SetIssue struct {
@@ -2238,6 +2649,78 @@ func (s *UpdateCardRequest) SetSourceQuote(val OptString) {
 // SetSourceRef sets the value of SourceRef.
 func (s *UpdateCardRequest) SetSourceRef(val OptString) {
 	s.SourceRef = val
+}
+
+type UpdateFactBadRequest ErrorResponse
+
+func (*UpdateFactBadRequest) updateFactRes() {}
+
+type UpdateFactForbidden ErrorResponse
+
+func (*UpdateFactForbidden) updateFactRes() {}
+
+type UpdateFactInternalServerError ErrorResponse
+
+func (*UpdateFactInternalServerError) updateFactRes() {}
+
+// UpdateFactNoContent is response for UpdateFact operation.
+type UpdateFactNoContent struct{}
+
+func (*UpdateFactNoContent) updateFactRes() {}
+
+type UpdateFactNotFound ErrorResponse
+
+func (*UpdateFactNotFound) updateFactRes() {}
+
+// Ref: #/components/schemas/UpdateFactRequest
+type UpdateFactRequest struct {
+	Name string `json:"name"`
+}
+
+// GetName returns the value of Name.
+func (s *UpdateFactRequest) GetName() string {
+	return s.Name
+}
+
+// SetName sets the value of Name.
+func (s *UpdateFactRequest) SetName(val string) {
+	s.Name = val
+}
+
+type UpdateSetBadRequest ErrorResponse
+
+func (*UpdateSetBadRequest) updateSetRes() {}
+
+type UpdateSetForbidden ErrorResponse
+
+func (*UpdateSetForbidden) updateSetRes() {}
+
+type UpdateSetInternalServerError ErrorResponse
+
+func (*UpdateSetInternalServerError) updateSetRes() {}
+
+// UpdateSetNoContent is response for UpdateSet operation.
+type UpdateSetNoContent struct{}
+
+func (*UpdateSetNoContent) updateSetRes() {}
+
+type UpdateSetNotFound ErrorResponse
+
+func (*UpdateSetNotFound) updateSetRes() {}
+
+// Ref: #/components/schemas/UpdateSetRequest
+type UpdateSetRequest struct {
+	Title string `json:"title"`
+}
+
+// GetTitle returns the value of Title.
+func (s *UpdateSetRequest) GetTitle() string {
+	return s.Title
+}
+
+// SetTitle sets the value of Title.
+func (s *UpdateSetRequest) SetTitle(val string) {
+	s.Title = val
 }
 
 // Ref: #/components/schemas/User

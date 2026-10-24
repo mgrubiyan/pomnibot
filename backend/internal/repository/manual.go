@@ -51,7 +51,9 @@ func (s *ManualStore) CreateSet(ctx context.Context, userID uuid.UUID, title str
 			if _, err = q.JoinSet(ctx, db.JoinSetParams{UserID: pgUserID, SetID: set.ID}); err != nil {
 				return err
 			}
-			_, err = insertManualCard(ctx, q, set.ID, req)
+			if req != nil {
+				_, err = insertManualCard(ctx, q, set.ID, req)
+			}
 			return err
 		})
 		var pgErr *pgconn.PgError
@@ -80,6 +82,11 @@ func (s *ManualStore) CreateCard(ctx context.Context, userID uuid.UUID, setID uu
 		return err
 	})
 	return cardID, err
+}
+
+// InTx runs fn in one transaction, for the writes of an answer.
+func (s *ManualStore) InTx(ctx context.Context, fn func(db.Querier) error) error {
+	return s.transaction(ctx, func(q *db.Queries) error { return fn(q) })
 }
 
 func (s *ManualStore) transaction(ctx context.Context, fn func(*db.Queries) error) error {

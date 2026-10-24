@@ -100,10 +100,10 @@ func TestManualCardsPostgres(t *testing.T) {
 		{Kind: contracts.CardKindChoice, Question: "Choice", Options: []string{"B", "A", "C"}, Answer: contracts.NewStringArrayCardAnswer([]string{"B", "A"})},
 		{Kind: contracts.CardKindTable, Question: "Table", Table: contracts.NewOptTableLayout(table), Answer: contracts.NewTableLayoutCardAnswer(table)},
 	}
-	if _, err := sets.CreateSet(ctx, user11, &contracts.CreateSetRequest{Title: " ", Card: requests[0]}); !errors.Is(err, usecase.ErrValidation) {
+	if _, err := sets.CreateSet(ctx, user11, &contracts.CreateSetRequest{Title: " ", Card: contracts.NewOptCreateCardRequest(requests[0])}); !errors.Is(err, usecase.ErrValidation) {
 		t.Fatalf("blank title: %v", err)
 	}
-	set, err := sets.CreateSet(ctx, user11, &contracts.CreateSetRequest{Title: " Manual ", Card: requests[0]})
+	set, err := sets.CreateSet(ctx, user11, &contracts.CreateSetRequest{Title: " Manual ", Card: contracts.NewOptCreateCardRequest(requests[0])})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestManualCardsPostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	got, err := sets.GetCardsBySetID(ctx, user22, set.ID)
+	got, err := sets.GetCardsBySetID(ctx, user11, set.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestManualCardsPostgres(t *testing.T) {
 		t.Fatalf("cards: %d", len(got))
 	}
 	for i, card := range got {
-		if card.Kind != requests[i].Kind || card.Question != requests[i].Question || !reflect.DeepEqual(card.Answer, requests[i].Answer) || card.FactId == uuid.Nil || card.FactName == "" || card.SourceQuote != "" || card.Explanation != "" {
+		if card.Kind != requests[i].Kind || card.Question != requests[i].Question || !reflect.DeepEqual(card.Answer.Value, requests[i].Answer) || card.FactId == uuid.Nil || card.FactName == "" || card.SourceQuote.Value != "" || card.Explanation.Value != "" {
 			t.Fatalf("roundtrip %d: %+v", i, card)
 		}
 		if i == 3 && !reflect.DeepEqual(card.Options, requests[i].Options) {

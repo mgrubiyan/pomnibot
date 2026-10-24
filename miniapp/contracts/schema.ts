@@ -71,6 +71,77 @@ export interface paths {
         delete: operations["DeleteSet"];
         options?: never;
         head?: never;
+        /** Update set title */
+        patch: operations["UpdateSet"];
+        trace?: never;
+    };
+    "/sets/{setId}/facts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get facts of a set */
+        get: operations["GetFactsBySetID"];
+        put?: never;
+        /** Create a fact in a set */
+        post: operations["CreateFact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/facts/{factId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a fact */
+        delete: operations["DeleteFact"];
+        options?: never;
+        head?: never;
+        /** Update fact name */
+        patch: operations["UpdateFact"];
+        trace?: never;
+    };
+    "/facts/{factId}/cards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a card in a fact */
+        post: operations["CreateCardInFact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/facts/{factId}/cards/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Reorder cards in a fact */
+        put: operations["ReorderCards"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -81,7 +152,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get cards */
+        /**
+         * Get cards
+         * @description The author gets whole cards; a member gets only the questions, without answers, options, tables, explanations and quotes.
+         */
         get: operations["GetCardsBySetID"];
         put?: never;
         /** CreateCard */
@@ -184,27 +258,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get questions of current feed */
+        /**
+         * Get questions of current feed
+         * @description Questions only: what answers a card comes back from AnswerQuestion, or from RevealCard for a flip card.
+         */
         get: operations["GetFeedQuestions"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/results": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Send set/feed results */
-        post: operations["SendResults"];
         delete?: never;
         options?: never;
         head?: never;
@@ -238,7 +298,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Send answer's text for input kind of questions */
+        /**
+         * Answer a card of the current feed and record the verdict
+         * @description Only the card the feed shows for a due fact is graded and recorded; asked again after that, the endpoint repeats the recorded verdict. A typed answer need not match word for word: form, word order and typos do not matter, and answers in other words are judged by a language model. When the model does not answer in time nothing is recorded and the method is fallback: ask again. A card the feed does not ask and the reader has never answered gets 409.
+         */
         post: operations["AnswerQuestion"];
         delete?: never;
         options?: never;
@@ -246,7 +309,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/cards/{cardId}/check": {
+    "/cards/{cardId}/reveal": {
         parameters: {
             query?: never;
             header?: never;
@@ -256,10 +319,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Check a typed answer by meaning without recording it
-         * @description The answer need not match word for word: form, word order and typos do not matter, and answers in other words are judged by a language model. Nothing is recorded: the feed sends results with SendResults.
+         * Show the answer of a flip card before the reader grades themselves
+         * @description Flip cards only, and only the card of the current feed or one the reader has answered. Recording the grade is AnswerQuestion's job.
          */
-        post: operations["CheckAnswer"];
+        post: operations["RevealCard"];
         delete?: never;
         options?: never;
         head?: never;
@@ -380,6 +443,7 @@ export interface components {
         CardKind: "choice" | "flip" | "input" | "boolean" | "table";
         /** @description choice - string[] (all correct option texts); legacy string/integer supported input - string boolean - boolean table - #/components/schemas/TableLayout */
         CardAnswer: string[] | number | string | boolean | components["schemas"]["TableLayout"];
+        /** @description answer, explanation and sourceQuote are absent only in a set member's list of the set's cards. */
         Card: {
             /** Format: uuid */
             id: string;
@@ -393,17 +457,64 @@ export interface components {
             /** @description choice only */
             options?: string[];
             table?: components["schemas"]["TableLayout"];
-            answer: components["schemas"]["CardAnswer"];
+            answer?: components["schemas"]["CardAnswer"];
             /** @description 2-3 sentences */
-            explanation: string;
+            explanation?: string;
             /** @description quote from the notes */
-            sourceQuote: string;
+            sourceQuote?: string;
             /** @description where the quote is from: «Лекция 3, стр. 2» */
+            sourceRef?: string;
+            step?: number;
+        };
+        Fact: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            setId: string;
+            name: string;
+        };
+        CreateFactRequest: {
+            name: string;
+        };
+        UpdateFactRequest: {
+            name: string;
+        };
+        UpdateSetRequest: {
+            title: string;
+        };
+        ReorderCardsRequest: {
+            cardIds: string[];
+        };
+        /** @description A card as the feed asks it, with nothing that gives the answer away. */
+        FeedCard: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            setId: string;
+            /** Format: uuid */
+            factId: string;
+            factName: string;
+            kind: components["schemas"]["CardKind"];
+            question: string;
+            /** @description choice only */
+            options?: string[];
+            table?: components["schemas"]["FeedTable"];
+        };
+        /** @description The columns of a sorting card and the terms to lay out, without their places. */
+        FeedTable: {
+            columns: string[];
+            items: string[];
+        };
+        /** @description What a feed card hides until it is answered. */
+        CardReveal: {
+            answer: components["schemas"]["CardAnswer"];
+            explanation: string;
+            sourceQuote: string;
             sourceRef?: string;
         };
         CreateSetRequest: {
             title: string;
-            card: components["schemas"]["CreateCardRequest"];
+            card?: components["schemas"]["CreateCardRequest"];
         };
         CreateCardRequest: {
             kind: components["schemas"]["CardKind"];
@@ -535,33 +646,21 @@ export interface components {
             /** @description The user sees every complaint, at GET /admin/issues */
             isAdmin?: boolean;
         };
-        Answer: {
-            /** Format: uuid */
-            cardId: string;
-            correct: boolean;
-        };
-        SendResultsRequest: components["schemas"]["Answer"][];
         AnswerQuestionRequest: {
-            /** @description Typed answer, or a JSON-encoded array of selected option texts for choice */
+            /** @description input: the typed answer; choice: a JSON-encoded array of the selected option texts; boolean: true or false; table: a JSON-encoded array of TableItem, every term with the column it was put in; flip: true when the reader knew the answer, false when not */
             answer: string;
         };
-        CheckAnswerRequest: {
-            /** @description Typed answer, or a JSON-encoded array of selected option texts for choice */
-            answer: string;
-        };
-        CheckAnswerResponse: {
+        AnswerQuestionResponse: {
             isCorrect: boolean;
             /** @description Why the answer counts or what it lacks, when a model judged it */
             reason?: string;
             /**
-             * @description local: matched up to form and typos, or surely wrong; model: judged by meaning; fallback: the model did not answer in time, local verdict
+             * @description local: graded without a model (a typed answer matched up to form and typos, or surely wrong); model: judged by meaning; fallback: the model did not answer in time, nothing was recorded, ask again
              * @enum {string}
              */
             method: "local" | "model" | "fallback";
-        };
-        AnswerQuestionResponse: {
-            isCorrect: boolean;
-            userAnswer: string;
+            /** @description Absent when the method is fallback */
+            reveal?: components["schemas"]["CardReveal"];
         };
     };
     responses: {
@@ -576,6 +675,15 @@ export interface components {
         };
         /** @description Resource not found */
         NotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description The feed does not ask this card now, and the reader has never answered it */
+        NotInFeed: {
             headers: {
                 [name: string]: unknown;
             };
@@ -750,6 +858,198 @@ export interface operations {
                 };
                 content?: never;
             };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    UpdateSet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                setId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSetRequest"];
+            };
+        };
+        responses: {
+            /** @description Card set updated successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    GetFactsBySetID: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                setId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Facts retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Fact"][];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    CreateFact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                setId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateFactRequest"];
+            };
+        };
+        responses: {
+            /** @description Fact created successfully */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Fact"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    DeleteFact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                factId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fact deleted successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    UpdateFact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                factId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateFactRequest"];
+            };
+        };
+        responses: {
+            /** @description Fact updated successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    CreateCardInFact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                factId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCardRequest"];
+            };
+        };
+        responses: {
+            /** @description Card created successfully */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Card"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    ReorderCards: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                factId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderCardsRequest"];
+            };
+        };
+        responses: {
+            /** @description Cards reordered successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
@@ -953,34 +1253,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Card"][];
+                    "application/json": components["schemas"]["FeedCard"][];
                 };
             };
-            403: components["responses"]["Forbidden"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    SendResults: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SendResultsRequest"];
-            };
-        };
-        responses: {
-            /** @description Results was sent */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalServerError"];
         };
@@ -1068,10 +1343,11 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["NotInFeed"];
             500: components["responses"]["InternalServerError"];
         };
     };
-    CheckAnswer: {
+    RevealCard: {
         parameters: {
             query?: never;
             header?: never;
@@ -1081,11 +1357,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CheckAnswerRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Ok */
             200: {
@@ -1093,12 +1365,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CheckAnswerResponse"];
+                    "application/json": components["schemas"]["CardReveal"];
                 };
             };
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["NotInFeed"];
             500: components["responses"]["InternalServerError"];
         };
     };

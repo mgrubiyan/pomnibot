@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -90,7 +89,9 @@ func (s *homescreenServiceImpl) GetToday(ctx context.Context, userID uuid.UUID) 
 	}, nil
 }
 
-func (s *homescreenServiceImpl) GetFeedQuestions(ctx context.Context, userID uuid.UUID) ([]contracts.Card, error) {
+// GetFeedQuestions asks the cards of the due facts, without their answers:
+// those come back from AnswerQuestion.
+func (s *homescreenServiceImpl) GetFeedQuestions(ctx context.Context, userID uuid.UUID) ([]contracts.FeedCard, error) {
 	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return nil, err
 	}
@@ -114,12 +115,15 @@ func (s *homescreenServiceImpl) GetFeedQuestions(ctx context.Context, userID uui
 	if err != nil {
 		return nil, err
 	}
-	builder := *s
-	builder.querier = details
 
-	cards := make([]contracts.Card, 0, len(rows))
+	cards := make([]contracts.FeedCard, 0, len(rows))
 	for _, r := range rows {
-		c, err := builder.buildFeedCard(ctx, r)
+		card := storedCard(r)
+		d, err := loadDetails(ctx, details, card)
+		if err != nil {
+			return nil, err
+		}
+		c, err := feedCardOf(card, d)
 		if err != nil {
 			return nil, err
 		}
@@ -127,133 +131,4 @@ func (s *homescreenServiceImpl) GetFeedQuestions(ctx context.Context, userID uui
 	}
 
 	return cards, nil
-}
-
-func (s *homescreenServiceImpl) SendResults(ctx context.Context, userID uuid.UUID, results []contracts.Answer) error {
-	if err := s.userService.EnsureUser(ctx, userID); err != nil {
-		return err
-	}
-
-	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
-	for _, res := range results {
-		var pgCardID pgtype.UUID
-		if err := pgCardID.Scan(res.CardId.String()); err != nil {
-			return fmt.Errorf("%w: invalid card id %s", ErrValidation, res.CardId)
-		}
-
-		card, err := s.querier.GetCardByID(ctx, db.GetCardByIDParams{
-			ID:     pgCardID,
-			UserID: pgUserID,
-		})
-		if err != nil {
-			return fmt.Errorf("card %s not found: %w", res.CardId, ErrNotFound)
-		}
-
-		_, err = s.querier.RecordAnswer(ctx, db.RecordAnswerParams{
-			UserID:  pgUserID,
-			CardID:  pgCardID,
-			Correct: res.Correct,
-		})
-		if err != nil {
-			return fmt.Errorf("record answer: %w", err)
-		}
-
-		if err := processFactAnswer(ctx, s.querier, pgUserID, card.FactID, res.Correct); err != nil {
-			return fmt.Errorf("process fact answer: %w", err)
-		}
-	}
-
-	return nil
-}
-
-func (s *homescreenServiceImpl) buildFeedCard(ctx context.Context, r db.GetFeedCardsForUserRow) (contracts.Card, error) {
-	cardUUID, err := uuid.FromBytes(r.ID.Bytes[:])
-	if err != nil {
-		return contracts.Card{}, fmt.Errorf("parse card uuid: %w", err)
-	}
-	setUUID, err := uuid.FromBytes(r.SetID.Bytes[:])
-	if err != nil {
-		return contracts.Card{}, fmt.Errorf("parse set uuid: %w", err)
-	}
-
-	factUUID, err := uuid.FromBytes(r.FactID.Bytes[:])
-	if err != nil {
-		return contracts.Card{}, fmt.Errorf("parse fact uuid: %w", err)
-	}
-
-	cardKind := contracts.CardKind(r.Kind)
-	card := contracts.Card{
-		ID:          cardUUID,
-		SetId:       setUUID,
-		FactId:      factUUID,
-		FactName:    r.FactName,
-		Kind:        cardKind,
-		Question:    r.Question,
-		Explanation: r.Explanation,
-		SourceQuote: r.SourceQuote,
-	}
-
-	if r.SourceRef.Valid && r.SourceRef.String != "" {
-		card.SourceRef.SetTo(r.SourceRef.String)
-	}
-
-	ansStr := ""
-	if r.AnswerText.Valid {
-		ansStr = r.AnswerText.String
-	}
-
-	switch cardKind {
-	case contracts.CardKindChoice:
-		opts, err := s.querier.GetCardOptions(ctx, r.ID)
-		if err != nil {
-			return contracts.Card{}, fmt.Errorf("get card options: %w", err)
-		}
-		card.Options = make([]string, 0, len(opts))
-		for _, o := range opts {
-			card.Options = append(card.Options, o.Text)
-		}
-		card.Answer = choiceAnswer(opts, ansStr)
-
-	case contracts.CardKindBoolean:
-		b, _ := strconv.ParseBool(ansStr)
-		card.Answer = contracts.CardAnswer{
-			Type: contracts.BoolCardAnswer,
-			Bool: b,
-		}
-	case contracts.CardKindTable:
-		cols, err := s.querier.GetCardTableColumns(ctx, r.ID)
-		if err != nil {
-			return contracts.Card{}, fmt.Errorf("get card table columns: %w", err)
-		}
-		items, err := s.querier.GetCardTableItems(ctx, r.ID)
-		if err != nil {
-			return contracts.Card{}, fmt.Errorf("get card table items: %w", err)
-		}
-
-		tableLayout := contracts.TableLayout{
-			Columns: make([]string, 0, len(cols)),
-			Items:   make([]contracts.TableItem, 0, len(items)),
-		}
-		for _, col := range cols {
-			tableLayout.Columns = append(tableLayout.Columns, col.Name)
-		}
-		for _, item := range items {
-			tableLayout.Items = append(tableLayout.Items, contracts.TableItem{
-				Text:   item.ItemText,
-				Column: item.ColumnName,
-			})
-		}
-		card.Table.SetTo(tableLayout)
-		card.Answer = contracts.CardAnswer{
-			Type:        contracts.TableLayoutCardAnswer,
-			TableLayout: tableLayout,
-		}
-	default:
-		card.Answer = contracts.CardAnswer{
-			Type:   contracts.StringCardAnswer,
-			String: ansStr,
-		}
-	}
-
-	return card, nil
 }
