@@ -171,13 +171,12 @@ function labelOf(card: FeedCard, value: string): string {
     return value === 'true' ? 'Верно' : 'Неверно';
 }
 
-async function loadCards(setId?: string): Promise<FeedCard[]> {
-    const { data, error } = await api.GET('/feed');
+async function loadCards(setId?: string, early?: boolean): Promise<FeedCard[]> {
+    const { data, error } = await api.GET('/feed', {
+        params: { query: { setId, early } },
+    });
     if (error || !data) {
         throw new Error(error?.message ?? 'Failed to load feed');
-    }
-    if (setId) {
-        return data.filter((card) => card.setId === setId);
     }
     return data;
 }
@@ -187,6 +186,8 @@ export interface FeedProps {
     setId?: string;
     /** Title of that set, for the result screen. */
     setTitle?: string;
+    /** Whether set is studied ahead of FSRS schedule. */
+    early?: boolean;
     /** Cards deleted and edited during this session. */
     removedCardIds: string[];
     cardPatches: Record<string, CardPatch>;
@@ -205,6 +206,7 @@ export interface FeedProps {
 export function Feed({
     setId,
     setTitle,
+    early,
     removedCardIds,
     cardPatches,
     resume,
@@ -267,7 +269,7 @@ export function Feed({
         }
         let cancelled = false;
 
-        loadCards(setId)
+        loadCards(setId, early)
             .then((next) => {
                 if (cancelled) {
                     return;
@@ -284,7 +286,7 @@ export function Feed({
         return () => {
             cancelled = true;
         };
-    }, [attempt, resume, setId, removedCardIds, cardPatches]);
+    }, [attempt, resume, setId, early, removedCardIds, cardPatches]);
 
     const retry = () => {
         passedRef.current = cards.slice(0, index);

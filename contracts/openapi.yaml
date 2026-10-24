@@ -553,6 +553,20 @@ paths:
         Questions only: what answers a card comes back from AnswerQuestion,
         or from RevealCard for a flip card.
       operationId: GetFeedQuestions
+      parameters:
+        - name: setId
+          in: query
+          required: false
+          description: Filter questions by set, or request set questions for review
+          schema:
+            type: string
+            format: uuid
+        - name: early
+          in: query
+          required: false
+          description: When true and setId is provided, includes set cards even if not yet due according to FSRS
+          schema:
+            type: boolean
       responses:
         '403':
           $ref: '#/components/responses/Forbidden'

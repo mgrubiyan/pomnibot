@@ -195,11 +195,11 @@ func (h *APIHandler) GetToday(ctx context.Context) (contracts.GetTodayRes, error
 }
 
 // GetFeedQuestions implements contracts.Handler.GetFeedQuestions.
-func (h *APIHandler) GetFeedQuestions(ctx context.Context) (contracts.GetFeedQuestionsRes, error) {
+func (h *APIHandler) GetFeedQuestions(ctx context.Context, params contracts.GetFeedQuestionsParams) (contracts.GetFeedQuestionsRes, error) {
 	if h.homescreen != nil {
-		return h.homescreen.GetFeedQuestions(ctx)
+		return h.homescreen.GetFeedQuestions(ctx, params)
 	}
-	return h.UnimplementedHandler.GetFeedQuestions(ctx)
+	return h.UnimplementedHandler.GetFeedQuestions(ctx, params)
 }
 
 // CreateSet delegates manual creation.

@@ -106,7 +106,7 @@ type Invoker interface {
 	// card.
 	//
 	// GET /feed
-	GetFeedQuestions(ctx context.Context) (GetFeedQuestionsRes, error)
+	GetFeedQuestions(ctx context.Context, params GetFeedQuestionsParams) (GetFeedQuestionsRes, error)
 	// GetHealth invokes getHealth operation.
 	//
 	// Health check endpoint.
@@ -1328,12 +1328,12 @@ func (c *Client) sendGetFactsBySetID(ctx context.Context, params GetFactsBySetID
 // card.
 //
 // GET /feed
-func (c *Client) GetFeedQuestions(ctx context.Context) (GetFeedQuestionsRes, error) {
-	res, err := c.sendGetFeedQuestions(ctx)
+func (c *Client) GetFeedQuestions(ctx context.Context, params GetFeedQuestionsParams) (GetFeedQuestionsRes, error) {
+	res, err := c.sendGetFeedQuestions(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendGetFeedQuestions(ctx context.Context) (res GetFeedQuestionsRes, err error) {
+func (c *Client) sendGetFeedQuestions(ctx context.Context, params GetFeedQuestionsParams) (res GetFeedQuestionsRes, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("GetFeedQuestions"),
 		semconv.HTTPRequestMethodKey.String("GET"),
@@ -1373,6 +1373,44 @@ func (c *Client) sendGetFeedQuestions(ctx context.Context) (res GetFeedQuestions
 	var pathParts [1]string
 	pathParts[0] = "/feed"
 	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeQueryParams"
+	q := uri.NewQueryEncoder()
+	{
+		// Encode "setId" parameter.
+		cfg := uri.QueryParameterEncodingConfig{
+			Name:    "setId",
+			Style:   uri.QueryStyleForm,
+			Explode: true,
+		}
+
+		if err := q.EncodeParam(cfg, func(e uri.Encoder) error {
+			if val, ok := params.SetId.Get(); ok {
+				return e.EncodeValue(conv.UUIDToString(val))
+			}
+			return nil
+		}); err != nil {
+			return res, errors.Wrap(err, "encode query")
+		}
+	}
+	{
+		// Encode "early" parameter.
+		cfg := uri.QueryParameterEncodingConfig{
+			Name:    "early",
+			Style:   uri.QueryStyleForm,
+			Explode: true,
+		}
+
+		if err := q.EncodeParam(cfg, func(e uri.Encoder) error {
+			if val, ok := params.Early.Get(); ok {
+				return e.EncodeValue(conv.BoolToString(val))
+			}
+			return nil
+		}); err != nil {
+			return res, errors.Wrap(err, "encode query")
+		}
+	}
+	u.RawQuery = q.Values().Encode()
 
 	stage = "EncodeRequest"
 	r, err := ht.NewRequest(ctx, "GET", u)

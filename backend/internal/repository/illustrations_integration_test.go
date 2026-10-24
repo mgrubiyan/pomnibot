@@ -47,7 +47,7 @@ func TestIllustrationsRoundTripAndEditPostgres(t *testing.T) {
 		}
 	}
 	assertSVG(all[0])
-	feed, err := home.GetFeedQuestions(ctx, owner)
+	feed, err := home.GetFeedQuestions(ctx, owner, usecase.FeedOptions{})
 	if err != nil || len(feed) != 1 {
 		t.Fatalf("feed: %v %v", feed, err)
 	}

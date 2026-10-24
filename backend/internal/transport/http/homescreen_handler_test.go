@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
+	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
 var (
@@ -17,7 +18,7 @@ var (
 
 type mockHomescreenService struct {
 	getTodayFunc         func(ctx context.Context, userID uuid.UUID) (*contracts.TodayData, error)
-	getFeedQuestionsFunc func(ctx context.Context, userID uuid.UUID) ([]contracts.FeedCard, error)
+	getFeedQuestionsFunc func(ctx context.Context, userID uuid.UUID, opts usecase.FeedOptions) ([]contracts.FeedCard, error)
 }
 
 func (m *mockHomescreenService) GetToday(ctx context.Context, userID uuid.UUID) (*contracts.TodayData, error) {
@@ -27,9 +28,9 @@ func (m *mockHomescreenService) GetToday(ctx context.Context, userID uuid.UUID) 
 	return nil, nil
 }
 
-func (m *mockHomescreenService) GetFeedQuestions(ctx context.Context, userID uuid.UUID) ([]contracts.FeedCard, error) {
+func (m *mockHomescreenService) GetFeedQuestions(ctx context.Context, userID uuid.UUID, opts usecase.FeedOptions) ([]contracts.FeedCard, error) {
 	if m.getFeedQuestionsFunc != nil {
-		return m.getFeedQuestionsFunc(ctx, userID)
+		return m.getFeedQuestionsFunc(ctx, userID, opts)
 	}
 	return nil, nil
 }
@@ -221,6 +222,7 @@ func TestHomescreenHandler_GetFeedQuestions(t *testing.T) {
 	tests := []struct {
 		name         string
 		ctx          context.Context
+		params       contracts.GetFeedQuestionsParams
 		mockSetup    func(t *testing.T) *mockHomescreenService
 		wantResType  any
 		checkResFunc func(t *testing.T, res contracts.GetFeedQuestionsRes)
@@ -230,7 +232,7 @@ func TestHomescreenHandler_GetFeedQuestions(t *testing.T) {
 			ctx:  WithUserID(context.Background(), testHomeUserID),
 			mockSetup: func(t *testing.T) *mockHomescreenService {
 				return &mockHomescreenService{
-					getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID) ([]contracts.FeedCard, error) {
+					getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID, _ usecase.FeedOptions) ([]contracts.FeedCard, error) {
 						if userID != testHomeUserID {
 							t.Fatalf("unexpected userID: %s", userID)
 						}
@@ -253,11 +255,45 @@ func TestHomescreenHandler_GetFeedQuestions(t *testing.T) {
 			},
 		},
 		{
+			name: "Success with setId and early flags propagated to service",
+			ctx:  WithUserID(context.Background(), testHomeUserID),
+			params: contracts.GetFeedQuestionsParams{
+				SetId: contracts.NewOptUUID(card1.SetId),
+				Early: contracts.NewOptBool(true),
+			},
+			mockSetup: func(t *testing.T) *mockHomescreenService {
+				return &mockHomescreenService{
+					getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID, opts usecase.FeedOptions) ([]contracts.FeedCard, error) {
+						if userID != testHomeUserID {
+							t.Fatalf("unexpected userID: %s", userID)
+						}
+						if opts.SetID == nil || *opts.SetID != card1.SetId {
+							t.Fatalf("expected SetID %s, got %v", card1.SetId, opts.SetID)
+						}
+						if !opts.Early {
+							t.Fatalf("expected Early true")
+						}
+						return []contracts.FeedCard{card1}, nil
+					},
+				}
+			},
+			wantResType: (*contracts.GetFeedQuestionsOKApplicationJSON)(nil),
+			checkResFunc: func(t *testing.T, res contracts.GetFeedQuestionsRes) {
+				feed, ok := res.(*contracts.GetFeedQuestionsOKApplicationJSON)
+				if !ok {
+					t.Fatalf("expected *contracts.GetFeedQuestionsOKApplicationJSON, got %T", res)
+				}
+				if len(*feed) != 1 || (*feed)[0].ID != card1.ID {
+					t.Fatalf("unexpected cards returned: %+v", *feed)
+				}
+			},
+		},
+		{
 			name: "Empty feed returns empty slice and not nil",
 			ctx:  WithUserID(context.Background(), testHomeUserID),
 			mockSetup: func(_ *testing.T) *mockHomescreenService {
 				return &mockHomescreenService{
-					getFeedQuestionsFunc: func(_ context.Context, _ uuid.UUID) ([]contracts.FeedCard, error) {
+					getFeedQuestionsFunc: func(_ context.Context, _ uuid.UUID, _ usecase.FeedOptions) ([]contracts.FeedCard, error) {
 						return nil, nil
 					},
 				}
@@ -281,7 +317,7 @@ func TestHomescreenHandler_GetFeedQuestions(t *testing.T) {
 			ctx:  context.Background(),
 			mockSetup: func(t *testing.T) *mockHomescreenService {
 				return &mockHomescreenService{
-					getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID) ([]contracts.FeedCard, error) {
+					getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID, _ usecase.FeedOptions) ([]contracts.FeedCard, error) {
 						if userID != uuid.Nil {
 							t.Fatalf("expected fallback userID 0, got %d", userID)
 						}
@@ -296,7 +332,7 @@ func TestHomescreenHandler_GetFeedQuestions(t *testing.T) {
 			ctx:  WithUserID(context.Background(), testHomeUser54321),
 			mockSetup: func(t *testing.T) *mockHomescreenService {
 				return &mockHomescreenService{
-					getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID) ([]contracts.FeedCard, error) {
+					getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID, _ usecase.FeedOptions) ([]contracts.FeedCard, error) {
 						if userID != testHomeUser54321 {
 							t.Fatalf("expected userID 54321, got %d", userID)
 						}
@@ -321,7 +357,7 @@ func TestHomescreenHandler_GetFeedQuestions(t *testing.T) {
 			ctx:  WithUserID(context.Background(), testHomeUserID),
 			mockSetup: func(t *testing.T) *mockHomescreenService {
 				return &mockHomescreenService{
-					getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID) ([]contracts.FeedCard, error) {
+					getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID, _ usecase.FeedOptions) ([]contracts.FeedCard, error) {
 						if userID != testHomeUserID {
 							t.Fatalf("unexpected userID: %s", userID)
 						}
@@ -347,7 +383,7 @@ func TestHomescreenHandler_GetFeedQuestions(t *testing.T) {
 			svc := tc.mockSetup(t)
 			handler := NewHomescreenHandler(svc)
 
-			res, err := handler.GetFeedQuestions(tc.ctx)
+			res, err := handler.GetFeedQuestions(tc.ctx, tc.params)
 			if err != nil {
 				t.Fatalf("unexpected error from handler: %v", err)
 			}

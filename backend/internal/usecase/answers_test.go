@@ -43,6 +43,12 @@ func newAnswerFixture(card db.GetCardByIDRow) *answerFixture {
 		}
 		return []db.GetFeedCardsForUserRow{db.GetFeedCardsForUserRow(f.card)}, nil
 	}
+	f.getSetFeedCardsForUserFunc = func(context.Context, db.GetSetFeedCardsForUserParams) ([]db.GetSetFeedCardsForUserRow, error) {
+		if !f.inFeed.Load() {
+			return nil, nil
+		}
+		return []db.GetSetFeedCardsForUserRow{db.GetSetFeedCardsForUserRow(f.card)}, nil
+	}
 	f.getLastAnswerFunc = func(context.Context, db.GetLastAnswerParams) (bool, error) {
 		if v := f.last.Load(); v != nil {
 			return *v, nil
@@ -398,7 +404,7 @@ func TestGetFeedQuestionsHidesAnswers(t *testing.T) {
 		},
 	}
 	batches := &detailBatchQuerier{mockQuerier: *q}
-	cards, err := usecase.NewHomescreenService(batches, usecase.NewUserService(batches)).GetFeedQuestions(context.Background(), testUser1)
+	cards, err := usecase.NewHomescreenService(batches, usecase.NewUserService(batches)).GetFeedQuestions(context.Background(), testUser1, usecase.FeedOptions{})
 	if err != nil || len(cards) != 1 {
 		t.Fatalf("GetFeedQuestions() = %+v, %v", cards, err)
 	}
@@ -457,7 +463,7 @@ func TestGetFeedQuestionsShufflesOptionsAndTerms(t *testing.T) {
 	svc := usecase.NewHomescreenService(q, usecase.NewUserService(q))
 	firstOption, firstTerm := map[string]bool{}, map[string]bool{}
 	for range 40 {
-		cards, err := svc.GetFeedQuestions(context.Background(), testUser1)
+		cards, err := svc.GetFeedQuestions(context.Background(), testUser1, usecase.FeedOptions{})
 		if err != nil || len(cards) != 2 || len(cards[0].Options) != 4 || len(cards[1].Table.Value.Items) != 4 {
 			t.Fatalf("GetFeedQuestions() = %+v, %v", cards, err)
 		}
@@ -498,4 +504,69 @@ func (shuffleDetails) GetCardTableItemsBatch(_ context.Context, ids []pgtype.UUI
 		}
 	}
 	return rows, nil
+}
+
+func TestGetFeedQuestions_EarlyReviewForSet(t *testing.T) {
+	setID := uuid.New()
+	card := testCard("choice", `["A"]`)
+	card.SetID = pgtype.UUID{Bytes: setID, Valid: true}
+
+	var getSetFeedCalled bool
+	q := &mockQuerier{
+		getFeedCardsForUserFunc: func(context.Context, pgtype.UUID) ([]db.GetFeedCardsForUserRow, error) {
+			// Regular feed has no cards due
+			return nil, nil
+		},
+		getSetFeedCardsForUserFunc: func(_ context.Context, arg db.GetSetFeedCardsForUserParams) ([]db.GetSetFeedCardsForUserRow, error) {
+			if arg.SetID.Bytes != setID {
+				t.Fatalf("expected SetID %v, got %v", setID, arg.SetID)
+			}
+			getSetFeedCalled = true
+			return []db.GetSetFeedCardsForUserRow{db.GetSetFeedCardsForUserRow(card)}, nil
+		},
+	}
+	batches := &detailBatchQuerier{mockQuerier: *q}
+	svc := usecase.NewHomescreenService(batches, usecase.NewUserService(batches))
+
+	cards, err := svc.GetFeedQuestions(context.Background(), testUser1, usecase.FeedOptions{
+		SetID: &setID,
+		Early: true,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !getSetFeedCalled {
+		t.Fatal("expected GetSetFeedCardsForUser to be called")
+	}
+	if len(cards) != 1 || cards[0].ID != uuid.UUID(card.ID.Bytes) {
+		t.Fatalf("unexpected cards: %+v", cards)
+	}
+}
+
+func TestAnswerQuestion_EarlyReview(t *testing.T) {
+	card := testCard("boolean", "true")
+	f := newAnswerFixture(card)
+	// Regular feed has no cards (card is NOT due)
+	f.getFeedCardsForUserFunc = func(context.Context, pgtype.UUID) ([]db.GetFeedCardsForUserRow, error) {
+		return nil, nil
+	}
+	// Early review feed has the card
+	f.getSetFeedCardsForUserFunc = func(_ context.Context, _ db.GetSetFeedCardsForUserParams) ([]db.GetSetFeedCardsForUserRow, error) {
+		if !f.inFeed.Load() {
+			return nil, nil
+		}
+		return []db.GetSetFeedCardsForUserRow{db.GetSetFeedCardsForUserRow(f.card)}, nil
+	}
+
+	svc := usecase.NewCardService(f, usecase.NewUserService(f))
+	res, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(card.ID.Bytes), "true")
+	if err != nil {
+		t.Fatalf("expected success for early review, got: %v", err)
+	}
+	if !res.IsCorrect {
+		t.Fatalf("expected IsCorrect true, got %v", res.IsCorrect)
+	}
+	if f.recorded.Load() != 1 {
+		t.Fatalf("expected answer to be recorded, got %d", f.recorded.Load())
+	}
 }

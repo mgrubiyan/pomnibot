@@ -788,6 +788,130 @@ func (q *Queries) GetMaxCardStepInFact(ctx context.Context, factID pgtype.UUID) 
 	return max_step, err
 }
 
+const getSetFeedCardsForUser = `-- name: GetSetFeedCardsForUser :many
+WITH set_facts AS (
+    SELECT
+        f.id AS fact_id,
+        f.set_id,
+        f.name AS fact_name,
+        COALESCE(ufp.step, 0) AS step,
+        COALESCE(ufp.next_review_at, '1970-01-01'::timestamptz) AS due_time
+    FROM user_sets us
+    JOIN facts f ON us.set_id = f.set_id
+    LEFT JOIN user_fact_progress ufp ON ufp.fact_id = f.id AND ufp.user_id = us.user_id
+    WHERE us.user_id = $1
+      AND us.set_id = $2
+),
+ranked_cards AS (
+    SELECT
+        c.id,
+        sf.set_id,
+        c.fact_id,
+        sf.fact_name,
+        c.kind,
+        c.question,
+        c.answer_text,
+        c.explanation,
+        c.question_svg,
+        c.explanation_svg,
+        c.source_quote,
+        c.source_ref,
+        c.updated_at,
+        sf.due_time,
+        sf.step,
+        ROW_NUMBER() OVER (
+            PARTITION BY c.fact_id
+            ORDER BY c.step ASC, c.id ASC
+        ) - 1 AS card_idx,
+        COUNT(*) OVER (PARTITION BY c.fact_id) AS total_cards
+    FROM cards c
+    JOIN set_facts sf ON c.fact_id = sf.fact_id
+    WHERE NOT EXISTS (
+        SELECT 1 FROM card_issues i
+        JOIN cards reported ON reported.id = i.card_id
+        JOIN sets s ON s.id = sf.set_id
+        WHERE reported.fact_id = c.fact_id
+          AND c.id >= reported.id
+          AND i.user_id = $1
+          AND s.author_id <> $1
+          AND i.resolved_at IS NULL
+          AND i.created_at > reported.updated_at
+    )
+)
+SELECT
+    id,
+    set_id,
+    fact_id,
+    fact_name,
+    kind,
+    question,
+    answer_text,
+    explanation,
+    question_svg,
+    explanation_svg,
+    source_quote,
+    source_ref,
+    updated_at
+FROM ranked_cards
+WHERE card_idx = LEAST(step, total_cards - 1)
+ORDER BY due_time ASC, fact_id ASC
+`
+
+type GetSetFeedCardsForUserParams struct {
+	UserID pgtype.UUID `json:"user_id"`
+	SetID  pgtype.UUID `json:"set_id"`
+}
+
+type GetSetFeedCardsForUserRow struct {
+	ID             pgtype.UUID        `json:"id"`
+	SetID          pgtype.UUID        `json:"set_id"`
+	FactID         pgtype.UUID        `json:"fact_id"`
+	FactName       string             `json:"fact_name"`
+	Kind           CardKind           `json:"kind"`
+	Question       string             `json:"question"`
+	AnswerText     pgtype.Text        `json:"answer_text"`
+	Explanation    string             `json:"explanation"`
+	QuestionSvg    pgtype.Text        `json:"question_svg"`
+	ExplanationSvg pgtype.Text        `json:"explanation_svg"`
+	SourceQuote    string             `json:"source_quote"`
+	SourceRef      pgtype.Text        `json:"source_ref"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetSetFeedCardsForUser(ctx context.Context, arg GetSetFeedCardsForUserParams) ([]GetSetFeedCardsForUserRow, error) {
+	rows, err := q.db.Query(ctx, getSetFeedCardsForUser, arg.UserID, arg.SetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetSetFeedCardsForUserRow
+	for rows.Next() {
+		var i GetSetFeedCardsForUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SetID,
+			&i.FactID,
+			&i.FactName,
+			&i.Kind,
+			&i.Question,
+			&i.AnswerText,
+			&i.Explanation,
+			&i.QuestionSvg,
+			&i.ExplanationSvg,
+			&i.SourceQuote,
+			&i.SourceRef,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateCard = `-- name: UpdateCard :one
 UPDATE cards
 SET

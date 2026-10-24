@@ -91,15 +91,43 @@ func (s *homescreenServiceImpl) GetToday(ctx context.Context, userID uuid.UUID) 
 
 // GetFeedQuestions asks the cards of the due facts, without their answers:
 // those come back from AnswerQuestion.
-func (s *homescreenServiceImpl) GetFeedQuestions(ctx context.Context, userID uuid.UUID) ([]contracts.FeedCard, error) {
+func (s *homescreenServiceImpl) GetFeedQuestions(ctx context.Context, userID uuid.UUID, opts FeedOptions) ([]contracts.FeedCard, error) {
 	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return nil, err
 	}
 
 	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
-	rows, err := s.querier.GetFeedCardsForUser(ctx, pgUserID)
-	if err != nil {
-		return nil, fmt.Errorf("get feed cards for user: %w", err)
+	var rows []storedCard
+	if opts.SetID != nil && opts.Early {
+		setRows, err := s.querier.GetSetFeedCardsForUser(ctx, db.GetSetFeedCardsForUserParams{
+			UserID: pgUserID,
+			SetID:  pgtype.UUID{Bytes: *opts.SetID, Valid: true},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("get set feed cards for user: %w", err)
+		}
+		rows = make([]storedCard, len(setRows))
+		for i, r := range setRows {
+			rows[i] = storedCard(r)
+		}
+	} else {
+		dueRows, err := s.querier.GetFeedCardsForUser(ctx, pgUserID)
+		if err != nil {
+			return nil, fmt.Errorf("get feed cards for user: %w", err)
+		}
+		if opts.SetID != nil {
+			targetSetID := pgtype.UUID{Bytes: *opts.SetID, Valid: true}
+			for _, r := range dueRows {
+				if r.SetID == targetSetID {
+					rows = append(rows, storedCard(r))
+				}
+			}
+		} else {
+			rows = make([]storedCard, len(dueRows))
+			for i, r := range dueRows {
+				rows[i] = storedCard(r)
+			}
+		}
 	}
 
 	var choiceIDs, tableIDs []pgtype.UUID
@@ -117,8 +145,7 @@ func (s *homescreenServiceImpl) GetFeedQuestions(ctx context.Context, userID uui
 	}
 
 	cards := make([]contracts.FeedCard, 0, len(rows))
-	for _, r := range rows {
-		card := storedCard(r)
+	for _, card := range rows {
 		d, err := loadDetails(ctx, details, card)
 		if err != nil {
 			return nil, err

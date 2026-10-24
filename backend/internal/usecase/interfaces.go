@@ -45,10 +45,16 @@ type CardService interface {
 	ResolveCardIssues(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) error
 }
 
+// FeedOptions controls which cards are selected for the feed.
+type FeedOptions struct {
+	SetID *uuid.UUID
+	Early bool
+}
+
 // HomescreenService defines domain operations for today overview and the feed.
 type HomescreenService interface {
 	GetToday(ctx context.Context, userID uuid.UUID) (*contracts.TodayData, error)
-	GetFeedQuestions(ctx context.Context, userID uuid.UUID) ([]contracts.FeedCard, error)
+	GetFeedQuestions(ctx context.Context, userID uuid.UUID, opts FeedOptions) ([]contracts.FeedCard, error)
 }
 
 // MAXUserParams comes from a verified MAX request or bot update.

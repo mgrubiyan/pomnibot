@@ -124,7 +124,7 @@ func (UnimplementedHandler) GetFactsBySetID(ctx context.Context, params GetFacts
 // card.
 //
 // GET /feed
-func (UnimplementedHandler) GetFeedQuestions(ctx context.Context) (r GetFeedQuestionsRes, _ error) {
+func (UnimplementedHandler) GetFeedQuestions(ctx context.Context, params GetFeedQuestionsParams) (r GetFeedQuestionsRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 

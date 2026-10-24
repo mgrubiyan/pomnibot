@@ -90,20 +90,24 @@ func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID uuid.UUID, 
 	defer unlock()
 
 	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
-	inFeed, err := s.inFeed(ctx, pgUserID, card.ID)
-	if err != nil {
-		return nil, err
-	}
-	if !inFeed {
-		correct, err := s.lastAnswer(ctx, pgUserID, card.ID)
-		if err != nil {
-			return nil, err
-		}
+	correct, err := s.lastAnswer(ctx, pgUserID, card.ID)
+	if err == nil {
 		return &contracts.AnswerQuestionResponse{
 			IsCorrect: correct,
 			Method:    contracts.AnswerQuestionResponseMethodLocal,
 			Reveal:    contracts.NewOptCardReveal(revealOf(card, details)),
 		}, nil
+	}
+	if !errors.Is(err, errNotInFeed) {
+		return nil, err
+	}
+
+	inFeed, err := s.inFeed(ctx, pgUserID, card.ID, card.SetID)
+	if err != nil {
+		return nil, err
+	}
+	if !inFeed {
+		return nil, errNotInFeed
 	}
 
 	v, err := s.grade(ctx, card, details, answer)
@@ -156,7 +160,7 @@ func (s *cardServiceImpl) RevealCard(ctx context.Context, userID uuid.UUID, card
 		return nil, fmt.Errorf("%w: only a flip card is revealed before the answer", ErrValidation)
 	}
 	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
-	inFeed, err := s.inFeed(ctx, pgUserID, card.ID)
+	inFeed, err := s.inFeed(ctx, pgUserID, card.ID, card.SetID)
 	if err != nil {
 		return nil, err
 	}
@@ -187,13 +191,25 @@ func (s *cardServiceImpl) readerCard(ctx context.Context, userID uuid.UUID, card
 }
 
 // inFeed tells whether the feed asks this card of the reader now: its fact
-// is due and the card is the one for the reader's step.
-func (s *cardServiceImpl) inFeed(ctx context.Context, userID, cardID pgtype.UUID) (bool, error) {
+// is due in the general feed, or active for an early review of the set.
+func (s *cardServiceImpl) inFeed(ctx context.Context, userID, cardID, setID pgtype.UUID) (bool, error) {
 	rows, err := s.querier.GetFeedCardsForUser(ctx, userID)
 	if err != nil {
 		return false, fmt.Errorf("get feed cards for user: %w", err)
 	}
 	for _, r := range rows {
+		if r.ID == cardID {
+			return true, nil
+		}
+	}
+	setRows, err := s.querier.GetSetFeedCardsForUser(ctx, db.GetSetFeedCardsForUserParams{
+		UserID: userID,
+		SetID:  setID,
+	})
+	if err != nil {
+		return false, fmt.Errorf("get set feed cards for user: %w", err)
+	}
+	for _, r := range setRows {
 		if r.ID == cardID {
 			return true, nil
 		}

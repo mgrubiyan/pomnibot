@@ -16,8 +16,10 @@ import s from './SetScreen.module.css';
 type Status = 'loading' | 'error' | 'ready';
 
 
-async function loadFeed(): Promise<FeedCard[]> {
-    const { data, error } = await api.GET('/feed');
+async function loadFeed(setId?: string): Promise<FeedCard[]> {
+    const { data, error } = await api.GET('/feed', {
+        params: { query: { setId } },
+    });
     if (error || !data) {
         throw new Error(error?.message ?? 'Failed to load feed');
     }
@@ -28,7 +30,7 @@ export interface SetScreenProps {
     setId: string;
     currentUser?: User | null;
     onBack: () => void;
-    onStart: (setId: string, setTitle?: string) => void;
+    onStart: (setId: string, setTitle?: string, early?: boolean) => void;
     onRemove: (setId: string) => void;
     /** The list of cards lives on its own screen, managed from there. */
     onOpenCards: (setId: string) => void;
@@ -65,14 +67,14 @@ export function SetScreen({
     useEffect(() => {
         let cancelled = false;
 
-        Promise.all([loadSet(setId), loadCards(setId), loadFeed()])
+        Promise.all([loadSet(setId), loadCards(setId), loadFeed(setId)])
             .then(([nextSet, nextCards, nextFeed]) => {
                 if (cancelled) {
                     return;
                 }
                 setSet(nextSet);
                 setCards(nextCards);
-                setFeedCards(nextFeed.filter((c) => c.setId === setId));
+                setFeedCards(nextFeed);
                 setStatus('ready');
             })
             .catch(() => {
@@ -259,24 +261,35 @@ export function SetScreen({
                 ) : (
                     <>
                         {hasDue ? (
-                            <Button size="medium" variant="primary" stretched onClick={() => onStart(set.id, set.title)}>
+                            <Button size="medium" variant="primary" stretched onClick={() => onStart(set.id, set.title, false)}>
                                 {/* The minutes do not fit a phone-wide button: «…около 3 ми…» */}
                                 Повторить {cardsLabel(dueCount)}
                             </Button>
                         ) : (
-                            // A status, not a button: there is nothing to press.
-                            <Flex align="center" justify="center" gap={8} className={s.done}>
-                                <IconCheck size={20} tone="positive" />
-                                <Typography.Text variant="body" color="secondary">
-                                    Все карточки повторены
-                                </Typography.Text>
-                            </Flex>
+                            <>
+                                <Flex align="center" justify="center" gap={8} className={s.done}>
+                                    <IconCheck size={20} tone="positive" />
+                                    <Typography.Text variant="body" color="secondary">
+                                        Все карточки повторены
+                                    </Typography.Text>
+                                </Flex>
+                                {cards.length > 0 ? (
+                                    <Button
+                                        size="medium"
+                                        variant="primary"
+                                        stretched
+                                        onClick={() => onStart(set.id, set.title, true)}
+                                    >
+                                        Повторить заранее
+                                    </Button>
+                                ) : null}
+                            </>
                         )}
 
                         {/* With nothing left to review, sharing is what is left to do. */}
                         <Button
                             size="medium"
-                            variant={hasDue ? 'secondary' : 'primary'}
+                            variant="secondary"
                             stretched
                             iconBefore={<IconShare size={20} />}
                             onClick={() => onShare(set.id, set.title)}

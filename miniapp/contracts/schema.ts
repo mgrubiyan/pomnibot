@@ -1255,7 +1255,12 @@ export interface operations {
     };
     GetFeedQuestions: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter questions by set, or request set questions for review */
+                setId?: string;
+                /** @description When true and setId is provided, includes set cards even if not yet due according to FSRS */
+                early?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;

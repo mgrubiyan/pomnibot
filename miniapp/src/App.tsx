@@ -33,6 +33,7 @@ type Screen =
           name: 'feed';
           setId?: string;
           setTitle?: string;
+          early?: boolean;
           resume?: FeedResume;
       }
     | { name: 'share'; setId: string; setTitle?: string }
@@ -383,12 +384,13 @@ function App() {
     }
 
     if (screen.name === 'feed') {
-        const { setId, setTitle, resume } = screen;
+        const { setId, setTitle, resume, early } = screen;
         return (
             <Feed
-                key={setId ?? 'all'}
+                key={`${setId ?? 'all'}-${early ? 'early' : 'due'}`}
                 setId={setId}
                 setTitle={setTitle}
+                early={early}
                 resume={resume}
                 removedCardIds={removedCardIds}
                 cardPatches={cardPatches}
@@ -482,7 +484,7 @@ function App() {
                 setId={screen.setId}
                 currentUser={currentUser}
                 onBack={goHome}
-                onStart={(setId, setTitle) => go({ name: 'feed', setId, setTitle })}
+                onStart={(setId, setTitle, early) => go({ name: 'feed', setId, setTitle, early })}
                 onRemove={removeSet}
                 onOpenCards={(setId) => go({ name: 'set-cards', setId })}
                 onOpenWarnings={(setId) => go({ name: 'set-warnings', setId })}

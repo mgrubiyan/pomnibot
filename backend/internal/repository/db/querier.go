@@ -57,6 +57,7 @@ type Querier interface {
 	GetProcessingReport(ctx context.Context, arg GetProcessingReportParams) ([]byte, error)
 	GetSetByID(ctx context.Context, arg GetSetByIDParams) (GetSetByIDRow, error)
 	GetSetByShareCode(ctx context.Context, shareCode string) (GetSetByShareCodeRow, error)
+	GetSetFeedCardsForUser(ctx context.Context, arg GetSetFeedCardsForUserParams) ([]GetSetFeedCardsForUserRow, error)
 	// Open complaints of the author's set: made after the card's last edit and
 	// not dismissed. Complaints about deleted cards are not listed.
 	GetSetIssues(ctx context.Context, arg GetSetIssuesParams) ([]GetSetIssuesRow, error)

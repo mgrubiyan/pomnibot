@@ -32,6 +32,7 @@ type mockQuerier struct {
 	getFactsBySetIDFunc             func(ctx context.Context, setID pgtype.UUID) ([]db.GetFactsBySetIDRow, error)
 	leaveSetFunc                    func(ctx context.Context, arg db.LeaveSetParams) (int64, error)
 	getFeedCardsForUserFunc         func(ctx context.Context, userID pgtype.UUID) ([]db.GetFeedCardsForUserRow, error)
+	getSetFeedCardsForUserFunc      func(ctx context.Context, arg db.GetSetFeedCardsForUserParams) ([]db.GetSetFeedCardsForUserRow, error)
 	getSetByIDFunc                  func(ctx context.Context, arg db.GetSetByIDParams) (db.GetSetByIDRow, error)
 	getSetByShareCodeFunc           func(ctx context.Context, shareCode string) (db.GetSetByShareCodeRow, error)
 	getSetPlanFunc                  func(ctx context.Context, arg db.GetSetPlanParams) ([]db.GetSetPlanRow, error)
@@ -251,6 +252,13 @@ func (m *mockQuerier) GetFactsBySetID(ctx context.Context, setID pgtype.UUID) ([
 func (m *mockQuerier) GetFeedCardsForUser(ctx context.Context, userID pgtype.UUID) ([]db.GetFeedCardsForUserRow, error) {
 	if m.getFeedCardsForUserFunc != nil {
 		return m.getFeedCardsForUserFunc(ctx, userID)
+	}
+	return nil, nil
+}
+
+func (m *mockQuerier) GetSetFeedCardsForUser(ctx context.Context, arg db.GetSetFeedCardsForUserParams) ([]db.GetSetFeedCardsForUserRow, error) {
+	if m.getSetFeedCardsForUserFunc != nil {
+		return m.getSetFeedCardsForUserFunc(ctx, arg)
 	}
 	return nil, nil
 }
