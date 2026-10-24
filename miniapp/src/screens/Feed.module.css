@@ -174,9 +174,17 @@
         opacity 0.12s var(--ease-out);
 }
 
-/* A picked option in a multiple choice, outlined like a picked table term. */
-.option[aria-pressed='true'] {
+/* A picked option in a multiple choice, outlined like a picked table term;
+   the same for the option just sent while the backend checks it. */
+.option[aria-pressed='true'],
+.option[data-sent] {
     border-color: var(--text-primary);
+}
+
+/* While the answer is being checked the other options step back, so the
+   tap reads as heard even before the verdict comes. */
+.option:disabled:not([aria-pressed='true'], [data-sent]) {
+    opacity: 0.5;
 }
 
 /* Lets a long word in the label wrap inside the button. */

@@ -224,6 +224,8 @@ export function Feed({
     // An answer the backend is grading — a typed one stays on the card while
     // it waits — and why it counts or not.
     const [check, setCheck] = useState<{ stage: CheckStage; typed: string | null } | null>(null);
+    /** The option tapped on a single-answer card, outlined while the backend checks it. */
+    const [sentOption, setSentOption] = useState<string | null>(null);
     const [reason, setReason] = useState<string | null>(null);
     // What the card hid until it was answered or, for a flip card, opened.
     const [reveal, setReveal] = useState<CardReveal | null>(null);
@@ -307,6 +309,7 @@ export function Feed({
     const reset = useCallback(() => {
         checkRunRef.current += 1;
         setCheck(null);
+        setSentOption(null);
         setReason(null);
         setReveal(null);
         setOpening(false);
@@ -936,10 +939,16 @@ export function Feed({
                             className={s.option}
                             disabled={check !== null}
                             aria-pressed={card.kind === 'choice' ? selectedOptions.includes(option.value) : undefined}
-                            onClick={() => card.kind === 'choice'
-                                ? setSelectedOptions((current) => current.includes(option.value)
-                                    ? current.filter((value) => value !== option.value) : [...current, option.value])
-                                : submit(option.value, option.value)}
+                            data-sent={check !== null && sentOption === option.value ? '' : undefined}
+                            onClick={() => {
+                                if (card.kind === 'choice') {
+                                    setSelectedOptions((current) => current.includes(option.value)
+                                        ? current.filter((value) => value !== option.value) : [...current, option.value]);
+                                    return;
+                                }
+                                setSentOption(option.value);
+                                submit(option.value, option.value);
+                            }}
                         >
                             <Typography.Text variant="body">{card.kind === 'choice' ? `${selectedOptions.includes(option.value) ? '☑' : '☐'} ` : ''}{option.label}</Typography.Text>
                         </button>
