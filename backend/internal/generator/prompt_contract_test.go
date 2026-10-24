@@ -104,3 +104,20 @@ func TestGenerationPromptsRequestGFMAndLaTeX(t *testing.T) {
 		}
 	}
 }
+
+func TestPromptsExampleAndCardFormatContract(t *testing.T) {
+	for name, prompt := range map[string]string{"system": prompts.GeneratorSystem, "task": prompts.GenerateGoals} {
+		for _, required := range []string{
+			"не описывай синтаксис словами в скобках",
+			"классификаци",
+			"не оставляй extraCards пустым",
+		} {
+			if !strings.Contains(prompt, required) {
+				t.Errorf("%s missing required guideline %q", name, required)
+			}
+		}
+		if strings.Contains(prompt, "Не создавай факты на случайные имена и числа из примеров;") {
+			t.Errorf("%s contains obsolete blanket prohibition on example names/numbers", name)
+		}
+	}
+}
