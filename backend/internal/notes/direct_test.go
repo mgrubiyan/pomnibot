@@ -33,6 +33,7 @@ func (s *captureDirectSaver) SaveGeneratedSet(_ context.Context, _ int64, title 
 func TestMakeWithDirectGeneratorPreservesProgressAndSavePayload(t *testing.T) {
 	for _, failure := range []bool{false, true} {
 		t.Run(fmt.Sprint(failure), func(t *testing.T) {
+			quote := "  Цитата из PDF без совпадения в текстовых блоках: x² ≠ x.  "
 			text := "Индекс ускоряет поиск записей по ключу."
 			d := material.Document{Blocks: []material.Block{{ID: "s", Page: 1, Text: text}}}
 			ex := &fakeExtractor{result: ingest.Result{Text: text, Document: d}}
@@ -48,7 +49,7 @@ func TestMakeWithDirectGeneratorPreservesProgressAndSavePayload(t *testing.T) {
 				if failure {
 					return providers.Response{}, errors.New("unavailable")
 				}
-				content := `{"issues":[],"facts":[{"name":"Назначение","pages":[1],"cards":[{"kind":"flip","question":"Для чего нужен индекс?","answer":"Для ускорения поиска по ключу.","source":"` + text + `","sourceQuote":""},{"kind":"input","question":"Для чего нужен индекс?","answer":"Для ускорения поиска по ключу.","source":"Поддержка поиска","sourceQuote":""}]}]}`
+				content := `{"issues":[],"facts":[{"name":"Назначение","pages":[1],"cards":[{"kind":"flip","question":"Для чего нужен индекс?","answer":"Для ускорения поиска по ключу.","source":"` + text + `","sourceQuote":"` + quote + `"},{"kind":"input","question":"Для чего нужен индекс?","answer":"Для ускорения поиска по ключу.","source":"Поддержка поиска","sourceQuote":"` + quote + `"}]}]}`
 				return providers.Response{Usage: usage, Content: []byte(content)}, nil
 			})
 			saver := &captureDirectSaver{}
@@ -68,6 +69,11 @@ func TestMakeWithDirectGeneratorPreservesProgressAndSavePayload(t *testing.T) {
 			r := saver.result
 			if err != nil || calls != 1 || saver.calls != 1 || !generating || progress != 2 || len(r.Facts) != 1 || generator.CardCount(r.Facts) != 2 || r.Budget.Calls != 1 || r.Budget.ReportedUSD != .001 {
 				t.Fatalf("lost save/progress/ledger: %+v err=%v", r, err)
+			}
+			for _, card := range r.Facts[0].Cards {
+				if card.Base().SourceQuote != quote {
+					t.Fatal("lost unverifiable quote in save payload")
+				}
 			}
 			if r.Artifact == nil || r.Artifact.Version != generator.PipelineVersion || len(r.Artifact.Files) != 1 || r.Artifact.Reading.Blocks[0].Text != text || len(r.Artifact.Facts) != 1 || r.Artifact.Request == nil {
 				t.Fatal("lost private original")

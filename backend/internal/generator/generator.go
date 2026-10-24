@@ -17,7 +17,7 @@ import (
 )
 
 // PipelineVersion identifies source input, prompt and code validation semantics.
-const PipelineVersion = "direct-generation-v10"
+const PipelineVersion = "direct-generation-v11"
 
 // Generator is safe for concurrent use. The provider owns transport retries.
 type Generator struct {
@@ -93,13 +93,6 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (out Result, err
 	}
 	if g.opts.MaxFactsPerDoc > 0 && len(r.Facts) > g.opts.MaxFactsPerDoc {
 		return out, invalidStage(&out, "generation", errors.New("generated facts exceed configured fact limit"))
-	}
-	for _, f := range r.Facts {
-		for _, c := range f.Cards {
-			if quote := c.Base().SourceQuote; quote != "" && !sourceContainsQuote(doc, f.Pages, quote) {
-				return out, invalidStage(&out, "generation", errors.New("source quote is not present on cited text pages"))
-			}
-		}
 	}
 	out.Facts = r.Facts
 	out.Artifact.Facts = r.Facts
@@ -263,35 +256,4 @@ func generationSource(doc Document) (string, int, error) {
 	}
 	data, e := json.Marshal(source)
 	return string(data), pages, e
-}
-
-// sourceContainsQuote accepts only verbatim fragments in the supplied text layer.
-// Native PDFs without a text layer retain page references and source explanations.
-func sourceContainsQuote(doc Document, pages []int, quote string) bool {
-	cited := map[int]bool{}
-	for _, p := range pages {
-		cited[p] = true
-	}
-	if doc.Structure != nil {
-		for _, b := range doc.Structure.Blocks {
-			if cited[b.Page] && strings.Contains(b.Text, quote) {
-				return true
-			}
-		}
-		return false
-	}
-	starts := doc.PageStarts
-	if len(starts) == 0 {
-		starts = []int{0}
-	}
-	for i, start := range starts {
-		end := len(doc.Text)
-		if i+1 < len(starts) {
-			end = starts[i+1]
-		}
-		if cited[i+1] && strings.Contains(doc.Text[start:end], quote) {
-			return true
-		}
-	}
-	return false
 }

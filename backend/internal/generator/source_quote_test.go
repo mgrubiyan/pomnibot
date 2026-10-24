@@ -3,45 +3,42 @@ package generator
 import (
 	"context"
 	"encoding/json"
+	"testing"
+
 	"github.com/mgrubiyan/pomnibot/backend/internal/material"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
-	"testing"
 )
 
-func TestQuotesMustBeVerbatimOnCitedTextPages(t *testing.T) {
+func TestQuotesArePreservedWithoutTextMatching(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		doc   Document
 		quote string
-		valid bool
 	}{
-		{"text", Document{Text: "A and B"}, "A and B", true},
-		{"paraphrase", Document{Text: "A and B"}, "B and A", false},
-		{"wrong page", Document{Text: "A and Bother", PageStarts: []int{0, 7}}, "other", false},
-		{"block", Document{Structure: &material.Document{Blocks: []material.Block{{Page: 1, Text: "A and B"}}}}, "A and B", true},
-		{"wrong block page", Document{Structure: &material.Document{Blocks: []material.Block{{Page: 2, Text: "A and B"}}}}, "A and B", false},
-		{"PDF cannot verify quote", pdfDocument(), "A and B", false},
-		{"PDF references without quote", pdfDocument(), "", true},
+		{"text", Document{Text: "A and B"}, "A and B"},
+		{"paraphrase", Document{Text: "A and B"}, "B and A"},
+		{"wrong page", Document{Text: "A and Bother", PageStarts: []int{0, 7}}, "other"},
+		{"block", Document{Structure: &material.Document{Blocks: []material.Block{{Page: 1, Text: "A and B"}}}}, "A and B"},
+		{"wrong block page", Document{Structure: &material.Document{Blocks: []material.Block{{Page: 2, Text: "A and B"}}}}, "A and B"},
+		{"PDF without text blocks", pdfDocument(), "A and B"},
+		{"exact characters", Document{Text: "unrelated"}, "  Цитата: x² ≠ x\n\t "},
+		{"empty quote", pdfDocument(), ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := learningFact("F")
-			// Only the input has a quote: each card must be checked independently.
+			// Each card keeps its own source and quote, including whitespace and Unicode.
 			f.Cards[1] = InputCard{CardBase{Question: "Recall", Source: "Input source", SourceQuote: tc.quote}, "answer"}
-			r, err := NewGenerator(stageFixture(f), Options{OnBatch: func(Batch) {
-				if !tc.valid {
-					t.Fatal("published invalid quote")
+			published := 0
+			r, err := NewGenerator(stageFixture(f), Options{OnBatch: func(b Batch) {
+				published++
+				if len(b.Facts) != 1 || b.Facts[0].Cards[1].Base().SourceQuote != tc.quote {
+					t.Fatal("lost quote in progress batch")
 				}
 			}}).Generate(context.Background(), tc.doc)
-			if !tc.valid {
-				if err == nil || len(r.Facts) != 0 {
-					t.Fatalf("%+v %v", r, err)
-				}
-				return
-			}
 			if err != nil {
 				t.Fatal(err)
 			}
-			if r.Facts[0].Cards[1].(InputCard).SourceQuote != tc.quote || r.Facts[0].Cards[0].(FlipCard).Source == "Input source" {
+			if published != 1 || r.Artifact.Facts[0].Cards[1].Base().SourceQuote != tc.quote || r.Facts[0].Cards[1].(InputCard).SourceQuote != tc.quote || r.Facts[0].Cards[0].(FlipCard).Source == "Input source" {
 				t.Fatal("lost individual source")
 			}
 		})

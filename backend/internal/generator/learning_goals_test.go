@@ -74,11 +74,12 @@ func TestDirectGenerationRejectsInvalidResponse(t *testing.T) {
 		"blank source": func(s string) string {
 			return strings.Replace(s, `"source":"Удаление индекса"`, `"source":" "`, 1)
 		},
-		"missing quote": func(s string) string { return strings.Replace(s, `,"sourceQuote":""`, "", 1) },
-		"null quote":    func(s string) string { return strings.Replace(s, `"sourceQuote":""`, `"sourceQuote":null`, 1) },
-		"old format":    func(string) string { return `{"issues":[],"goals":[],"cards":[]}` },
-		"unknown kind":  func(s string) string { return strings.Replace(s, `"kind":"flip"`, `"kind":"other"`, 1) },
-		"null card":     func(s string) string { return strings.Replace(s, `"cards":[`, `"cards":[null,`, 1) },
+		"missing quote":    func(s string) string { return strings.Replace(s, `,"sourceQuote":""`, "", 1) },
+		"non-string quote": func(s string) string { return strings.Replace(s, `"sourceQuote":""`, `"sourceQuote":42`, 1) },
+		"null quote":       func(s string) string { return strings.Replace(s, `"sourceQuote":""`, `"sourceQuote":null`, 1) },
+		"old format":       func(string) string { return `{"issues":[],"goals":[],"cards":[]}` },
+		"unknown kind":     func(s string) string { return strings.Replace(s, `"kind":"flip"`, `"kind":"other"`, 1) },
+		"null card":        func(s string) string { return strings.Replace(s, `"cards":[`, `"cards":[null,`, 1) },
 	} {
 		t.Run(defect, func(t *testing.T) {
 			b := mutate(directReply())
@@ -150,18 +151,10 @@ func TestDirectGenerationRejectsFactLimitWithoutPartialPublication(t *testing.T)
 }
 
 func TestInvalidLastFactRejectsWholeResponse(t *testing.T) {
-	for _, defect := range []string{"quote", "duplicate question"} {
-		t.Run(defect, func(t *testing.T) {
-			a, b := learningFact("A"), learningFact("B")
-			if defect == "quote" {
-				b.Cards[1] = InputCard{CardBase{Question: "B?", Source: "source", SourceQuote: "invented"}, "answer"}
-			} else {
-				b.Cards[0] = FlipCard{cardBase("  a?  "), "answer"}
-			}
-			r, err := NewGenerator(stageFixture(a, b), Options{OnBatch: func(Batch) { t.Fatal("published before validating all facts") }}).Generate(t.Context(), Document{Text: "A and B"})
-			if err == nil || len(r.Facts) != 0 || r.Stats.InvalidResponses != 1 {
-				t.Fatalf("%+v %v", r, err)
-			}
-		})
+	a, b := learningFact("A"), learningFact("B")
+	b.Cards[0] = FlipCard{cardBase("  a?  "), "answer"}
+	r, err := NewGenerator(stageFixture(a, b), Options{OnBatch: func(Batch) { t.Fatal("published before validating all facts") }}).Generate(t.Context(), Document{Text: "A and B"})
+	if err == nil || len(r.Facts) != 0 || r.Stats.InvalidResponses != 1 {
+		t.Fatalf("%+v %v", r, err)
 	}
 }

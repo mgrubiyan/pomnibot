@@ -33,7 +33,7 @@ func factSchema() map[string]any {
 		fields["kind"] = map[string]any{"type": "string", "const": kind}
 		fields["question"] = s
 		fields["source"] = map[string]any{"type": "string", "description": "Nonempty source information supporting this specific card, including formulas and conditions."}
-		fields["sourceQuote"] = map[string]any{"type": "string", "description": "Verbatim quote for this card from text blocks on the fact pages; empty string if unavailable."}
+		fields["sourceQuote"] = map[string]any{"type": "string", "description": "Verbatim quote for this card from the supplied text or readable original PDF on the fact pages; empty string if unavailable or not confidently readable."}
 		return schemaObject(fields)
 	}
 	variants := []any{
