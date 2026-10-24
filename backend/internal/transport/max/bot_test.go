@@ -20,22 +20,29 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
+var (
+	maxTestUserID = uuid.MustParse("00000000-0000-0000-0000-000000112345")
+	testID101     = uuid.MustParse("00000000-0000-0000-0000-000000000101")
+	testID102     = uuid.MustParse("00000000-0000-0000-0000-000000000102")
+	testID103     = uuid.MustParse("00000000-0000-0000-0000-000000000103")
+)
+
 type mockUserService struct {
 	upsertMAXUserFunc func(context.Context, usecase.MAXUserParams) (usecase.Account, error)
-	deliveryFunc      func(context.Context, int64) (usecase.Account, error)
+	deliveryFunc      func(context.Context, uuid.UUID) (usecase.Account, error)
 	usecase.UserService
-	ensureUserFunc           func(ctx context.Context, userID int64) error
-	getUsersWithDueFactsFunc func(ctx context.Context, now time.Time, tz string) ([]int64, error)
+	ensureUserFunc           func(ctx context.Context, userID uuid.UUID) error
+	getUsersWithDueFactsFunc func(ctx context.Context, now time.Time, tz string) ([]uuid.UUID, error)
 }
 
-func (m *mockUserService) EnsureUser(ctx context.Context, userID int64) error {
+func (m *mockUserService) EnsureUser(ctx context.Context, userID uuid.UUID) error {
 	if m.ensureUserFunc != nil {
 		return m.ensureUserFunc(ctx, userID)
 	}
 	return nil
 }
 
-func (m *mockUserService) GetUsersWithDueFacts(ctx context.Context, now time.Time, tz string) ([]int64, error) {
+func (m *mockUserService) GetUsersWithDueFacts(ctx context.Context, now time.Time, tz string) ([]uuid.UUID, error) {
 	if m.getUsersWithDueFactsFunc != nil {
 		return m.getUsersWithDueFactsFunc(ctx, now, tz)
 	}
@@ -46,22 +53,22 @@ func (m *mockUserService) UpsertMAXUser(ctx context.Context, i usecase.MAXUserPa
 	if m.upsertMAXUserFunc != nil {
 		return m.upsertMAXUserFunc(ctx, i)
 	}
-	return usecase.Account{User: contracts.User{ID: i.MaxID + 100000, FirstName: i.FirstName}, MaxID: i.MaxID, ProfileComplete: true}, nil
+	return usecase.Account{User: contracts.User{ID: maxTestUserID, FirstName: i.FirstName}, MaxID: i.MaxID, ProfileComplete: true}, nil
 }
-func (m *mockUserService) GetAccount(ctx context.Context, id int64) (usecase.Account, error) {
+func (m *mockUserService) GetAccount(ctx context.Context, id uuid.UUID) (usecase.Account, error) {
 	if m.deliveryFunc != nil {
 		return m.deliveryFunc(ctx, id)
 	}
-	return usecase.Account{MaxID: id}, nil
+	return usecase.Account{}, nil
 }
 
 type mockSetService struct {
 	usecase.SetService
-	generateMockSetFunc  func(ctx context.Context, userID int64, title string) (*contracts.CardSet, error)
-	saveGeneratedSetFunc func(ctx context.Context, userID int64, title string, genResult generator.Result) (*contracts.CardSet, error)
+	generateMockSetFunc  func(ctx context.Context, userID uuid.UUID, title string) (*contracts.CardSet, error)
+	saveGeneratedSetFunc func(ctx context.Context, userID uuid.UUID, title string, genResult generator.Result) (*contracts.CardSet, error)
 }
 
-func (m *mockSetService) GenerateMockSet(ctx context.Context, userID int64, title string) (*contracts.CardSet, error) {
+func (m *mockSetService) GenerateMockSet(ctx context.Context, userID uuid.UUID, title string) (*contracts.CardSet, error) {
 	if m.generateMockSetFunc != nil {
 		return m.generateMockSetFunc(ctx, userID, title)
 	}
@@ -75,7 +82,7 @@ func (m *mockSetService) GenerateMockSet(ctx context.Context, userID int64, titl
 	return res, nil
 }
 
-func (m *mockSetService) SaveGeneratedSet(ctx context.Context, userID int64, title string, genResult generator.Result) (*contracts.CardSet, error) {
+func (m *mockSetService) SaveGeneratedSet(ctx context.Context, userID uuid.UUID, title string, genResult generator.Result) (*contracts.CardSet, error) {
 	if m.saveGeneratedSetFunc != nil {
 		return m.saveGeneratedSetFunc(ctx, userID, title, genResult)
 	}
@@ -202,7 +209,7 @@ func TestBotWelcomeMessage(t *testing.T) {
 	userSvc := &mockUserService{
 		upsertMAXUserFunc: func(_ context.Context, params usecase.MAXUserParams) (usecase.Account, error) {
 			capturedParams = &params
-			return usecase.Account{User: contracts.User{ID: 900}}, nil
+			return usecase.Account{User: contracts.User{ID: uuid.MustParse("00000000-0000-0000-0000-000000000900")}}, nil
 		},
 	}
 	setSvc := &mockSetService{}
@@ -294,7 +301,7 @@ func TestBot_UpsertMAXUser_OnMessageCreated(t *testing.T) {
 	userSvc := &mockUserService{
 		upsertMAXUserFunc: func(_ context.Context, params usecase.MAXUserParams) (usecase.Account, error) {
 			capturedParams = &params
-			return usecase.Account{User: contracts.User{ID: 900}}, nil
+			return usecase.Account{User: contracts.User{ID: uuid.MustParse("00000000-0000-0000-0000-000000000900")}}, nil
 		},
 	}
 	setSvc := &mockSetService{}
@@ -457,11 +464,11 @@ func TestBot_FileAttachment_GeneratesSet(t *testing.T) {
 	}
 
 	userSvc := &mockUserService{}
-	var capturedUserID int64
+	var capturedUserID uuid.UUID
 	var capturedTitle string
 
 	setSvc := &mockSetService{
-		saveGeneratedSetFunc: func(_ context.Context, userID int64, title string, _ generator.Result) (*contracts.CardSet, error) {
+		saveGeneratedSetFunc: func(_ context.Context, userID uuid.UUID, title string, _ generator.Result) (*contracts.CardSet, error) {
 			capturedUserID = userID
 			capturedTitle = title
 			res := &contracts.CardSet{
@@ -494,7 +501,7 @@ func TestBot_FileAttachment_GeneratesSet(t *testing.T) {
 	t.Run("file attachment generates set with title from filename", func(t *testing.T) {
 		sentMessage = SendMessageRequest{}
 		editedMessage = SendMessageRequest{}
-		capturedUserID = 0
+		capturedUserID = uuid.Nil
 		capturedTitle = ""
 
 		bot.handleUpdate(ctx, Update{
@@ -521,8 +528,8 @@ func TestBot_FileAttachment_GeneratesSet(t *testing.T) {
 			},
 		})
 
-		if capturedUserID != 112345 {
-			t.Errorf("expected internal userID 112345, got %d", capturedUserID)
+		if capturedUserID != maxTestUserID {
+			t.Errorf("expected internal userID %s, got %s", maxTestUserID, capturedUserID)
 		}
 		if capturedTitle != "лекция биология" {
 			t.Errorf("expected title 'лекция биология', got %q", capturedTitle)
@@ -542,7 +549,7 @@ func TestBot_FileAttachment_GeneratesSet(t *testing.T) {
 	t.Run("message caption overrides filename for title", func(t *testing.T) {
 		sentMessage = SendMessageRequest{}
 		editedMessage = SendMessageRequest{}
-		capturedUserID = 0
+		capturedUserID = uuid.Nil
 		capturedTitle = ""
 
 		bot.handleUpdate(ctx, Update{
@@ -613,7 +620,7 @@ func TestBot_FileAttachment_GeneratesSet(t *testing.T) {
 	t.Run("batch of photos generates joint set", func(t *testing.T) {
 		sentMessage = SendMessageRequest{}
 		editedMessage = SendMessageRequest{}
-		capturedUserID = 0
+		capturedUserID = uuid.Nil
 		capturedTitle = ""
 
 		var extractedFiles []ingest.File
@@ -1095,19 +1102,21 @@ func TestSendReviewReminders(t *testing.T) {
 		}
 
 		userSvc := &mockUserService{
-			deliveryFunc: func(_ context.Context, id int64) (usecase.Account, error) {
+			deliveryFunc: func(_ context.Context, id uuid.UUID) (usecase.Account, error) {
 				switch id {
-				case 101, 102:
-					return usecase.Account{MaxID: id + 100}, nil
-				case 103:
+				case testID101:
+					return usecase.Account{MaxID: 201}, nil
+				case testID102:
+					return usecase.Account{MaxID: 202}, nil
+				case testID103:
 					return usecase.Account{TgID: 201}, nil
 				default:
-					t.Fatalf("unexpected internal ID %d", id)
+					t.Fatalf("unexpected internal ID %s", id)
 					return usecase.Account{}, nil
 				}
 			},
-			getUsersWithDueFactsFunc: func(_ context.Context, _ time.Time, _ string) ([]int64, error) {
-				return []int64{101, 102, 103, 100001, 0}, nil
+			getUsersWithDueFactsFunc: func(_ context.Context, _ time.Time, _ string) ([]uuid.UUID, error) {
+				return []uuid.UUID{testID101, testID102, testID103}, nil
 			},
 		}
 
@@ -1172,8 +1181,14 @@ func TestSendReviewReminders(t *testing.T) {
 		}
 
 		userSvc := &mockUserService{
-			getUsersWithDueFactsFunc: func(_ context.Context, _ time.Time, _ string) ([]int64, error) {
-				return []int64{201, 202}, nil
+			deliveryFunc: func(_ context.Context, id uuid.UUID) (usecase.Account, error) {
+				if id == testID101 {
+					return usecase.Account{MaxID: 201}, nil
+				}
+				return usecase.Account{MaxID: 202}, nil
+			},
+			getUsersWithDueFactsFunc: func(_ context.Context, _ time.Time, _ string) ([]uuid.UUID, error) {
+				return []uuid.UUID{testID101, testID102}, nil
 			},
 		}
 
@@ -1200,7 +1215,7 @@ func TestSendReviewReminders(t *testing.T) {
 
 		mockErr := errors.New("db error")
 		userSvc := &mockUserService{
-			getUsersWithDueFactsFunc: func(_ context.Context, _ time.Time, _ string) ([]int64, error) {
+			getUsersWithDueFactsFunc: func(_ context.Context, _ time.Time, _ string) ([]uuid.UUID, error) {
 				return nil, mockErr
 			},
 		}

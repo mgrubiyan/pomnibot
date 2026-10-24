@@ -13,12 +13,15 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
 )
 
-// prepareGeneratedSet assigns storage identity after generation has completed.
+// prepareGeneratedSet assigns UUIDv7s sequentially so database reads retain fact order.
 func prepareGeneratedSet(title string, result generator.Result) (repository.GeneratedSet, error) {
 	out := repository.GeneratedSet{Report: result}
 	for _, fact := range result.Facts {
-		id := uuid.NewString()
-		out.Facts = append(out.Facts, cards.Fact{ID: id, Name: fact.Name, Topic: fact.Name})
+		id, err := uuid.NewV7()
+		if err != nil {
+			return repository.GeneratedSet{}, fmt.Errorf("generate fact UUIDv7: %w", err)
+		}
+		out.Facts = append(out.Facts, cards.Fact{ID: id.String(), Name: fact.Name, Topic: fact.Name})
 		pages := make([]string, len(fact.Pages))
 		for i, page := range fact.Pages {
 			pages[i] = strconv.Itoa(page)
@@ -29,7 +32,7 @@ func prepareGeneratedSet(title string, result generator.Result) (repository.Gene
 				return repository.GeneratedSet{}, fmt.Errorf("nil generated card")
 			}
 			base := raw.Base()
-			c := cards.Card{FactID: id, Question: base.Question, Explanation: base.Source, SourceQuote: base.SourceQuote, SourceRef: ref}
+			c := cards.Card{FactID: id.String(), Question: base.Question, Explanation: base.Source, SourceQuote: base.SourceQuote, SourceRef: ref}
 			switch v := raw.(type) {
 			case generator.FlipCard:
 				c.Kind = cards.KindFlip

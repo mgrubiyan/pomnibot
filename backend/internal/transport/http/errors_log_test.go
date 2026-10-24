@@ -25,12 +25,13 @@ func captureLog(t *testing.T) *bytes.Buffer {
 
 func TestInternalErrorsAreLogged(t *testing.T) {
 	logs := captureLog(t)
+	testUserID := uuid.MustParse("00000000-0000-0000-0000-000000000042")
 	h := NewSetsHandler(&mockSetService{
-		getSetFunc: func(context.Context, int64, uuid.UUID) (*contracts.CardSet, error) {
+		getSetFunc: func(context.Context, uuid.UUID, uuid.UUID) (*contracts.CardSet, error) {
 			return nil, errors.New("connection refused")
 		},
 	})
-	ctx := WithUserID(context.Background(), 42)
+	ctx := WithUserID(context.Background(), testUserID)
 
 	res, err := h.GetSet(ctx, contracts.GetSetParams{SetId: uuid.New()})
 	if err != nil {
@@ -41,7 +42,7 @@ func TestInternalErrorsAreLogged(t *testing.T) {
 	}
 
 	got := logs.String()
-	for _, want := range []string{"level=ERROR", "operation=GetSet", "user_id=42", "connection refused"} {
+	for _, want := range []string{"level=ERROR", "operation=GetSet", "user_id=" + testUserID.String(), "connection refused"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("log %q does not contain %q", got, want)
 		}
@@ -51,7 +52,7 @@ func TestInternalErrorsAreLogged(t *testing.T) {
 func TestNotFoundIsNotLoggedAsError(t *testing.T) {
 	logs := captureLog(t)
 	h := NewSetsHandler(&mockSetService{
-		getSetFunc: func(context.Context, int64, uuid.UUID) (*contracts.CardSet, error) {
+		getSetFunc: func(context.Context, uuid.UUID, uuid.UUID) (*contracts.CardSet, error) {
 			return nil, usecase.ErrNotFound
 		},
 	})

@@ -62,7 +62,7 @@ type fakeSaver struct {
 	err    error
 }
 
-func (f *fakeSaver) SaveGeneratedSet(_ context.Context, _ int64, title string, _ generator.Result) (*contracts.CardSet, error) {
+func (f *fakeSaver) SaveGeneratedSet(_ context.Context, _ uuid.UUID, title string, _ generator.Result) (*contracts.CardSet, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -82,7 +82,7 @@ func TestMake_SavesSetNamedAfterFile(t *testing.T) {
 	m := New(extractor, &fakeGenerator{}, saver, 1)
 
 	var cardsSeen []int
-	res, err := m.Make(context.Background(), Request{UserID: 1, Files: file("Лекция_4_митоз.pdf")},
+	res, err := m.Make(context.Background(), Request{UserID: uuid.New(), Files: file("Лекция_4_митоз.pdf")},
 		Progress{Cards: func(total int) { cardsSeen = append(cardsSeen, total) }})
 	if err != nil {
 		t.Fatalf("Make: %v", err)
@@ -319,7 +319,7 @@ func TestMakeWarnsWhenSourceBlocksRemainUnassigned(t *testing.T) {
 	}}
 	extractor := &fakeExtractor{result: ingest.Result{Text: "Митоз.", Document: material.Document{Blocks: []material.Block{{ID: "b", Text: "Митоз."}}}}}
 	m := New(extractor, gen, &fakeSaver{}, 1)
-	res, err := m.Make(context.Background(), Request{UserID: 1, Files: file("lecture.pdf")}, Progress{})
+	res, err := m.Make(context.Background(), Request{UserID: uuid.New(), Files: file("lecture.pdf")}, Progress{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +342,7 @@ func TestMakeNativePDFWithoutTextAndNeverSavesFailedGeneration(t *testing.T) {
 				}
 				return oneCard("T"), nil
 			}}
-			_, err := New(ex, gen, saver, 1).Make(context.Background(), Request{UserID: 1, Files: file("scan.pdf")}, Progress{})
+			_, err := New(ex, gen, saver, 1).Make(context.Background(), Request{UserID: uuid.New(), Files: file("scan.pdf")}, Progress{})
 			if failed {
 				if err == nil || len(saver.titles) != 0 {
 					t.Fatal("saved failed generation")

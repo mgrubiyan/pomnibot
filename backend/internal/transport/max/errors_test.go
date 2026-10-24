@@ -121,7 +121,7 @@ func TestBot_FailuresTellTheStudentWhatHappened(t *testing.T) {
 			if gen == nil {
 				gen = &mockCardGenerator{}
 			}
-			setSvc := &mockSetService{saveGeneratedSetFunc: func(_ context.Context, _ int64, title string, _ generator.Result) (*contracts.CardSet, error) {
+			setSvc := &mockSetService{saveGeneratedSetFunc: func(_ context.Context, _ uuid.UUID, title string, _ generator.Result) (*contracts.CardSet, error) {
 				if tt.saveErr != nil {
 					return nil, tt.saveErr
 				}
@@ -168,7 +168,7 @@ func TestBot_SuccessMentionsPoorlyReadPages(t *testing.T) {
 			Warnings: []string{"Страница 1 распознана плохо, попробуйте переснять."},
 		}, nil
 	}}
-	setSvc := &mockSetService{saveGeneratedSetFunc: func(_ context.Context, _ int64, title string, _ generator.Result) (*contracts.CardSet, error) {
+	setSvc := &mockSetService{saveGeneratedSetFunc: func(_ context.Context, _ uuid.UUID, title string, _ generator.Result) (*contracts.CardSet, error) {
 		return &contracts.CardSet{ID: uuid.New(), Title: title}, nil
 	}}
 	b, err := NewBot(client, "https://example.test", &mockUserService{}, notes.New(extractor, &mockCardGenerator{}, setSvc, 1))

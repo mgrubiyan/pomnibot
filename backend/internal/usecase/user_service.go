@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
@@ -55,8 +56,10 @@ func (s *userServiceImpl) UpsertTelegramUser(ctx context.Context, params Telegra
 	return accountFromUser(row), nil
 }
 
-func (s *userServiceImpl) GetAccount(ctx context.Context, id int64) (Account, error) {
-	row, err := s.querier.GetUserByID(ctx, id)
+func (s *userServiceImpl) GetAccount(ctx context.Context, id uuid.UUID) (Account, error) {
+	var pgID pgtype.UUID
+	_ = pgID.Scan(id.String())
+	row, err := s.querier.GetUserByID(ctx, pgID)
 	if err != nil {
 		return Account{}, fmt.Errorf("get account: %w", err)
 	}
@@ -64,7 +67,11 @@ func (s *userServiceImpl) GetAccount(ctx context.Context, id int64) (Account, er
 }
 
 func accountFromUser(row db.User) Account {
-	user := contracts.User{ID: row.ID, FirstName: row.FirstName}
+	var uid uuid.UUID
+	if row.ID.Valid {
+		uid = row.ID.Bytes
+	}
+	user := contracts.User{ID: uid, FirstName: row.FirstName}
 	if row.LastName.Valid {
 		user.LastName.SetTo(row.LastName.String)
 	}
@@ -76,17 +83,19 @@ func accountFromUser(row db.User) Account {
 }
 
 // EnsureUser ensures a record exists for the internal user ID, including the browser test user.
-func (s *userServiceImpl) EnsureUser(ctx context.Context, userID int64) error {
-	_, err := s.querier.EnsureUser(ctx, userID)
+func (s *userServiceImpl) EnsureUser(ctx context.Context, userID uuid.UUID) error {
+	var pgID pgtype.UUID
+	_ = pgID.Scan(userID.String())
+	_, err := s.querier.EnsureUser(ctx, pgID)
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to ensure user in database", "userID", userID, "error", err)
-		return fmt.Errorf("ensure user %d: %w", userID, err)
+		return fmt.Errorf("ensure user %s: %w", userID, err)
 	}
 	return nil
 }
 
 // GetUsersWithDueFacts returns all user IDs who have cards due today or earlier in the given timezone.
-func (s *userServiceImpl) GetUsersWithDueFacts(ctx context.Context, now time.Time, tz string) ([]int64, error) {
+func (s *userServiceImpl) GetUsersWithDueFacts(ctx context.Context, now time.Time, tz string) ([]uuid.UUID, error) {
 	if strings.TrimSpace(tz) == "" {
 		tz = "Europe/Moscow"
 	}
@@ -105,12 +114,12 @@ func (s *userServiceImpl) GetUsersWithDueFacts(ctx context.Context, now time.Tim
 		return nil, fmt.Errorf("get users with due facts: %w", err)
 	}
 
-	users := make([]int64, 0, len(rawUsers))
+	users := make([]uuid.UUID, 0, len(rawUsers))
 	for _, id := range rawUsers {
-		if id == 0 || id == 100001 {
+		if !id.Valid || id.Bytes == uuid.Nil {
 			continue
 		}
-		users = append(users, id)
+		users = append(users, id.Bytes)
 	}
 
 	return users, nil

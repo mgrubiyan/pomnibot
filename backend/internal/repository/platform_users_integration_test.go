@@ -36,23 +36,23 @@ func TestPlatformUsersMigrationAndSharedLearning(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if maxAccount.User.ID != 9999999 {
-		t.Fatalf("legacy ID changed: %d", maxAccount.User.ID)
+	if maxAccount.MaxID != 9999999 {
+		t.Fatalf("legacy ID changed: %d", maxAccount.MaxID)
 	}
 	var count int
-	if err = pool.QueryRow(ctx, "SELECT count(*) FROM users WHERE id IN (0,1,100001) AND (max_id IS NOT NULL OR tg_id IS NOT NULL)").Scan(&count); err != nil || count != 0 {
+	if err = pool.QueryRow(ctx, "SELECT count(*) FROM users WHERE id = '00000000-0000-0000-0000-000000000000' AND (max_id IS NOT NULL OR tg_id IS NOT NULL)").Scan(&count); err != nil || count != 0 {
 		t.Fatalf("demo platform IDs: %d %v", count, err)
 	}
-	var elo int
-	if err = pool.QueryRow(ctx, "SELECT elo FROM user_fact_progress WHERE user_id=9999999 AND fact_id='legacy-fact'").Scan(&elo); err != nil || elo != 900 {
-		t.Fatalf("progress: %d %v", elo, err)
+	var step int
+	if err = pool.QueryRow(ctx, "SELECT step FROM user_fact_progress WHERE user_id=$1", maxAccount.User.ID).Scan(&step); err != nil || step != 1 {
+		t.Fatalf("progress step: %d %v", step, err)
 	}
-	var owner int64
-	if err = pool.QueryRow(ctx, "SELECT author_id FROM sets WHERE id=$1", oldSet).Scan(&owner); err != nil || owner != maxAccount.User.ID {
-		t.Fatalf("owner: %d %v", owner, err)
+	var owner uuid.UUID
+	if err = pool.QueryRow(ctx, "SELECT author_id FROM sets WHERE share_code='111111'").Scan(&owner); err != nil || owner != maxAccount.User.ID {
+		t.Fatalf("owner: %s %v", owner, err)
 	}
 	var wg sync.WaitGroup
-	ids := make(chan int64, 32)
+	ids := make(chan uuid.UUID, 32)
 	failures := make(chan error, 32)
 	for i := range 32 {
 		wg.Go(func() {
@@ -70,17 +70,17 @@ func TestPlatformUsersMigrationAndSharedLearning(t *testing.T) {
 	for err := range failures {
 		t.Fatal(err)
 	}
-	var telegramID int64
+	var telegramID uuid.UUID
 	for id := range ids {
-		if telegramID == 0 {
+		if telegramID == uuid.Nil {
 			telegramID = id
 		}
 		if id != telegramID {
 			t.Fatal("duplicate Telegram accounts")
 		}
 	}
-	if telegramID <= maxAccount.User.ID {
-		t.Fatalf("sequence did not advance: %d", telegramID)
+	if telegramID == maxAccount.User.ID {
+		t.Fatalf("accounts clashed: %s", telegramID)
 	}
 	telegram, err := users.GetAccount(ctx, telegramID)
 	if err != nil {

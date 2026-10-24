@@ -17,10 +17,19 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
+var (
+	testUser1 = uuid.MustParse("00000000-0000-0000-0000-000000000100")
+	testUser2 = uuid.MustParse("00000000-0000-0000-0000-000000000200")
+	testUser3 = uuid.MustParse("00000000-0000-0000-0000-000000000300")
+	testOther = uuid.MustParse("00000000-0000-0000-0000-000000000999")
+	testFact1 = uuid.MustParse("00000000-0000-0000-0000-000000000f01")
+)
+
 func TestSetService_GetSet(t *testing.T) {
 	setUUID := uuid.New()
 	var pgUUID pgtype.UUID
 	_ = pgUUID.Scan(setUUID.String())
+	authorUUID := pgtype.UUID{Bytes: testUser1, Valid: true}
 
 	mock := &mockQuerier{
 		getSetByIDFunc: func(_ context.Context, arg db.GetSetByIDParams) (db.GetSetByIDRow, error) {
@@ -28,7 +37,7 @@ func TestSetService_GetSet(t *testing.T) {
 				return db.GetSetByIDRow{
 					ID:              pgUUID,
 					Title:           "Test Set",
-					AuthorID:        100,
+					AuthorID:        authorUUID,
 					AuthorFirstName: "Alice",
 					ShareCode:       "123456",
 					CardsTotal:      10,
@@ -42,7 +51,7 @@ func TestSetService_GetSet(t *testing.T) {
 	svc := usecase.NewSetService(mock, usecase.NewUserService(mock))
 
 	// Success
-	res, err := svc.GetSet(context.Background(), 100, setUUID)
+	res, err := svc.GetSet(context.Background(), testUser1, setUUID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -57,7 +66,7 @@ func TestSetService_GetSet(t *testing.T) {
 	}
 
 	// Not found
-	_, err = svc.GetSet(context.Background(), 100, uuid.New())
+	_, err = svc.GetSet(context.Background(), testUser1, uuid.New())
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -68,8 +77,10 @@ func TestSetService_GetSetLeaderboard(t *testing.T) {
 	var pgUUID pgtype.UUID
 	_ = pgUUID.Scan(setUUID.String())
 
-	authorID := int64(100)
-	memberID := int64(200)
+	authorID := testUser1
+	memberID := testUser2
+	authorUUID := pgtype.UUID{Bytes: authorID, Valid: true}
+	memberUUID := pgtype.UUID{Bytes: memberID, Valid: true}
 
 	mock := &mockQuerier{
 		getSetByIDFunc: func(_ context.Context, arg db.GetSetByIDParams) (db.GetSetByIDRow, error) {
@@ -77,14 +88,14 @@ func TestSetService_GetSetLeaderboard(t *testing.T) {
 				return db.GetSetByIDRow{
 					ID:              pgUUID,
 					Title:           "Math Set",
-					AuthorID:        authorID,
+					AuthorID:        authorUUID,
 					AuthorFirstName: "Alice",
 				}, nil
 			}
 			return db.GetSetByIDRow{}, pgx.ErrNoRows
 		},
 		isSetAuthorFunc: func(_ context.Context, arg db.IsSetAuthorParams) (bool, error) {
-			if arg.ID == pgUUID && arg.AuthorID == authorID {
+			if arg.ID == pgUUID && arg.AuthorID == authorUUID {
 				return true, nil
 			}
 			return false, nil
@@ -93,13 +104,13 @@ func TestSetService_GetSetLeaderboard(t *testing.T) {
 			if setID == pgUUID {
 				return []db.GetSetLeaderboardRow{
 					{
-						UserID:     authorID,
+						UserID:     authorUUID,
 						FirstName:  "Alice",
 						Percentile: 100,
 						Rank:       1,
 					},
 					{
-						UserID:     memberID,
+						UserID:     memberUUID,
 						FirstName:  "Bob",
 						Percentile: 50,
 						Rank:       2,
@@ -150,18 +161,18 @@ func TestSetService_JoinSetByShareCode(t *testing.T) {
 	setUUID := uuid.New()
 	var pgUUID pgtype.UUID
 	_ = pgUUID.Scan(setUUID.String())
+	authorUUID := pgtype.UUID{Bytes: testUser2, Valid: true}
 
 	mock := &mockQuerier{
-		getSetByShareCodeFunc: func(_ context.Context, arg db.GetSetByShareCodeParams) (db.GetSetByShareCodeRow, error) {
-			if arg.ShareCode == "101101" {
+		getSetByShareCodeFunc: func(_ context.Context, code string) (db.GetSetByShareCodeRow, error) {
+			if code == "101101" {
 				return db.GetSetByShareCodeRow{
 					ID:              pgUUID,
 					Title:           "Course Set",
-					AuthorID:        200,
+					AuthorID:        authorUUID,
 					AuthorFirstName: "Bob",
 					ShareCode:       "101101",
 					CardsTotal:      20,
-					CardsDue:        20,
 				}, nil
 			}
 			return db.GetSetByShareCodeRow{}, pgx.ErrNoRows
@@ -176,7 +187,7 @@ func TestSetService_JoinSetByShareCode(t *testing.T) {
 
 	svc := usecase.NewSetService(mock, usecase.NewUserService(mock))
 
-	res, err := svc.JoinSetByShareCode(context.Background(), 100, "101101")
+	res, err := svc.JoinSetByShareCode(context.Background(), testUser1, "101101")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -185,7 +196,7 @@ func TestSetService_JoinSetByShareCode(t *testing.T) {
 	}
 
 	// Not found share code
-	_, err = svc.JoinSetByShareCode(context.Background(), 100, "999999")
+	_, err = svc.JoinSetByShareCode(context.Background(), testUser1, "999999")
 	if err == nil {
 		t.Fatal("expected not found error")
 	}
@@ -195,13 +206,14 @@ func TestSetService_DeleteSet(t *testing.T) {
 	setUUID := uuid.New()
 	var pgUUID pgtype.UUID
 	_ = pgUUID.Scan(setUUID.String())
+	authorUUID := pgtype.UUID{Bytes: testUser1, Valid: true}
 
 	deleted := false
 	left := false
 
 	mock := &mockQuerier{
 		isSetAuthorFunc: func(_ context.Context, arg db.IsSetAuthorParams) (bool, error) {
-			return arg.AuthorID == 100, nil
+			return arg.AuthorID == authorUUID, nil
 		},
 		deleteSetFunc: func(_ context.Context, _ db.DeleteSetParams) (int64, error) {
 			deleted = true
@@ -216,7 +228,7 @@ func TestSetService_DeleteSet(t *testing.T) {
 	svc := usecase.NewSetService(mock, usecase.NewUserService(mock))
 
 	// Author deletes
-	if err := svc.DeleteSet(context.Background(), 100, setUUID); err != nil {
+	if err := svc.DeleteSet(context.Background(), testUser1, setUUID); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !deleted {
@@ -224,7 +236,7 @@ func TestSetService_DeleteSet(t *testing.T) {
 	}
 
 	// Non-author leaves
-	if err := svc.DeleteSet(context.Background(), 200, setUUID); err != nil {
+	if err := svc.DeleteSet(context.Background(), testUser2, setUUID); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !left {
@@ -236,18 +248,20 @@ func TestCardService_AnswerQuestion(t *testing.T) {
 	cardUUID := uuid.New()
 	var pgUUID pgtype.UUID
 	_ = pgUUID.Scan(cardUUID.String())
+	userUUID := pgtype.UUID{Bytes: testUser1, Valid: true}
+	factUUID := pgtype.UUID{Bytes: testFact1, Valid: true}
 
 	recorded := false
 	progressUpdated := false
 
 	mock := &mockQuerier{
 		getCardByIDFunc: func(_ context.Context, arg db.GetCardByIDParams) (db.GetCardByIDRow, error) {
-			if arg.UserID != 100 {
+			if arg.UserID != userUUID {
 				return db.GetCardByIDRow{}, pgx.ErrNoRows
 			}
 			return db.GetCardByIDRow{
 				ID:          pgUUID,
-				FactID:      "fact-1",
+				FactID:      factUUID,
 				Kind:        "choice",
 				Question:    "What is C++?",
 				AnswerText:  pgtype.Text{String: "A programming language", Valid: true},
@@ -255,14 +269,14 @@ func TestCardService_AnswerQuestion(t *testing.T) {
 				SourceQuote: "C++ is a language.",
 			}, nil
 		},
-		recordAnswerResultFunc: func(_ context.Context, arg db.RecordAnswerResultParams) (db.AnswerResult, error) {
+		recordAnswerFunc: func(_ context.Context, arg db.RecordAnswerParams) (db.Answer, error) {
 			recorded = true
 			if !arg.Correct {
 				t.Fatalf("expected correct answer, got incorrect")
 			}
-			return db.AnswerResult{}, nil
+			return db.Answer{}, nil
 		},
-		updateFactProgressOnAnswerFunc: func(_ context.Context, _ db.UpdateFactProgressOnAnswerParams) (db.UserFactProgress, error) {
+		upsertFactProgressFunc: func(_ context.Context, _ db.UpsertFactProgressParams) (db.UserFactProgress, error) {
 			progressUpdated = true
 			return db.UserFactProgress{}, nil
 		},
@@ -270,7 +284,7 @@ func TestCardService_AnswerQuestion(t *testing.T) {
 
 	svc := usecase.NewCardService(mock, usecase.NewUserService(mock))
 
-	res, err := svc.AnswerQuestion(context.Background(), 100, cardUUID, "A programming language")
+	res, err := svc.AnswerQuestion(context.Background(), testUser1, cardUUID, "A programming language")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -295,40 +309,42 @@ func TestCardService_CheckAnswer(t *testing.T) {
 	cardUUID := uuid.New()
 	var pgUUID pgtype.UUID
 	_ = pgUUID.Scan(cardUUID.String())
+	userUUID := pgtype.UUID{Bytes: testUser1, Valid: true}
+	factUUID := pgtype.UUID{Bytes: testFact1, Valid: true}
 
 	mock := &mockQuerier{
 		getCardByIDFunc: func(_ context.Context, arg db.GetCardByIDParams) (db.GetCardByIDRow, error) {
-			if arg.UserID != 100 {
+			if arg.UserID != userUUID {
 				return db.GetCardByIDRow{}, pgx.ErrNoRows
 			}
 			return db.GetCardByIDRow{
 				ID:          pgUUID,
-				FactID:      "fact-1",
+				FactID:      factUUID,
 				Kind:        "input",
 				Question:    "На каком массиве применим бинарный поиск?",
 				AnswerText:  pgtype.Text{String: "на отсортированном массиве", Valid: true},
 				SourceQuote: "Бинарный поиск работает только на отсортированном массиве",
 			}, nil
 		},
-		recordAnswerResultFunc: func(context.Context, db.RecordAnswerResultParams) (db.AnswerResult, error) {
+		recordAnswerFunc: func(context.Context, db.RecordAnswerParams) (db.Answer, error) {
 			t.Fatal("a check must not record the answer")
-			return db.AnswerResult{}, nil
+			return db.Answer{}, nil
 		},
 	}
 	model := &fakeModel{}
 	svc := usecase.NewCardService(mock, usecase.NewUserService(mock), usecase.WithGrader(&grader.Grader{Model: model}))
 
-	res, err := svc.CheckAnswer(context.Background(), 100, cardUUID, "массив должен быть упорядочен")
+	res, err := svc.CheckAnswer(context.Background(), testUser1, cardUUID, "массив должен быть упорядочен")
 	if err != nil || !res.IsCorrect || res.Method != contracts.CheckAnswerResponseMethodModel || res.Reason.Value == "" {
 		t.Fatalf("CheckAnswer() = %+v, %v; want correct by the model with a reason", res, err)
 	}
 
-	res, err = svc.CheckAnswer(context.Background(), 100, cardUUID, "Отсортированный массив.")
+	res, err = svc.CheckAnswer(context.Background(), testUser1, cardUUID, "Отсортированный массив.")
 	if err != nil || !res.IsCorrect || res.Method != contracts.CheckAnswerResponseMethodLocal || model.calls != 1 {
 		t.Fatalf("CheckAnswer() = %+v, %v, model calls %d; want correct locally", res, err, model.calls)
 	}
 
-	if _, err := svc.CheckAnswer(context.Background(), 200, cardUUID, "что угодно"); !errors.Is(err, usecase.ErrNotFound) {
+	if _, err := svc.CheckAnswer(context.Background(), testUser2, cardUUID, "что угодно"); !errors.Is(err, usecase.ErrNotFound) {
 		t.Fatalf("someone else's card: err = %v, want ErrNotFound", err)
 	}
 }
@@ -336,20 +352,20 @@ func TestCardService_CheckAnswer(t *testing.T) {
 func TestHomescreenService_GetToday(t *testing.T) {
 	futureTime := time.Now().Add(24 * time.Hour)
 	mock := &mockQuerier{
-		getUserByIDFunc: func(_ context.Context, id int64) (db.User, error) {
+		getUserByIDFunc: func(_ context.Context, id pgtype.UUID) (db.User, error) {
 			return db.User{ID: id, FirstName: "Tester"}, nil
 		},
-		getNextReviewDateForUserFunc: func(_ context.Context, _ int64) (pgtype.Timestamptz, error) {
+		getNextReviewDateForUserFunc: func(_ context.Context, _ pgtype.UUID) (pgtype.Timestamptz, error) {
 			return pgtype.Timestamptz{Time: futureTime, Valid: true}, nil
 		},
-		countTotalDueCardsForUserFunc: func(_ context.Context, _ int64) (int32, error) {
+		countTotalDueCardsForUserFunc: func(_ context.Context, _ pgtype.UUID) (int32, error) {
 			return 12, nil
 		},
-		getUserSetsFunc: func(_ context.Context, _ int64) ([]db.GetUserSetsRow, error) {
+		getUserSetsFunc: func(_ context.Context, _ pgtype.UUID) ([]db.GetUserSetsRow, error) {
 			return []db.GetUserSetsRow{
 				{
 					Title:           "Set 1",
-					AuthorID:        300,
+					AuthorID:        pgtype.UUID{Bytes: testUser3, Valid: true},
 					AuthorFirstName: "Alice",
 					CardsTotal:      10,
 					CardsDue:        5,
@@ -360,11 +376,11 @@ func TestHomescreenService_GetToday(t *testing.T) {
 
 	svc := usecase.NewHomescreenService(mock, usecase.NewUserService(mock))
 
-	today, err := svc.GetToday(context.Background(), 100)
+	today, err := svc.GetToday(context.Background(), testUser1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if today.User.ID != 100 || today.User.FirstName != "Tester" || today.DueCount != 12 {
+	if today.User.ID != testUser1 || today.User.FirstName != "Tester" || today.DueCount != 12 {
 		t.Fatalf("unexpected today data: %+v", today)
 	}
 	if !today.NextReviewAt.Set || today.NextReviewAt.Value.Unix() != futureTime.Unix() {
@@ -377,23 +393,23 @@ func TestHomescreenService_GetToday(t *testing.T) {
 
 func TestHomescreenService_GetToday_NoNextReview(t *testing.T) {
 	mock := &mockQuerier{
-		getUserByIDFunc: func(_ context.Context, id int64) (db.User, error) {
+		getUserByIDFunc: func(_ context.Context, id pgtype.UUID) (db.User, error) {
 			return db.User{ID: id, FirstName: "Tester"}, nil
 		},
-		getNextReviewDateForUserFunc: func(_ context.Context, _ int64) (pgtype.Timestamptz, error) {
+		getNextReviewDateForUserFunc: func(_ context.Context, _ pgtype.UUID) (pgtype.Timestamptz, error) {
 			return pgtype.Timestamptz{Valid: false}, nil
 		},
-		countTotalDueCardsForUserFunc: func(_ context.Context, _ int64) (int32, error) {
+		countTotalDueCardsForUserFunc: func(_ context.Context, _ pgtype.UUID) (int32, error) {
 			return 0, nil
 		},
-		getUserSetsFunc: func(_ context.Context, _ int64) ([]db.GetUserSetsRow, error) {
+		getUserSetsFunc: func(_ context.Context, _ pgtype.UUID) ([]db.GetUserSetsRow, error) {
 			return nil, nil
 		},
 	}
 
 	svc := usecase.NewHomescreenService(mock, usecase.NewUserService(mock))
 
-	today, err := svc.GetToday(context.Background(), 100)
+	today, err := svc.GetToday(context.Background(), testUser1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -406,39 +422,40 @@ func TestHomescreenService_SendResults(t *testing.T) {
 	cardUUID := uuid.New()
 	var pgUUID pgtype.UUID
 	_ = pgUUID.Scan(cardUUID.String())
+	userUUID := pgtype.UUID{Bytes: testUser1, Valid: true}
+	factUUID := pgtype.UUID{Bytes: testFact1, Valid: true}
 
 	count := 0
 
 	mock := &mockQuerier{
 		getCardByIDFunc: func(_ context.Context, arg db.GetCardByIDParams) (db.GetCardByIDRow, error) {
-			if arg.UserID != 100 {
+			if arg.UserID != userUUID {
 				return db.GetCardByIDRow{}, pgx.ErrNoRows
 			}
 			return db.GetCardByIDRow{
 				ID:     pgUUID,
-				FactID: "fact-1",
+				FactID: factUUID,
 			}, nil
 		},
-		recordAnswerResultFunc: func(_ context.Context, _ db.RecordAnswerResultParams) (db.AnswerResult, error) {
+		recordAnswerFunc: func(_ context.Context, _ db.RecordAnswerParams) (db.Answer, error) {
 			count++
-			return db.AnswerResult{}, nil
+			return db.Answer{}, nil
 		},
-		updateFactProgressOnAnswerFunc: func(_ context.Context, _ db.UpdateFactProgressOnAnswerParams) (db.UserFactProgress, error) {
+		upsertFactProgressFunc: func(_ context.Context, _ db.UpsertFactProgressParams) (db.UserFactProgress, error) {
 			return db.UserFactProgress{}, nil
 		},
 	}
 
 	svc := usecase.NewHomescreenService(mock, usecase.NewUserService(mock))
 
-	results := []contracts.AnswerResult{
+	results := []contracts.Answer{
 		{
-			CardId:     cardUUID,
-			Correct:    true,
-			AnsweredAt: time.Now(),
+			CardId:  cardUUID,
+			Correct: true,
 		},
 	}
 
-	if err := svc.SendResults(context.Background(), 100, results); err != nil {
+	if err := svc.SendResults(context.Background(), testUser1, results); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if count != 1 {
@@ -455,12 +472,13 @@ func TestCardService_UpdateCard_Authorization(t *testing.T) {
 	var pgSetUUID pgtype.UUID
 	_ = pgSetUUID.Scan(setUUID.String())
 
-	authorID := int64(100)
-	otherUserID := int64(999)
+	authorID := testUser1
+	otherUserID := testOther
+	authorUUID := pgtype.UUID{Bytes: authorID, Valid: true}
 
 	mock := &mockQuerier{
 		getCardByIDForAuthorFunc: func(_ context.Context, arg db.GetCardByIDForAuthorParams) (db.GetCardByIDForAuthorRow, error) {
-			if arg.AuthorID == authorID && arg.ID == pgUUID {
+			if arg.AuthorID == authorUUID && arg.ID == pgUUID {
 				return db.GetCardByIDForAuthorRow{
 					ID:         pgUUID,
 					SetID:      pgSetUUID,
@@ -471,11 +489,11 @@ func TestCardService_UpdateCard_Authorization(t *testing.T) {
 			}
 			return db.GetCardByIDForAuthorRow{}, pgx.ErrNoRows
 		},
-		updateCardFunc: func(_ context.Context, arg db.UpdateCardParams) (db.Card, error) {
-			if arg.AuthorID != authorID {
-				return db.Card{}, pgx.ErrNoRows
+		updateCardFunc: func(_ context.Context, arg db.UpdateCardParams) (db.UpdateCardRow, error) {
+			if arg.AuthorID != authorUUID {
+				return db.UpdateCardRow{}, pgx.ErrNoRows
 			}
-			return db.Card{
+			return db.UpdateCardRow{
 				ID:         arg.ID,
 				Kind:       "flip",
 				Question:   arg.Question,
@@ -514,7 +532,7 @@ func TestCardService_UpdateCard_FieldsAndKinds(t *testing.T) {
 	var pgSetUUID pgtype.UUID
 	_ = pgSetUUID.Scan(setUUID.String())
 
-	authorID := int64(100)
+	authorID := testUser1
 
 	t.Run("Update boolean card with answer and topic", func(t *testing.T) {
 		var updatedArg db.UpdateCardParams
@@ -523,15 +541,16 @@ func TestCardService_UpdateCard_FieldsAndKinds(t *testing.T) {
 				return db.GetCardByIDForAuthorRow{
 					ID:         pgUUID,
 					SetID:      pgSetUUID,
+					FactID:     pgUUID,
+					FactName:   "Initial Fact",
 					Kind:       "boolean",
 					Question:   "Initial question",
 					AnswerText: pgtype.Text{String: "false", Valid: true},
-					Topic:      "Initial Topic",
 				}, nil
 			},
-			updateCardFunc: func(_ context.Context, arg db.UpdateCardParams) (db.Card, error) {
+			updateCardFunc: func(_ context.Context, arg db.UpdateCardParams) (db.UpdateCardRow, error) {
 				updatedArg = arg
-				return db.Card{
+				return db.UpdateCardRow{
 					ID:          arg.ID,
 					Kind:        "boolean",
 					Question:    arg.Question,
@@ -548,7 +567,6 @@ func TestCardService_UpdateCard_FieldsAndKinds(t *testing.T) {
 		req := &contracts.UpdateCardRequest{
 			Question:    contracts.NewOptString("Is preprocessor first?"),
 			Explanation: contracts.NewOptString("Yes, it is the first stage."),
-			Topic:       contracts.NewOptString("Compilation"),
 			Answer: contracts.NewOptCardAnswer(contracts.CardAnswer{
 				Type: contracts.BoolCardAnswer,
 				Bool: true,
@@ -562,8 +580,8 @@ func TestCardService_UpdateCard_FieldsAndKinds(t *testing.T) {
 		if res.Question != "Is preprocessor first?" {
 			t.Errorf("expected updated question, got %s", res.Question)
 		}
-		if res.Topic != "Compilation" {
-			t.Errorf("expected topic Compilation, got %s", res.Topic)
+		if res.FactName != "Initial Fact" {
+			t.Errorf("expected fact name Initial Fact, got %s", res.FactName)
 		}
 		if res.Explanation != "Yes, it is the first stage." {
 			t.Errorf("expected updated explanation, got %s", res.Explanation)
@@ -591,8 +609,8 @@ func TestCardService_UpdateCard_FieldsAndKinds(t *testing.T) {
 					Question: "Categorize items",
 				}, nil
 			},
-			updateCardFunc: func(_ context.Context, arg db.UpdateCardParams) (db.Card, error) {
-				return db.Card{
+			updateCardFunc: func(_ context.Context, arg db.UpdateCardParams) (db.UpdateCardRow, error) {
+				return db.UpdateCardRow{
 					ID:       arg.ID,
 					Kind:     "table",
 					Question: arg.Question,
@@ -646,20 +664,20 @@ func TestCardService_UpdateCard_FieldsAndKinds(t *testing.T) {
 	})
 
 	t.Run("Update card kind to choice with options", func(t *testing.T) {
-		var updatedKind string
+		var updatedKind db.CardKind
 		mock := &mockQuerier{
 			getCardByIDForAuthorFunc: func(_ context.Context, _ db.GetCardByIDForAuthorParams) (db.GetCardByIDForAuthorRow, error) {
 				return db.GetCardByIDForAuthorRow{
 					ID:         pgUUID,
 					SetID:      pgSetUUID,
-					Kind:       "input",
+					Kind:       db.CardKindInput,
 					Question:   "Initial question",
 					AnswerText: pgtype.Text{String: "Option 1", Valid: true},
 				}, nil
 			},
-			updateCardFunc: func(_ context.Context, arg db.UpdateCardParams) (db.Card, error) {
+			updateCardFunc: func(_ context.Context, arg db.UpdateCardParams) (db.UpdateCardRow, error) {
 				updatedKind = arg.Kind
-				return db.Card{
+				return db.UpdateCardRow{
 					ID:         arg.ID,
 					Kind:       arg.Kind,
 					Question:   arg.Question,
@@ -703,12 +721,13 @@ func TestCardService_UpdateCard_FieldsAndKinds(t *testing.T) {
 
 func TestCardService_DeleteCard_Authorization(t *testing.T) {
 	cardUUID := uuid.New()
-	authorID := int64(100)
-	otherUserID := int64(999)
+	authorID := testUser1
+	otherUserID := testOther
+	authorUUID := pgtype.UUID{Bytes: authorID, Valid: true}
 
 	mock := &mockQuerier{
 		deleteCardFunc: func(_ context.Context, arg db.DeleteCardParams) (int64, error) {
-			if arg.AuthorID == authorID {
+			if arg.AuthorID == authorUUID {
 				return 1, nil
 			}
 			return 0, nil
@@ -734,18 +753,19 @@ func TestSetService_GetCardsBySetID_Authorization(t *testing.T) {
 	var pgSetUUID pgtype.UUID
 	_ = pgSetUUID.Scan(setUUID.String())
 
-	memberID := int64(100)
-	nonMemberID := int64(999)
+	memberID := testUser1
+	nonMemberID := testOther
+	memberUUID := pgtype.UUID{Bytes: memberID, Valid: true}
 
 	mock := &mockQuerier{
 		getSetByIDFunc: func(_ context.Context, arg db.GetSetByIDParams) (db.GetSetByIDRow, error) {
-			if arg.UserID == memberID && arg.ID == pgSetUUID {
+			if arg.UserID == memberUUID && arg.ID == pgSetUUID {
 				return db.GetSetByIDRow{ID: pgSetUUID, Title: "Set 1"}, nil
 			}
 			return db.GetSetByIDRow{}, pgx.ErrNoRows
 		},
 		getCardsBySetIDFunc: func(_ context.Context, arg db.GetCardsBySetIDParams) ([]db.GetCardsBySetIDRow, error) {
-			if arg.UserID == memberID && arg.SetID == pgSetUUID {
+			if arg.UserID == memberUUID && arg.SetID == pgSetUUID {
 				return []db.GetCardsBySetIDRow{
 					{
 						ID:       pgtype.UUID{Bytes: [16]byte{1}, Valid: true},
@@ -779,7 +799,7 @@ func TestSetService_GetCardsBySetID_Authorization(t *testing.T) {
 
 func TestSetService_DeleteSet_NonMember(t *testing.T) {
 	setUUID := uuid.New()
-	nonMemberID := int64(999)
+	nonMemberID := testOther
 
 	mock := &mockQuerier{
 		isSetAuthorFunc: func(_ context.Context, _ db.IsSetAuthorParams) (bool, error) {
@@ -800,14 +820,14 @@ func TestSetService_DeleteSet_NonMember(t *testing.T) {
 
 func TestSetService_SaveGeneratedSet(t *testing.T) {
 	ctx := context.Background()
-	const userID = int64(123)
+	userID := testUser1
 	const title = "Конспект по биологии"
 
 	mock := &mockQuerier{
-		ensureUserFunc: func(_ context.Context, id int64) (db.User, error) {
+		ensureUserFunc: func(_ context.Context, id pgtype.UUID) (db.User, error) {
 			return db.User{ID: id}, nil
 		},
-		getSetByShareCodeFunc: func(_ context.Context, _ db.GetSetByShareCodeParams) (db.GetSetByShareCodeRow, error) {
+		getSetByShareCodeFunc: func(_ context.Context, _ string) (db.GetSetByShareCodeRow, error) {
 			return db.GetSetByShareCodeRow{}, pgx.ErrNoRows
 		},
 		createSetFunc: func(_ context.Context, arg db.CreateSetParams) (db.Set, error) {
@@ -822,9 +842,6 @@ func TestSetService_SaveGeneratedSet(t *testing.T) {
 		},
 		joinSetFunc: func(_ context.Context, arg db.JoinSetParams) (db.UserSet, error) {
 			return db.UserSet{UserID: arg.UserID, SetID: arg.SetID}, nil
-		},
-		upsertTopicFunc: func(_ context.Context, name string) (db.Topic, error) {
-			return db.Topic{Name: name}, nil
 		},
 		createFactFunc: func(_ context.Context, arg db.CreateFactParams) (db.Fact, error) {
 			return db.Fact{ID: arg.ID, SetID: arg.SetID, Name: arg.Name}, nil

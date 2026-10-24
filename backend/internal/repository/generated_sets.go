@@ -26,7 +26,7 @@ type GeneratedSet struct {
 }
 
 // SaveGeneratedSet persists the prepared models and their assigned fact identifiers.
-func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title string, genResult GeneratedSet) (*db.Set, int, error) {
+func SaveGeneratedSet(ctx context.Context, q db.Querier, userID uuid.UUID, title string, genResult GeneratedSet) (*db.Set, int, error) {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		title = "Новый конспект"
@@ -37,9 +37,10 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title str
 		return nil, 0, fmt.Errorf("generate unique share code: %w", err)
 	}
 
+	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
 	newSet, err := q.CreateSet(ctx, db.CreateSetParams{
 		Title:     title,
-		AuthorID:  userID,
+		AuthorID:  pgUserID,
 		ShareCode: shareCode,
 	})
 	if err != nil {
@@ -51,7 +52,7 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title str
 		if marshalErr != nil {
 			return nil, 0, fmt.Errorf("encode private processing report: %w", marshalErr)
 		}
-		affected, saveErr := q.SaveProcessingReport(ctx, db.SaveProcessingReportParams{ID: newSet.ID, AuthorID: userID, Version: genResult.Report.Artifact.Version, Report: data})
+		affected, saveErr := q.SaveProcessingReport(ctx, db.SaveProcessingReportParams{ID: newSet.ID, AuthorID: pgUserID, Version: genResult.Report.Artifact.Version, Report: data})
 		if saveErr != nil {
 			return nil, 0, fmt.Errorf("save private processing report: %w", saveErr)
 		}
@@ -61,32 +62,16 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title str
 	}
 
 	if _, err := q.JoinSet(ctx, db.JoinSetParams{
-		UserID: userID,
+		UserID: pgUserID,
 		SetID:  newSet.ID,
 	}); err != nil {
 		return nil, 0, fmt.Errorf("enroll user in set: %w", err)
 	}
 
-	topicCache := make(map[string]pgtype.UUID)
 	factsInserted := 0
 	cardsInserted := 0
 
 	for _, f := range genResult.Facts {
-		var topicID pgtype.UUID
-		if f.Topic != "" {
-			if tid, ok := topicCache[f.Topic]; ok {
-				topicID = tid
-			} else {
-				t, err := q.UpsertTopic(ctx, f.Topic)
-				if err != nil {
-					slog.ErrorContext(ctx, "failed to upsert topic", "topic", f.Topic, "error", err)
-				} else {
-					topicID = t.ID
-					topicCache[f.Topic] = topicID
-				}
-			}
-		}
-
 		name := f.Name
 		if strings.TrimSpace(name) == "" {
 			name = f.Topic
@@ -95,11 +80,14 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title str
 			name = "Факт"
 		}
 
-		_, err := q.CreateFact(ctx, db.CreateFactParams{
-			ID:      f.ID,
-			SetID:   newSet.ID,
-			TopicID: topicID,
-			Name:    name,
+		factID, err := uuid.Parse(f.ID)
+		if err != nil {
+			return nil, 0, fmt.Errorf("parse generated fact ID: %w", err)
+		}
+		_, err = q.CreateFact(ctx, db.CreateFactParams{
+			ID:    pgtype.UUID{Bytes: factID, Valid: true},
+			SetID: newSet.ID,
+			Name:  name,
 		})
 		if err == nil {
 			factsInserted++
@@ -108,21 +96,27 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title str
 		}
 	}
 
-	for position, c := range genResult.Cards {
-		cardUUID := uuid.New()
-		var cardID pgtype.UUID
-		_ = cardID.Scan(cardUUID.String())
+	// The feed selects each fact's step by card UUID order.
+	for _, c := range genResult.Cards {
+		cardUUID, err := uuid.NewV7()
+		if err != nil {
+			return nil, 0, fmt.Errorf("generate card UUIDv7: %w", err)
+		}
+		cardID := pgtype.UUID{Bytes: cardUUID, Valid: true}
 
 		answer := c.Answer
 		if c.Kind == cards.KindChoice && len(c.RightAnswers) > 0 {
 			data, _ := json.Marshal(c.RightAnswers)
 			answer = string(data)
 		}
+		factID, err := uuid.Parse(c.FactID)
+		if err != nil {
+			return nil, 0, fmt.Errorf("parse generated card fact ID: %w", err)
+		}
 		createdCard, err := q.CreateCard(ctx, db.CreateCardParams{
 			ID:       cardID,
-			Position: int32(position),
-			FactID:   c.FactID,
-			Kind:     string(c.Kind),
+			FactID:   pgtype.UUID{Bytes: factID, Valid: true},
+			Kind:     db.CardKind(c.Kind),
 			Question: c.Question,
 			AnswerText: pgtype.Text{
 				String: answer,
@@ -180,7 +174,7 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID int64, title str
 	}
 
 	if err := q.InitUserFactProgress(ctx, db.InitUserFactProgressParams{
-		UserID: userID,
+		UserID: pgUserID,
 		SetID:  newSet.ID,
 	}); err != nil {
 		slog.WarnContext(ctx, "failed to initialize user fact progress", "error", err, "userID", userID)
@@ -206,10 +200,7 @@ func generateUniqueShareCode(ctx context.Context, q db.Querier) (string, error) 
 		}
 		code := fmt.Sprintf("%06d", 100000+n.Int64())
 
-		_, err = q.GetSetByShareCode(ctx, db.GetSetByShareCodeParams{
-			ShareCode: code,
-			UserID:    0,
-		})
+		_, err = q.GetSetByShareCode(ctx, code)
 		if err != nil {
 			// Not found means it is available
 			return code, nil

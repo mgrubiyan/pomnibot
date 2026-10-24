@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
@@ -24,7 +25,7 @@ func accountFromContext(ctx context.Context) (usecase.Account, bool) {
 func AuthMiddleware(maxToken, telegramToken string, users usecase.UserService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			fallback := WithUserName(WithUserID(r.Context(), 0), "Browser Test User")
+			fallback := WithUserName(WithUserID(r.Context(), uuid.Nil), "Browser Test User")
 			scheme, raw, ok := strings.Cut(r.Header.Get("Authorization"), " ")
 			var user *initDataUser
 			var err error

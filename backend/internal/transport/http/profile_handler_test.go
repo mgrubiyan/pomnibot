@@ -11,6 +11,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
@@ -27,7 +28,7 @@ func (u *profileUsers) UpsertTelegramUser(context.Context, usecase.TelegramUserP
 func (u *profileUsers) UpsertMAXUser(context.Context, usecase.MAXUserParams) (usecase.Account, error) {
 	return u.account, nil
 }
-func (u *profileUsers) SaveProfile(_ context.Context, id int64, first, last string) (usecase.Account, error) {
+func (u *profileUsers) SaveProfile(_ context.Context, id uuid.UUID, first, last string) (usecase.Account, error) {
 	if id != u.account.User.ID {
 		return usecase.Account{}, errors.New("wrong internal ID")
 	}
@@ -51,7 +52,8 @@ func (u *profileUsers) SaveProfile(_ context.Context, id int64, first, last stri
 }
 
 func TestProfileHTTP(t *testing.T) {
-	users := &profileUsers{account: usecase.Account{User: contracts.User{ID: 900}, TgID: 42, ProfileStep: "last_name"}}
+	testUserUUID := uuid.MustParse("00000000-0000-0000-0000-000000000900")
+	users := &profileUsers{account: usecase.Account{User: contracts.User{ID: testUserUUID}, TgID: 42, ProfileStep: "last_name"}}
 	raw := generateValidInitData(map[string]string{"auth_date": fmt.Sprint(time.Now().Unix()), "user": `{"id":42}`}, "secret")
 
 	handler := NewAPIHandler(nil, nil, nil, users)
@@ -68,7 +70,7 @@ func TestProfileHTTP(t *testing.T) {
 		router.ServeHTTP(w, r)
 		return w
 	}
-	if w := request("GET", "/api/profile", "", "tma "+raw); w.Code != 200 || !strings.Contains(w.Body.String(), `"profileComplete":false`) || !strings.Contains(w.Body.String(), `"id":900`) {
+	if w := request("GET", "/api/profile", "", "tma "+raw); w.Code != 200 || !strings.Contains(w.Body.String(), `"profileComplete":false`) || !strings.Contains(w.Body.String(), fmt.Sprintf(`"id":"%s"`, testUserUUID)) {
 		t.Fatalf("read incomplete: %d %s", w.Code, w.Body.String())
 	}
 	if w := request("GET", "/api/", "", "tma "+raw); w.Code != 403 || !strings.Contains(w.Body.String(), "profile_required") {

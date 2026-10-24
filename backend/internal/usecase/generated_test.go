@@ -1,6 +1,7 @@
 package usecase_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"reflect"
@@ -27,12 +28,11 @@ func (q *reportQuerier) SaveProcessingReport(_ context.Context, p db.SaveProcess
 func TestSaveGeneratedFactsAssignsUUIDsAndConvertsCards(t *testing.T) {
 	var facts []db.CreateFactParams
 	var saved []db.CreateCardParams
-	var topics []string
 	var options []db.CreateCardOptionParams
 	var columns []db.CreateCardTableColumnParams
 	var items []db.CreateCardTableItemParams
 	q := &reportQuerier{mockQuerier: &mockQuerier{
-		getSetByShareCodeFunc: func(context.Context, db.GetSetByShareCodeParams) (db.GetSetByShareCodeRow, error) {
+		getSetByShareCodeFunc: func(context.Context, string) (db.GetSetByShareCodeRow, error) {
 			return db.GetSetByShareCodeRow{}, pgx.ErrNoRows
 		},
 		createSetFunc: func(_ context.Context, p db.CreateSetParams) (db.Set, error) {
@@ -45,10 +45,6 @@ func TestSaveGeneratedFactsAssignsUUIDsAndConvertsCards(t *testing.T) {
 		createCardFunc: func(_ context.Context, p db.CreateCardParams) (db.Card, error) {
 			saved = append(saved, p)
 			return db.Card{ID: p.ID}, nil
-		},
-		upsertTopicFunc: func(_ context.Context, name string) (db.Topic, error) {
-			topics = append(topics, name)
-			return db.Topic{}, nil
 		},
 		createCardOptionFunc: func(_ context.Context, p db.CreateCardOptionParams) (db.CardOption, error) {
 			options = append(options, p)
@@ -78,7 +74,7 @@ func TestSaveGeneratedFactsAssignsUUIDsAndConvertsCards(t *testing.T) {
 	}, Coverage: generator.Coverage{Issues: []string{"uncertain page"}}, Artifact: &generator.Artifact{Version: generator.PipelineVersion, Response: "original model response"}}
 	svc := usecase.NewSetService(q, usecase.NewUserService(q))
 	for run := 0; run < 2; run++ {
-		set, err := svc.SaveGeneratedSet(t.Context(), 42, "Lecture", r)
+		set, err := svc.SaveGeneratedSet(t.Context(), uuid.New(), "Lecture", r)
 		if err != nil || set.CardsTotal != 7 {
 			t.Fatalf("%+v %v", set, err)
 		}
@@ -86,12 +82,23 @@ func TestSaveGeneratedFactsAssignsUUIDsAndConvertsCards(t *testing.T) {
 	if len(facts) != 4 || len(saved) != 14 {
 		t.Fatalf("facts=%d cards=%d", len(facts), len(saved))
 	}
-	ids := map[string]bool{}
-	for _, f := range facts {
-		if _, err := uuid.Parse(f.ID); err != nil || ids[f.ID] {
-			t.Fatalf("invalid or reused UUID %q", f.ID)
+	ids := map[pgtype.UUID]bool{}
+	for i, f := range facts {
+		if !f.ID.Valid || uuid.UUID(f.ID.Bytes).Version() != 7 || ids[f.ID] {
+			t.Fatalf("invalid or reused UUIDv7 %v", f.ID)
+		}
+		if i > 0 && bytes.Compare(facts[i-1].ID.Bytes[:], f.ID.Bytes[:]) >= 0 {
+			t.Fatal("fact UUIDs do not preserve generation order")
 		}
 		ids[f.ID] = true
+	}
+	for i, c := range saved {
+		if !c.ID.Valid || uuid.UUID(c.ID.Bytes).Version() != 7 {
+			t.Fatalf("invalid card UUIDv7 %v", c.ID)
+		}
+		if i > 0 && bytes.Compare(saved[i-1].ID.Bytes[:], c.ID.Bytes[:]) >= 0 {
+			t.Fatal("card UUIDs do not preserve generation order")
+		}
 	}
 	for i, c := range saved {
 		factIndex := (i / 7) * 2
@@ -102,11 +109,8 @@ func TestSaveGeneratedFactsAssignsUUIDsAndConvertsCards(t *testing.T) {
 			t.Fatal("crossed fact references")
 		}
 	}
-	if !reflect.DeepEqual(topics, []string{"First", "Second", "First", "Second"}) {
-		t.Fatalf("Topic must equal Name: %v", topics)
-	}
 	for i, source := range []string{"Flip source", "Boolean source", "Choice source", "Table source", "Input source"} {
-		if saved[i].Explanation != source || saved[i].SourceRef.String != "Lecture, стр. 2, 3" || saved[i].Position != int32(i) {
+		if saved[i].Explanation != source || saved[i].SourceRef.String != "Lecture, стр. 2, 3" {
 			t.Fatalf("lost card source/order: %+v", saved[i])
 		}
 	}

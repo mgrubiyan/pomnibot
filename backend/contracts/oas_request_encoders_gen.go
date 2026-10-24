@@ -94,6 +94,20 @@ func encodePutProfileRequest(
 	return nil
 }
 
+func encodeReportCardIssueRequest(
+	req *ReportCardIssueRequest,
+	r *http.Request,
+) error {
+	const contentType = "application/json"
+	e := new(jx.Encoder)
+	{
+		req.Encode(e)
+	}
+	encoded := e.Bytes()
+	ht.SetBody(r, bytes.NewReader(encoded), contentType)
+	return nil
+}
+
 func encodeSendResultsRequest(
 	req SendResultsRequest,
 	r *http.Request,

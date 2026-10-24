@@ -34,7 +34,7 @@ func newTestQuerier() *testQuerier {
 	return &testQuerier{}
 }
 
-func (q *testQuerier) GetSetByShareCode(context.Context, db.GetSetByShareCodeParams) (db.GetSetByShareCodeRow, error) {
+func (q *testQuerier) GetSetByShareCode(context.Context, string) (db.GetSetByShareCodeRow, error) {
 	return db.GetSetByShareCodeRow{}, pgx.ErrNoRows
 }
 
@@ -56,24 +56,14 @@ func (q *testQuerier) JoinSet(_ context.Context, arg db.JoinSetParams) (db.UserS
 	}, nil
 }
 
-func (q *testQuerier) UpsertTopic(_ context.Context, name string) (db.Topic, error) {
-	var topicUUID pgtype.UUID
-	_ = topicUUID.Scan(uuid.New().String())
-	return db.Topic{
-		ID:   topicUUID,
-		Name: name,
-	}, nil
-}
-
 func (q *testQuerier) CreateFact(_ context.Context, arg db.CreateFactParams) (db.Fact, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.createdFacts = append(q.createdFacts, arg)
 	return db.Fact{
-		ID:      arg.ID,
-		SetID:   arg.SetID,
-		TopicID: arg.TopicID,
-		Name:    arg.Name,
+		ID:    arg.ID,
+		SetID: arg.SetID,
+		Name:  arg.Name,
 	}, nil
 }
 
@@ -124,17 +114,17 @@ func (q *testQuerier) InitUserFactProgress(_ context.Context, arg db.InitUserFac
 func TestSaveGeneratedSet_Success(t *testing.T) {
 	ctx := context.Background()
 	tq := newTestQuerier()
-	const userID int64 = 999
+	userID := uuid.New()
 	const title = "Generated Set"
 
 	genResult := repository.GeneratedSet{
 		Facts: []cards.Fact{
-			{ID: "fact-1", Name: "Fact One", Topic: "Biology"},
-			{ID: "fact-2", Name: "Fact Two", Topic: "Biology"},
+			{ID: "01900000-0000-7000-8000-000000000001", Name: "Fact One", Topic: "Biology"},
+			{ID: "01900000-0000-7000-8000-000000000002", Name: "Fact Two", Topic: "Biology"},
 		},
 		Cards: []cards.Card{
 			{
-				FactID:      "fact-1",
+				FactID:      "01900000-0000-7000-8000-000000000001",
 				Kind:        cards.KindChoice,
 				Question:    "What is fact one?",
 				Options:     []string{"A", "B", "C"},
@@ -144,7 +134,7 @@ func TestSaveGeneratedSet_Success(t *testing.T) {
 				SourceRef:   "Page 1",
 			},
 			{
-				FactID:      "fact-2",
+				FactID:      "01900000-0000-7000-8000-000000000002",
 				Kind:        cards.KindFlip,
 				Question:    "What is fact two?",
 				Answer:      "Answer 2",
@@ -163,8 +153,8 @@ func TestSaveGeneratedSet_Success(t *testing.T) {
 	if set.Title != title {
 		t.Errorf("expected title %q, got %q", title, set.Title)
 	}
-	if set.AuthorID != userID {
-		t.Errorf("expected authorID %d, got %d", userID, set.AuthorID)
+	if set.AuthorID.Bytes != userID {
+		t.Errorf("expected authorID %s, got %v", userID, set.AuthorID)
 	}
 	if cardCount != 2 {
 		t.Errorf("expected 2 cards, got %d", cardCount)
@@ -183,9 +173,9 @@ func TestSaveGeneratedSet_Success(t *testing.T) {
 func TestSaveGeneratedSet_TableCard(t *testing.T) {
 	tq := newTestQuerier()
 	genResult := repository.GeneratedSet{
-		Facts: []cards.Fact{{ID: "fact-1", Name: "Прокариоты и эукариоты", Topic: "Клетка"}},
+		Facts: []cards.Fact{{ID: "01900000-0000-7000-8000-000000000001", Name: "Прокариоты и эукариоты", Topic: "Клетка"}},
 		Cards: []cards.Card{{
-			FactID:   "fact-1",
+			FactID:   "01900000-0000-7000-8000-000000000001",
 			Kind:     cards.KindTable,
 			Question: "Распределите организмы по строению клетки",
 			Table: &cards.Table{
@@ -199,7 +189,7 @@ func TestSaveGeneratedSet_TableCard(t *testing.T) {
 		}},
 	}
 
-	if _, n, err := repository.SaveGeneratedSet(context.Background(), tq, 1, "Клетка", genResult); err != nil || n != 1 {
+	if _, n, err := repository.SaveGeneratedSet(context.Background(), tq, uuid.New(), "Клетка", genResult); err != nil || n != 1 {
 		t.Fatalf("SaveGeneratedSet = %d cards, err %v", n, err)
 	}
 	if len(tq.createdColumns) != 2 || tq.createdColumns[1].Name != "Эукариоты" || tq.createdColumns[1].Position != 1 {
@@ -223,13 +213,14 @@ func (q *testQuerier) SaveProcessingReport(_ context.Context, arg db.SaveProcess
 	return 1, nil
 }
 func TestSaveGeneratedSetPreservesPrivateSourceArtifact(t *testing.T) {
+	userID := uuid.New()
 	q := newTestQuerier()
 	result := repository.GeneratedSet{Report: generator.Result{Artifact: &generator.Artifact{Version: generator.PipelineVersion, Files: []ingest.File{{Name: "private.txt", Data: []byte("source")}}}, Facts: []generator.Fact{{Name: "Fact", Pages: []int{1}, Cards: []generator.Card{generator.FlipCard{CardBase: generator.CardBase{Question: "Q", Source: "S", SourceQuote: "source"}, Answer: "A"}, generator.InputCard{CardBase: generator.CardBase{Question: "Q", Source: "S", SourceQuote: ""}, Answer: "A"}}}}}}
-	_, _, err := repository.SaveGeneratedSet(context.Background(), q, 42, "notes", result)
+	_, _, err := repository.SaveGeneratedSet(context.Background(), q, userID, "notes", result)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(q.reports) != 1 || q.reports[0].AuthorID != 42 {
+	if len(q.reports) != 1 || q.reports[0].AuthorID.Bytes != userID {
 		t.Fatal("private artifact not saved for owner")
 	}
 	var restored generator.Result
@@ -261,7 +252,7 @@ func TestSaveRecordedGeneration(t *testing.T) {
 	r.Artifact = &generator.Artifact{Version: generator.PipelineVersion}
 	q := newTestQuerier()
 	svc := usecase.NewSetService(q, usecase.NewUserService(q))
-	set, err := svc.SaveGeneratedSet(context.Background(), 42, "Recorded lecture", r)
+	set, err := svc.SaveGeneratedSet(context.Background(), uuid.New(), "Recorded lecture", r)
 	count := 0
 	if set != nil {
 		count = set.CardsTotal
@@ -278,18 +269,18 @@ func TestSaveRecordedGeneration(t *testing.T) {
 
 func TestSaveGeneratedSetKeepsAllCorrectOptionsAndSharedFact(t *testing.T) {
 	q := newTestQuerier()
-	_, count, err := repository.SaveGeneratedSet(context.Background(), q, 1, "T", repository.GeneratedSet{
-		Facts: []cards.Fact{{ID: "f", Name: "F", Topic: "Topic"}},
+	_, count, err := repository.SaveGeneratedSet(context.Background(), q, uuid.New(), "T", repository.GeneratedSet{
+		Facts: []cards.Fact{{ID: "01900000-0000-7000-8000-000000000003", Name: "F", Topic: "Topic"}},
 		Cards: []cards.Card{
-			{FactID: "f", Kind: cards.KindFlip, Question: "Recall", Answer: "A and B"},
-			{FactID: "f", Kind: cards.KindChoice, Question: "Choose", Answer: `["A","B"]`, RightAnswers: []string{"A", "B"}, Options: []string{"A", "B", "C"}},
+			{FactID: "01900000-0000-7000-8000-000000000003", Kind: cards.KindFlip, Question: "Recall", Answer: "A and B"},
+			{FactID: "01900000-0000-7000-8000-000000000003", Kind: cards.KindChoice, Question: "Choose", Answer: `["A","B"]`, RightAnswers: []string{"A", "B"}, Options: []string{"A", "B", "C"}},
 		},
 	})
 	if err != nil || count != 2 || len(q.createdFacts) != 1 {
 		t.Fatalf("count=%d err=%v", count, err)
 	}
 	for _, c := range q.createdCards {
-		if c.FactID != "f" {
+		if uuid.UUID(c.FactID.Bytes).String() != "01900000-0000-7000-8000-000000000003" {
 			t.Fatal("different fact")
 		}
 	}
@@ -298,6 +289,6 @@ func TestSaveGeneratedSetKeepsAllCorrectOptionsAndSharedFact(t *testing.T) {
 	}
 }
 
-func (q *testQuerier) EnsureUser(_ context.Context, id int64) (db.User, error) {
+func (q *testQuerier) EnsureUser(_ context.Context, id pgtype.UUID) (db.User, error) {
 	return db.User{ID: id}, nil
 }

@@ -1,9 +1,12 @@
 package config
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
 func TestLoadLocal(t *testing.T) {
@@ -206,5 +209,42 @@ func TestLoadProdRejectsAIStudioFirstWhenOff(t *testing.T) {
 	t.Setenv("LLM_PRIMARY", "aistudio")
 	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "LLM_PRIMARY") {
 		t.Errorf("Load() error = %v, want one naming LLM_PRIMARY", err)
+	}
+}
+
+func TestLoadAdmins(t *testing.T) {
+	setProdEnv(t)
+	t.Setenv("ADMIN_MAX_IDS", "123, 456")
+	t.Setenv("ADMIN_TG_IDS", "789")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := usecase.Admins{MaxIDs: []int64{123, 456}, TgIDs: []int64{789}}
+	if !reflect.DeepEqual(cfg.Admins, want) {
+		t.Fatalf("admins = %+v, want %+v", cfg.Admins, want)
+	}
+
+	// In prod the browser test user is anyone without MAX or Telegram.
+	t.Setenv("ADMIN_MAX_IDS", "")
+	t.Setenv("ADMIN_TG_IDS", "")
+	if cfg, err = Load(); err != nil || !reflect.DeepEqual(cfg.Admins, usecase.Admins{}) {
+		t.Fatalf("no admins: %+v, %v", cfg.Admins, err)
+	}
+
+	t.Setenv("ADMIN_TG_IDS", "12a")
+	if _, err = Load(); err == nil || !strings.Contains(err.Error(), "ADMIN_TG_IDS") {
+		t.Fatalf("bad ID: %v", err)
+	}
+}
+
+func TestLoadLocalAdmin(t *testing.T) {
+	t.Setenv("APP_ENV", "local")
+	t.Setenv("PORT", "")
+	t.Setenv("ADMIN_MAX_IDS", "")
+	t.Setenv("ADMIN_TG_IDS", "")
+	cfg, err := Load()
+	if err != nil || !cfg.Admins.BrowserTestUser {
+		t.Fatalf("local user must be an admin: %+v, %v", cfg.Admins, err)
 	}
 }

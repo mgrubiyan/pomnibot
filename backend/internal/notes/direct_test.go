@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"testing"
 
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
@@ -24,7 +25,7 @@ type captureDirectSaver struct {
 	calls  int
 }
 
-func (s *captureDirectSaver) SaveGeneratedSet(_ context.Context, _ int64, title string, r generator.Result) (*contracts.CardSet, error) {
+func (s *captureDirectSaver) SaveGeneratedSet(_ context.Context, _ uuid.UUID, title string, r generator.Result) (*contracts.CardSet, error) {
 	s.result = r
 	s.calls++
 	return &contracts.CardSet{Title: title}, nil
@@ -56,7 +57,7 @@ func TestMakeWithDirectGeneratorPreservesProgressAndSavePayload(t *testing.T) {
 			maker := New(ex, FromGenerator(generator.NewGenerator(model, generator.Options{})), saver, 1).WithBudget(providers.BudgetLimits{USD: .05, Calls: 3})
 			progress := 0
 			generating := false
-			result, err := maker.Make(context.Background(), Request{UserID: 42, Files: file("lecture.pdf")}, Progress{Generating: func() { generating = true }, Cards: func(n int) { progress = n }})
+			result, err := maker.Make(context.Background(), Request{UserID: uuid.New(), Files: file("lecture.pdf")}, Progress{Generating: func() { generating = true }, Cards: func(n int) { progress = n }})
 			if failure {
 				if err == nil || saver.calls != 0 || progress != 0 {
 					t.Fatal("failed result saved or published")

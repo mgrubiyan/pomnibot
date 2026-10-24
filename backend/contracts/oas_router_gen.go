@@ -20,16 +20,19 @@ var (
 	rn5AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
-	rn13AllowedHeaders = map[string]string{
+	rn21AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
+	}
+	rn14AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
 	}
-	rn19AllowedHeaders = map[string]string{
+	rn23AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
 	rn10AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
-	rn18AllowedHeaders = map[string]string{
+	rn20AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
 	rn9AllowedHeaders = map[string]string{
@@ -100,6 +103,31 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			switch elem[0] {
+			case 'a': // Prefix: "admin/issues"
+
+				if l := len("admin/issues"); len(elem) >= l && elem[0:l] == "admin/issues" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch r.Method {
+					case "GET":
+						s.handleGetAdminIssuesRequest([0]string{}, elemIsEscaped, w, r)
+					default:
+						s.notAllowed(w, r, notAllowedParams{
+							allowedMethods: "GET",
+							allowedHeaders: nil,
+							acceptPost:     "",
+							acceptPatch:    "",
+						})
+					}
+
+					return
+				}
+
 			case 'c': // Prefix: "cards/"
 
 				if l := len("cards/"); len(elem) >= l && elem[0:l] == "cards/" {
@@ -205,6 +233,61 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							return
 						}
 
+					case 'i': // Prefix: "issue"
+
+						if l := len("issue"); len(elem) >= l && elem[0:l] == "issue" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							switch r.Method {
+							case "POST":
+								s.handleReportCardIssueRequest([1]string{
+									args[0],
+								}, elemIsEscaped, w, r)
+							default:
+								s.notAllowed(w, r, notAllowedParams{
+									allowedMethods: "POST",
+									allowedHeaders: rn21AllowedHeaders,
+									acceptPost:     "application/json",
+									acceptPatch:    "",
+								})
+							}
+
+							return
+						}
+						switch elem[0] {
+						case '/': // Prefix: "/resolve"
+
+							if l := len("/resolve"); len(elem) >= l && elem[0:l] == "/resolve" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								// Leaf node.
+								switch r.Method {
+								case "POST":
+									s.handleResolveCardIssuesRequest([1]string{
+										args[0],
+									}, elemIsEscaped, w, r)
+								default:
+									s.notAllowed(w, r, notAllowedParams{
+										allowedMethods: "POST",
+										allowedHeaders: nil,
+										acceptPost:     "",
+										acceptPatch:    "",
+									})
+								}
+
+								return
+							}
+
+						}
+
 					}
 
 				}
@@ -277,7 +360,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					default:
 						s.notAllowed(w, r, notAllowedParams{
 							allowedMethods: "GET,PUT",
-							allowedHeaders: rn13AllowedHeaders,
+							allowedHeaders: rn14AllowedHeaders,
 							acceptPost:     "",
 							acceptPatch:    "",
 						})
@@ -302,7 +385,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					default:
 						s.notAllowed(w, r, notAllowedParams{
 							allowedMethods: "POST",
-							allowedHeaders: rn19AllowedHeaders,
+							allowedHeaders: rn23AllowedHeaders,
 							acceptPost:     "application/json",
 							acceptPatch:    "",
 						})
@@ -363,7 +446,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							default:
 								s.notAllowed(w, r, notAllowedParams{
 									allowedMethods: "POST",
-									allowedHeaders: rn18AllowedHeaders,
+									allowedHeaders: rn20AllowedHeaders,
 									acceptPost:     "application/json",
 									acceptPatch:    "",
 								})
@@ -441,6 +524,33 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 										allowedMethods: "GET,POST",
 										allowedHeaders: rn9AllowedHeaders,
 										acceptPost:     "application/json",
+										acceptPatch:    "",
+									})
+								}
+
+								return
+							}
+
+						case 'i': // Prefix: "issues"
+
+							if l := len("issues"); len(elem) >= l && elem[0:l] == "issues" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								// Leaf node.
+								switch r.Method {
+								case "GET":
+									s.handleGetSetIssuesRequest([1]string{
+										args[0],
+									}, elemIsEscaped, w, r)
+								default:
+									s.notAllowed(w, r, notAllowedParams{
+										allowedMethods: "GET",
+										allowedHeaders: nil,
+										acceptPost:     "",
 										acceptPatch:    "",
 									})
 								}
@@ -647,6 +757,31 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 				}
 			}
 			switch elem[0] {
+			case 'a': // Prefix: "admin/issues"
+
+				if l := len("admin/issues"); len(elem) >= l && elem[0:l] == "admin/issues" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch method {
+					case "GET":
+						r.name = GetAdminIssuesOperation
+						r.summary = "Every complaint about cards, for admins"
+						r.operationID = "GetAdminIssues"
+						r.operationGroup = ""
+						r.pathPattern = "/admin/issues"
+						r.args = args
+						r.count = 0
+						return r, true
+					default:
+						return
+					}
+				}
+
 			case 'c': // Prefix: "cards/"
 
 				if l := len("cards/"); len(elem) >= l && elem[0:l] == "cards/" {
@@ -749,6 +884,57 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							default:
 								return
 							}
+						}
+
+					case 'i': // Prefix: "issue"
+
+						if l := len("issue"); len(elem) >= l && elem[0:l] == "issue" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							switch method {
+							case "POST":
+								r.name = ReportCardIssueOperation
+								r.summary = "Report what is wrong with a card"
+								r.operationID = "ReportCardIssue"
+								r.operationGroup = ""
+								r.pathPattern = "/cards/{cardId}/issue"
+								r.args = args
+								r.count = 1
+								return r, true
+							default:
+								return
+							}
+						}
+						switch elem[0] {
+						case '/': // Prefix: "/resolve"
+
+							if l := len("/resolve"); len(elem) >= l && elem[0:l] == "/resolve" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								// Leaf node.
+								switch method {
+								case "POST":
+									r.name = ResolveCardIssuesOperation
+									r.summary = "Keep a card as it is and close its complaints"
+									r.operationID = "ResolveCardIssues"
+									r.operationGroup = ""
+									r.pathPattern = "/cards/{cardId}/issue/resolve"
+									r.args = args
+									r.count = 1
+									return r, true
+								default:
+									return
+								}
+							}
+
 						}
 
 					}
@@ -999,6 +1185,31 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									r.operationID = "CreateCard"
 									r.operationGroup = ""
 									r.pathPattern = "/sets/{setId}/cards"
+									r.args = args
+									r.count = 1
+									return r, true
+								default:
+									return
+								}
+							}
+
+						case 'i': // Prefix: "issues"
+
+							if l := len("issues"); len(elem) >= l && elem[0:l] == "issues" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								// Leaf node.
+								switch method {
+								case "GET":
+									r.name = GetSetIssuesOperation
+									r.summary = "Open complaints about the cards of the author's set"
+									r.operationID = "GetSetIssues"
+									r.operationGroup = ""
+									r.pathPattern = "/sets/{setId}/issues"
 									r.args = args
 									r.count = 1
 									return r, true

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/notes"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
@@ -205,7 +206,7 @@ type attachmentInfo struct {
 	data     []byte
 }
 
-func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64, internalID int64, caption string, atts []attachmentInfo) {
+func (b *Bot) handleFileMessage(ctx context.Context, chatID int64, userID int64, internalID uuid.UUID, caption string, atts []attachmentInfo) {
 	log := slog.With("user_id", userID, "chat_id", chatID)
 
 	count := len(atts)
@@ -400,11 +401,11 @@ func extractFilename(att Attachment) string {
 	return ""
 }
 
-func (b *Bot) upsertUser(ctx context.Context, u User) (int64, error) {
+func (b *Bot) upsertUser(ctx context.Context, u User) (uuid.UUID, error) {
 	account, err := b.userService.UpsertMAXUser(ctx, usecase.MAXUserParams{MaxID: u.UserID, FirstName: u.FirstName, LastName: u.LastName, Username: u.Username, IsBot: u.IsBot})
 	if err != nil {
 		slog.ErrorContext(ctx, "resolve MAX user", "error", err)
-		return 0, err
+		return uuid.Nil, err
 	}
 	return account.User.ID, nil
 }
@@ -417,7 +418,12 @@ func (b *Bot) buildAppButtons() [][]map[string]interface{} {
 	if b.botUser != nil && b.botUser.Username != nil {
 		username = *b.botUser.Username
 	}
+	return appButtons(username, b.appURL)
+}
 
+// appButtons open the mini app in MAX, when the bot's username is known, and
+// in the browser.
+func appButtons(username, appURL string) [][]map[string]interface{} {
 	buttons := [][]map[string]interface{}{}
 
 	if username != "" {
@@ -434,7 +440,7 @@ func (b *Bot) buildAppButtons() [][]map[string]interface{} {
 		{
 			"type": "link",
 			"text": "Открыть в браузере 🌐",
-			"url":  b.appURL,
+			"url":  appURL,
 		},
 	})
 
@@ -539,7 +545,7 @@ func (b *Bot) SendReviewReminders(ctx context.Context) (int, error) {
 
 	successCount := 0
 	for _, userID := range userIDs {
-		if userID == 0 || userID == 100001 {
+		if userID == uuid.Nil {
 			continue
 		}
 

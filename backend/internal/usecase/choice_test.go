@@ -20,7 +20,7 @@ func TestChoiceCheckRequiresAllAnswers(t *testing.T) {
 		given string
 		want  bool
 	}{{`["B","A"]`, true}, {`["A"]`, false}, {`["A","B","C"]`, false}, {`["A","A"]`, false}} {
-		r, err := svc.CheckAnswer(context.Background(), 1, uuid.New(), tc.given)
+		r, err := svc.CheckAnswer(context.Background(), uuid.New(), uuid.New(), tc.given)
 		if err != nil || r.IsCorrect != tc.want || r.Method != contracts.CheckAnswerResponseMethodLocal {
 			t.Fatalf("%s: %+v %v", tc.given, r, err)
 		}
@@ -36,8 +36,8 @@ func TestChoiceAnswerOnlyEditUpdatesAllOptionFlags(t *testing.T) {
 		getCardOptionsFunc: func(context.Context, pgtype.UUID) ([]db.CardOption, error) {
 			return []db.CardOption{{Text: "A", IsCorrect: true}, {Text: "B"}, {Text: "C"}}, nil
 		},
-		updateCardFunc: func(_ context.Context, p db.UpdateCardParams) (db.Card, error) {
-			return db.Card{Kind: p.Kind, Question: p.Question, AnswerText: p.AnswerText}, nil
+		updateCardFunc: func(_ context.Context, p db.UpdateCardParams) (db.UpdateCardRow, error) {
+			return db.UpdateCardRow{Kind: p.Kind, Question: p.Question, AnswerText: p.AnswerText}, nil
 		},
 		createCardOptionFunc: func(_ context.Context, p db.CreateCardOptionParams) (db.CardOption, error) {
 			saved = append(saved, p)
@@ -45,7 +45,7 @@ func TestChoiceAnswerOnlyEditUpdatesAllOptionFlags(t *testing.T) {
 		},
 	}
 	svc := usecase.NewCardService(q, usecase.NewUserService(q))
-	r, err := svc.UpdateCard(context.Background(), 1, uuid.New(), &contracts.UpdateCardRequest{Answer: contracts.NewOptCardAnswer(contracts.NewStringArrayCardAnswer([]string{"A", "B"}))})
+	r, err := svc.UpdateCard(context.Background(), uuid.New(), uuid.New(), &contracts.UpdateCardRequest{Answer: contracts.NewOptCardAnswer(contracts.NewStringArrayCardAnswer([]string{"A", "B"}))})
 	if err != nil || len(saved) != 3 || !saved[0].IsCorrect || !saved[1].IsCorrect || saved[2].IsCorrect || len(r.Answer.StringArray) != 2 {
 		t.Fatalf("%+v %+v %v", r, saved, err)
 	}
