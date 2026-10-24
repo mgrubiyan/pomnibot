@@ -230,6 +230,9 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("gigachat: %s: status %d: %s", e.op, e.Status, e.Body)
 }
 
+// StatusCode exposes HTTP diagnostics without rendering upstream response text.
+func (e *APIError) StatusCode() int { return e.Status }
+
 // chatError returns the APIError of a chat completion call in err's chain,
 // or nil for anything else, token errors included.
 func chatError(err error) *APIError {

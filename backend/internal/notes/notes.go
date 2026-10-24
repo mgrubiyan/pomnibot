@@ -227,7 +227,7 @@ func (m *Maker) Make(ctx context.Context, req Request, p Progress) (Result, erro
 	}
 	genResult, err := m.generator.Generate(ctx, doc, onBatch)
 	if err != nil {
-		log.Error("failed to generate cards from document", "error", err)
+		log.Error("failed to generate cards from document", "error", err.Error(), "generation", generator.Diagnostics(err))
 		return Result{}, fmt.Errorf("generate cards: %w", err)
 	}
 	if generator.CardCount(genResult.Facts) == 0 {

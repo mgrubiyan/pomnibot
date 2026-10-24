@@ -130,6 +130,9 @@ type APIError struct {
 
 func (e *APIError) Error() string { return fmt.Sprintf("openrouter: status %d", e.Status) }
 
+// StatusCode exposes HTTP diagnostics without rendering upstream response text.
+func (e *APIError) StatusCode() int { return e.Status }
+
 type transportError struct{}
 
 func (transportError) Error() string { return "openrouter: network or response read failure" }

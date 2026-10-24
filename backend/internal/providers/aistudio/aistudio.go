@@ -148,6 +148,9 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("aistudio: status %d: %s", e.Status, e.Body)
 }
 
+// StatusCode exposes HTTP diagnostics without rendering upstream response text.
+func (e *APIError) StatusCode() int { return e.Status }
+
 // transportError is a failure to reach the API or to read its answer, the
 // only kind of non-HTTP error that may pass on a retry.
 type transportError struct{ err error }
