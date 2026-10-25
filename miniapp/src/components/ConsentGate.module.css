@@ -1,5 +1,29 @@
+/* The question stands in the middle; once the consent is opened under it,
+   the block scrolls inside the screen instead of the whole page. */
 .body {
     flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    /* Transparent until there is more below; then a line marks the edge. */
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s;
+}
+
+.body::-webkit-scrollbar {
+    display: none;
+}
+
+.moreBelow {
+    border-bottom-color: var(--divider-primary);
+}
+
+/* Auto margins centre it while it fits and, unlike justify-content,
+   do not push its top out of reach when it does not. */
+.question {
+    flex-shrink: 0;
+    margin-block: auto;
     padding: 0 24px;
     text-align: center;
 }
