@@ -18,7 +18,6 @@ import { StatusScreen } from '../components/StatusScreen';
 import { IconCheck, IconDoc, IconOffline } from '../components/Icons';
 import { estimateMinutes } from '../utils/estimate';
 import { aboutMinutesLabel, cardsLabel, cardsWord } from '../utils/plural';
-import { formatTodayDate } from '../utils/today';
 import { formatAuthorName, formatGreetingName } from '../utils/user';
 import { UserAvatar } from '../components/UserAvatar';
 import { formatNextReviewSubtitle, isNextReviewToday } from '../utils/reviewDate';
@@ -197,17 +196,20 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, remo
         </Flex>
     );
 
+    const whyLink = (
+        <button type="button" className={s.why} onClick={onOpenWhy}>
+            <Typography.Text variant="label" color="secondary">
+                Почему это работает
+            </Typography.Text>
+        </button>
+    );
+
     return (
         <Screen>
             <Flex justify="space-between" align="center" gap={12} className={s.header}>
-                <Flex direction="column" align="flex-start" gap={4} className={s.headerText}>
-                    <Typography.Text variant="description" color="secondary" asChild>
-                        <h1 className={s.greeting}>Привет, {formatGreetingName(today.user)}</h1>
-                    </Typography.Text>
-                    <Typography.Text variant="description" color="tertiary" className={s.date}>
-                        {formatTodayDate()}
-                    </Typography.Text>
-                </Flex>
+                <Typography.Text variant="description" color="secondary" asChild>
+                    <h1 className={s.greeting}>Привет, {formatGreetingName(today.user)}</h1>
+                </Typography.Text>
                 {onOpenProfile ? (
                     <button type="button" className={s.profileButton} onClick={onOpenProfile} aria-label="Профиль">
                         <UserAvatar user={today.user} size={36} />
@@ -259,7 +261,12 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, remo
                         </Flex>
 
                         <Flex direction="column" align="stretch" gap={8} className={s.setsSection}>
-                            <CellHeader titleStyle="normal">Мои наборы</CellHeader>
+                            <CellHeader
+                                titleStyle="normal"
+                                after={whyLink}
+                            >
+                                Мои наборы
+                            </CellHeader>
                             <CellList mode="island" filled className={s.setsList}>
                                 {sets.map((set, index) => {
                                     // The feed is loaded by now; a set it has no cards of has nothing
@@ -297,6 +304,7 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, remo
                         <Typography.Text variant="body" color="secondary" className={s.emptyText}>
                             Загрузите конспект, и мы сделаем из него карточки
                         </Typography.Text>
+                        {whyLink}
                     </Flex>
                 )}
 
@@ -311,14 +319,6 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, remo
                         />
                     </CellList>
                 ) : null}
-
-                <button type="button" className={s.why} onClick={onOpenWhy}>
-                    <Typography.Text variant="label" color="tertiary">
-                        Карточка возвращается, когда вы начинаете её забывать: так запоминается
-                        надолго.{' '}
-                        <span className={s.whyMore}>Почему это работает</span>
-                    </Typography.Text>
-                </button>
             </Flex>
 
             {bottomActions}
