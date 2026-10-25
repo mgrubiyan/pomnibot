@@ -171,8 +171,16 @@ func (g *Generator) completeStage(ctx context.Context, doc Document, source, sta
 			return e
 		}
 		out.Coverage.Issues = slices.Clone(reply.Issues)
-		if e := validateFacts(reply.Facts, pages); e != nil {
+		validFacts, droppedInvalid, droppedDup, issues, e := validateAndSanitizeFacts(reply.Facts, pages)
+		if e != nil {
 			return e
+		}
+		out.Stats.DroppedInvalid += droppedInvalid
+		out.Stats.DroppedDuplicate += droppedDup
+		reply.Facts = validFacts
+		out.Coverage.Issues = append(out.Coverage.Issues, issues...)
+		for _, issue := range issues {
+			slog.Warn("cards: dropped invalid or duplicate item", "issue", issue)
 		}
 		if g.opts.MaxFactsPerDoc > 0 && len(reply.Facts) > g.opts.MaxFactsPerDoc {
 			return problem("limit", "facts", fmt.Sprintf("generated %d facts, configured limit is %d", len(reply.Facts), g.opts.MaxFactsPerDoc))

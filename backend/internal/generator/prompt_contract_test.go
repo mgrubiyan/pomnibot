@@ -56,19 +56,19 @@ func TestPromptsAndSchemaUseNestedFacts(t *testing.T) {
 	fact := object(props["facts"].(map[string]any)["items"].(map[string]any), "name", "pages", "recall", "extraCards")
 	object(fact["recall"].(map[string]any), "question", "answer", "source", "sourceQuote")
 	variants := fact["extraCards"].(map[string]any)["items"].(map[string]any)["anyOf"].([]any)
-	if len(variants) != 4 {
+	if len(variants) != 3 {
 		t.Fatal("missing card formats")
 	}
 	for i, v := range variants {
 		kind := v.(map[string]any)["properties"].(map[string]any)["kind"].(map[string]any)["const"]
-		if kind != []string{"recall", "boolean", "choice", "table"}[i] {
+		if kind != []string{"boolean", "choice", "table"}[i] {
 			t.Fatalf("unexpected kind %v", kind)
 		}
 		fields := []string{"kind", "question", "source", "sourceQuote"}
 		switch i {
-		case 2:
+		case 1:
 			fields = append(fields, "rightAnswers", "wrongAnswers")
-		case 3:
+		case 2:
 			fields = append(fields, "columns")
 		default:
 			fields = append(fields, "answer")
@@ -148,6 +148,8 @@ func TestPromptsExampleAndCardFormatContract(t *testing.T) {
 			"без предоставления закрытого списка",
 			"Запрещено добавлять карточки kind: \"recall\" в extraCards",
 			"Запрещено оформлять примеры через текстовый ввод",
+			"Запрещено создавать карточки choice с вариантами вида true/false",
+			"или в choice (с вариантами да/нет, верно/неверно, true/false)",
 		} {
 			if !strings.Contains(prompt, required) {
 				t.Errorf("%s missing required guideline %q", name, required)

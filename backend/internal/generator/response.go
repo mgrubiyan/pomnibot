@@ -291,68 +291,289 @@ func requiredFields(b []byte, keys ...string) error {
 
 func normalized(s string) string { return strings.ToLower(strings.Join(strings.Fields(s), " ")) }
 
-func validateFacts(facts []Fact, pages int) error {
-	if len(facts) == 0 {
-		return problem("validation", "facts", "facts are empty")
+func sanitizeChoiceCard(c ChoiceCard) ChoiceCard {
+	c.Question = strings.TrimSpace(c.Question)
+	c.Source = strings.TrimSpace(c.Source)
+
+	cleanList := func(list []string) []string {
+		var out []string
+		seen := map[string]bool{}
+		for _, item := range list {
+			item = strings.TrimSpace(item)
+			if item == "" {
+				continue
+			}
+			norm := normalized(item)
+			if seen[norm] {
+				continue
+			}
+			seen[norm] = true
+			out = append(out, item)
+		}
+		return out
 	}
-	names, questions := map[string]bool{}, map[string]bool{}
+
+	c.RightAnswers = cleanList(c.RightAnswers)
+	rawWrongs := cleanList(c.WrongAnswers)
+	rightSet := map[string]bool{}
+	for _, r := range c.RightAnswers {
+		rightSet[normalized(r)] = true
+	}
+	var cleanWrongs []string
+	for _, w := range rawWrongs {
+		if !rightSet[normalized(w)] {
+			cleanWrongs = append(cleanWrongs, w)
+		}
+	}
+	c.WrongAnswers = cleanWrongs
+	return c
+}
+
+func sanitizeTableCard(c TableCard) TableCard {
+	c.Question = strings.TrimSpace(c.Question)
+	c.Source = strings.TrimSpace(c.Source)
+	var newCols []Column
+	for _, col := range c.Columns {
+		col.Name = strings.TrimSpace(col.Name)
+		var newRows []string
+		seen := map[string]bool{}
+		for _, row := range col.Rows {
+			row = strings.TrimSpace(row)
+			if row == "" {
+				continue
+			}
+			norm := normalized(row)
+			if seen[norm] {
+				continue
+			}
+			seen[norm] = true
+			newRows = append(newRows, row)
+		}
+		col.Rows = newRows
+		newCols = append(newCols, col)
+	}
+	c.Columns = newCols
+	return c
+}
+
+func sanitizeCard(c Card) Card {
+	if c == nil {
+		return nil
+	}
+	switch v := c.(type) {
+	case ChoiceCard:
+		return sanitizeChoiceCard(v)
+	case TableCard:
+		return sanitizeTableCard(v)
+	default:
+		return c
+	}
+}
+
+func cardSignature(c Card) string {
+	if c == nil {
+		return ""
+	}
+	base := c.Base()
+	q := normalized(base.Question)
+	switch v := c.(type) {
+	case FlipCard:
+		return fmt.Sprintf("flip:%s:%s", q, normalized(v.Answer))
+	case InputCard:
+		return fmt.Sprintf("input:%s:%s", q, normalized(v.Answer))
+	case BooleanCard:
+		return fmt.Sprintf("boolean:%s:%t", q, v.Answer)
+	case ChoiceCard:
+		rights := make([]string, len(v.RightAnswers))
+		for i, r := range v.RightAnswers {
+			rights[i] = normalized(r)
+		}
+		slices.Sort(rights)
+		wrongs := make([]string, len(v.WrongAnswers))
+		for i, w := range v.WrongAnswers {
+			wrongs[i] = normalized(w)
+		}
+		slices.Sort(wrongs)
+		return fmt.Sprintf("choice:%s:R[%s]:W[%s]", q, strings.Join(rights, "|"), strings.Join(wrongs, "|"))
+	case TableCard:
+		var cols []string
+		for _, col := range v.Columns {
+			rows := slices.Clone(col.Rows)
+			for i := range rows {
+				rows[i] = normalized(rows[i])
+			}
+			slices.Sort(rows)
+			cols = append(cols, fmt.Sprintf("%s=[%s]", normalized(col.Name), strings.Join(rows, "|")))
+		}
+		slices.Sort(cols)
+		return fmt.Sprintf("table:%s:%s", q, strings.Join(cols, ";"))
+	default:
+		return fmt.Sprintf("%T:%s", c, q)
+	}
+}
+
+func validateAndSanitizeFacts(facts []Fact, pages int) ([]Fact, int, int, []string, error) {
+	if len(facts) == 0 {
+		return nil, 0, 0, nil, problem("validation", "facts", "facts are empty")
+	}
+
+	names := map[string]bool{}
+	recallQuestions := map[string]bool{}
+	seenSignatures := map[string]bool{}
+	var validFacts []Fact
+	var issues []string
+	droppedInvalid := 0
+	droppedDuplicate := 0
+
 	for i, f := range facts {
 		path := fmt.Sprintf("facts[%d]", i)
 		name := normalized(f.Name)
 		if name == "" {
-			return problem("validation", path+".name", "fact name is empty")
+			return nil, droppedInvalid, droppedDuplicate, issues, problem("validation", path+".name", "fact name is empty")
 		}
 		if names[name] {
-			return problem("validation", path+".name", "duplicate fact name")
+			return nil, droppedInvalid, droppedDuplicate, issues, problem("validation", path+".name", "duplicate fact name")
 		}
 		names[name] = true
+
 		if len(f.Pages) == 0 {
-			return problem("validation", path+".pages", "fact pages are empty")
+			return nil, droppedInvalid, droppedDuplicate, issues, problem("validation", path+".pages", "fact pages are empty")
 		}
+
 		seen := map[int]bool{}
 		for j, p := range f.Pages {
 			pagePath := fmt.Sprintf("%s.pages[%d]", path, j)
 			if p < 1 || p > pages {
-				return problem("validation", pagePath, fmt.Sprintf("page is outside document range 1..%d", pages))
+				return nil, droppedInvalid, droppedDuplicate, issues, problem("validation", pagePath, fmt.Sprintf("page is outside document range 1..%d", pages))
 			}
 			if seen[p] {
-				return problem("validation", pagePath, "duplicate fact page")
+				return nil, droppedInvalid, droppedDuplicate, issues, problem("validation", pagePath, "duplicate fact page")
 			}
 			seen[p] = true
 		}
+
+		// Detect contradictory booleans within the same fact
+		boolAnswers := map[string]map[bool]bool{}
+		for _, c := range f.Cards {
+			if b, ok := c.(BooleanCard); ok {
+				q := normalized(b.Question)
+				if q != "" {
+					if boolAnswers[q] == nil {
+						boolAnswers[q] = map[bool]bool{}
+					}
+					boolAnswers[q][b.Answer] = true
+				}
+			}
+		}
+		contradictoryBools := map[string]bool{}
+		for q, answers := range boolAnswers {
+			if len(answers) > 1 {
+				contradictoryBools[q] = true
+			}
+		}
+
+		var validCards []Card
+		var validPaths []string
+		var validIndices []int
 		flip, input := false, false
+
 		for j, c := range f.Cards {
 			index := j
 			if len(f.cardIndices) == len(f.Cards) {
 				index = f.cardIndices[j]
 			}
 			cardPath := fmt.Sprintf("%s.cards[%d]", path, index)
+			sourcePath := ""
 			if len(f.cardPaths) == len(f.Cards) {
-				cardPath = fieldPath(path, f.cardPaths[j])
+				sourcePath = f.cardPaths[j]
+				cardPath = fieldPath(path, sourcePath)
 			}
+			isRecall := sourcePath == "recall"
+			if !isRecall && len(f.cardPaths) == 0 {
+				switch c.(type) {
+				case FlipCard:
+					if !flip {
+						isRecall = true
+					}
+				case InputCard:
+					if !input {
+						isRecall = true
+					}
+				}
+			}
+
+			// If extraCard was decoded as FlipCard/InputCard (legacy recall in extraCards)
+			if _, ok := c.(FlipCard); ok && !isRecall {
+				isRecall = true
+			}
+			if _, ok := c.(InputCard); ok && !isRecall {
+				isRecall = true
+			}
+
+			c = sanitizeCard(c)
 			if err := validateCard(c); err != nil {
-				return atPath(cardPath, err)
+				diagErr := atPath(cardPath, err)
+				if isRecall {
+					return nil, droppedInvalid, droppedDuplicate, issues, diagErr
+				}
+				droppedInvalid++
+				issues = append(issues, diagErr.Error())
+				continue
 			}
-			key := fmt.Sprintf("%T:%s", c, normalized(c.Base().Question))
-			if questions[key] {
-				return problem("validation", cardPath+".question", "duplicate card question of the same kind")
+
+			// Recall cards enforce question uniqueness per kind
+			if isRecall {
+				key := fmt.Sprintf("%T:%s", c, normalized(c.Base().Question))
+				if recallQuestions[key] {
+					return nil, droppedInvalid, droppedDuplicate, issues, problem("validation", cardPath+".question", "duplicate card question of the same kind")
+				}
+				recallQuestions[key] = true
 			}
-			questions[key] = true
+
+			if b, ok := c.(BooleanCard); ok {
+				q := normalized(b.Question)
+				if contradictoryBools[q] {
+					droppedInvalid++
+					err := problem("validation", cardPath+".answer", "contradictory boolean card answer")
+					issues = append(issues, err.Error())
+					continue
+				}
+			}
+
+			sig := cardSignature(c)
+			if seenSignatures[sig] {
+				droppedDuplicate++
+				err := problem("validation", cardPath, "duplicate card with identical signature")
+				issues = append(issues, err.Error())
+				continue
+			}
+			seenSignatures[sig] = true
+
 			switch c.(type) {
 			case FlipCard:
 				flip = true
 			case InputCard:
 				input = true
 			}
+			validCards = append(validCards, c)
+			validPaths = append(validPaths, sourcePath)
+			validIndices = append(validIndices, index)
 		}
+
 		if !flip {
-			return problem("validation", path+".cards", "missing required flip card")
+			return nil, droppedInvalid, droppedDuplicate, issues, problem("validation", path+".cards", "missing required flip card")
 		}
 		if !input {
-			return problem("validation", path+".cards", "missing required input card")
+			return nil, droppedInvalid, droppedDuplicate, issues, problem("validation", path+".cards", "missing required input card")
 		}
+
+		f.Cards = validCards
+		f.cardPaths = validPaths
+		f.cardIndices = validIndices
+		validFacts = append(validFacts, f)
 	}
-	return nil
+
+	return validFacts, droppedInvalid, droppedDuplicate, issues, nil
 }
 
 // validateCard checks content without creating storage models.
