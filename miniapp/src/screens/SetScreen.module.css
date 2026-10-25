@@ -1,5 +1,5 @@
 /* Set screen: what the set holds at the top, what can be done at the bottom.
-   The middle scrolls, the header and the buttons stay put. */
+   The title and the rows scroll, the buttons stay put. */
 
 .body {
     flex: 1;

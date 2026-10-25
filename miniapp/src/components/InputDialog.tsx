@@ -1,5 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react';
-import { Button, Flex, Input, Typography } from '@maxhub/max-ui';
+import { Button, Flex, Typography } from '@maxhub/max-ui';
+import { AutoTextarea } from './AutoTextarea';
 import s from './Dialog.module.css';
 
 export interface InputDialogProps {
@@ -24,7 +25,6 @@ export function InputDialog({
     onCancel,
 }: InputDialogProps) {
     const dialogRef = useRef<HTMLDialogElement>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
     const [value, setValue] = useState(initialValue);
     const backdropPointerDown = useRef(false);
     const titleId = useId();
@@ -39,7 +39,11 @@ export function InputDialog({
         document.body.style.overflow = 'hidden';
         document.documentElement.style.overflow = 'hidden';
         dialog.showModal();
-        inputRef.current?.focus();
+        // AutoTextarea keeps its ref to itself. The caret goes after the
+        // name, where a rename usually starts.
+        const field = dialog.querySelector('textarea');
+        field?.focus();
+        field?.setSelectionRange(field.value.length, field.value.length);
 
         return () => {
             dialog.close();
@@ -98,13 +102,17 @@ export function InputDialog({
                         </Typography.Text>
                     ) : null}
                 </Flex>
-                <Input
-                    ref={inputRef}
-                    size="large"
+                {/* A name is one line, but a long one is read whole: the field
+                    wraps and grows instead of scrolling sideways. */}
+                <AutoTextarea
+                    rows={1}
+                    mode="secondary"
+                    className={s.field}
                     value={value}
                     placeholder={placeholder}
                     maxLength={120}
-                    onChange={(e) => setValue(e.target.value)}
+                    // A pasted line break would end up in the name.
+                    onChange={(e) => setValue(e.target.value.replace(/\s*\n\s*/g, ' '))}
                     onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                             e.preventDefault();

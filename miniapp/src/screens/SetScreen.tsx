@@ -175,17 +175,19 @@ export function SetScreen({
 
     return (
         <Screen>
-            <ScreenHeader
-                title={set.title}
-                subtitle={<>
-                    {cardsLabel(totalCards)}
-                    {hasDue ? ` · ${dueCount} на повтор` : ''}
-                    {shared && set.author ? ` · автор: ${formatAuthorName(set.author)}` : ''}
-                </>}
-                onBack={onBack}
-            />
-
+            {/* The header scrolls with the rest: on a short phone a three-line
+                title would leave the rows a pocket of two. */}
             <Flex ref={bodyRef} direction="column" align="stretch" gap={16} className={cx(s.body, moreBelow && s.moreBelow)}>
+                <ScreenHeader
+                    title={set.title}
+                    subtitle={<>
+                        {cardsLabel(totalCards)}
+                        {hasDue ? ` · ${dueCount} на повтор` : ''}
+                        {shared && set.author ? ` · автор: ${formatAuthorName(set.author)}` : ''}
+                    </>}
+                    onBack={onBack}
+                />
+
                 <Flex direction="column" align="stretch" gap={12} className={s.ratingCard}>
                     <Flex justify="space-between" align="baseline">
                         <Typography.Text variant="body" color="secondary">

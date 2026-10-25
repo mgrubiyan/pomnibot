@@ -46,3 +46,13 @@
 .title {
     margin: 0;
 }
+
+/* The name field: one line as tall and as round as a large MAX UI input,
+   more lines when the name is long. */
+.field {
+    border-radius: var(--size-border-radius-action-large);
+}
+
+.field textarea {
+    padding-block: 16px;
+}
