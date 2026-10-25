@@ -3,6 +3,8 @@ package ingest
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
+	"hash/crc32"
 	"image"
 	"image/png"
 	"math/rand/v2"
@@ -95,5 +97,27 @@ func TestShrinkAveragesPixels(t *testing.T) {
 	dst := shrink(src, 2, 1)
 	if got := dst.Pix; got[0] != 100 || got[1] != 100 {
 		t.Errorf("shrink() = %v, want the mean of each 2x2 block: [100 100]", got)
+	}
+}
+
+// bombPNG is the start of a PNG whose header announces w×h pixels: enough
+// for DecodeConfig, while Decode would allocate the whole bitmap.
+func bombPNG(w, h uint32) []byte {
+	var b bytes.Buffer
+	b.WriteString("\x89PNG\r\n\x1a\n")
+	ihdr := binary.BigEndian.AppendUint32(nil, w)
+	ihdr = binary.BigEndian.AppendUint32(ihdr, h)
+	ihdr = append(ihdr, 1, 0, 0, 0, 0) // 1-bit grayscale
+	_ = binary.Write(&b, binary.BigEndian, uint32(len(ihdr)))
+	chunk := append([]byte("IHDR"), ihdr...)
+	b.Write(chunk)
+	_ = binary.Write(&b, binary.BigEndian, crc32.ChecksumIEEE(chunk))
+	return b.Bytes()
+}
+
+func TestFitImageRejectsBombBeforeDecoding(t *testing.T) {
+	_, _, _, err := fitImage(bombPNG(10_001, 10_001), serviceLimits)
+	if !errors.Is(err, ErrImageTooLarge) {
+		t.Errorf("fitImage() error = %v, want ErrImageTooLarge", err)
 	}
 }

@@ -195,3 +195,20 @@ func TestVisionDropsLinesOnlyMarkedIllegible(t *testing.T) {
 		t.Errorf("got %+v, want a line with a word marked kept", pages)
 	}
 }
+
+// A PDF page can be drawn at any size, so its rendering is checked too.
+func TestVisionRejectsHugeRenderedPage(t *testing.T) {
+	for _, fullPage := range []bool{false, true} {
+		model := &fakeModel{texts: []string{"Страница."}}
+		ocr := &VisionOCR{Model: model, FullPage: fullPage, Render: func(context.Context, []byte, int) ([]byte, error) {
+			return bombPNG(10_001, 10_001), nil
+		}}
+		_, err := ocr.Recognize(context.Background(), OCRRequest{Data: pdfBytes, MimeType: "application/pdf", Pages: 1})
+		if !errors.Is(err, ErrImageTooLarge) {
+			t.Errorf("full page %v: error = %v, want ErrImageTooLarge", fullPage, err)
+		}
+		if len(model.sizes) != 0 {
+			t.Errorf("full page %v: the model saw %v", fullPage, model.sizes)
+		}
+	}
+}
