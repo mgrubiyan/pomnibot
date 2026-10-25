@@ -91,6 +91,15 @@
     overflow-wrap: anywhere;
 }
 
+/* What kind of card it is, small enough not to compete with the question. */
+.kindTag {
+    display: inline-block;
+    margin-bottom: 4px;
+    padding: 2px 8px;
+    border-radius: 8px;
+    background: var(--background-surface);
+}
+
 .dragHandle {
     touch-action: none;
     user-select: none;

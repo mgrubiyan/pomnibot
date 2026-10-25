@@ -8,3 +8,12 @@ export const CARD_KINDS: { kind: CardKind; label: string; hint: string }[] = [
     { kind: 'input', label: 'Ввод текста', hint: 'Ответ вписывают словом или числом' },
     { kind: 'table', label: 'Таблица', hint: 'Понятия раскладывают по колонкам' },
 ];
+
+/** A card kind in a word or two, for a marker next to the question. */
+export const CARD_KIND_TAGS: Record<CardKind, string> = {
+    flip: 'Флип',
+    choice: 'Выбор',
+    boolean: 'Верно / Неверно',
+    input: 'Ввод',
+    table: 'Таблица',
+};
