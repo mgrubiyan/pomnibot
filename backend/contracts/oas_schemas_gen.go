@@ -159,15 +159,27 @@ func (*AnswerQuestionNotFound) answerQuestionRes() {}
 
 // Ref: #/components/schemas/AnswerQuestionRequest
 type AnswerQuestionRequest struct {
+	// Unique submission ID, reused for retries and renewed for each new review.
+	AttemptId uuid.UUID `json:"attemptId"`
 	// Input: the typed answer; choice: a JSON-encoded array of the selected option texts; boolean: true or
 	// false; table: a JSON-encoded array of TableItem, every term with the column it was put in; flip:
 	// true when the reader knew the answer, false when not.
 	Answer string `json:"answer"`
 }
 
+// GetAttemptId returns the value of AttemptId.
+func (s *AnswerQuestionRequest) GetAttemptId() uuid.UUID {
+	return s.AttemptId
+}
+
 // GetAnswer returns the value of Answer.
 func (s *AnswerQuestionRequest) GetAnswer() string {
 	return s.Answer
+}
+
+// SetAttemptId sets the value of AttemptId.
+func (s *AnswerQuestionRequest) SetAttemptId(val uuid.UUID) {
+	s.AttemptId = val
 }
 
 // SetAnswer sets the value of Answer.
@@ -2133,6 +2145,52 @@ func (o OptTableLayout) Get() (v TableLayout, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptTableLayout) Or(d TableLayout) TableLayout {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptUUID returns new OptUUID with value set to v.
+func NewOptUUID(v uuid.UUID) OptUUID {
+	return OptUUID{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptUUID is optional uuid.UUID.
+type OptUUID struct {
+	Value uuid.UUID
+	Set   bool
+}
+
+// IsSet returns true if OptUUID was set.
+func (o OptUUID) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptUUID) Reset() {
+	var v uuid.UUID
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptUUID) SetTo(v uuid.UUID) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptUUID) Get() (v uuid.UUID, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptUUID) Or(d uuid.UUID) uuid.UUID {
 	if v, ok := o.Get(); ok {
 		return v
 	}

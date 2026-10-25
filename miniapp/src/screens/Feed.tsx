@@ -57,6 +57,13 @@ const CHECK_RETRY_MS = 2_000;
 /** Requests lost in a row before the run stops on the error screen. */
 const CHECK_LOST_LIMIT = 3;
 
+interface AnswerAttempt {
+    attemptId: string;
+    answer: string;
+    typed: string | null;
+    onVerdict: (result: Checked) => void;
+}
+
 interface Checked {
     correct: boolean;
     reason: string | null;
@@ -91,11 +98,11 @@ function refusalOf(status: number): Refusal | null {
  * when the backend gave up on the model (fallback): the reader keeps waiting
  * for a real verdict.
  */
-async function sendAnswer(cardId: string, answer: string): Promise<Checked | Refusal | typeof LOST | null> {
+async function sendAnswer(cardId: string, answer: string, attemptId: string): Promise<Checked | Refusal | typeof LOST | null> {
     try {
         const { data, response } = await api.POST('/cards/{cardId}/answer', {
             params: { path: { cardId } },
-            body: { answer },
+            body: { answer, attemptId },
         });
         const refusal = refusalOf(response.status);
         if (refusal) {
@@ -171,13 +178,12 @@ function labelOf(card: FeedCard, value: string): string {
     return value === 'true' ? 'Верно' : 'Неверно';
 }
 
-async function loadCards(setId?: string): Promise<FeedCard[]> {
-    const { data, error } = await api.GET('/feed');
+async function loadCards(setId?: string, early?: boolean): Promise<FeedCard[]> {
+    const { data, error } = await api.GET('/feed', {
+        params: { query: { setId, early } },
+    });
     if (error || !data) {
         throw new Error(error?.message ?? 'Failed to load feed');
-    }
-    if (setId) {
-        return data.filter((card) => card.setId === setId);
     }
     return data;
 }
@@ -187,6 +193,8 @@ export interface FeedProps {
     setId?: string;
     /** Title of that set, for the result screen. */
     setTitle?: string;
+    /** Whether set is studied ahead of FSRS schedule. */
+    early?: boolean;
     /** Cards deleted and edited during this session. */
     removedCardIds: string[];
     cardPatches: Record<string, CardPatch>;
@@ -205,6 +213,7 @@ export interface FeedProps {
 export function Feed({
     setId,
     setTitle,
+    early,
     removedCardIds,
     cardPatches,
     resume,
@@ -267,7 +276,7 @@ export function Feed({
         }
         let cancelled = false;
 
-        loadCards(setId)
+        loadCards(setId, early)
             .then((next) => {
                 if (cancelled) {
                     return;
@@ -284,16 +293,7 @@ export function Feed({
         return () => {
             cancelled = true;
         };
-    }, [attempt, resume, setId, removedCardIds, cardPatches]);
-
-    const retry = () => {
-        passedRef.current = cards.slice(0, index);
-        // The reloaded feed shuffles the terms anew, so a layout kept by
-        // their places would put them in columns the reader never chose.
-        setPlacements({});
-        setStatus('loading');
-        setAttempt((current) => current + 1);
-    };
+    }, [attempt, resume, setId, early, removedCardIds, cardPatches]);
 
     const startFlip = useCallback(() => setFlipping(motionAllowed()), []);
 
@@ -326,7 +326,7 @@ export function Feed({
         reset();
     }, [reset]);
 
-    // The card is answered anew once the run is retried.
+    // Stop the check while retaining its submission for an explicit retry.
     const stop = useCallback(() => {
         reset();
         setStatus('error');
@@ -337,11 +337,17 @@ export function Feed({
      * none. A card the feed no longer asks is skipped without a result; a
      * backend that keeps failing stops the run.
      */
+    // Keep the complete submission until its verdict is known.
+    const answerAttempts = useRef(new Map<string, AnswerAttempt>());
     const ask = useCallback(
         (cardId: string, answer: string, typed: string | null, onVerdict: (result: Checked) => void) => {
+            const submission = answerAttempts.current.get(cardId) ?? {
+                attemptId: crypto.randomUUID(), answer, typed, onVerdict,
+            };
+            answerAttempts.current.set(cardId, submission);
             const run = checkRunRef.current + 1;
             checkRunRef.current = run;
-            setCheck({ stage: 'checking', typed });
+            setCheck({ stage: 'checking', typed: submission.typed });
             setCheckRun(run);
 
             let lost = 0;
@@ -349,7 +355,7 @@ export function Feed({
                 if (checkRunRef.current !== run) {
                     return; // the reader moved on
                 }
-                void sendAnswer(cardId, answer).then((result) => {
+                void sendAnswer(cardId, submission.answer, submission.attemptId).then((result) => {
                     if (checkRunRef.current !== run) {
                         return;
                     }
@@ -365,6 +371,7 @@ export function Feed({
                     }
                     setCheck(null);
                     if (result === GONE) {
+                        answerAttempts.current.delete(cardId);
                         showNext();
                         return;
                     }
@@ -372,15 +379,33 @@ export function Feed({
                         stop();
                         return;
                     }
+                    answerAttempts.current.delete(cardId);
                     setReason(result.reason);
                     setReveal(result.reveal);
-                    onVerdict(result);
+                    submission.onVerdict(result);
                 });
             };
             attempt();
         },
         [showNext, stop],
     );
+
+    const retry = () => {
+        const submission = card && answerAttempts.current.get(card.id);
+        if (card && submission) {
+            // The backend may already have committed this answer. Replay it
+            // before allowing fresh input, keeping the original table order.
+            setStatus('ready');
+            ask(card.id, submission.answer, submission.typed, submission.onVerdict);
+            return;
+        }
+        passedRef.current = cards.slice(0, index);
+        // The reloaded feed shuffles the terms anew, so a layout kept by
+        // their places would put them in columns the reader never chose.
+        setPlacements({});
+        setStatus('loading');
+        setAttempt((current) => current + 1);
+    };
 
     // Leaving the feed drops a check that is still waiting or retrying.
     useEffect(
@@ -498,7 +523,10 @@ export function Feed({
         if (!card) {
             return;
         }
-        ask(card.id, String(knew), null, (result) => setVerdict(result.correct ? 'correct' : 'wrong'));
+        ask(card.id, String(knew), null, (result) => {
+            setRevealed(true);
+            setVerdict(result.correct ? 'correct' : 'wrong');
+        });
     };
 
     const checkTable = () => {

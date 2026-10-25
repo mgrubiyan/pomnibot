@@ -11,6 +11,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getAnswerByAttempt = `-- name: GetAnswerByAttempt :one
+SELECT correct FROM answers
+WHERE user_id = $1 AND card_id = $2 AND attempt_id = $3
+`
+
+type GetAnswerByAttemptParams struct {
+	UserID    pgtype.UUID `json:"user_id"`
+	CardID    pgtype.UUID `json:"card_id"`
+	AttemptID pgtype.UUID `json:"attempt_id"`
+}
+
+func (q *Queries) GetAnswerByAttempt(ctx context.Context, arg GetAnswerByAttemptParams) (bool, error) {
+	row := q.db.QueryRow(ctx, getAnswerByAttempt, arg.UserID, arg.CardID, arg.AttemptID)
+	var correct bool
+	err := row.Scan(&correct)
+	return correct, err
+}
+
 const getLastAnswer = `-- name: GetLastAnswer :one
 SELECT correct FROM answers
 WHERE user_id = $1 AND card_id = $2
@@ -36,25 +54,32 @@ func (q *Queries) GetLastAnswer(ctx context.Context, arg GetLastAnswerParams) (b
 }
 
 const recordAnswer = `-- name: RecordAnswer :one
-INSERT INTO answers (user_id, card_id, correct)
-VALUES ($1, $2, $3)
-RETURNING correct, id, user_id, card_id
+INSERT INTO answers (user_id, card_id, correct, attempt_id)
+VALUES ($1, $2, $3, $4)
+RETURNING correct, id, user_id, card_id, attempt_id
 `
 
 type RecordAnswerParams struct {
-	UserID  pgtype.UUID `json:"user_id"`
-	CardID  pgtype.UUID `json:"card_id"`
-	Correct bool        `json:"correct"`
+	UserID    pgtype.UUID `json:"user_id"`
+	CardID    pgtype.UUID `json:"card_id"`
+	Correct   bool        `json:"correct"`
+	AttemptID pgtype.UUID `json:"attempt_id"`
 }
 
 func (q *Queries) RecordAnswer(ctx context.Context, arg RecordAnswerParams) (Answer, error) {
-	row := q.db.QueryRow(ctx, recordAnswer, arg.UserID, arg.CardID, arg.Correct)
+	row := q.db.QueryRow(ctx, recordAnswer,
+		arg.UserID,
+		arg.CardID,
+		arg.Correct,
+		arg.AttemptID,
+	)
 	var i Answer
 	err := row.Scan(
 		&i.Correct,
 		&i.ID,
 		&i.UserID,
 		&i.CardID,
+		&i.AttemptID,
 	)
 	return i, err
 }

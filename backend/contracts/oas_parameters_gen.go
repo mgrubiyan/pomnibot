@@ -604,6 +604,123 @@ func decodeGetFactsBySetIDParams(args [1]string, argsEscaped bool, r *http.Reque
 	return params, nil
 }
 
+// GetFeedQuestionsParams is parameters of GetFeedQuestions operation.
+type GetFeedQuestionsParams struct {
+	// Filter questions by set, or request set questions for review.
+	SetId OptUUID `json:",omitempty,omitzero"`
+	// When true and setId is provided, includes set cards even if not yet due according to FSRS.
+	Early OptBool `json:",omitempty,omitzero"`
+}
+
+func unpackGetFeedQuestionsParams(packed middleware.Parameters) (params GetFeedQuestionsParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "setId",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.SetId = v.(OptUUID)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "early",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Early = v.(OptBool)
+		}
+	}
+	return params
+}
+
+func decodeGetFeedQuestionsParams(args [0]string, argsEscaped bool, r *http.Request) (params GetFeedQuestionsParams, _ error) {
+	q := uri.NewQueryDecoder(r.URL.Query())
+	// Decode query: setId.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "setId",
+			Style:   uri.QueryStyleForm,
+			Explode: true,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotSetIdVal uuid.UUID
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToUUID(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotSetIdVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.SetId.SetTo(paramsDotSetIdVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "setId",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: early.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "early",
+			Style:   uri.QueryStyleForm,
+			Explode: true,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotEarlyVal bool
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToBool(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotEarlyVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Early.SetTo(paramsDotEarlyVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "early",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // GetSetParams is parameters of GetSet operation.
 type GetSetParams struct {
 	// The ID of the card set.

@@ -103,7 +103,7 @@ func (h *CardsHandler) AnswerQuestion(ctx context.Context, req *contracts.Answer
 		return &contracts.AnswerQuestionBadRequest{Message: "answer is required"}, nil
 	}
 	userID, _ := UserIDFromContext(ctx)
-	res, err := h.cardService.AnswerQuestion(ctx, userID, params.CardId, strings.TrimSpace(req.Answer))
+	res, err := h.cardService.AnswerQuestion(ctx, userID, params.CardId, strings.TrimSpace(req.Answer), req.AttemptId)
 	if err != nil {
 		if errors.Is(err, usecase.ErrValidation) {
 			return &contracts.AnswerQuestionBadRequest{Message: err.Error()}, nil

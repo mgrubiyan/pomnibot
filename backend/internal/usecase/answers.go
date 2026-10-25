@@ -23,9 +23,7 @@ import (
 // the reader cannot see at all (as after their sign-in expired) stops the run.
 var errNotInFeed = fmt.Errorf("%w: the card is not in the feed", ErrConflict)
 
-// replayWindow is how long a recorded verdict is repeated to a card that
-// left the feed: long enough for a lost response to be retried, too short
-// for an answer from an earlier pass to stand in for a new one.
+// replayWindow allows a recently answered flip card to be revealed again.
 const replayWindow = 2 * time.Minute
 
 // answerLocks serialize the answers of one reader to one fact, so a double
@@ -75,9 +73,9 @@ func (l *answerLocks) lock(userID uuid.UUID, factID pgtype.UUID) func() {
 }
 
 // AnswerQuestion grades and records the answer to the card the feed asks of
-// the reader now. Once it is recorded the card leaves the feed, and asking
-// again repeats the recorded verdict instead of grading anew.
-func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error) {
+// the reader now. Retries with the same attempt ID repeat its verdict; a new
+// review uses a new ID, even when it asks the same card immediately.
+func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string, attemptID uuid.UUID) (*contracts.AnswerQuestionResponse, error) {
 	if err := s.userService.EnsureUser(ctx, userID); err != nil {
 		return nil, err
 	}
@@ -90,20 +88,28 @@ func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID uuid.UUID, 
 	defer unlock()
 
 	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
-	inFeed, err := s.inFeed(ctx, pgUserID, card.ID)
-	if err != nil {
-		return nil, err
-	}
-	if !inFeed {
-		correct, err := s.lastAnswer(ctx, pgUserID, card.ID)
-		if err != nil {
-			return nil, err
-		}
+	correct, err := s.querier.GetAnswerByAttempt(ctx, db.GetAnswerByAttemptParams{
+		UserID:    pgUserID,
+		CardID:    card.ID,
+		AttemptID: pgtype.UUID{Bytes: attemptID, Valid: true},
+	})
+	if err == nil {
 		return &contracts.AnswerQuestionResponse{
 			IsCorrect: correct,
 			Method:    contracts.AnswerQuestionResponseMethodLocal,
 			Reveal:    contracts.NewOptCardReveal(revealOf(card, details)),
 		}, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("get answer by attempt: %w", err)
+	}
+
+	inFeed, err := s.inFeed(ctx, pgUserID, card.ID, card.SetID)
+	if err != nil {
+		return nil, err
+	}
+	if !inFeed {
+		return nil, errNotInFeed
 	}
 
 	v, err := s.grade(ctx, card, details, answer)
@@ -124,9 +130,10 @@ func (s *cardServiceImpl) AnswerQuestion(ctx context.Context, userID uuid.UUID, 
 	// leaves the card in the feed with nothing recorded for the retry.
 	if err := s.inTx(ctx, func(q db.Querier) error {
 		if _, err := q.RecordAnswer(ctx, db.RecordAnswerParams{
-			UserID:  pgUserID,
-			CardID:  card.ID,
-			Correct: v.Correct,
+			UserID:    pgUserID,
+			CardID:    card.ID,
+			Correct:   v.Correct,
+			AttemptID: pgtype.UUID{Bytes: attemptID, Valid: true},
 		}); err != nil {
 			return fmt.Errorf("record answer: %w", err)
 		}
@@ -156,7 +163,7 @@ func (s *cardServiceImpl) RevealCard(ctx context.Context, userID uuid.UUID, card
 		return nil, fmt.Errorf("%w: only a flip card is revealed before the answer", ErrValidation)
 	}
 	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
-	inFeed, err := s.inFeed(ctx, pgUserID, card.ID)
+	inFeed, err := s.inFeed(ctx, pgUserID, card.ID, card.SetID)
 	if err != nil {
 		return nil, err
 	}
@@ -187,13 +194,25 @@ func (s *cardServiceImpl) readerCard(ctx context.Context, userID uuid.UUID, card
 }
 
 // inFeed tells whether the feed asks this card of the reader now: its fact
-// is due and the card is the one for the reader's step.
-func (s *cardServiceImpl) inFeed(ctx context.Context, userID, cardID pgtype.UUID) (bool, error) {
+// is due in the general feed, or active for an early review of the set.
+func (s *cardServiceImpl) inFeed(ctx context.Context, userID, cardID, setID pgtype.UUID) (bool, error) {
 	rows, err := s.querier.GetFeedCardsForUser(ctx, userID)
 	if err != nil {
 		return false, fmt.Errorf("get feed cards for user: %w", err)
 	}
 	for _, r := range rows {
+		if r.ID == cardID {
+			return true, nil
+		}
+	}
+	setRows, err := s.querier.GetSetFeedCardsForUser(ctx, db.GetSetFeedCardsForUserParams{
+		UserID: userID,
+		SetID:  setID,
+	})
+	if err != nil {
+		return false, fmt.Errorf("get set feed cards for user: %w", err)
+	}
+	for _, r := range setRows {
 		if r.ID == cardID {
 			return true, nil
 		}

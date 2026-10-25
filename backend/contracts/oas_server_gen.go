@@ -86,7 +86,7 @@ type Handler interface {
 	// card.
 	//
 	// GET /feed
-	GetFeedQuestions(ctx context.Context) (GetFeedQuestionsRes, error)
+	GetFeedQuestions(ctx context.Context, params GetFeedQuestionsParams) (GetFeedQuestionsRes, error)
 	// GetHealth implements getHealth operation.
 	//
 	// Health check endpoint.

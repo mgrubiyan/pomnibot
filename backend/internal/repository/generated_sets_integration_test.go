@@ -144,7 +144,7 @@ func TestGeneratedSetOrderAndChoiceIssuesPostgres(t *testing.T) {
 	// Only the card the feed asks now is graded, not an easier or a harder
 	// card of the same fact.
 	for _, other := range []uuid.UUID{all[0].ID, all[4].ID} {
-		if _, err := cards.AnswerQuestion(ctx, reader, other, "true"); !errors.Is(err, usecase.ErrConflict) {
+		if _, err := cards.AnswerQuestion(ctx, reader, other, "true", uuid.New()); !errors.Is(err, usecase.ErrConflict) {
 			t.Fatalf("answer to a card out of the feed: %v", err)
 		}
 	}
@@ -156,12 +156,13 @@ func TestGeneratedSetOrderAndChoiceIssuesPostgres(t *testing.T) {
 	}
 	beforeAnswer := uuid.Must(uuid.NewV7())
 	time.Sleep(5 * time.Millisecond)
-	answer, err := cards.AnswerQuestion(ctx, reader, choiceID, `["C","B"]`)
+	attemptID := uuid.New()
+	answer, err := cards.AnswerQuestion(ctx, reader, choiceID, `["C","B"]`, attemptID)
 	if err != nil || !answer.IsCorrect || !slices.Equal(answer.Reveal.Value.Answer.StringArray, []string{"B", "C"}) {
 		t.Fatalf("answer: %+v %v", answer, err)
 	}
 	// Asked again, the endpoint repeats the recorded verdict and records nothing.
-	again, err := cards.AnswerQuestion(ctx, reader, choiceID, `["B"]`)
+	again, err := cards.AnswerQuestion(ctx, reader, choiceID, `["B"]`, attemptID)
 	if err != nil || !again.IsCorrect {
 		t.Fatalf("second answer: %+v %v", again, err)
 	}
@@ -236,5 +237,60 @@ func TestSetWarningsPostgres(t *testing.T) {
 		if err != nil || !slices.Equal(loaded.Warnings, want) {
 			t.Fatalf("API set for %s = %+v, err=%v", user, loaded, err)
 		}
+	}
+}
+
+// A one-card fact remains eligible for early review after reaching its last step.
+func TestEarlyReviewAnswerAttemptsPostgres(t *testing.T) {
+	pool := manualTestPool(t)
+	ctx := t.Context()
+	q := db.New(pool)
+	users := usecase.NewUserService(q)
+	store := repository.NewManualStore(pool)
+	sets := usecase.NewSetService(q, users, store)
+	owner, reader := uuid.New(), uuid.New()
+	set, err := sets.CreateSet(ctx, owner, &contracts.CreateSetRequest{
+		Title: "Early review",
+		Card: contracts.NewOptCreateCardRequest(contracts.CreateCardRequest{
+			Kind: contracts.CardKindBoolean, Question: "True?", Answer: contracts.NewBoolCardAnswer(true),
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sets.JoinSetByShareCode(ctx, reader, set.ShareCode.Value); err != nil {
+		t.Fatal(err)
+	}
+	feed, err := q.GetSetFeedCardsForUser(ctx, db.GetSetFeedCardsForUserParams{
+		UserID: pgtype.UUID{Bytes: reader, Valid: true}, SetID: pgtype.UUID{Bytes: set.ID, Valid: true},
+	})
+	if err != nil || len(feed) != 1 {
+		t.Fatalf("feed=%+v error=%v", feed, err)
+	}
+	card := feed[0]
+	firstAttempt, secondAttempt := uuid.New(), uuid.New()
+	// Rebuild the service too: deduplication must survive a server restart.
+	answer := func(given string, attemptID uuid.UUID, want bool) {
+		t.Helper()
+		svc := usecase.NewCardService(q, users, usecase.WithTransactions(store))
+		res, err := svc.AnswerQuestion(ctx, reader, uuid.UUID(card.ID.Bytes), given, attemptID)
+		if err != nil || res.IsCorrect != want {
+			t.Fatalf("answer=%+v error=%v, want %v", res, err, want)
+		}
+	}
+	answer("true", firstAttempt, true)
+	answer("false", secondAttempt, false)
+	// A delayed retry still gets its own verdict after another review.
+	answer("true", firstAttempt, true)
+	answer("false", secondAttempt, false)
+	var count int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM answers WHERE user_id=$1 AND card_id=$2", reader, card.ID).Scan(&count); err != nil || count != 2 {
+		t.Fatalf("answers=%d error=%v, want 2", count, err)
+	}
+	progress, err := q.GetUserFactProgress(ctx, db.GetUserFactProgressParams{
+		UserID: pgtype.UUID{Bytes: reader, Valid: true}, FactID: card.FactID,
+	})
+	if err != nil || progress.Reps != 2 || progress.Step != 0 {
+		t.Fatalf("progress=%+v error=%v, want two reviews and step 0", progress, err)
 	}
 }

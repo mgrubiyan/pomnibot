@@ -88,7 +88,7 @@ func TestCardListsBatchDetails(t *testing.T) {
 			users := usecase.NewUserService(q)
 			var count int
 			if feed {
-				cards, err := usecase.NewHomescreenService(q, users).GetFeedQuestions(context.Background(), testUserID)
+				cards, err := usecase.NewHomescreenService(q, users).GetFeedQuestions(context.Background(), testUserID, usecase.FeedOptions{})
 				if err != nil {
 					t.Fatal(err)
 				}

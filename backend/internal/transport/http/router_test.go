@@ -381,7 +381,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 				DueCount: 7,
 			}, nil
 		},
-		getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID) ([]contracts.FeedCard, error) {
+		getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID, _ usecase.FeedOptions) ([]contracts.FeedCard, error) {
 			if userID != testUserID {
 				t.Errorf("expected userID %s, got %s", testUserID, userID)
 			}
@@ -494,7 +494,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 	})
 
 	t.Run("POST /api/cards/{cardId}/answer with auth returns 200", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"answer":"4"}`)
+		body := bytes.NewBufferString(`{"answer":"4","attemptId":"01900000-0000-7000-8000-000000000001"}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/cards/"+testCardID.String()+"/answer", body)
 		req.Header.Set("Authorization", "max "+authHeader)
 		req.Header.Set("Content-Type", "application/json")
@@ -551,6 +551,24 @@ func TestRouter_E2E_Integration(t *testing.T) {
 			if _, ok := resp[0][hidden]; ok {
 				t.Errorf("the feed gives away %q: %s", hidden, rec.Body.String())
 			}
+		}
+	})
+
+	t.Run("GET /api/feed?setId=...&early=true with auth returns 200", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/feed?setId=%s&early=true", testSetID), nil)
+		req.Header.Set("Authorization", "max "+authHeader)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var resp []map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse json: %v", err)
+		}
+		if len(resp) != 1 || resp[0]["question"] != "Feed Question" {
+			t.Errorf("unexpected feed response: %+v", resp)
 		}
 	})
 
