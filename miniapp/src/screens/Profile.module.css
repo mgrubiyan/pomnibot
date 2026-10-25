@@ -17,6 +17,33 @@
     padding: 8px 16px 0;
 }
 
+.photo {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.12s var(--ease-out);
+}
+
+.photo:active,
+.photo:disabled {
+    opacity: 0.6;
+}
+
+/* Opened by the buttons; a visible file field looks foreign in MAX. */
+.file {
+    display: none;
+}
+
+.photoError {
+    color: var(--icon-negative);
+    text-align: center;
+    text-wrap: pretty;
+}
+
 .name {
     margin: 0;
     text-align: center;

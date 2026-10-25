@@ -28,6 +28,7 @@ type Querier interface {
 	CreateCardTableItem(ctx context.Context, arg CreateCardTableItemParams) (CardTableItem, error)
 	CreateFact(ctx context.Context, arg CreateFactParams) (Fact, error)
 	CreateSet(ctx context.Context, arg CreateSetParams) (Set, error)
+	DeleteAvatar(ctx context.Context, id pgtype.UUID) (User, error)
 	DeleteCard(ctx context.Context, arg DeleteCardParams) (int64, error)
 	DeleteCardOptions(ctx context.Context, cardID pgtype.UUID) error
 	DeleteCardTableColumns(ctx context.Context, cardID pgtype.UUID) error
@@ -37,6 +38,7 @@ type Querier interface {
 	EnsureUser(ctx context.Context, id pgtype.UUID) (User, error)
 	FactExists(ctx context.Context, id pgtype.UUID) (bool, error)
 	GetAnswerByAttempt(ctx context.Context, arg GetAnswerByAttemptParams) (bool, error)
+	GetAvatarImage(ctx context.Context, id pgtype.UUID) ([]byte, error)
 	GetCardByID(ctx context.Context, arg GetCardByIDParams) (GetCardByIDRow, error)
 	GetCardByIDForAuthor(ctx context.Context, arg GetCardByIDForAuthorParams) (GetCardByIDForAuthorRow, error)
 	GetCardOptions(ctx context.Context, cardID pgtype.UUID) ([]CardOption, error)
@@ -92,6 +94,8 @@ type Querier interface {
 	// Sets the reader's progress back to the previous card of the fact when they
 	// report a problem, so they don't skip ahead to harder cards.
 	RollbackFactStepOnCardIssue(ctx context.Context, arg RollbackFactStepOnCardIssueParams) error
+	// Replaces the user's photo with a new one under a new ID.
+	SaveAvatar(ctx context.Context, arg SaveAvatarParams) (User, error)
 	SaveProcessingReport(ctx context.Context, arg SaveProcessingReportParams) (int64, error)
 	SaveTelegramProfile(ctx context.Context, arg SaveTelegramProfileParams) (User, error)
 	// Giving consent again keeps the time it was first given.

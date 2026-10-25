@@ -74,6 +74,7 @@ func (s *homescreenServiceImpl) GetToday(ctx context.Context, userID uuid.UUID) 
 	estimatedMinutes := int(math.Ceil(float64(dueCount) * 15.0 / 60.0))
 
 	todayUser := buildUserContract(user.ID, user.FirstName, user.LastName, user.Username)
+	setAvatar(&todayUser, user.AvatarID)
 
 	var optNextReviewAt contracts.OptNilDateTime
 	if nextReviewAt.Valid {

@@ -19,19 +19,20 @@ export interface UserAvatarProps {
     size: number;
 }
 
-/** A person's round avatar: the first letter of their name, or an outline
-    for a member who has not let the author see them. */
+/** A person's round avatar: their photo, the first letter of their name,
+    or an outline for a member who has not let the author see them. */
 export function UserAvatar({ user, size }: UserAvatarProps) {
     const letter = avatarLetter(user);
+    const fallback = letter ? (
+        <Avatar.Text gradient={gradientOf(user.id)}>{letter}</Avatar.Text>
+    ) : (
+        <Avatar.Icon>
+            <IconPerson size={Math.round(size / 2)} tone="muted" />
+        </Avatar.Icon>
+    );
     return (
         <Avatar.Container size={size} form="circle">
-            {letter ? (
-                <Avatar.Text gradient={gradientOf(user.id)}>{letter}</Avatar.Text>
-            ) : (
-                <Avatar.Icon>
-                    <IconPerson size={Math.round(size / 2)} tone="muted" />
-                </Avatar.Icon>
-            )}
+            {user.avatarUrl ? <Avatar.Image src={user.avatarUrl} alt="" fallback={fallback} /> : fallback}
         </Avatar.Container>
     );
 }

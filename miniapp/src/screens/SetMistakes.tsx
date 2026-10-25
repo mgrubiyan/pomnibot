@@ -7,6 +7,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusScreen } from '../components/StatusScreen';
 import { IconOffline } from '../components/Icons';
 import { formatAuthorName } from '../utils/user';
+import { UserAvatar } from '../components/UserAvatar';
 import { factLabel, factStudents, mistakesLabel, studentFacts } from '../utils/mistakes';
 import { plural } from '../utils/plural';
 import s from './SetMistakes.module.css';
@@ -219,6 +220,7 @@ export function SetMistakes({ setId, setTitle, onBack }: SetMistakesProps) {
                                 key={entry.user.id}
                                 separator={index > 0}
                                 innerClassNames={entry.mistakes === 0 ? quiet : undefined}
+                                before={<UserAvatar user={entry.user} size={36} />}
                                 title={<span className={s.wrap}>{formatAuthorName(entry.user)}</span>}
                                 subtitle={mistakesLabel(entry.mistakes, entry.answers)}
                             />
@@ -293,6 +295,7 @@ export function SetMistakes({ setId, setTitle, onBack }: SetMistakesProps) {
                                             ? () => open({ kind: 'student', id: item.user.id })
                                             : undefined
                                     }
+                                    before={<UserAvatar user={item.user} size={36} />}
                                     title={<span className={s.wrap}>{formatAuthorName(item.user)}</span>}
                                     subtitle={mistakesLabel(item.mistakes, item.answers)}
                                 />

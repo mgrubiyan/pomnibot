@@ -78,6 +78,7 @@ func accountFromUser(row db.User) Account {
 	if row.Username.Valid {
 		user.Username.SetTo(row.Username.String)
 	}
+	setAvatar(&user, row.AvatarID)
 	return Account{User: user, MaxID: row.MaxID.Int64, TgID: row.TgID.Int64,
 		ProfileComplete: row.ProfileComplete, ProfileStep: row.ProfileStep, BotStarted: row.TgBotStarted,
 		DataConsent: row.DataConsentAt.Valid}

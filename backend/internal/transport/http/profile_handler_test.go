@@ -1,9 +1,14 @@
 package http
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"image"
+	pngenc "image/png"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,6 +25,7 @@ type profileUsers struct {
 	usecase.UserService
 	account   usecase.Account
 	saveError error
+	photo     []byte
 }
 
 func (u *profileUsers) UpsertTelegramUser(context.Context, usecase.TelegramUserParams) (usecase.Account, error) {
@@ -181,5 +187,117 @@ func TestProfileConsentHTTP(t *testing.T) {
 	}
 	if w := request(local, "GET", "/api/profile", "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), `"dataConsent":true`) {
 		t.Fatalf("local browser profile: %d %s", w.Code, w.Body.String())
+	}
+}
+
+func (u *profileUsers) SaveAvatar(_ context.Context, id uuid.UUID, data []byte) (usecase.Account, error) {
+	if id != u.account.User.ID {
+		return usecase.Account{}, errors.New("wrong internal ID")
+	}
+	photo, err := usecase.CleanAvatar(data)
+	if err != nil {
+		return usecase.Account{}, err
+	}
+	u.photo = photo
+	u.account.User.AvatarUrl.SetTo("/api/avatars/" + testPhotoID.String())
+	return u.account, nil
+}
+
+func (u *profileUsers) DeleteAvatar(_ context.Context, id uuid.UUID) (usecase.Account, error) {
+	if id != u.account.User.ID {
+		return usecase.Account{}, errors.New("wrong internal ID")
+	}
+	u.photo = nil
+	u.account.User.AvatarUrl.Reset()
+	return u.account, nil
+}
+
+func (u *profileUsers) AvatarImage(_ context.Context, id uuid.UUID) ([]byte, error) {
+	if id != testPhotoID || u.photo == nil {
+		return nil, usecase.ErrNotFound
+	}
+	return u.photo, nil
+}
+
+var testPhotoID = uuid.MustParse("00000000-0000-0000-0000-0000000000a1")
+
+func TestProfileAvatarHTTP(t *testing.T) {
+	member := uuid.MustParse("00000000-0000-0000-0000-000000000903")
+	users := &profileUsers{account: usecase.Account{User: contracts.User{ID: member, FirstName: "Ann"}, MaxID: 42, ProfileComplete: true}}
+	raw := generateValidInitData(map[string]string{"auth_date": fmt.Sprint(time.Now().Unix()), "user": `{"id":42}`}, "secret")
+	router, err := NewRouter(NewAPIHandler(nil, nil, nil, users), fstest.MapFS{}, "secret", "", users)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := func(method, path, body, auth string) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.Header.Set("Authorization", auth)
+		r.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, r)
+		return w
+	}
+	img := image.NewRGBA(image.Rect(0, 0, 16, 16))
+	var png bytes.Buffer
+	if err := pngenc.Encode(&png, img); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"image":"` + base64.StdEncoding.EncodeToString(png.Bytes()) + `"}`
+
+	if w := request("PUT", "/api/profile/avatar", body, ""); w.Code != 403 || users.photo != nil {
+		t.Fatalf("browser can upload in production: %d %s", w.Code, w.Body.String())
+	}
+	if w := request("PUT", "/api/profile/avatar", `{"image":"aGVsbG8="}`, "max "+raw); w.Code != 400 {
+		t.Fatalf("not an image: %d %s", w.Code, w.Body.String())
+	}
+	// A body far over the limit is refused; TestLimitAvatarBody shows it is not read in full.
+	huge := `{"image":"` + strings.Repeat("A", 2<<20) + `"}`
+	if w := request("PUT", "/api/profile/avatar", huge, "max "+raw); w.Code < 400 || w.Code >= 500 {
+		t.Fatalf("huge body: %d %s", w.Code, w.Body.String())
+	}
+	w := request("PUT", "/api/profile/avatar", body, "max "+raw)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"avatarUrl":"/api/avatars/`+testPhotoID.String()+`"`) {
+		t.Fatalf("upload: %d %s", w.Code, w.Body.String())
+	}
+
+	// An image tag sends no authorization.
+	w = request("GET", "/api/avatars/"+testPhotoID.String(), "", "")
+	if w.Code != 200 || w.Header().Get("Content-Type") != "image/jpeg" || !strings.Contains(w.Header().Get("Cache-Control"), "immutable") {
+		t.Fatalf("photo: %d %v", w.Code, w.Header())
+	}
+	if _, format, err := image.DecodeConfig(w.Body); err != nil || format != "jpeg" {
+		t.Fatalf("served photo: %s %v", format, err)
+	}
+	if w := request("GET", "/api/avatars/"+uuid.NewString(), "", ""); w.Code != 404 {
+		t.Fatalf("unknown photo: %d", w.Code)
+	}
+
+	if w := request("DELETE", "/api/profile/avatar", "", ""); w.Code != 403 || users.photo == nil {
+		t.Fatalf("browser can delete in production: %d", w.Code)
+	}
+	if w := request("DELETE", "/api/profile/avatar", "", "max "+raw); w.Code != 200 || strings.Contains(w.Body.String(), "avatarUrl") {
+		t.Fatalf("delete: %d %s", w.Code, w.Body.String())
+	}
+	if w := request("GET", "/api/avatars/"+testPhotoID.String(), "", ""); w.Code != 404 {
+		t.Fatalf("deleted photo: %d", w.Code)
+	}
+}
+
+func TestLimitAvatarBody(t *testing.T) {
+	var read int64
+	var readErr error
+	handler := limitAvatarBody(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		read, readErr = io.Copy(io.Discard, r.Body)
+	}))
+	body := strings.Repeat("A", 2*maxAvatarRequest)
+
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("PUT", "/api/profile/avatar", strings.NewReader(body)))
+	if readErr == nil || read > maxAvatarRequest {
+		t.Fatalf("photo upload read %d bytes, error %v", read, readErr)
+	}
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("POST", "/api/sets", strings.NewReader(body)))
+	if readErr != nil || read != int64(len(body)) {
+		t.Fatalf("other request read %d bytes, error %v", read, readErr)
 	}
 }

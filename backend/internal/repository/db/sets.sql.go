@@ -294,13 +294,14 @@ ranked AS (
         u.first_name,
         u.last_name,
         u.username,
+        u.avatar_id,
         (u.data_consent_at IS NOT NULL)::BOOLEAN AS data_consent,
         CAST(LEAST(100, GREATEST(0, ROUND(us.avg_mastery * 100.0))) AS INT) AS percentile,
         DENSE_RANK() OVER (ORDER BY us.avg_mastery DESC)::INT AS rank
     FROM user_scores us
     JOIN users u ON u.id = us.user_id
 )
-SELECT user_id, first_name, last_name, username, data_consent, percentile, rank
+SELECT user_id, first_name, last_name, username, avatar_id, data_consent, percentile, rank
 FROM ranked
 ORDER BY rank ASC, user_id ASC
 `
@@ -310,6 +311,7 @@ type GetSetLeaderboardRow struct {
 	FirstName   string      `json:"first_name"`
 	LastName    pgtype.Text `json:"last_name"`
 	Username    pgtype.Text `json:"username"`
+	AvatarID    pgtype.UUID `json:"avatar_id"`
 	DataConsent bool        `json:"data_consent"`
 	Percentile  int32       `json:"percentile"`
 	Rank        int32       `json:"rank"`
@@ -329,6 +331,7 @@ func (q *Queries) GetSetLeaderboard(ctx context.Context, setID pgtype.UUID) ([]G
 			&i.FirstName,
 			&i.LastName,
 			&i.Username,
+			&i.AvatarID,
 			&i.DataConsent,
 			&i.Percentile,
 			&i.Rank,
@@ -344,7 +347,7 @@ func (q *Queries) GetSetLeaderboard(ctx context.Context, setID pgtype.UUID) ([]G
 }
 
 const getSetStudents = `-- name: GetSetStudents :many
-SELECT u.id, u.first_name, u.last_name, u.username,
+SELECT u.id, u.first_name, u.last_name, u.username, u.avatar_id,
     (u.data_consent_at IS NOT NULL)::BOOLEAN AS data_consent
 FROM user_sets us
 JOIN sets s ON s.id = us.set_id
@@ -358,6 +361,7 @@ type GetSetStudentsRow struct {
 	FirstName   string      `json:"first_name"`
 	LastName    pgtype.Text `json:"last_name"`
 	Username    pgtype.Text `json:"username"`
+	AvatarID    pgtype.UUID `json:"avatar_id"`
 	DataConsent bool        `json:"data_consent"`
 }
 
@@ -376,6 +380,7 @@ func (q *Queries) GetSetStudents(ctx context.Context, setID pgtype.UUID) ([]GetS
 			&i.FirstName,
 			&i.LastName,
 			&i.Username,
+			&i.AvatarID,
 			&i.DataConsent,
 		); err != nil {
 			return nil, err

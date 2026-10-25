@@ -74,6 +74,12 @@ type Invoker interface {
 	//
 	// DELETE /facts/{factId}
 	DeleteFact(ctx context.Context, params DeleteFactParams) (DeleteFactRes, error)
+	// DeleteProfileAvatar invokes DeleteProfileAvatar operation.
+	//
+	// Remove the user's photo.
+	//
+	// DELETE /profile/avatar
+	DeleteProfileAvatar(ctx context.Context) (DeleteProfileAvatarRes, error)
 	// DeleteSet invokes DeleteSet operation.
 	//
 	// Delete a card set.
@@ -87,6 +93,13 @@ type Invoker interface {
 	//
 	// GET /admin/issues
 	GetAdminIssues(ctx context.Context) (GetAdminIssuesRes, error)
+	// GetAvatar invokes GetAvatar operation.
+	//
+	// Needs no authorization, since an image tag sends none: the random ID reaches only those the photo is
+	// shown to, and a new photo gets a new ID.
+	//
+	// GET /avatars/{avatarId}
+	GetAvatar(ctx context.Context, params GetAvatarParams) (GetAvatarRes, error)
 	// GetCardsBySetID invokes GetCardsBySetID operation.
 	//
 	// Only the author can get cards of a set; other users receive 403 Forbidden.
@@ -174,6 +187,13 @@ type Invoker interface {
 	//
 	// PUT /profile
 	PutProfile(ctx context.Context, request *ProfileRequest) (PutProfileRes, error)
+	// PutProfileAvatar invokes PutProfileAvatar operation.
+	//
+	// The image is re-encoded as JPEG, which drops its metadata. Set authors see it only when the user
+	// agreed to show them their name.
+	//
+	// PUT /profile/avatar
+	PutProfileAvatar(ctx context.Context, request *AvatarRequest) (PutProfileAvatarRes, error)
 	// PutProfileConsent invokes PutProfileConsent operation.
 	//
 	// Without consent the leaderboard and the mistakes of a set show the member to its author as an
@@ -957,6 +977,86 @@ func (c *Client) sendDeleteFact(ctx context.Context, params DeleteFactParams) (r
 	return result, nil
 }
 
+// DeleteProfileAvatar invokes DeleteProfileAvatar operation.
+//
+// Remove the user's photo.
+//
+// DELETE /profile/avatar
+func (c *Client) DeleteProfileAvatar(ctx context.Context) (DeleteProfileAvatarRes, error) {
+	res, err := c.sendDeleteProfileAvatar(ctx)
+	return res, err
+}
+
+func (c *Client) sendDeleteProfileAvatar(ctx context.Context) (res DeleteProfileAvatarRes, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("DeleteProfileAvatar"),
+		semconv.HTTPRequestMethodKey.String("DELETE"),
+		semconv.URLTemplateKey.String("/profile/avatar"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, DeleteProfileAvatarOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/profile/avatar"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "DELETE", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer func() {
+		// Drain the body to EOF before closing, so the underlying
+		// connection can be reused by the Transport regardless of the
+		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
+		_, _ = io.Copy(io.Discard, body)
+		_ = body.Close()
+	}()
+
+	stage = "DecodeResponse"
+	result, err := decodeDeleteProfileAvatarResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
 // DeleteSet invokes DeleteSet operation.
 //
 // Delete a card set.
@@ -1129,6 +1229,105 @@ func (c *Client) sendGetAdminIssues(ctx context.Context) (res GetAdminIssuesRes,
 
 	stage = "DecodeResponse"
 	result, err := decodeGetAdminIssuesResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// GetAvatar invokes GetAvatar operation.
+//
+// Needs no authorization, since an image tag sends none: the random ID reaches only those the photo is
+// shown to, and a new photo gets a new ID.
+//
+// GET /avatars/{avatarId}
+func (c *Client) GetAvatar(ctx context.Context, params GetAvatarParams) (GetAvatarRes, error) {
+	res, err := c.sendGetAvatar(ctx, params)
+	return res, err
+}
+
+func (c *Client) sendGetAvatar(ctx context.Context, params GetAvatarParams) (res GetAvatarRes, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("GetAvatar"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/avatars/{avatarId}"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, GetAvatarOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [2]string
+	pathParts[0] = "/avatars/"
+	{
+		// Encode "avatarId" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "avatarId",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.UUIDToString(params.AvatarId))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer func() {
+		// Drain the body to EOF before closing, so the underlying
+		// connection can be reused by the Transport regardless of the
+		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
+		_, _ = io.Copy(io.Discard, body)
+		_ = body.Close()
+	}()
+
+	stage = "DecodeResponse"
+	result, err := decodeGetAvatarResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -2447,6 +2646,90 @@ func (c *Client) sendPutProfile(ctx context.Context, request *ProfileRequest) (r
 
 	stage = "DecodeResponse"
 	result, err := decodePutProfileResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// PutProfileAvatar invokes PutProfileAvatar operation.
+//
+// The image is re-encoded as JPEG, which drops its metadata. Set authors see it only when the user
+// agreed to show them their name.
+//
+// PUT /profile/avatar
+func (c *Client) PutProfileAvatar(ctx context.Context, request *AvatarRequest) (PutProfileAvatarRes, error) {
+	res, err := c.sendPutProfileAvatar(ctx, request)
+	return res, err
+}
+
+func (c *Client) sendPutProfileAvatar(ctx context.Context, request *AvatarRequest) (res PutProfileAvatarRes, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("PutProfileAvatar"),
+		semconv.HTTPRequestMethodKey.String("PUT"),
+		semconv.URLTemplateKey.String("/profile/avatar"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, PutProfileAvatarOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/profile/avatar"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "PUT", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodePutProfileAvatarRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer func() {
+		// Drain the body to EOF before closing, so the underlying
+		// connection can be reused by the Transport regardless of the
+		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
+		_, _ = io.Copy(io.Discard, body)
+		_ = body.Close()
+	}()
+
+	stage = "DecodeResponse"
+	result, err := decodePutProfileAvatarResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}

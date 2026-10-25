@@ -93,6 +93,9 @@ type UserService interface {
 	SaveProfile(context.Context, uuid.UUID, string, string) (Account, error)
 	ProfileInput(context.Context, uuid.UUID, string, bool) (Account, error)
 	SetDataConsent(context.Context, uuid.UUID, bool) (Account, error)
+	SaveAvatar(context.Context, uuid.UUID, []byte) (Account, error)
+	DeleteAvatar(context.Context, uuid.UUID) (Account, error)
+	AvatarImage(context.Context, uuid.UUID) ([]byte, error)
 	EnsureUser(ctx context.Context, userID uuid.UUID) error
 	GetUsersWithDueFacts(ctx context.Context, now time.Time, tz string) ([]uuid.UUID, error)
 }

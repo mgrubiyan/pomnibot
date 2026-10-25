@@ -80,6 +80,15 @@ func (UnimplementedHandler) DeleteFact(ctx context.Context, params DeleteFactPar
 	return r, ht.ErrNotImplemented
 }
 
+// DeleteProfileAvatar implements DeleteProfileAvatar operation.
+//
+// Remove the user's photo.
+//
+// DELETE /profile/avatar
+func (UnimplementedHandler) DeleteProfileAvatar(ctx context.Context) (r DeleteProfileAvatarRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // DeleteSet implements DeleteSet operation.
 //
 // Delete a card set.
@@ -96,6 +105,16 @@ func (UnimplementedHandler) DeleteSet(ctx context.Context, params DeleteSetParam
 //
 // GET /admin/issues
 func (UnimplementedHandler) GetAdminIssues(ctx context.Context) (r GetAdminIssuesRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// GetAvatar implements GetAvatar operation.
+//
+// Needs no authorization, since an image tag sends none: the random ID reaches only those the photo is
+// shown to, and a new photo gets a new ID.
+//
+// GET /avatars/{avatarId}
+func (UnimplementedHandler) GetAvatar(ctx context.Context, params GetAvatarParams) (r GetAvatarRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
@@ -225,6 +244,16 @@ func (UnimplementedHandler) JoinSetByShareCode(ctx context.Context, req *JoinSet
 //
 // PUT /profile
 func (UnimplementedHandler) PutProfile(ctx context.Context, req *ProfileRequest) (r PutProfileRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// PutProfileAvatar implements PutProfileAvatar operation.
+//
+// The image is re-encoded as JPEG, which drops its metadata. Set authors see it only when the user
+// agreed to show them their name.
+//
+// PUT /profile/avatar
+func (UnimplementedHandler) PutProfileAvatar(ctx context.Context, req *AvatarRequest) (r PutProfileAvatarRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 

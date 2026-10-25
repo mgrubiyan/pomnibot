@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"errors"
 
@@ -87,4 +88,58 @@ func (h *APIHandler) PutProfile(ctx context.Context, req *contracts.ProfileReque
 		return &contracts.PutProfileInternalServerError{Message: internalError(ctx, "PutProfile", err)}, nil
 	}
 	return profileResponse(saved), nil
+}
+
+// PutProfileAvatar is restricted to verified accounts.
+func (h *APIHandler) PutProfileAvatar(ctx context.Context, req *contracts.AvatarRequest) (contracts.PutProfileAvatarRes, error) {
+	account, ok, err := h.profileAccount(ctx)
+	if err != nil {
+		return &contracts.PutProfileAvatarInternalServerError{Message: internalError(ctx, "PutProfileAvatar", err)}, nil
+	}
+	if !ok {
+		return &contracts.PutProfileAvatarForbidden{Message: "authorization required"}, nil
+	}
+	saved, err := h.users.SaveAvatar(ctx, account.User.ID, req.Image)
+	if errors.Is(err, usecase.ErrValidation) {
+		return &contracts.PutProfileAvatarBadRequest{Message: err.Error()}, nil
+	}
+	if err != nil {
+		return &contracts.PutProfileAvatarInternalServerError{Message: internalError(ctx, "PutProfileAvatar", err)}, nil
+	}
+	return profileResponse(saved), nil
+}
+
+// DeleteProfileAvatar is restricted to verified accounts.
+func (h *APIHandler) DeleteProfileAvatar(ctx context.Context) (contracts.DeleteProfileAvatarRes, error) {
+	account, ok, err := h.profileAccount(ctx)
+	if err != nil {
+		return &contracts.DeleteProfileAvatarInternalServerError{Message: internalError(ctx, "DeleteProfileAvatar", err)}, nil
+	}
+	if !ok {
+		return &contracts.DeleteProfileAvatarForbidden{Message: "authorization required"}, nil
+	}
+	saved, err := h.users.DeleteAvatar(ctx, account.User.ID)
+	if err != nil {
+		return &contracts.DeleteProfileAvatarInternalServerError{Message: internalError(ctx, "DeleteProfileAvatar", err)}, nil
+	}
+	return profileResponse(saved), nil
+}
+
+// GetAvatar serves a photo to anyone holding its address: a new photo gets
+// a new one, so it may be cached for good.
+func (h *APIHandler) GetAvatar(ctx context.Context, params contracts.GetAvatarParams) (contracts.GetAvatarRes, error) {
+	if h.users == nil {
+		return &contracts.GetAvatarInternalServerError{Message: "profile service unavailable"}, nil
+	}
+	photo, err := h.users.AvatarImage(ctx, params.AvatarId)
+	if errors.Is(err, usecase.ErrNotFound) {
+		return &contracts.GetAvatarNotFound{Message: "photo not found"}, nil
+	}
+	if err != nil {
+		return &contracts.GetAvatarInternalServerError{Message: internalError(ctx, "GetAvatar", err)}, nil
+	}
+	return &contracts.GetAvatarOKHeaders{
+		CacheControl: contracts.NewOptString("public, max-age=31536000, immutable"),
+		Response:     contracts.GetAvatarOK{Data: bytes.NewReader(photo)},
+	}, nil
 }

@@ -1,10 +1,11 @@
-import { useId, useState } from 'react';
-import { CellHeader, CellList, CellSimple, Flex, Switch, Typography } from '@maxhub/max-ui';
+import { useId, useRef, useState, type ChangeEvent } from 'react';
+import { Button, CellHeader, CellList, CellSimple, Flex, Switch, Typography } from '@maxhub/max-ui';
 import { api } from '../api';
 import type { Profile as ProfileData } from '../types';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { UserAvatar } from '../components/UserAvatar';
+import { avatarFromFile } from '../utils/avatar';
 import { ANONYMOUS_MEMBER, formatAuthorName } from '../utils/user';
 import s from './Profile.module.css';
 
@@ -28,6 +29,64 @@ export function Profile({ profile, onChange, onBack }: ProfileProps) {
     const [showText, setShowText] = useState(false);
     const textId = useId();
     const consent = profile.dataConsent;
+    const fileRef = useRef<HTMLInputElement>(null);
+    const [photoBusy, setPhotoBusy] = useState(false);
+    const [photoError, setPhotoError] = useState('');
+    const hasPhoto = Boolean(profile.user.avatarUrl);
+
+    const pickPhoto = () => fileRef.current?.click();
+
+    const uploadPhoto = async (event: ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        // The same file picked again must fire the change once more.
+        event.target.value = '';
+        if (!file || photoBusy) {
+            return;
+        }
+        setPhotoBusy(true);
+        setPhotoError('');
+        try {
+            let image: string;
+            try {
+                image = await avatarFromFile(file);
+            } catch {
+                setPhotoError('Не получилось открыть это фото. Выберите другое.');
+                return;
+            }
+            const { data, response } = await api.PUT('/profile/avatar', { body: { image } });
+            if (response.status === 400) {
+                setPhotoError('Это фото не подходит. Выберите другое.');
+                return;
+            }
+            if (!response.ok || !data) {
+                throw new Error('photo upload failed');
+            }
+            onChange(data);
+        } catch {
+            setPhotoError('Не получилось загрузить фото. Проверьте соединение и попробуйте ещё раз.');
+        } finally {
+            setPhotoBusy(false);
+        }
+    };
+
+    const removePhoto = async () => {
+        if (photoBusy) {
+            return;
+        }
+        setPhotoBusy(true);
+        setPhotoError('');
+        try {
+            const { data, response } = await api.DELETE('/profile/avatar');
+            if (!response.ok || !data) {
+                throw new Error('photo removal failed');
+            }
+            onChange(data);
+        } catch {
+            setPhotoError('Не получилось удалить фото. Проверьте соединение и попробуйте ещё раз.');
+        } finally {
+            setPhotoBusy(false);
+        }
+    };
 
     const toggle = async (given: boolean) => {
         if (saving) {
@@ -54,8 +113,40 @@ export function Profile({ profile, onChange, onBack }: ProfileProps) {
 
             <Flex direction="column" align="stretch" gap={20} className={s.body}>
                 <Flex direction="column" align="center" gap={12} className={s.identity}>
-                    <UserAvatar user={profile.user} size={88} />
+                    <button
+                        type="button"
+                        className={s.photo}
+                        onClick={pickPhoto}
+                        disabled={photoBusy}
+                        aria-label={hasPhoto ? 'Сменить фото' : 'Добавить фото'}
+                    >
+                        <UserAvatar user={profile.user} size={88} />
+                    </button>
+                    <input
+                        ref={fileRef}
+                        type="file"
+                        accept="image/*"
+                        className={s.file}
+                        tabIndex={-1}
+                        aria-hidden="true"
+                        onChange={(event) => void uploadPhoto(event)}
+                    />
                     <Typography.Title className={s.name}>{formatAuthorName(profile.user)}</Typography.Title>
+                    <Flex gap={8} justify="center" wrap="wrap">
+                        <Button size="small" variant="secondary" loading={photoBusy} onClick={pickPhoto}>
+                            {hasPhoto ? 'Сменить фото' : 'Добавить фото'}
+                        </Button>
+                        {hasPhoto ? (
+                            <Button size="small" variant="ghost" disabled={photoBusy} onClick={() => void removePhoto()}>
+                                Удалить
+                            </Button>
+                        ) : null}
+                    </Flex>
+                    {photoError ? (
+                        <Typography.Text variant="description" className={s.photoError} role="alert">
+                            {photoError}
+                        </Typography.Text>
+                    ) : null}
                 </Flex>
 
                 <Flex direction="column" align="stretch" gap={8}>

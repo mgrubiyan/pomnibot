@@ -7,6 +7,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusScreen } from '../components/StatusScreen';
 import { IconOffline } from '../components/Icons';
 import { formatAuthorName } from '../utils/user';
+import { UserAvatar } from '../components/UserAvatar';
 import s from './Leaderboard.module.css';
 
 type Status = 'loading' | 'error' | 'forbidden' | 'ready';
@@ -133,9 +134,12 @@ export function Leaderboard({ setId, setTitle, onBack }: LeaderboardProps) {
                                         key={item.user.id}
                                         separator={index > 0}
                                         before={
-                                            <div className={`${s.rankBadge} ${rankClass}`}>
-                                                {item.rank}
-                                            </div>
+                                            <Flex align="center" gap={12}>
+                                                <div className={`${s.rankBadge} ${rankClass}`}>
+                                                    {item.rank}
+                                                </div>
+                                                <UserAvatar user={item.user} size={36} />
+                                            </Flex>
                                         }
                                         title={formatAuthorName(item.user)}
                                         after={

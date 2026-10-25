@@ -89,6 +89,8 @@ func TestSetService_GetSetLeaderboard(t *testing.T) {
 	authorUUID := pgtype.UUID{Bytes: authorID, Valid: true}
 	memberUUID := pgtype.UUID{Bytes: memberID, Valid: true}
 	shyUUID := pgtype.UUID{Bytes: testUser3, Valid: true}
+	bobPhoto := pgtype.UUID{Bytes: uuid.MustParse("00000000-0000-0000-0000-00000000b0b0"), Valid: true}
+	carolPhoto := pgtype.UUID{Bytes: uuid.MustParse("00000000-0000-0000-0000-00000000ca01"), Valid: true}
 
 	mock := &mockQuerier{
 		getSetByIDFunc: func(_ context.Context, arg db.GetSetByIDParams) (db.GetSetByIDRow, error) {
@@ -121,6 +123,7 @@ func TestSetService_GetSetLeaderboard(t *testing.T) {
 					{
 						UserID:      memberUUID,
 						FirstName:   "Bob",
+						AvatarID:    bobPhoto,
 						DataConsent: true,
 						Percentile:  50,
 						Rank:        2,
@@ -128,6 +131,7 @@ func TestSetService_GetSetLeaderboard(t *testing.T) {
 					{
 						UserID:     shyUUID,
 						FirstName:  "Carol",
+						AvatarID:   carolPhoto,
 						LastName:   pgtype.Text{String: "Smith", Valid: true},
 						Username:   pgtype.Text{String: "carol", Valid: true},
 						Percentile: 20,
@@ -161,14 +165,17 @@ func TestSetService_GetSetLeaderboard(t *testing.T) {
 		if u := res.Items[0].User; u.FirstName != "Alice" || u.Anonymous.Value {
 			t.Errorf("author does not see themselves: %+v", u)
 		}
-		if u := res.Items[1].User; u.FirstName != "Bob" || u.Anonymous.Value {
+		if u := res.Items[1].User; u.FirstName != "Bob" || u.Anonymous.Value || u.AvatarUrl.Value != "/api/avatars/00000000-0000-0000-0000-00000000b0b0" {
 			t.Errorf("member who agreed is hidden: %+v", u)
+		}
+		if u := res.Items[0].User; u.AvatarUrl.Set {
+			t.Errorf("author without a photo got one: %+v", u)
 		}
 		shy := res.Items[2]
 		if shy.User.ID != testUser3 || shy.Rank != 3 || shy.Percentile != 20 {
 			t.Errorf("unexpected item 2: %+v", shy)
 		}
-		if u := shy.User; !u.Anonymous.Value || u.FirstName != "" || u.LastName.Set || u.Username.Set {
+		if u := shy.User; !u.Anonymous.Value || u.FirstName != "" || u.LastName.Set || u.Username.Set || u.AvatarUrl.Set {
 			t.Errorf("member without consent is shown: %+v", u)
 		}
 	})

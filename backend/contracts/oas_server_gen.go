@@ -54,6 +54,12 @@ type Handler interface {
 	//
 	// DELETE /facts/{factId}
 	DeleteFact(ctx context.Context, params DeleteFactParams) (DeleteFactRes, error)
+	// DeleteProfileAvatar implements DeleteProfileAvatar operation.
+	//
+	// Remove the user's photo.
+	//
+	// DELETE /profile/avatar
+	DeleteProfileAvatar(ctx context.Context) (DeleteProfileAvatarRes, error)
 	// DeleteSet implements DeleteSet operation.
 	//
 	// Delete a card set.
@@ -67,6 +73,13 @@ type Handler interface {
 	//
 	// GET /admin/issues
 	GetAdminIssues(ctx context.Context) (GetAdminIssuesRes, error)
+	// GetAvatar implements GetAvatar operation.
+	//
+	// Needs no authorization, since an image tag sends none: the random ID reaches only those the photo is
+	// shown to, and a new photo gets a new ID.
+	//
+	// GET /avatars/{avatarId}
+	GetAvatar(ctx context.Context, params GetAvatarParams) (GetAvatarRes, error)
 	// GetCardsBySetID implements GetCardsBySetID operation.
 	//
 	// Only the author can get cards of a set; other users receive 403 Forbidden.
@@ -154,6 +167,13 @@ type Handler interface {
 	//
 	// PUT /profile
 	PutProfile(ctx context.Context, req *ProfileRequest) (PutProfileRes, error)
+	// PutProfileAvatar implements PutProfileAvatar operation.
+	//
+	// The image is re-encoded as JPEG, which drops its metadata. Set authors see it only when the user
+	// agreed to show them their name.
+	//
+	// PUT /profile/avatar
+	PutProfileAvatar(ctx context.Context, req *AvatarRequest) (PutProfileAvatarRes, error)
 	// PutProfileConsent implements PutProfileConsent operation.
 	//
 	// Without consent the leaderboard and the mistakes of a set show the member to its author as an
