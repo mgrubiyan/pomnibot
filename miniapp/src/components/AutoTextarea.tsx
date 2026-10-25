@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
-import { Textarea, type TextareaProps } from '@maxhub/max-ui';
+import { mergeRefs, Textarea, type TextareaProps } from '@maxhub/max-ui';
 
 /**
  * A MAX UI Textarea that grows with its text, so a long question or
  * explanation is read whole instead of scrolled inside a small box.
- * `rows` stays the least height. The field keeps its ref to itself: a ref
- * from outside would take its place and the field would stop growing.
+ * `rows` stays the least height. A ref from outside is merged with the
+ * field's own, which it needs to grow.
  */
-export function AutoTextarea(props: Omit<TextareaProps, 'ref'>) {
+export function AutoTextarea({ ref: outerRef, ...props }: TextareaProps) {
     const ref = useRef<HTMLTextAreaElement>(null);
 
     const fit = useCallback(() => {
@@ -41,5 +41,5 @@ export function AutoTextarea(props: Omit<TextareaProps, 'ref'>) {
         return () => observer.disconnect();
     }, [fit]);
 
-    return <Textarea {...props} ref={ref} />;
+    return <Textarea {...props} ref={mergeRefs(ref, outerRef)} />;
 }

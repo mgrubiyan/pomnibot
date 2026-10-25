@@ -13,8 +13,8 @@ export interface ScreenHeaderProps {
 
 /** The back arrow and the title. The arrow stays on the first line of a
     title that wraps, instead of drifting down to the middle of the block.
-    A long title stops at three lines, so it does not push the screen into
-    a scroll; a tap on it shows the rest. */
+    A long title stops at three lines, so it does not take half of a short
+    screen; a tap on it shows the rest. */
 export function ScreenHeader({ title, subtitle, onBack }: ScreenHeaderProps) {
     const titleRef = useRef<HTMLHeadingElement>(null);
     const [clamped, setClamped] = useState(false);

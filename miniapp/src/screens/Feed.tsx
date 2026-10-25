@@ -18,6 +18,7 @@ import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
 import { Result } from './Result';
 import { cx } from '../utils/cx';
+import { motionAllowed } from '../utils/motion';
 import {
     IconCheck,
     IconChevronLeft,
@@ -47,7 +48,6 @@ const FLIP_MS = 300;
 const CARD_OUT_MS = 150;
 
 /** With reduced motion the card changes without turning or sliding. */
-const motionAllowed = () => !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** The reader always waits for the verdict; past these marks only the words change. */
 const CHECK_LONGER_MS = 8_000;

@@ -56,3 +56,8 @@
 .field textarea {
     padding-block: 16px;
 }
+
+/* As light as the placeholder of a MAX UI input, not the textarea's. */
+.field textarea::placeholder {
+    color: var(--text-tertiary);
+}

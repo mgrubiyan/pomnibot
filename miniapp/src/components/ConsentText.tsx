@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Flex, Typography } from '@maxhub/max-ui';
+import { motionAllowed } from '../utils/motion';
 import { ANONYMOUS_MEMBER } from '../utils/user';
 import s from './ConsentText.module.css';
 
@@ -21,18 +22,19 @@ export interface ConsentTextProps {
 /** One line on what the control means, and the full text under a tap. */
 export function ConsentText({ id, lead }: ConsentTextProps) {
     const [open, setOpen] = useState(false);
-    const textRef = useRef<HTMLDivElement>(null);
+    const rootRef = useRef<HTMLDivElement>(null);
 
     // The text opens under the fold on a short phone; bring it up so the
-    // tap visibly did something.
+    // tap visibly did something. The whole block is the target: the link
+    // just tapped stays on top when the text is taller than the screen,
+    // and the text's own rise-in transform does not skew the measure.
     useEffect(() => {
         if (!open) return;
-        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        textRef.current?.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+        rootRef.current?.scrollIntoView({ block: 'nearest', behavior: motionAllowed() ? 'smooth' : 'auto' });
     }, [open]);
 
     return (
-        <Flex direction="column" align="stretch" gap={8} id={id}>
+        <Flex ref={rootRef} direction="column" align="stretch" gap={8} id={id}>
             <Typography.Text variant="label" color="tertiary" className={s.lead}>
                 {lead}, вы соглашаетесь на обработку персональных данных.{' '}
                 <button type="button" className={s.more} aria-expanded={open} onClick={() => setOpen((current) => !current)}>
@@ -40,7 +42,7 @@ export function ConsentText({ id, lead }: ConsentTextProps) {
                 </button>
             </Typography.Text>
             {open ? (
-                <Flex ref={textRef} direction="column" align="stretch" gap={8} className={s.text}>
+                <Flex direction="column" align="stretch" gap={8} className={s.text}>
                     {CONSENT_TEXT.map((paragraph) => (
                         <Typography.Text key={paragraph} variant="label" color="secondary">
                             {paragraph}

@@ -3,6 +3,8 @@ import { Button, Flex, Typography } from '@maxhub/max-ui';
 import { AutoTextarea } from './AutoTextarea';
 import s from './Dialog.module.css';
 
+const flatten = (text: string) => text.replace(/\s*\n\s*/g, ' ');
+
 export interface InputDialogProps {
     title: string;
     description?: string;
@@ -25,6 +27,7 @@ export function InputDialog({
     onCancel,
 }: InputDialogProps) {
     const dialogRef = useRef<HTMLDialogElement>(null);
+    const fieldRef = useRef<HTMLTextAreaElement>(null);
     const [value, setValue] = useState(initialValue);
     const backdropPointerDown = useRef(false);
     const titleId = useId();
@@ -39,9 +42,8 @@ export function InputDialog({
         document.body.style.overflow = 'hidden';
         document.documentElement.style.overflow = 'hidden';
         dialog.showModal();
-        // AutoTextarea keeps its ref to itself. The caret goes after the
-        // name, where a rename usually starts.
-        const field = dialog.querySelector('textarea');
+        // The caret goes after the name, where a rename usually starts.
+        const field = fieldRef.current;
         field?.focus();
         field?.setSelectionRange(field.value.length, field.value.length);
 
@@ -105,6 +107,7 @@ export function InputDialog({
                 {/* A name is one line, but a long one is read whole: the field
                     wraps and grows instead of scrolling sideways. */}
                 <AutoTextarea
+                    ref={fieldRef}
                     rows={1}
                     // Enter saves, so the keyboard says so.
                     enterKeyHint="done"
@@ -113,10 +116,27 @@ export function InputDialog({
                     value={value}
                     placeholder={placeholder}
                     maxLength={120}
-                    // A pasted line break would end up in the name.
-                    onChange={(e) => setValue(e.target.value.replace(/\s*\n\s*/g, ' '))}
+                    onChange={(e) => {
+                        const field = e.target;
+                        // Some phone keyboards send «Готово» as a line break
+                        // with no Enter keydown: it saves, like Enter.
+                        if ((e.nativeEvent as InputEvent).inputType === 'insertLineBreak') {
+                            handleConfirm();
+                            return;
+                        }
+                        if (!field.value.includes('\n')) {
+                            setValue(field.value);
+                            return;
+                        }
+                        // A pasted line break would end up in the name. The
+                        // caret stays where the paste ended, not at the end.
+                        const caret = flatten(field.value.slice(0, field.selectionStart)).length;
+                        setValue(flatten(field.value));
+                        requestAnimationFrame(() => field.setSelectionRange(caret, caret));
+                    }}
                     onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
+                        // Enter that picks an IME candidate is not a save.
+                        if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                             e.preventDefault();
                             handleConfirm();
                         }
