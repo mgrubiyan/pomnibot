@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -35,6 +36,7 @@ type mockSetService struct {
 	getSetPlanFunc         func(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.SetPlanItem, error)
 	joinSetByShareCodeFunc func(ctx context.Context, userID uuid.UUID, code string) (*contracts.CardSet, error)
 	getSetLeaderboardFunc  func(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error)
+	getSetMistakesFunc     func(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.SetMistakesResponse, error)
 	generateMockSetFunc    func(ctx context.Context, userID uuid.UUID, title string) (*contracts.CardSet, error)
 }
 
@@ -83,6 +85,13 @@ func (m *mockSetService) JoinSetByShareCode(ctx context.Context, userID uuid.UUI
 func (m *mockSetService) GetSetLeaderboard(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
 	if m.getSetLeaderboardFunc != nil {
 		return m.getSetLeaderboardFunc(ctx, userID, setID)
+	}
+	return nil, nil
+}
+
+func (m *mockSetService) GetSetMistakes(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.SetMistakesResponse, error) {
+	if m.getSetMistakesFunc != nil {
+		return m.getSetMistakesFunc(ctx, userID, setID)
 	}
 	return nil, nil
 }
@@ -803,6 +812,60 @@ func TestSetsHandler_GetSetLeaderboard(t *testing.T) {
 			t.Fatalf("expected *contracts.GetSetLeaderboardInternalServerError, got %T", res)
 		}
 	})
+}
+
+func TestSetsHandler_GetSetMistakes(t *testing.T) {
+	targetSetID := uuid.New()
+
+	t.Run("author gets the mistakes", func(t *testing.T) {
+		svc := &mockSetService{
+			getSetMistakesFunc: func(_ context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.SetMistakesResponse, error) {
+				if userID != testSetsUser123 || setID != targetSetID {
+					t.Fatalf("unexpected call args: userID=%s, setID=%s", userID, setID)
+				}
+				return &contracts.SetMistakesResponse{
+					SetId: setID,
+					Facts: []contracts.FactMistakes{{FactName: "Ключи", Answers: 3, Mistakes: 1}},
+				}, nil
+			},
+		}
+		res, err := NewSetsHandler(svc).GetSetMistakes(WithUserID(context.Background(), testSetsUser123), contracts.GetSetMistakesParams{SetId: targetSetID})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		mistakes, ok := res.(*contracts.SetMistakesResponse)
+		if !ok {
+			t.Fatalf("expected *contracts.SetMistakesResponse, got %T", res)
+		}
+		if len(mistakes.Facts) != 1 || mistakes.Facts[0].Mistakes != 1 {
+			t.Errorf("unexpected response: %+v", mistakes)
+		}
+	})
+
+	for _, tc := range []struct {
+		name string
+		err  error
+		want contracts.GetSetMistakesRes
+	}{
+		{"member is forbidden", usecase.ErrForbidden, &contracts.GetSetMistakesForbidden{}},
+		{"unknown set is not found", usecase.ErrNotFound, &contracts.GetSetMistakesNotFound{}},
+		{"database failure is internal", errors.New("db error"), &contracts.GetSetMistakesInternalServerError{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := &mockSetService{
+				getSetMistakesFunc: func(context.Context, uuid.UUID, uuid.UUID) (*contracts.SetMistakesResponse, error) {
+					return nil, tc.err
+				},
+			}
+			res, err := NewSetsHandler(svc).GetSetMistakes(context.Background(), contracts.GetSetMistakesParams{SetId: targetSetID})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if fmt.Sprintf("%T", res) != fmt.Sprintf("%T", tc.want) {
+				t.Fatalf("expected %T, got %T", tc.want, res)
+			}
+		})
+	}
 }
 
 func (m *mockSetService) UpdateSetTitle(ctx context.Context, userID uuid.UUID, setID uuid.UUID, title string) error {

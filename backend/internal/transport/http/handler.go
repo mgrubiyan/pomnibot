@@ -114,6 +114,14 @@ func (h *APIHandler) GetSetLeaderboard(ctx context.Context, params contracts.Get
 	return h.UnimplementedHandler.GetSetLeaderboard(ctx, params)
 }
 
+// GetSetMistakes implements contracts.Handler.GetSetMistakes.
+func (h *APIHandler) GetSetMistakes(ctx context.Context, params contracts.GetSetMistakesParams) (contracts.GetSetMistakesRes, error) {
+	if h.sets != nil {
+		return h.sets.GetSetMistakes(ctx, params)
+	}
+	return h.UnimplementedHandler.GetSetMistakes(ctx, params)
+}
+
 // JoinSetByShareCode implements contracts.Handler.JoinSetByShareCode.
 func (h *APIHandler) JoinSetByShareCode(ctx context.Context, req *contracts.JoinSetRequest) (contracts.JoinSetByShareCodeRes, error) {
 	if h.sets != nil {

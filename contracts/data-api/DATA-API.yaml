@@ -1629,6 +1629,110 @@ checks:
                 example: 85
   timeoutMs: 5000
   repeatable: true
+- id: GetSetMistakes
+  name: Mistakes the members of the author's set make, by fact
+  method: GET
+  path: /sets/{setId}/mistakes
+  role: user
+  request:
+    path:
+      setId: ${setId}
+  expected:
+    statusCodes:
+    - 200
+    contentType: application/json
+    requiredFields:
+    - facts
+    - setId
+    - students
+    bodySchema:
+      type: object
+      required:
+      - setId
+      - facts
+      - students
+      properties:
+        setId:
+          type: string
+          format: uuid
+        facts:
+          description: Facts of the set, the ones most members made mistakes on first;
+            facts nobody answered yet come last.
+          type: array
+          items:
+            type: object
+            required:
+            - factId
+            - factName
+            - answers
+            - mistakes
+            - studentsAnswered
+            - studentsMistaken
+            - students
+            properties:
+              factId:
+                type: string
+                format: uuid
+              factName:
+                type: string
+              answers:
+                type: integer
+              mistakes:
+                type: integer
+              studentsAnswered:
+                description: Members who answered a card of the fact at least once.
+                type: integer
+              studentsMistaken:
+                description: Members who made at least one mistake on the fact.
+                type: integer
+              students:
+                description: Counts of the members who answered the fact.
+                type: array
+                items:
+                  type: object
+                  required:
+                  - userId
+                  - answers
+                  - mistakes
+                  properties:
+                    userId:
+                      type: string
+                      format: uuid
+                    answers:
+                      type: integer
+                    mistakes:
+                      type: integer
+        students:
+          description: Current members, the author excluded, in the order they joined.
+          type: array
+          items:
+            type: object
+            required:
+            - user
+            - answers
+            - mistakes
+            properties:
+              user:
+                type: object
+                required:
+                - id
+                - firstName
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  firstName:
+                    type: string
+                  lastName:
+                    type: string
+                  username:
+                    type: string
+              answers:
+                type: integer
+              mistakes:
+                type: integer
+  timeoutMs: 5000
+  repeatable: true
 - id: GetSetPlan
   name: Get set's facts plan
   method: GET

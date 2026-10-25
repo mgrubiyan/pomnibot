@@ -117,6 +117,13 @@ type Handler interface {
 	//
 	// GET /sets/{setId}/leaderboard
 	GetSetLeaderboard(ctx context.Context, params GetSetLeaderboardParams) (GetSetLeaderboardRes, error)
+	// GetSetMistakes implements GetSetMistakes operation.
+	//
+	// Counts every answer of the current members to the cards of each fact. The author's own answers and
+	// those of members who left are not counted.
+	//
+	// GET /sets/{setId}/mistakes
+	GetSetMistakes(ctx context.Context, params GetSetMistakesParams) (GetSetMistakesRes, error)
 	// GetSetPlan implements GetSetPlan operation.
 	//
 	// Get set's facts plan.

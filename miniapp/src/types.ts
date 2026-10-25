@@ -19,6 +19,9 @@ export interface Answer {
 export type User = components['schemas']['User'];
 export type LeaderboardEntry = components['schemas']['LeaderboardEntry'];
 export type SetLeaderboardResponse = components['schemas']['SetLeaderboardResponse'];
+export type SetMistakes = components['schemas']['SetMistakesResponse'];
+export type FactMistakes = components['schemas']['FactMistakes'];
+export type StudentMistakes = components['schemas']['StudentMistakes'];
 export type CardIssueReason = components['schemas']['CardIssueReason'];
 export type SetIssue = components['schemas']['SetIssue'];
 export type CardIssueStatus = components['schemas']['CardIssueStatus'];

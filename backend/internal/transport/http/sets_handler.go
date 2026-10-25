@@ -129,6 +129,22 @@ func (h *SetsHandler) GetSetLeaderboard(ctx context.Context, params contracts.Ge
 	return res, nil
 }
 
+// GetSetMistakes implements contracts.Handler.GetSetMistakes.
+func (h *SetsHandler) GetSetMistakes(ctx context.Context, params contracts.GetSetMistakesParams) (contracts.GetSetMistakesRes, error) {
+	userID, _ := UserIDFromContext(ctx)
+	res, err := h.setService.GetSetMistakes(ctx, userID, params.SetId)
+	if err != nil {
+		if errors.Is(err, usecase.ErrForbidden) {
+			return &contracts.GetSetMistakesForbidden{Message: err.Error()}, nil
+		}
+		if errors.Is(err, usecase.ErrNotFound) {
+			return &contracts.GetSetMistakesNotFound{Message: err.Error()}, nil
+		}
+		return &contracts.GetSetMistakesInternalServerError{Message: internalError(ctx, "GetSetMistakes", err)}, nil
+	}
+	return res, nil
+}
+
 // JoinSetByShareCode implements contracts.Handler.JoinSetByShareCode.
 func (h *SetsHandler) JoinSetByShareCode(ctx context.Context, req *contracts.JoinSetRequest) (contracts.JoinSetByShareCodeRes, error) {
 	if req == nil || strings.TrimSpace(req.Code) == "" {

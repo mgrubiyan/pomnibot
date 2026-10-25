@@ -20,6 +20,7 @@ const CardIssue = lazy(() => import('./screens/CardIssue'));
 const Feed = lazy(() => import('./screens/Feed'));
 const SetCards = lazy(() => import('./screens/SetCards'));
 const SetIssues = lazy(() => import('./screens/SetIssues'));
+const SetMistakes = lazy(() => import('./screens/SetMistakes'));
 
 /** No router yet: browser history is not used. */
 type Screen =
@@ -38,6 +39,7 @@ type Screen =
       }
     | { name: 'share'; setId: string; setTitle?: string }
     | { name: 'leaderboard'; setId: string; setTitle?: string }
+    | { name: 'set-mistakes'; setId: string; setTitle?: string }
     | { name: 'why' }
     | { name: 'add' }
     | { name: 'create-method' }
@@ -437,6 +439,16 @@ function App() {
         );
     }
 
+    if (screen.name === 'set-mistakes') {
+        return (
+            <SetMistakes
+                setId={screen.setId}
+                setTitle={screen.setTitle}
+                onBack={() => openSet(screen.setId)}
+            />
+        );
+    }
+
     if (screen.name === 'why') {
         return <WhyItWorks onBack={goHome} />;
     }
@@ -505,6 +517,7 @@ function App() {
                 onOpenWarnings={(setId) => go({ name: 'set-warnings', setId })}
                 onOpenIssues={(setId) => go({ name: 'set-issues', setId })}
                 onShare={(setId, setTitle) => go({ name: 'share', setId, setTitle })}
+                onOpenMistakes={(setId, setTitle) => go({ name: 'set-mistakes', setId, setTitle })}
                 onOpenLeaderboard={(setId, setTitle) =>
                     go({
                         name: 'leaderboard',

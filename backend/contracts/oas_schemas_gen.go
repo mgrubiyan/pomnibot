@@ -1274,6 +1274,90 @@ func (s *Fact) SetName(val string) {
 
 func (*Fact) createFactRes() {}
 
+// Ref: #/components/schemas/FactMistakes
+type FactMistakes struct {
+	FactId   uuid.UUID `json:"factId"`
+	FactName string    `json:"factName"`
+	Answers  int       `json:"answers"`
+	Mistakes int       `json:"mistakes"`
+	// Members who answered a card of the fact at least once.
+	StudentsAnswered int `json:"studentsAnswered"`
+	// Members who made at least one mistake on the fact.
+	StudentsMistaken int `json:"studentsMistaken"`
+	// Counts of the members who answered the fact.
+	Students []StudentFactMistakes `json:"students"`
+}
+
+// GetFactId returns the value of FactId.
+func (s *FactMistakes) GetFactId() uuid.UUID {
+	return s.FactId
+}
+
+// GetFactName returns the value of FactName.
+func (s *FactMistakes) GetFactName() string {
+	return s.FactName
+}
+
+// GetAnswers returns the value of Answers.
+func (s *FactMistakes) GetAnswers() int {
+	return s.Answers
+}
+
+// GetMistakes returns the value of Mistakes.
+func (s *FactMistakes) GetMistakes() int {
+	return s.Mistakes
+}
+
+// GetStudentsAnswered returns the value of StudentsAnswered.
+func (s *FactMistakes) GetStudentsAnswered() int {
+	return s.StudentsAnswered
+}
+
+// GetStudentsMistaken returns the value of StudentsMistaken.
+func (s *FactMistakes) GetStudentsMistaken() int {
+	return s.StudentsMistaken
+}
+
+// GetStudents returns the value of Students.
+func (s *FactMistakes) GetStudents() []StudentFactMistakes {
+	return s.Students
+}
+
+// SetFactId sets the value of FactId.
+func (s *FactMistakes) SetFactId(val uuid.UUID) {
+	s.FactId = val
+}
+
+// SetFactName sets the value of FactName.
+func (s *FactMistakes) SetFactName(val string) {
+	s.FactName = val
+}
+
+// SetAnswers sets the value of Answers.
+func (s *FactMistakes) SetAnswers(val int) {
+	s.Answers = val
+}
+
+// SetMistakes sets the value of Mistakes.
+func (s *FactMistakes) SetMistakes(val int) {
+	s.Mistakes = val
+}
+
+// SetStudentsAnswered sets the value of StudentsAnswered.
+func (s *FactMistakes) SetStudentsAnswered(val int) {
+	s.StudentsAnswered = val
+}
+
+// SetStudentsMistaken sets the value of StudentsMistaken.
+func (s *FactMistakes) SetStudentsMistaken(val int) {
+	s.StudentsMistaken = val
+}
+
+// SetStudents sets the value of Students.
+func (s *FactMistakes) SetStudents(val []StudentFactMistakes) {
+	s.Students = val
+}
+
 // A card as the feed asks it, with nothing that gives the answer away.
 // Ref: #/components/schemas/FeedCard
 type FeedCard struct {
@@ -1500,6 +1584,18 @@ func (*GetSetLeaderboardInternalServerError) getSetLeaderboardRes() {}
 type GetSetLeaderboardNotFound ErrorResponse
 
 func (*GetSetLeaderboardNotFound) getSetLeaderboardRes() {}
+
+type GetSetMistakesForbidden ErrorResponse
+
+func (*GetSetMistakesForbidden) getSetMistakesRes() {}
+
+type GetSetMistakesInternalServerError ErrorResponse
+
+func (*GetSetMistakesInternalServerError) getSetMistakesRes() {}
+
+type GetSetMistakesNotFound ErrorResponse
+
+func (*GetSetMistakesNotFound) getSetMistakesRes() {}
 
 type GetSetNotFound ErrorResponse
 
@@ -2502,6 +2598,47 @@ func (s *SetLeaderboardResponse) SetItems(val []LeaderboardEntry) {
 
 func (*SetLeaderboardResponse) getSetLeaderboardRes() {}
 
+// Ref: #/components/schemas/SetMistakesResponse
+type SetMistakesResponse struct {
+	SetId uuid.UUID `json:"setId"`
+	// Facts of the set, the ones most members made mistakes on first; facts nobody answered yet come last.
+	Facts []FactMistakes `json:"facts"`
+	// Current members, the author excluded, in the order they joined.
+	Students []StudentMistakes `json:"students"`
+}
+
+// GetSetId returns the value of SetId.
+func (s *SetMistakesResponse) GetSetId() uuid.UUID {
+	return s.SetId
+}
+
+// GetFacts returns the value of Facts.
+func (s *SetMistakesResponse) GetFacts() []FactMistakes {
+	return s.Facts
+}
+
+// GetStudents returns the value of Students.
+func (s *SetMistakesResponse) GetStudents() []StudentMistakes {
+	return s.Students
+}
+
+// SetSetId sets the value of SetId.
+func (s *SetMistakesResponse) SetSetId(val uuid.UUID) {
+	s.SetId = val
+}
+
+// SetFacts sets the value of Facts.
+func (s *SetMistakesResponse) SetFacts(val []FactMistakes) {
+	s.Facts = val
+}
+
+// SetStudents sets the value of Students.
+func (s *SetMistakesResponse) SetStudents(val []StudentMistakes) {
+	s.Students = val
+}
+
+func (*SetMistakesResponse) getSetMistakesRes() {}
+
 // Ref: #/components/schemas/SetPlanItem
 type SetPlanItem struct {
 	FactName string    `json:"factName"`
@@ -2531,6 +2668,80 @@ func (s *SetPlanItem) SetDate(val time.Time) {
 type SetPlanResponse []SetPlanItem
 
 func (*SetPlanResponse) getSetPlanRes() {}
+
+// Ref: #/components/schemas/StudentFactMistakes
+type StudentFactMistakes struct {
+	UserId   uuid.UUID `json:"userId"`
+	Answers  int       `json:"answers"`
+	Mistakes int       `json:"mistakes"`
+}
+
+// GetUserId returns the value of UserId.
+func (s *StudentFactMistakes) GetUserId() uuid.UUID {
+	return s.UserId
+}
+
+// GetAnswers returns the value of Answers.
+func (s *StudentFactMistakes) GetAnswers() int {
+	return s.Answers
+}
+
+// GetMistakes returns the value of Mistakes.
+func (s *StudentFactMistakes) GetMistakes() int {
+	return s.Mistakes
+}
+
+// SetUserId sets the value of UserId.
+func (s *StudentFactMistakes) SetUserId(val uuid.UUID) {
+	s.UserId = val
+}
+
+// SetAnswers sets the value of Answers.
+func (s *StudentFactMistakes) SetAnswers(val int) {
+	s.Answers = val
+}
+
+// SetMistakes sets the value of Mistakes.
+func (s *StudentFactMistakes) SetMistakes(val int) {
+	s.Mistakes = val
+}
+
+// Ref: #/components/schemas/StudentMistakes
+type StudentMistakes struct {
+	User     User `json:"user"`
+	Answers  int  `json:"answers"`
+	Mistakes int  `json:"mistakes"`
+}
+
+// GetUser returns the value of User.
+func (s *StudentMistakes) GetUser() User {
+	return s.User
+}
+
+// GetAnswers returns the value of Answers.
+func (s *StudentMistakes) GetAnswers() int {
+	return s.Answers
+}
+
+// GetMistakes returns the value of Mistakes.
+func (s *StudentMistakes) GetMistakes() int {
+	return s.Mistakes
+}
+
+// SetUser sets the value of User.
+func (s *StudentMistakes) SetUser(val User) {
+	s.User = val
+}
+
+// SetAnswers sets the value of Answers.
+func (s *StudentMistakes) SetAnswers(val int) {
+	s.Answers = val
+}
+
+// SetMistakes sets the value of Mistakes.
+func (s *StudentMistakes) SetMistakes(val int) {
+	s.Mistakes = val
+}
 
 // A sorting item and its category. Both strings support GFM + math.
 // Ref: #/components/schemas/TableItem

@@ -1,0 +1,29 @@
+/* Where the members of the author's set make mistakes. */
+
+.body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.list {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.hint {
+    padding: 0 16px;
+    text-wrap: pretty;
+}
+
+/* Fact names and member names are long and come unbroken. */
+.wrap {
+    overflow-wrap: anywhere;
+}
+
+.empty {
+    padding: 32px 16px;
+    text-align: center;
+    text-wrap: balance;
+}

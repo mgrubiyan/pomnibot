@@ -173,6 +173,16 @@ func (UnimplementedHandler) GetSetLeaderboard(ctx context.Context, params GetSet
 	return r, ht.ErrNotImplemented
 }
 
+// GetSetMistakes implements GetSetMistakes operation.
+//
+// Counts every answer of the current members to the cards of each fact. The author's own answers and
+// those of members who left are not counted.
+//
+// GET /sets/{setId}/mistakes
+func (UnimplementedHandler) GetSetMistakes(ctx context.Context, params GetSetMistakesParams) (r GetSetMistakesRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // GetSetPlan implements GetSetPlan operation.
 //
 // Get set's facts plan.
