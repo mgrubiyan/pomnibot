@@ -38,3 +38,36 @@
     padding: 0 16px;
     color: var(--icon-negative);
 }
+
+/* The question is seen once: it rises in, the answers a beat later. */
+.enter {
+    transition: opacity 300ms var(--ease-out), transform 300ms var(--ease-out);
+
+    @starting-style {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+}
+
+.enterLater {
+    transition-delay: 60ms;
+}
+
+/* The error and the way out fade in rather than pop. */
+.appear {
+    transition: opacity 150ms var(--ease-out);
+
+    @starting-style {
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .enter {
+        transition: opacity 200ms var(--ease-out);
+
+        @starting-style {
+            transform: none;
+        }
+    }
+}

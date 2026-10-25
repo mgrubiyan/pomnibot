@@ -2,20 +2,24 @@ import { useState, type ReactNode } from 'react';
 import { Button, Flex, Typography } from '@maxhub/max-ui';
 import { api } from '../api';
 import { config } from '../config';
+import { cx } from '../utils/cx';
 import { ANONYMOUS_MEMBER, PROFILE_SIGNED_OUT } from '../utils/user';
 import { ConsentText } from './ConsentText';
 import { IconPerson } from './Icons';
 import { useProfile } from './profileContext';
 import { Screen } from './Screen';
-import { cx } from '../utils/cx';
 import { useMoreBelow } from '../utils/useMoreBelow';
 import s from './ConsentGate.module.css';
+
+/** A quick save shows nothing; a slow one says it is saving. */
+const SAVING_DELAY_MS = 200;
 
 /** On the first visit the user says whether set authors may see them; the
     answer can be changed in the profile at any time. */
 export function ConsentGate({ children }: { children: ReactNode }) {
     const state = useProfile();
     const [saving, setSaving] = useState<boolean | null>(null);
+    const [slow, setSlow] = useState(false);
     const [failed, setFailed] = useState<false | 'network' | 'signed-out'>(false);
     // After a failed save the user may go on and be asked on the next visit.
     const [later, setLater] = useState(false);
@@ -32,6 +36,7 @@ export function ConsentGate({ children }: { children: ReactNode }) {
         if (saving !== null) return;
         setSaving(given);
         setFailed(false);
+        const timer = setTimeout(() => setSlow(true), SAVING_DELAY_MS);
         try {
             const { data, response } = await api.PUT('/profile/consent', { body: { given } });
             if (response.status === 403) {
@@ -43,6 +48,8 @@ export function ConsentGate({ children }: { children: ReactNode }) {
         } catch {
             setFailed('network');
         } finally {
+            clearTimeout(timer);
+            setSlow(false);
             setSaving(null);
         }
     };
@@ -51,7 +58,7 @@ export function ConsentGate({ children }: { children: ReactNode }) {
         <Screen>
             {/* The question and the opened consent scroll, the buttons stay put. */}
             <Flex ref={bodyRef} direction="column" align="stretch" gap={12} className={cx(s.body, moreBelow && s.moreBelow)}>
-                <Flex direction="column" align="center" gap={12} className={s.question}>
+                <Flex direction="column" align="center" gap={12} className={cx(s.question, s.enter)}>
                     <IconPerson size={48} tone="muted" />
                     <Typography.Text variant="subheader" className={s.title}>
                         Показывать вас авторам наборов?
@@ -64,24 +71,26 @@ export function ConsentGate({ children }: { children: ReactNode }) {
                         Это можно изменить в любой момент в профиле.
                     </Typography.Text>
                 </Flex>
-                <ConsentText lead="Нажимая «Разрешить»" />
+                <div className={cx(s.enter, s.enterLater)}>
+                    <ConsentText lead="Нажимая «Разрешить»" />
+                </div>
             </Flex>
 
-            <Flex direction="column" align="stretch" gap={12}>
+            <Flex direction="column" align="stretch" gap={12} className={cx(s.enter, s.enterLater)}>
                 {failed ? (
-                    <Typography.Text variant="description" className={s.error} role="alert">
+                    <Typography.Text variant="description" className={cx(s.error, s.appear)} role="alert">
                         {failed === 'signed-out' ? PROFILE_SIGNED_OUT : 'Не получилось сохранить. Проверьте соединение и попробуйте ещё раз.'}
                     </Typography.Text>
                 ) : null}
                 <Flex direction="column" align="stretch" gap={8}>
-                    <Button size="medium" variant="primary" stretched disabled={saving !== null} onClick={() => void answer(true)}>
-                        {saving === true ? 'Сохраняем…' : 'Разрешить'}
+                    <Button size="medium" variant="primary" stretched disabled={slow} onClick={() => void answer(true)}>
+                        {slow && saving === true ? 'Сохраняем…' : 'Разрешить'}
                     </Button>
-                    <Button size="medium" variant="secondary" stretched disabled={saving !== null} onClick={() => void answer(false)}>
-                        {saving === false ? 'Сохраняем…' : 'Не показывать'}
+                    <Button size="medium" variant="secondary" stretched disabled={slow} onClick={() => void answer(false)}>
+                        {slow && saving === false ? 'Сохраняем…' : 'Не показывать'}
                     </Button>
                     {failed ? (
-                        <Button size="medium" variant="ghost" stretched disabled={saving !== null} onClick={() => setLater(true)}>
+                        <Button size="medium" variant="ghost" stretched disabled={slow} className={s.appear} onClick={() => setLater(true)}>
                             Спросить потом
                         </Button>
                     ) : null}

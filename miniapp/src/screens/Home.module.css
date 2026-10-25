@@ -131,7 +131,6 @@
     font: inherit;
     white-space: nowrap;
     text-decoration: underline;
-    text-decoration-color: var(--text-tertiary);
     text-underline-offset: 2px;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
