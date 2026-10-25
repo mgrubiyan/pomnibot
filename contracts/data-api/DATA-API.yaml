@@ -332,6 +332,7 @@ checks:
     contentType: application/json
     requiredFields:
     - dataConsent
+    - dataConsentAnswered
     - profileComplete
     - user
     bodySchema:
@@ -340,6 +341,7 @@ checks:
       - user
       - profileComplete
       - dataConsent
+      - dataConsentAnswered
       properties:
         user:
           type: object
@@ -374,6 +376,10 @@ checks:
         dataConsent:
           type: boolean
           description: The user lets set authors see their name and photo
+        dataConsentAnswered:
+          type: boolean
+          description: The user has said yes or no to the consent once; until then
+            the mini-app asks
   timeoutMs: 5000
   repeatable: true
 - id: PutProfile
@@ -390,6 +396,7 @@ checks:
     contentType: application/json
     requiredFields:
     - dataConsent
+    - dataConsentAnswered
     - profileComplete
     - user
     bodySchema:
@@ -398,6 +405,7 @@ checks:
       - user
       - profileComplete
       - dataConsent
+      - dataConsentAnswered
       properties:
         user:
           type: object
@@ -432,6 +440,10 @@ checks:
         dataConsent:
           type: boolean
           description: The user lets set authors see their name and photo
+        dataConsentAnswered:
+          type: boolean
+          description: The user has said yes or no to the consent once; until then
+            the mini-app asks
   timeoutMs: 5000
   repeatable: false
 - id: PutProfileAvatar
@@ -448,6 +460,7 @@ checks:
     contentType: application/json
     requiredFields:
     - dataConsent
+    - dataConsentAnswered
     - profileComplete
     - user
     bodySchema:
@@ -456,6 +469,7 @@ checks:
       - user
       - profileComplete
       - dataConsent
+      - dataConsentAnswered
       properties:
         user:
           type: object
@@ -490,6 +504,10 @@ checks:
         dataConsent:
           type: boolean
           description: The user lets set authors see their name and photo
+        dataConsentAnswered:
+          type: boolean
+          description: The user has said yes or no to the consent once; until then
+            the mini-app asks
   timeoutMs: 5000
   repeatable: false
 - id: PutProfileConsent
@@ -506,6 +524,7 @@ checks:
     contentType: application/json
     requiredFields:
     - dataConsent
+    - dataConsentAnswered
     - profileComplete
     - user
     bodySchema:
@@ -514,6 +533,7 @@ checks:
       - user
       - profileComplete
       - dataConsent
+      - dataConsentAnswered
       properties:
         user:
           type: object
@@ -548,6 +568,10 @@ checks:
         dataConsent:
           type: boolean
           description: The user lets set authors see their name and photo
+        dataConsentAnswered:
+          type: boolean
+          description: The user has said yes or no to the consent once; until then
+            the mini-app asks
   timeoutMs: 5000
   repeatable: false
 - id: CreateSet

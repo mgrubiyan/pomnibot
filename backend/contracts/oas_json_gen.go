@@ -6612,13 +6612,18 @@ func (s *ProfileResponse) encodeFields(e *jx.Encoder) {
 		e.FieldStart("dataConsent")
 		e.Bool(s.DataConsent)
 	}
+	{
+		e.FieldStart("dataConsentAnswered")
+		e.Bool(s.DataConsentAnswered)
+	}
 }
 
-var jsonFieldsNameOfProfileResponse = [4]string{
+var jsonFieldsNameOfProfileResponse = [5]string{
 	0: "user",
 	1: "platform",
 	2: "profileComplete",
 	3: "dataConsent",
+	4: "dataConsentAnswered",
 }
 
 // Decode decodes ProfileResponse from json.
@@ -6674,6 +6679,18 @@ func (s *ProfileResponse) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"dataConsent\"")
 			}
+		case "dataConsentAnswered":
+			requiredBitSet[0] |= 1 << 4
+			if err := func() error {
+				v, err := d.Bool()
+				s.DataConsentAnswered = bool(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"dataConsentAnswered\"")
+			}
 		default:
 			return d.Skip()
 		}
@@ -6684,7 +6701,7 @@ func (s *ProfileResponse) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b00001101,
+		0b00011101,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.

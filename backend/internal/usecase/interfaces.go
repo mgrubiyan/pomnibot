@@ -83,6 +83,9 @@ type Account struct {
 	BotStarted      bool
 	// DataConsent lets set authors see the user's name.
 	DataConsent bool
+	// DataConsentAnswered: the user has said yes or no to it once, so the
+	// mini-app no longer asks.
+	DataConsentAnswered bool
 }
 
 // UserService defines user domain operations.

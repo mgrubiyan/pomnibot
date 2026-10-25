@@ -5,20 +5,10 @@ import type { Profile as ProfileData } from '../types';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { UserAvatar } from '../components/UserAvatar';
+import { ConsentText } from '../components/ConsentText';
 import { avatarFromFile } from '../utils/avatar';
-import { ANONYMOUS_MEMBER, formatAuthorName } from '../utils/user';
+import { ANONYMOUS_MEMBER, PROFILE_SIGNED_OUT, formatAuthorName } from '../utils/user';
 import s from './Profile.module.css';
-
-/** The full consent; the switch on the screen gives or withdraws it. */
-const CONSENT_TEXT = [
-    'Я даю команде Помнибота согласие на обработку моих персональных данных: имени, фамилии, имени пользователя, фотографии профиля и результатов повторения — прогресса, ответов и ошибок в наборах карточек.',
-    'Цель — показывать эти данные авторам наборов, в которых я участвую, в таблице лидеров и в списке ошибок участников, чтобы автор видел, кому и в чём нужна помощь.',
-    'Команда Помнибота хранит эти данные и показывает их только авторам моих наборов. Другим людям и организациям они не передаются.',
-    `Согласие действует, пока я его не отзову. Отозвать его можно в любой момент этим же переключателем в профиле — после этого авторы видят меня как «${ANONYMOUS_MEMBER}».`,
-];
-
-/** Outside MAX and Telegram the server does not know who is asking. */
-const SIGNED_OUT = 'Профиль можно изменить только в приложении в MAX или Telegram.';
 
 export interface ProfileProps {
     profile: ProfileData;
@@ -29,7 +19,6 @@ export interface ProfileProps {
 export function Profile({ profile, onChange, onBack }: ProfileProps) {
     const [saving, setSaving] = useState(false);
     const [failed, setFailed] = useState<false | 'network' | 'signed-out'>(false);
-    const [showText, setShowText] = useState(false);
     const textId = useId();
     // The switch moves on the tap; the answer of the server confirms it or
     // takes it back.
@@ -69,7 +58,7 @@ export function Profile({ profile, onChange, onBack }: ProfileProps) {
                 return;
             }
             if (response.status === 403) {
-                setPhotoError(SIGNED_OUT);
+                setPhotoError(PROFILE_SIGNED_OUT);
                 return;
             }
             if (!response.ok || !data) {
@@ -100,7 +89,7 @@ export function Profile({ profile, onChange, onBack }: ProfileProps) {
         try {
             const { data, response } = await api.DELETE('/profile/avatar');
             if (response.status === 403) {
-                setPhotoError(SIGNED_OUT);
+                setPhotoError(PROFILE_SIGNED_OUT);
                 return;
             }
             if (!response.ok || !data) {
@@ -204,33 +193,12 @@ export function Profile({ profile, onChange, onBack }: ProfileProps) {
                     </Typography.Text>
                     {failed ? (
                         <Typography.Text variant="description" className={s.error} role="alert">
-                            {failed === 'signed-out' ? SIGNED_OUT : 'Не получилось сохранить. Проверьте соединение и попробуйте ещё раз.'}
+                            {failed === 'signed-out' ? PROFILE_SIGNED_OUT : 'Не получилось сохранить. Проверьте соединение и попробуйте ещё раз.'}
                         </Typography.Text>
                     ) : null}
                 </Flex>
 
-                <Flex direction="column" align="stretch" gap={8} id={textId}>
-                    <Typography.Text variant="label" color="tertiary" className={s.note}>
-                        Включая переключатель, вы соглашаетесь на обработку персональных данных.{' '}
-                        <button
-                            type="button"
-                            className={s.more}
-                            aria-expanded={showText}
-                            onClick={() => setShowText((current) => !current)}
-                        >
-                            {showText ? 'Скрыть текст согласия' : 'Текст согласия'}
-                        </button>
-                    </Typography.Text>
-                    {showText ? (
-                        <Flex direction="column" align="stretch" gap={8} className={s.consentText}>
-                            {CONSENT_TEXT.map((paragraph) => (
-                                <Typography.Text key={paragraph} variant="label" color="secondary">
-                                    {paragraph}
-                                </Typography.Text>
-                            ))}
-                        </Flex>
-                    ) : null}
-                </Flex>
+                <ConsentText id={textId} lead="Включая переключатель" />
             </Flex>
         </Screen>
     );

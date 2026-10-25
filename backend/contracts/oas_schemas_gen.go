@@ -2416,6 +2416,8 @@ type ProfileResponse struct {
 	ProfileComplete bool                       `json:"profileComplete"`
 	// The user lets set authors see their name and photo.
 	DataConsent bool `json:"dataConsent"`
+	// The user has said yes or no to the consent once; until then the mini-app asks.
+	DataConsentAnswered bool `json:"dataConsentAnswered"`
 }
 
 // GetUser returns the value of User.
@@ -2438,6 +2440,11 @@ func (s *ProfileResponse) GetDataConsent() bool {
 	return s.DataConsent
 }
 
+// GetDataConsentAnswered returns the value of DataConsentAnswered.
+func (s *ProfileResponse) GetDataConsentAnswered() bool {
+	return s.DataConsentAnswered
+}
+
 // SetUser sets the value of User.
 func (s *ProfileResponse) SetUser(val User) {
 	s.User = val
@@ -2456,6 +2463,11 @@ func (s *ProfileResponse) SetProfileComplete(val bool) {
 // SetDataConsent sets the value of DataConsent.
 func (s *ProfileResponse) SetDataConsent(val bool) {
 	s.DataConsent = val
+}
+
+// SetDataConsentAnswered sets the value of DataConsentAnswered.
+func (s *ProfileResponse) SetDataConsentAnswered(val bool) {
+	s.DataConsentAnswered = val
 }
 
 func (*ProfileResponse) deleteProfileAvatarRes() {}
