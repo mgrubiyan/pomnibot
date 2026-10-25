@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"image"
+	"fmt"
 	"image/jpeg"
 	"log/slog"
 	"strings"
@@ -34,9 +34,9 @@ func (v *VisionOCR) readFullPage(ctx context.Context, data []byte, mime, model, 
 			check, checked = got[0], true
 		}
 	}
-	img, _, err := image.Decode(bytes.NewReader(data))
+	img, err := decodeImage(data)
 	if err != nil {
-		return OCRPage{}, errors.New("ingest: decode full page image")
+		return OCRPage{}, fmt.Errorf("ingest: decode full page image: %w", err)
 	}
 	orientation := exifOrientation(data)
 	if check.Rotate != 0 {

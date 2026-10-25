@@ -21,6 +21,11 @@ const (
 	MaxOCRPages  = 200        // per PDF
 )
 
+// MaxDecodePixels caps an image decoded here. Decoding allocates the whole
+// bitmap its header announces, so a file of a few hundred kilobytes can ask
+// for gigabytes; 100 megapixels still takes a full-size camera photo.
+const MaxDecodePixels = 100_000_000
+
 // maxLongSide caps a photo that has to be shrunk anyway: 4096 px along the
 // long side keeps handwriting legible and a JPEG well under the size limit.
 const maxLongSide = 4096
@@ -45,6 +50,9 @@ func fitImage(data []byte, lim limits) (out []byte, mime string, resized bool, e
 	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
 		return nil, "", false, fmt.Errorf("read image: %w", err)
+	}
+	if err := checkPixels(cfg); err != nil {
+		return nil, "", false, err
 	}
 	mime = "image/" + format
 	accepted := format == "jpeg" || format == "png"
@@ -81,6 +89,28 @@ func fitImage(data []byte, lim limits) (out []byte, mime string, resized bool, e
 		}
 		scale *= 0.8
 	}
+}
+
+// checkPixels refuses an image whose header announces more than
+// MaxDecodePixels, before anything is allocated for it.
+func checkPixels(cfg image.Config) error {
+	if int64(cfg.Width)*int64(cfg.Height) > MaxDecodePixels {
+		return fmt.Errorf("%w: %dx%d", ErrImageTooLarge, cfg.Width, cfg.Height)
+	}
+	return nil
+}
+
+// decodeImage decodes an image within MaxDecodePixels.
+func decodeImage(data []byte) (image.Image, error) {
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	if err := checkPixels(cfg); err != nil {
+		return nil, err
+	}
+	img, _, err := image.Decode(bytes.NewReader(data))
+	return img, err
 }
 
 func toGray(img image.Image) *image.Gray {

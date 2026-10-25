@@ -252,3 +252,15 @@ func TestExtractShrinksLargePhotos(t *testing.T) {
 		t.Errorf("sent %s %dx%d (%s), want a JPEG within 1000 pixels keeping the proportions", format, cfg.Width, cfg.Height, sent.MimeType)
 	}
 }
+
+func TestExtractRejectsHugePhoto(t *testing.T) {
+	ocr := &fakeOCR{}
+	_, err := newOCRExtractor(t, ocr, &fakePDF{}).Extract(context.Background(), []File{{Name: "bomb.png", Data: bombPNG(65_535, 65_535)}})
+	var ie *Error
+	if !errors.As(err, &ie) || !errors.Is(err, ErrImageTooLarge) || !strings.Contains(ie.Message, "слишком большое") {
+		t.Errorf("error = %v, want *Error with ErrImageTooLarge telling the photo is too large", err)
+	}
+	if len(ocr.reqs) != 0 {
+		t.Error("the service was called for a photo over the pixel limit")
+	}
+}

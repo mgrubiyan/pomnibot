@@ -127,12 +127,13 @@ type Options struct {
 
 // Errors, wrapped in *Error.
 var (
-	ErrUnsupported  = errors.New("unsupported file type")
-	ErrNoPDF        = errors.New("PDF support disabled")
-	ErrNoOCR        = errors.New("OCR not configured")
-	ErrTooLarge     = errors.New("file over the OCR size limit")
-	ErrTooManyPages = errors.New("PDF over the OCR page limit")
-	ErrOCR          = errors.New("OCR failed")
+	ErrUnsupported   = errors.New("unsupported file type")
+	ErrNoPDF         = errors.New("PDF support disabled")
+	ErrNoOCR         = errors.New("OCR not configured")
+	ErrTooLarge      = errors.New("file over the OCR size limit")
+	ErrTooManyPages  = errors.New("PDF over the OCR page limit")
+	ErrImageTooLarge = errors.New("image over the decode pixel limit")
+	ErrOCR           = errors.New("OCR failed")
 )
 
 // Error is a problem with the student's files. Message is for the student.
@@ -418,6 +419,10 @@ func (e *Extractor) readImage(ctx context.Context, res *Result, file int, f File
 			Message: "Распознавание фото не настроено: пришлите текст или PDF."}
 	}
 	data, mime, _, err := fitImage(f.Data, e.lim)
+	if errors.Is(err, ErrImageTooLarge) {
+		return "", &Error{File: f.Name, Err: err,
+			Message: "Фото слишком большое. Пришлите снимок поменьше."}
+	}
 	if err != nil {
 		return "", &Error{File: f.Name, Err: ErrUnsupported,
 			Message: "Не удалось открыть фото: пришлите JPEG или PNG."}

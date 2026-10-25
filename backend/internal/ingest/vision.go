@@ -211,7 +211,7 @@ func (v *VisionOCR) readPage(ctx context.Context, data []byte, mime, model strin
 // read turns the image upright, cuts a tall one in halves and has the model
 // write out each.
 func (v *VisionOCR) read(ctx context.Context, data []byte, rotate int) (string, error) {
-	img, _, err := image.Decode(bytes.NewReader(data))
+	img, err := decodeImage(data)
 	if err != nil {
 		return "", fmt.Errorf("decode image: %w", err)
 	}
