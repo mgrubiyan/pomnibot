@@ -253,7 +253,18 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, remo
                         </Flex>
 
                         <Flex direction="column" align="stretch" gap={8} className={s.setsSection}>
-                            <CellHeader titleStyle="normal">Мои наборы</CellHeader>
+                            <CellHeader
+                                titleStyle="normal"
+                                after={
+                                    <button type="button" className={s.why} onClick={onOpenWhy}>
+                                        <Typography.Text variant="label" color="secondary">
+                                            Почему это работает
+                                        </Typography.Text>
+                                    </button>
+                                }
+                            >
+                                Мои наборы
+                            </CellHeader>
                             <CellList mode="island" filled className={s.setsList}>
                                 {sets.map((set, index) => {
                                     // The feed is loaded by now; a set it has no cards of has nothing
@@ -305,14 +316,6 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, remo
                         />
                     </CellList>
                 ) : null}
-
-                <button type="button" className={s.why} onClick={onOpenWhy}>
-                    <Typography.Text variant="label" color="tertiary">
-                        Карточка возвращается, когда вы начинаете её забывать: так запоминается
-                        надолго.{' '}
-                        <span className={s.whyMore}>Почему это работает</span>
-                    </Typography.Text>
-                </button>
             </Flex>
 
             {bottomActions}

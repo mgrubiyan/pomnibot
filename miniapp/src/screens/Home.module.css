@@ -119,15 +119,19 @@
     text-wrap: pretty;
 }
 
-/* What the research says, in one quiet line; a tap opens the details. */
+/* «Почему это работает» sits in the «Мои наборы» header. The text is a
+   label, the place to tap it 44 px tall. */
 .why {
-    margin: 0;
-    padding: 0 16px 8px;
+    flex-shrink: 0;
+    margin: -12px -8px;
+    padding: 12px 8px;
     border: 0;
     background: none;
     font: inherit;
-    text-align: left;
-    text-wrap: pretty;
+    white-space: nowrap;
+    text-decoration: underline;
+    text-decoration-color: var(--text-tertiary);
+    text-underline-offset: 2px;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     transition: opacity 0.12s var(--ease-out);
@@ -136,12 +140,4 @@
 .why:active {
     opacity: 0.6;
     transition-duration: 0.06s;
-}
-
-.whyMore {
-    color: var(--text-secondary);
-    text-decoration: underline;
-    text-underline-offset: 2px;
-    /* The link moves to the next line whole, not split in two. */
-    white-space: nowrap;
 }
