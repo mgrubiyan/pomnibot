@@ -77,6 +77,7 @@ func TestCardService_ReportCardIssue_Comment(t *testing.T) {
 		{"other without a comment", contracts.CardIssueReasonOther, "  ", pgtype.Text{}, usecase.ErrValidation},
 		{"501 characters", contracts.CardIssueReasonAnswer, long + "я", pgtype.Text{}, usecase.ErrValidation},
 		{"broken text", contracts.CardIssueReasonAnswer, "\xff", pgtype.Text{}, usecase.ErrValidation},
+		{"NUL", contracts.CardIssueReasonOther, "a\x00b", pgtype.Text{}, usecase.ErrValidation},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

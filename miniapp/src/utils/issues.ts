@@ -8,7 +8,7 @@ export const ISSUE_REASONS: { value: CardIssueReason; label: string; hint: strin
     { value: 'other', label: 'Другое', hint: 'Опишите, что не так с карточкой' },
 ];
 
-/** The server takes at most this many characters. */
+/** The server takes at most this many characters: IssueCommentMaxLength. */
 export const ISSUE_COMMENT_MAX_LENGTH = 500;
 
 /** What the reader sends: the reason and, for «Другое» always, their words. */

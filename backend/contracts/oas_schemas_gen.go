@@ -2621,8 +2621,8 @@ func (*ReportCardIssueNotFound) reportCardIssueRes() {}
 // Ref: #/components/schemas/ReportCardIssueRequest
 type ReportCardIssueRequest struct {
 	Reason CardIssueReason `json:"reason"`
-	// What is wrong, in the reader's words; required with the reason other. Surrounding spaces are
-	// dropped.
+	// What is wrong, in the reader's words; required with the reason other. Spaces around it are dropped
+	// before it is saved.
 	Comment OptString `json:"comment"`
 }
 

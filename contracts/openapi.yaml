@@ -1385,7 +1385,7 @@ components:
           maxLength: 500
           description: >-
             What is wrong, in the reader's words; required with the reason
-            other. Surrounding spaces are dropped.
+            other. Spaces around it are dropped before it is saved.
 
     CardIssueStatus:
       type: string

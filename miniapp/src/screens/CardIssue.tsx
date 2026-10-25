@@ -102,21 +102,21 @@ export function CardIssue({ card, setTitle, isOwner = false, onBack, onEdit, onR
             <Flex direction="column" align="stretch" gap={8}>
                 {error && <Typography.Text role="alert">{error}</Typography.Text>}
                 {needsComment && !error && (
-                    <Typography.Text variant="description" color="tertiary" className={s.note}>
+                    <Typography.Text id="card-issue-needs-comment" variant="description" color="tertiary" className={s.note}>
                         Напишите, что не так, чтобы отправить
                     </Typography.Text>
                 )}
                 {isOwner ? (
                     <>
-                        <Button size="medium" variant="primary" stretched disabled={busy || needsComment} onClick={() => run(onEdit)}>
+                        <Button size="medium" variant="primary" stretched disabled={busy || needsComment} aria-describedby={needsComment ? 'card-issue-needs-comment' : undefined} onClick={() => run(onEdit)}>
                             Исправить карточку
                         </Button>
-                        <Button size="medium" variant="secondary" stretched disabled={busy || needsComment} onClick={() => run(onRemove)}>
+                        <Button size="medium" variant="secondary" stretched disabled={busy || needsComment} aria-describedby={needsComment ? 'card-issue-needs-comment' : undefined} onClick={() => run(onRemove)}>
                             Удалить из набора
                         </Button>
                     </>
                 ) : (
-                    <Button size="medium" variant="primary" stretched disabled={busy || needsComment} onClick={() => run(onReport)}>
+                    <Button size="medium" variant="primary" stretched disabled={busy || needsComment} aria-describedby={needsComment ? 'card-issue-needs-comment' : undefined} onClick={() => run(onReport)}>
                         Сообщить об ошибке
                     </Button>
                 )}

@@ -654,7 +654,7 @@ export interface components {
         CardIssueReason: "answer" | "wording" | "not-in-notes" | "other";
         ReportCardIssueRequest: {
             reason: components["schemas"]["CardIssueReason"];
-            /** @description What is wrong, in the reader's words; required with the reason other. Surrounding spaces are dropped. */
+            /** @description What is wrong, in the reader's words; required with the reason other. Spaces around it are dropped before it is saved. */
             comment?: string;
         };
         /**

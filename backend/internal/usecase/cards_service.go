@@ -318,12 +318,20 @@ func (s *cardServiceImpl) ReportCardIssue(ctx context.Context, userID uuid.UUID,
 	return nil
 }
 
-// cleanIssueComment keeps the reader's words without surrounding spaces, at
-// most 500 characters; none is NULL. «Другое» means nothing without them.
+// IssueCommentMaxLength is the longest comment, in characters; the contract's
+// maxLength and the mini-app's ISSUE_COMMENT_MAX_LENGTH say the same.
+const IssueCommentMaxLength = 500
+
+// cleanIssueComment keeps the reader's words without surrounding spaces; none
+// is NULL. «Другое» means nothing without them.
 func cleanIssueComment(reason contracts.CardIssueReason, comment string) (pgtype.Text, error) {
 	comment = strings.TrimSpace(comment)
-	if !utf8.ValidString(comment) || utf8.RuneCountInString(comment) > 500 {
-		return pgtype.Text{}, fmt.Errorf("%w: comment must be at most 500 characters", ErrValidation)
+	// Postgres text cannot hold a NUL, and the save would fail as a server error.
+	if !utf8.ValidString(comment) || strings.ContainsRune(comment, 0) {
+		return pgtype.Text{}, fmt.Errorf("%w: comment is not valid text", ErrValidation)
+	}
+	if utf8.RuneCountInString(comment) > IssueCommentMaxLength {
+		return pgtype.Text{}, fmt.Errorf("%w: comment must be at most %d characters", ErrValidation, IssueCommentMaxLength)
 	}
 	if comment == "" && reason == contracts.CardIssueReasonOther {
 		return pgtype.Text{}, fmt.Errorf("%w: say what is wrong with the card", ErrValidation)
