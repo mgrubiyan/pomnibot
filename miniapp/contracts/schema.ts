@@ -244,6 +244,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sets/{setId}/retention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Forecast fact recall without changing review state */
+        get: operations["GetSetRetention"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sets/{setId}/plan": {
         parameters: {
             query?: never;
@@ -787,6 +804,37 @@ export interface components {
              * @example 123456
              */
             code: string;
+        };
+        /** Format: double */
+        RecallProbability: number;
+        RetentionPoint: {
+            /**
+             * Format: double
+             * @description Fractional days since calculatedAt; repeated coordinates show before and after a review.
+             */
+            day: number;
+            withReviews: components["schemas"]["RecallProbability"];
+            withoutReviews: components["schemas"]["RecallProbability"];
+        };
+        RetentionGroups: {
+            below70: number;
+            /** @description Both boundaries are inclusive. */
+            from70To90: number;
+            above90: number;
+        };
+        /** @description All facts count once, including unavailable and unlearned facts. Empty sets have zero probabilities; display them as unavailable. */
+        SetRetention: {
+            /** Format: date-time */
+            calculatedAt: string;
+            /** @enum {integer} */
+            horizonDays: 13;
+            target: components["schemas"]["RecallProbability"];
+            totalFacts: number;
+            current: components["schemas"]["RecallProbability"];
+            groups: components["schemas"]["RetentionGroups"];
+            points: components["schemas"]["RetentionPoint"][];
+            withReviews: components["schemas"]["RecallProbability"];
+            withoutReviews: components["schemas"]["RecallProbability"];
         };
         SetPlanItem: {
             factName: string;
@@ -1452,6 +1500,30 @@ export interface operations {
                 };
             };
             403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    GetSetRetention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                setId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recall probabilities and successful on-time review simulation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetRetention"];
+                };
+            };
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };

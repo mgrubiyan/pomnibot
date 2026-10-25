@@ -43,7 +43,7 @@ func processFactAnswer(ctx context.Context, q db.Querier, userID, factID pgtype.
 		currentStep = p.Step
 	}
 
-	params := fsrs.DefaultParam()
+	params := factFSRSParameters()
 	scheduling := params.Repeat(card, now)
 	rating := fsrs.Again
 	if isCorrect {
@@ -83,4 +83,9 @@ func processFactAnswer(ctx context.Context, q db.Querier, userID, factID pgtype.
 	}
 
 	return nil
+}
+
+// factFSRSParameters is shared by real answers and retention forecasts.
+func factFSRSParameters() fsrs.Parameters {
+	return fsrs.DefaultParam()
 }

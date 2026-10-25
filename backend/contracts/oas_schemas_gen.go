@@ -1732,6 +1732,14 @@ type GetSetPlanNotFound ErrorResponse
 
 func (*GetSetPlanNotFound) getSetPlanRes() {}
 
+type GetSetRetentionInternalServerError ErrorResponse
+
+func (*GetSetRetentionInternalServerError) getSetRetentionRes() {}
+
+type GetSetRetentionNotFound ErrorResponse
+
+func (*GetSetRetentionNotFound) getSetRetentionRes() {}
+
 type GetSetShareCodeForbidden ErrorResponse
 
 func (*GetSetShareCodeForbidden) getSetShareCodeRes() {}
@@ -2877,6 +2885,8 @@ type PutProfileInternalServerError ErrorResponse
 
 func (*PutProfileInternalServerError) putProfileRes() {}
 
+type RecallProbability float64
+
 type ReorderCardsBadRequest ErrorResponse
 
 func (*ReorderCardsBadRequest) reorderCardsRes() {}
@@ -2978,6 +2988,82 @@ func (*ResolveCardIssuesNoContent) resolveCardIssuesRes() {}
 type ResolveCardIssuesNotFound ErrorResponse
 
 func (*ResolveCardIssuesNotFound) resolveCardIssuesRes() {}
+
+// Ref: #/components/schemas/RetentionGroups
+type RetentionGroups struct {
+	Below70 int `json:"below70"`
+	// Both boundaries are inclusive.
+	From70To90 int `json:"from70To90"`
+	Above90    int `json:"above90"`
+}
+
+// GetBelow70 returns the value of Below70.
+func (s *RetentionGroups) GetBelow70() int {
+	return s.Below70
+}
+
+// GetFrom70To90 returns the value of From70To90.
+func (s *RetentionGroups) GetFrom70To90() int {
+	return s.From70To90
+}
+
+// GetAbove90 returns the value of Above90.
+func (s *RetentionGroups) GetAbove90() int {
+	return s.Above90
+}
+
+// SetBelow70 sets the value of Below70.
+func (s *RetentionGroups) SetBelow70(val int) {
+	s.Below70 = val
+}
+
+// SetFrom70To90 sets the value of From70To90.
+func (s *RetentionGroups) SetFrom70To90(val int) {
+	s.From70To90 = val
+}
+
+// SetAbove90 sets the value of Above90.
+func (s *RetentionGroups) SetAbove90(val int) {
+	s.Above90 = val
+}
+
+// Ref: #/components/schemas/RetentionPoint
+type RetentionPoint struct {
+	// Fractional days since calculatedAt; repeated coordinates show before and after a review.
+	Day            float64           `json:"day"`
+	WithReviews    RecallProbability `json:"withReviews"`
+	WithoutReviews RecallProbability `json:"withoutReviews"`
+}
+
+// GetDay returns the value of Day.
+func (s *RetentionPoint) GetDay() float64 {
+	return s.Day
+}
+
+// GetWithReviews returns the value of WithReviews.
+func (s *RetentionPoint) GetWithReviews() RecallProbability {
+	return s.WithReviews
+}
+
+// GetWithoutReviews returns the value of WithoutReviews.
+func (s *RetentionPoint) GetWithoutReviews() RecallProbability {
+	return s.WithoutReviews
+}
+
+// SetDay sets the value of Day.
+func (s *RetentionPoint) SetDay(val float64) {
+	s.Day = val
+}
+
+// SetWithReviews sets the value of WithReviews.
+func (s *RetentionPoint) SetWithReviews(val RecallProbability) {
+	s.WithReviews = val
+}
+
+// SetWithoutReviews sets the value of WithoutReviews.
+func (s *RetentionPoint) SetWithoutReviews(val RecallProbability) {
+	s.WithoutReviews = val
+}
 
 type RevealCardBadRequest ErrorResponse
 
@@ -3158,6 +3244,126 @@ func (s *SetPlanItem) SetDate(val time.Time) {
 type SetPlanResponse []SetPlanItem
 
 func (*SetPlanResponse) getSetPlanRes() {}
+
+// All facts count once, including unavailable and unlearned facts. Empty sets have zero probabilities;
+// display them as unavailable.
+// Ref: #/components/schemas/SetRetention
+type SetRetention struct {
+	CalculatedAt   time.Time               `json:"calculatedAt"`
+	HorizonDays    SetRetentionHorizonDays `json:"horizonDays"`
+	Target         RecallProbability       `json:"target"`
+	TotalFacts     int                     `json:"totalFacts"`
+	Current        RecallProbability       `json:"current"`
+	Groups         RetentionGroups         `json:"groups"`
+	Points         []RetentionPoint        `json:"points"`
+	WithReviews    RecallProbability       `json:"withReviews"`
+	WithoutReviews RecallProbability       `json:"withoutReviews"`
+}
+
+// GetCalculatedAt returns the value of CalculatedAt.
+func (s *SetRetention) GetCalculatedAt() time.Time {
+	return s.CalculatedAt
+}
+
+// GetHorizonDays returns the value of HorizonDays.
+func (s *SetRetention) GetHorizonDays() SetRetentionHorizonDays {
+	return s.HorizonDays
+}
+
+// GetTarget returns the value of Target.
+func (s *SetRetention) GetTarget() RecallProbability {
+	return s.Target
+}
+
+// GetTotalFacts returns the value of TotalFacts.
+func (s *SetRetention) GetTotalFacts() int {
+	return s.TotalFacts
+}
+
+// GetCurrent returns the value of Current.
+func (s *SetRetention) GetCurrent() RecallProbability {
+	return s.Current
+}
+
+// GetGroups returns the value of Groups.
+func (s *SetRetention) GetGroups() RetentionGroups {
+	return s.Groups
+}
+
+// GetPoints returns the value of Points.
+func (s *SetRetention) GetPoints() []RetentionPoint {
+	return s.Points
+}
+
+// GetWithReviews returns the value of WithReviews.
+func (s *SetRetention) GetWithReviews() RecallProbability {
+	return s.WithReviews
+}
+
+// GetWithoutReviews returns the value of WithoutReviews.
+func (s *SetRetention) GetWithoutReviews() RecallProbability {
+	return s.WithoutReviews
+}
+
+// SetCalculatedAt sets the value of CalculatedAt.
+func (s *SetRetention) SetCalculatedAt(val time.Time) {
+	s.CalculatedAt = val
+}
+
+// SetHorizonDays sets the value of HorizonDays.
+func (s *SetRetention) SetHorizonDays(val SetRetentionHorizonDays) {
+	s.HorizonDays = val
+}
+
+// SetTarget sets the value of Target.
+func (s *SetRetention) SetTarget(val RecallProbability) {
+	s.Target = val
+}
+
+// SetTotalFacts sets the value of TotalFacts.
+func (s *SetRetention) SetTotalFacts(val int) {
+	s.TotalFacts = val
+}
+
+// SetCurrent sets the value of Current.
+func (s *SetRetention) SetCurrent(val RecallProbability) {
+	s.Current = val
+}
+
+// SetGroups sets the value of Groups.
+func (s *SetRetention) SetGroups(val RetentionGroups) {
+	s.Groups = val
+}
+
+// SetPoints sets the value of Points.
+func (s *SetRetention) SetPoints(val []RetentionPoint) {
+	s.Points = val
+}
+
+// SetWithReviews sets the value of WithReviews.
+func (s *SetRetention) SetWithReviews(val RecallProbability) {
+	s.WithReviews = val
+}
+
+// SetWithoutReviews sets the value of WithoutReviews.
+func (s *SetRetention) SetWithoutReviews(val RecallProbability) {
+	s.WithoutReviews = val
+}
+
+func (*SetRetention) getSetRetentionRes() {}
+
+type SetRetentionHorizonDays int
+
+const (
+	SetRetentionHorizonDays13 SetRetentionHorizonDays = 13
+)
+
+// AllValues returns all SetRetentionHorizonDays values.
+func (SetRetentionHorizonDays) AllValues() []SetRetentionHorizonDays {
+	return []SetRetentionHorizonDays{
+		SetRetentionHorizonDays13,
+	}
+}
 
 // Ref: #/components/schemas/StudentFactMistakes
 type StudentFactMistakes struct {

@@ -1,0 +1,32 @@
+.root { position: relative; }
+.menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 5;
+    width: max-content;
+    max-width: calc(100vw - 40px);
+    padding: 4px;
+    border-radius: 16px;
+    border: 1px solid var(--divider-primary);
+    background: var(--background-card);
+    box-shadow: 0 8px 24px #0002;
+}
+.menu button {
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 10px 14px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.menu button:focus-visible, .menu button:hover { background: var(--background-secondary); outline: 2px solid var(--button-primary); outline-offset: -2px; }
+.menu .destructive { color: var(--icon-negative); }

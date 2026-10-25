@@ -89,6 +89,10 @@ type GetSetRes interface {
 	getSetRes()
 }
 
+type GetSetRetentionRes interface {
+	getSetRetentionRes()
+}
+
 type GetSetShareCodeRes interface {
 	getSetShareCodeRes()
 }

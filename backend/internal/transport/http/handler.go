@@ -276,3 +276,11 @@ func (h *APIHandler) GetFactsBySetID(ctx context.Context, params contracts.GetFa
 	}
 	return h.UnimplementedHandler.GetFactsBySetID(ctx, params)
 }
+
+// GetSetRetention implements contracts.Handler.GetSetRetention.
+func (h *APIHandler) GetSetRetention(ctx context.Context, params contracts.GetSetRetentionParams) (contracts.GetSetRetentionRes, error) {
+	if h.sets != nil {
+		return h.sets.GetSetRetention(ctx, params)
+	}
+	return h.UnimplementedHandler.GetSetRetention(ctx, params)
+}

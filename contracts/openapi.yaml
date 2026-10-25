@@ -541,6 +541,30 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /sets/{setId}/retention:
+    get:
+      tags: [Sets]
+      summary: Forecast fact recall without changing review state
+      operationId: GetSetRetention
+      parameters:
+        - name: setId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Recall probabilities and successful on-time review simulation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetRetention'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
   /sets/{setId}/plan:
     get:
       tags:
@@ -1666,6 +1690,68 @@ components:
           pattern: '\d{6}'
           example: '123456'
           description: The 6-digit share code of the set
+
+    RecallProbability:
+      type: number
+      format: double
+      minimum: 0
+      maximum: 1
+    RetentionPoint:
+      type: object
+      required: [day, withReviews, withoutReviews]
+      properties:
+        day:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 13
+          description: Fractional days since calculatedAt; repeated coordinates show before and after a review.
+        withReviews:
+          $ref: '#/components/schemas/RecallProbability'
+        withoutReviews:
+          $ref: '#/components/schemas/RecallProbability'
+    RetentionGroups:
+      type: object
+      required: [below70, from70To90, above90]
+      properties:
+        below70:
+          type: integer
+          minimum: 0
+        from70To90:
+          type: integer
+          minimum: 0
+          description: Both boundaries are inclusive.
+        above90:
+          type: integer
+          minimum: 0
+    SetRetention:
+      type: object
+      description: All facts count once, including unavailable and unlearned facts. Empty sets have zero probabilities; display them as unavailable.
+      required: [calculatedAt, horizonDays, target, totalFacts, current, groups, points, withReviews, withoutReviews]
+      properties:
+        calculatedAt:
+          type: string
+          format: date-time
+        horizonDays:
+          type: integer
+          enum: [13]
+        target:
+          $ref: '#/components/schemas/RecallProbability'
+        totalFacts:
+          type: integer
+          minimum: 0
+        current:
+          $ref: '#/components/schemas/RecallProbability'
+        groups:
+          $ref: '#/components/schemas/RetentionGroups'
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/RetentionPoint'
+        withReviews:
+          $ref: '#/components/schemas/RecallProbability'
+        withoutReviews:
+          $ref: '#/components/schemas/RecallProbability'
 
     SetPlanItem:
       type: object

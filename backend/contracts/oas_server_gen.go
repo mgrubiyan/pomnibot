@@ -150,6 +150,12 @@ type Handler interface {
 	//
 	// GET /sets/{setId}/plan
 	GetSetPlan(ctx context.Context, params GetSetPlanParams) (GetSetPlanRes, error)
+	// GetSetRetention implements GetSetRetention operation.
+	//
+	// Forecast fact recall without changing review state.
+	//
+	// GET /sets/{setId}/retention
+	GetSetRetention(ctx context.Context, params GetSetRetentionParams) (GetSetRetentionRes, error)
 	// GetSetShareCode implements GetSetShareCode operation.
 	//
 	// Get share code for a set.
