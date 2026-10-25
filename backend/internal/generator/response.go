@@ -576,11 +576,6 @@ func validateAndSanitizeFacts(facts []Fact, pages int) ([]Fact, int, int, []stri
 	return validFacts, droppedInvalid, droppedDuplicate, issues, nil
 }
 
-func validateFacts(facts []Fact, pages int) error {
-	_, _, _, _, err := validateAndSanitizeFacts(facts, pages)
-	return err
-}
-
 // validateCard checks content without creating storage models.
 func validateCard(c Card) error {
 	if c == nil {
