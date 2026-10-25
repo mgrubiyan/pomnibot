@@ -43,10 +43,12 @@ func limitUploads(next http.Handler) http.Handler {
 				writeAuthError(w, http.StatusRequestEntityTooLarge, "files over 20 MB in all", "")
 				return
 			}
-			// Only a signed account may send notes; others keep the server's
-			// timeouts, so they cannot hold a connection for minutes.
+			// Only a signed account may send notes. The rest are refused
+			// before the body is read, so nobody can hold the server for
+			// minutes or fill its memory without signing in.
 			if _, ok := accountFromContext(r.Context()); !ok {
-				break
+				writeAuthError(w, http.StatusForbidden, "authorization required", "")
+				return
 			}
 			rc := http.NewResponseController(w)
 			deadline := time.Now().Add(notesUploadTime)

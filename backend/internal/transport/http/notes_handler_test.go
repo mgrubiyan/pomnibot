@@ -347,3 +347,49 @@ func TestUploadNotesOutlastsTheServerTimeouts(t *testing.T) {
 		t.Fatalf("slow upload: %d %s", resp.StatusCode, data)
 	}
 }
+
+func TestUploadNotesAfterShutdownBegins(t *testing.T) {
+	users := notesUsers()
+	maker := newFakeMaker()
+	ctx, cancel := context.WithCancel(context.Background())
+	handler := NewAPIHandler(nil, nil, nil, users).WithNotes(ctx, maker)
+	server := newNotesServer(t, handler, users)
+
+	// An upload still arriving when the server stops waiting for it must not
+	// start a document the shutdown no longer waits for.
+	cancel()
+	handler.WaitNotes()
+	if w := server.upload(context.Background(), server.auth, notesFile{"late.txt", "text"}); w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("upload after shutdown: %d %s", w.Code, w.Body.String())
+	}
+	select {
+	case <-maker.calls:
+		t.Fatal("a document started after shutdown")
+	default:
+	}
+}
+
+// An unsigned upload is refused before its body is read.
+func TestUnsignedUploadIsRefusedUnread(t *testing.T) {
+	users := notesUsers()
+	server := newNotesServer(t, NewAPIHandler(nil, nil, nil, users).WithNotes(context.Background(), newFakeMaker()), users)
+	body := &countingReader{r: strings.NewReader(strings.Repeat("x", 1<<20))}
+	r := httptest.NewRequest(http.MethodPost, "/api/notes", body)
+	r.Header.Set("Content-Type", "multipart/form-data; boundary=x")
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, r)
+	if w.Code != http.StatusForbidden || body.n != 0 {
+		t.Fatalf("unsigned upload: %d, read %d bytes", w.Code, body.n)
+	}
+}
+
+type countingReader struct {
+	r io.Reader
+	n int
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += n
+	return n, err
+}
