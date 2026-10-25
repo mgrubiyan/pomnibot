@@ -402,7 +402,7 @@ export function SetCards({
             <Flex ref={bodyRef} direction="column" align="stretch" gap={8} className={s.body}>
                 {isOwner && (
                     <Flex align="center" justify="space-between" className={s.setTitleCard}>
-                        <Flex direction="column" gap={2} className={s.setTitleContent}>
+                        <Flex direction="column" align="stretch" gap={2} className={s.setTitleContent}>
                             <Typography.Text variant="description" color="tertiary">
                                 Набор
                             </Typography.Text>
