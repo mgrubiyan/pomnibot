@@ -94,3 +94,56 @@ func TestStoredFactsRoundTripRetainsAllCardSourcesAndKinds(t *testing.T) {
 		}
 	}
 }
+
+func TestAIResponseDecodesMarkdownTablesInQuestionAndExtraCards(t *testing.T) {
+	markdownTableQuestion := "Дана таблица Persons:\n\n| LastName | FirstName | Year |\n| --- | --- | --- |\n| Hansen | Ola | 1951 |\n| Svendson | Tove | 1978 |\n\nКакие строки вернет запрос `WHERE Year > 1965`?"
+	payload := `{"issues":[],"facts":[{"name":"Фильтрация по году","pages":[12],"recall":{"question":` +
+		jsonString(markdownTableQuestion) + `,"answer":"Строку с Tove Svendson (1978).","source":"WHERE Year > 1965 отбирает записи с годом строго больше 1965.","sourceQuote":""},"extraCards":[{"kind":"choice","question":"Какая запись условия верна для числового столбца Year?","rightAnswers":["WHERE Year > 1965"],"wrongAnswers":["WHERE Year > '1965'"],"source":"Числовые константы пишутся без апострофов.","sourceQuote":""},{"kind":"table","question":"Распределите литералы по типам:","columns":[{"name":"Числовые","rows":["1965","1978"]},{"name":"Строковые","rows":["'Tove'","'Sandnes'"]}],"source":"Числа без кавычек, строки в апострофах.","sourceQuote":""}]}]}`
+
+	var r AIResponse
+	if err := json.Unmarshal([]byte(payload), &r); err != nil {
+		t.Fatalf("failed to decode AIResponse with markdown table and extraCards: %v", err)
+	}
+	if len(r.Facts) != 1 {
+		t.Fatalf("expected 1 fact, got %d", len(r.Facts))
+	}
+	fact := r.Facts[0]
+	// recall expands to FlipCard + InputCard, plus 1 ChoiceCard and 1 TableCard = 4 cards total
+	if len(fact.Cards) != 4 {
+		t.Fatalf("expected 4 expanded cards, got %d", len(fact.Cards))
+	}
+	var foundTableInQuestion bool
+	var foundChoice bool
+	var foundTableCard bool
+	for _, c := range fact.Cards {
+		if strings.Contains(c.Base().Question, "| LastName | FirstName |") {
+			foundTableInQuestion = true
+		}
+		switch card := c.(type) {
+		case ChoiceCard:
+			foundChoice = true
+			if len(card.RightAnswers) != 1 || card.RightAnswers[0] != "WHERE Year > 1965" {
+				t.Errorf("unexpected choice rightAnswers: %+v", card.RightAnswers)
+			}
+		case TableCard:
+			foundTableCard = true
+			if len(card.Columns) != 2 || card.Columns[0].Name != "Числовые" {
+				t.Errorf("unexpected table card columns: %+v", card.Columns)
+			}
+		}
+	}
+	if !foundTableInQuestion {
+		t.Error("expected markdown table in question to be preserved")
+	}
+	if !foundChoice {
+		t.Error("expected ChoiceCard to be preserved")
+	}
+	if !foundTableCard {
+		t.Error("expected TableCard to be preserved")
+	}
+}
+
+func jsonString(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}

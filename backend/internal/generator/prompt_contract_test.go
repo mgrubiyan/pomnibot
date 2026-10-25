@@ -101,6 +101,60 @@ func TestGenerationPromptsRequestGFMAndLaTeX(t *testing.T) {
 			if !strings.Contains(answer, `\cdot`) || !strings.Contains(answer, "$") {
 				t.Fatalf("example loses LaTeX: %q", answer)
 			}
+			var foundTableCard, foundBooleanCard, foundChoiceCard bool
+			for _, f := range reply.Facts {
+				for _, c := range f.Cards {
+					switch tc := c.(type) {
+					case TableCard:
+						if len(tc.Columns) >= 2 {
+							foundTableCard = true
+						}
+					case BooleanCard:
+						foundBooleanCard = true
+					case ChoiceCard:
+						if len(tc.RightAnswers) > 0 && len(tc.WrongAnswers) > 0 {
+							foundChoiceCard = true
+						}
+					}
+				}
+			}
+			if !foundTableCard {
+				t.Fatalf("%s example missing TableCard in extraCards", name)
+			}
+			if !foundBooleanCard {
+				t.Fatalf("%s example missing BooleanCard in extraCards", name)
+			}
+			if !foundChoiceCard {
+				t.Fatalf("%s example missing ChoiceCard in extraCards", name)
+			}
+		}
+	}
+}
+
+func TestPromptsExampleAndCardFormatContract(t *testing.T) {
+	for name, prompt := range map[string]string{"system": prompts.GeneratorSystem, "task": prompts.GenerateGoals} {
+		for _, required := range []string{
+			"не описывай синтаксис словами в скобках",
+			"классификаци",
+			"не оставляй extraCards пустым",
+			"исходную размерность данных",
+			"не создавай искусственных таблиц",
+			"типичные ошибки понимания",
+			"деление понятий на группы, виды или режимы",
+			"Запрещено упаковывать булевы проверки",
+			"Запрещено выдавать классификацию",
+			"обучить ученика",
+			"массивах rows",
+			"без предоставления закрытого списка",
+			"Запрещено добавлять карточки kind: \"recall\" в extraCards",
+			"Запрещено оформлять примеры через текстовый ввод",
+		} {
+			if !strings.Contains(prompt, required) {
+				t.Errorf("%s missing required guideline %q", name, required)
+			}
+		}
+		if strings.Contains(prompt, "Не создавай факты на случайные имена и числа из примеров;") {
+			t.Errorf("%s contains obsolete blanket prohibition on example names/numbers", name)
 		}
 	}
 }
