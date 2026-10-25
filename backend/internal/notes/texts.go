@@ -25,44 +25,85 @@ const (
 // TextRemarksInMiniApp points authors to the full processing remarks.
 const TextRemarksInMiniApp = "⚠️ Есть замечания к набору — их можно посмотреть в мини-приложении."
 
-// FailureText is what to tell the student about an error of Make, or ""
-// when there is nothing to tell: the student gave up waiting.
-func FailureText(err error) string {
+// Reason is why a document did not become a set, for a client that words
+// the failure itself, such as the mini app.
+type Reason string
+
+// Reasons of Failure.
+const (
+	ReasonGaveUp     Reason = ""           // the student gave up waiting: nothing to tell
+	ReasonNoFiles    Reason = "no_files"   // no files came with the document
+	ReasonUnreadable Reason = "unreadable" // the files could not be read; the message says why
+	ReasonNoText     Reason = "no_text"
+	ReasonNoCards    Reason = "no_cards"
+	ReasonOtherText  Reason = "other_text" // the model refused the text
+	ReasonTooLong    Reason = "too_long"   // the notes could not be taken in whole
+	ReasonTooMuch    Reason = "too_much"   // the document ran out of its processing limit
+	ReasonTryLater   Reason = "try_later"  // our own failure: the model or the database
+)
+
+// Failure tells why an error of Make happened. For ReasonUnreadable the
+// message, from ingest, says what is wrong with the files and names the
+// file at fault when there are several.
+func Failure(err error) (Reason, string) {
 	var ee *extractError
 	switch {
 	case errors.Is(err, ErrGaveUp):
-		return ""
+		return ReasonGaveUp, ""
 	case errors.Is(err, providers.ErrBudget):
-		return TextBudgetExceeded
+		return ReasonTooMuch, ""
 	case errors.Is(err, providers.ErrCapability):
-		return TextSourceLimit
+		return ReasonTooLong, ""
 	case errors.Is(err, providers.ErrRefused):
-		return TextOtherText
+		return ReasonOtherText, ""
 	case errors.Is(err, ErrNoFiles):
-		return TextResend
+		return ReasonNoFiles, ""
 	case errors.Is(err, ErrNoText):
-		return TextNoText
+		return ReasonNoText, ""
 	case errors.As(err, &ee):
-		return extractFailure(ee.err, ee.files)
+		if message := extractFailure(ee.err, ee.files); message != "" {
+			return ReasonUnreadable, message
+		}
+		return ReasonTryLater, ""
 	case errors.Is(err, ErrNoCards):
-		return TextNoCards
+		return ReasonNoCards, ""
 	default:
-		return TextTryLater
+		return ReasonTryLater, ""
 	}
 }
 
-// extractFailure explains why the files could not be read. Ingest errors
-// already carry a message for the student; with several files it names the
-// one at fault.
+var failureTexts = map[Reason]string{
+	ReasonNoFiles:   TextResend,
+	ReasonNoText:    TextNoText,
+	ReasonNoCards:   TextNoCards,
+	ReasonOtherText: TextOtherText,
+	ReasonTooLong:   TextSourceLimit,
+	ReasonTooMuch:   TextBudgetExceeded,
+	ReasonTryLater:  TextTryLater,
+}
+
+// FailureText is what to tell the student about an error of Make, or ""
+// when there is nothing to tell: the student gave up waiting.
+func FailureText(err error) string {
+	reason, message := Failure(err)
+	if reason == ReasonUnreadable {
+		return "😕 " + message
+	}
+	return failureTexts[reason]
+}
+
+// extractFailure explains why the files could not be read, or "" when ingest
+// left no message for the student. With several files it names the one at
+// fault.
 func extractFailure(err error, files int) string {
 	var ie *ingest.Error
 	if !errors.As(err, &ie) || ie.Message == "" {
-		return TextTryLater
+		return ""
 	}
 	if files > 1 && ie.File != "" {
-		return fmt.Sprintf("😕 Файл «%s»: %s", ie.File, ie.Message)
+		return fmt.Sprintf("Файл «%s»: %s", ie.File, ie.Message)
 	}
-	return "😕 " + ie.Message
+	return ie.Message
 }
 
 // WithWarnings adds a compact notice pointing to the full remarks in the Mini App.

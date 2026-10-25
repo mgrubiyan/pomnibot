@@ -17,6 +17,7 @@ type APIHandler struct {
 	facts      *FactsHandler
 	homescreen *HomescreenHandler
 	admin      usecase.AdminService
+	notes      *noteJobs
 	// browserProfile lets the browser test account change its profile.
 	browserProfile bool
 }

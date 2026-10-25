@@ -74,10 +74,6 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 	if cfg.Environment == config.Local {
 		api = api.WithBrowserProfile()
 	}
-	router, err := httptransport.NewRouter(api, assets, cfg.MaxBotToken, cfg.TelegramBotToken, users)
-	if err != nil {
-		return fmt.Errorf("initialize router: %w", err)
-	}
 
 	// Stop background integrations on both startup failure and normal shutdown.
 	ctx, cancel := context.WithCancel(ctx)
@@ -89,9 +85,10 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 			wait()
 		}
 	}()
+	var maker *notes.Maker
 	if cfg.Environment == config.Prod {
-		// One Maker for every bot: they share its queue, so together they
-		// stay within what the model serves at once.
+		// One Maker for every bot and the mini app: they share its queue,
+		// so together they stay within what the model serves at once.
 		ocr, err := yandex.New(cfg.OCR)
 		if err != nil {
 			return fmt.Errorf("initialize OCR: %w", err)
@@ -110,7 +107,15 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 		if cfg.OpenRouter != nil {
 			limits.USD = .15
 		}
-		maker := notes.New(extractor, notes.FromGenerator(cardGenerator), sets, llm.slots).WithCache(llm.cache, llm.readingIdentity).WithBudget(limits)
+		maker = notes.New(extractor, notes.FromGenerator(cardGenerator), sets, llm.slots).WithCache(llm.cache, llm.readingIdentity).WithBudget(limits)
+		api = api.WithNotes(ctx, maker)
+		bots = append(bots, api.WaitNotes)
+	}
+	router, err := httptransport.NewRouter(api, assets, cfg.MaxBotToken, cfg.TelegramBotToken, users)
+	if err != nil {
+		return fmt.Errorf("initialize router: %w", err)
+	}
+	if maker != nil {
 		maxBot, err := startMAXBot(ctx, cfg, maker, users)
 		if err != nil {
 			return err

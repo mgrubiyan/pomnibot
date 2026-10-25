@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-faster/errors"
 	"github.com/google/uuid"
+	ht "github.com/ogen-go/ogen/http"
 )
 
 // Ref: #/components/schemas/AdminCardIssue
@@ -1651,6 +1652,22 @@ type GetFeedQuestionsOKApplicationJSON []FeedCard
 
 func (*GetFeedQuestionsOKApplicationJSON) getFeedQuestionsRes() {}
 
+type GetNotesJobForbidden ErrorResponse
+
+func (*GetNotesJobForbidden) getNotesJobRes() {}
+
+type GetNotesJobInternalServerError ErrorResponse
+
+func (*GetNotesJobInternalServerError) getNotesJobRes() {}
+
+type GetNotesJobNotFound ErrorResponse
+
+func (*GetNotesJobNotFound) getNotesJobRes() {}
+
+type GetNotesJobServiceUnavailable ErrorResponse
+
+func (*GetNotesJobServiceUnavailable) getNotesJobRes() {}
+
 type GetSetForbidden ErrorResponse
 
 func (*GetSetForbidden) getSetRes() {}
@@ -1819,6 +1836,259 @@ func (s *LeaderboardEntry) SetRank(val int) {
 // SetPercentile sets the value of Percentile.
 func (s *LeaderboardEntry) SetPercentile(val int) {
 	s.Percentile = val
+}
+
+// Ref: #/components/schemas/NotesJob
+type NotesJob struct {
+	// Queued waits for a turn, reading reads the files, generating makes the cards; done and failed are
+	// final.
+	State NotesJobState `json:"state"`
+	// Documents ahead in the queue, while queued.
+	Ahead OptInt `json:"ahead"`
+	// Cards made so far, while generating.
+	Cards OptInt `json:"cards"`
+	// The new set, when done.
+	SetId OptUUID `json:"setId"`
+	// When done, whether the set has remarks to look at.
+	Remarks OptBool `json:"remarks"`
+	// Why the document failed. unreadable comes with a message naming what is wrong with the files;
+	// too_long means the notes could not be taken in whole, too_much that they ran out of the processing
+	// limit.
+	Reason OptNotesJobReason `json:"reason"`
+	// For unreadable, what is wrong with the files, for the student.
+	Message OptString `json:"message"`
+}
+
+// GetState returns the value of State.
+func (s *NotesJob) GetState() NotesJobState {
+	return s.State
+}
+
+// GetAhead returns the value of Ahead.
+func (s *NotesJob) GetAhead() OptInt {
+	return s.Ahead
+}
+
+// GetCards returns the value of Cards.
+func (s *NotesJob) GetCards() OptInt {
+	return s.Cards
+}
+
+// GetSetId returns the value of SetId.
+func (s *NotesJob) GetSetId() OptUUID {
+	return s.SetId
+}
+
+// GetRemarks returns the value of Remarks.
+func (s *NotesJob) GetRemarks() OptBool {
+	return s.Remarks
+}
+
+// GetReason returns the value of Reason.
+func (s *NotesJob) GetReason() OptNotesJobReason {
+	return s.Reason
+}
+
+// GetMessage returns the value of Message.
+func (s *NotesJob) GetMessage() OptString {
+	return s.Message
+}
+
+// SetState sets the value of State.
+func (s *NotesJob) SetState(val NotesJobState) {
+	s.State = val
+}
+
+// SetAhead sets the value of Ahead.
+func (s *NotesJob) SetAhead(val OptInt) {
+	s.Ahead = val
+}
+
+// SetCards sets the value of Cards.
+func (s *NotesJob) SetCards(val OptInt) {
+	s.Cards = val
+}
+
+// SetSetId sets the value of SetId.
+func (s *NotesJob) SetSetId(val OptUUID) {
+	s.SetId = val
+}
+
+// SetRemarks sets the value of Remarks.
+func (s *NotesJob) SetRemarks(val OptBool) {
+	s.Remarks = val
+}
+
+// SetReason sets the value of Reason.
+func (s *NotesJob) SetReason(val OptNotesJobReason) {
+	s.Reason = val
+}
+
+// SetMessage sets the value of Message.
+func (s *NotesJob) SetMessage(val OptString) {
+	s.Message = val
+}
+
+func (*NotesJob) getNotesJobRes() {}
+func (*NotesJob) uploadNotesRes() {}
+
+// Why the document failed. unreadable comes with a message naming what is wrong with the files;
+// too_long means the notes could not be taken in whole, too_much that they ran out of the processing
+// limit.
+type NotesJobReason string
+
+const (
+	NotesJobReasonUnreadable NotesJobReason = "unreadable"
+	NotesJobReasonNoText     NotesJobReason = "no_text"
+	NotesJobReasonNoCards    NotesJobReason = "no_cards"
+	NotesJobReasonOtherText  NotesJobReason = "other_text"
+	NotesJobReasonTooLong    NotesJobReason = "too_long"
+	NotesJobReasonTooMuch    NotesJobReason = "too_much"
+	NotesJobReasonTryLater   NotesJobReason = "try_later"
+)
+
+// AllValues returns all NotesJobReason values.
+func (NotesJobReason) AllValues() []NotesJobReason {
+	return []NotesJobReason{
+		NotesJobReasonUnreadable,
+		NotesJobReasonNoText,
+		NotesJobReasonNoCards,
+		NotesJobReasonOtherText,
+		NotesJobReasonTooLong,
+		NotesJobReasonTooMuch,
+		NotesJobReasonTryLater,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s NotesJobReason) MarshalText() ([]byte, error) {
+	switch s {
+	case NotesJobReasonUnreadable:
+		return []byte(s), nil
+	case NotesJobReasonNoText:
+		return []byte(s), nil
+	case NotesJobReasonNoCards:
+		return []byte(s), nil
+	case NotesJobReasonOtherText:
+		return []byte(s), nil
+	case NotesJobReasonTooLong:
+		return []byte(s), nil
+	case NotesJobReasonTooMuch:
+		return []byte(s), nil
+	case NotesJobReasonTryLater:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *NotesJobReason) UnmarshalText(data []byte) error {
+	switch NotesJobReason(data) {
+	case NotesJobReasonUnreadable:
+		*s = NotesJobReasonUnreadable
+		return nil
+	case NotesJobReasonNoText:
+		*s = NotesJobReasonNoText
+		return nil
+	case NotesJobReasonNoCards:
+		*s = NotesJobReasonNoCards
+		return nil
+	case NotesJobReasonOtherText:
+		*s = NotesJobReasonOtherText
+		return nil
+	case NotesJobReasonTooLong:
+		*s = NotesJobReasonTooLong
+		return nil
+	case NotesJobReasonTooMuch:
+		*s = NotesJobReasonTooMuch
+		return nil
+	case NotesJobReasonTryLater:
+		*s = NotesJobReasonTryLater
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+// Queued waits for a turn, reading reads the files, generating makes the cards; done and failed are
+// final.
+type NotesJobState string
+
+const (
+	NotesJobStateQueued     NotesJobState = "queued"
+	NotesJobStateReading    NotesJobState = "reading"
+	NotesJobStateGenerating NotesJobState = "generating"
+	NotesJobStateDone       NotesJobState = "done"
+	NotesJobStateFailed     NotesJobState = "failed"
+)
+
+// AllValues returns all NotesJobState values.
+func (NotesJobState) AllValues() []NotesJobState {
+	return []NotesJobState{
+		NotesJobStateQueued,
+		NotesJobStateReading,
+		NotesJobStateGenerating,
+		NotesJobStateDone,
+		NotesJobStateFailed,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s NotesJobState) MarshalText() ([]byte, error) {
+	switch s {
+	case NotesJobStateQueued:
+		return []byte(s), nil
+	case NotesJobStateReading:
+		return []byte(s), nil
+	case NotesJobStateGenerating:
+		return []byte(s), nil
+	case NotesJobStateDone:
+		return []byte(s), nil
+	case NotesJobStateFailed:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *NotesJobState) UnmarshalText(data []byte) error {
+	switch NotesJobState(data) {
+	case NotesJobStateQueued:
+		*s = NotesJobStateQueued
+		return nil
+	case NotesJobStateReading:
+		*s = NotesJobStateReading
+		return nil
+	case NotesJobStateGenerating:
+		*s = NotesJobStateGenerating
+		return nil
+	case NotesJobStateDone:
+		*s = NotesJobStateDone
+		return nil
+	case NotesJobStateFailed:
+		*s = NotesJobStateFailed
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+// Ref: #/components/schemas/NotesUpload
+type NotesUploadMultipart struct {
+	// Text, PDF, Word, PowerPoint or photos of the pages, at most 10 files and 20 MB in all.
+	Files []ht.MultipartFile `json:"files"`
+}
+
+// GetFiles returns the value of Files.
+func (s *NotesUploadMultipart) GetFiles() []ht.MultipartFile {
+	return s.Files
+}
+
+// SetFiles sets the value of Files.
+func (s *NotesUploadMultipart) SetFiles(val []ht.MultipartFile) {
+	s.Files = val
 }
 
 // NewOptBool returns new OptBool with value set to v.
@@ -2205,6 +2475,52 @@ func (o OptNilDateTime) Get() (v time.Time, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptNilDateTime) Or(d time.Time) time.Time {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptNotesJobReason returns new OptNotesJobReason with value set to v.
+func NewOptNotesJobReason(v NotesJobReason) OptNotesJobReason {
+	return OptNotesJobReason{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptNotesJobReason is optional NotesJobReason.
+type OptNotesJobReason struct {
+	Value NotesJobReason
+	Set   bool
+}
+
+// IsSet returns true if OptNotesJobReason was set.
+func (o OptNotesJobReason) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptNotesJobReason) Reset() {
+	var v NotesJobReason
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptNotesJobReason) SetTo(v NotesJobReason) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptNotesJobReason) Get() (v NotesJobReason, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptNotesJobReason) Or(d NotesJobReason) NotesJobReason {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -3232,6 +3548,30 @@ func (s *UpdateSetRequest) GetTitle() string {
 func (s *UpdateSetRequest) SetTitle(val string) {
 	s.Title = val
 }
+
+type UploadNotesBadRequest ErrorResponse
+
+func (*UploadNotesBadRequest) uploadNotesRes() {}
+
+type UploadNotesConflict ErrorResponse
+
+func (*UploadNotesConflict) uploadNotesRes() {}
+
+type UploadNotesForbidden ErrorResponse
+
+func (*UploadNotesForbidden) uploadNotesRes() {}
+
+type UploadNotesInternalServerError ErrorResponse
+
+func (*UploadNotesInternalServerError) uploadNotesRes() {}
+
+type UploadNotesRequestEntityTooLarge ErrorResponse
+
+func (*UploadNotesRequestEntityTooLarge) uploadNotesRes() {}
+
+type UploadNotesServiceUnavailable ErrorResponse
+
+func (*UploadNotesServiceUnavailable) uploadNotesRes() {}
 
 // Ref: #/components/schemas/User
 type User struct {

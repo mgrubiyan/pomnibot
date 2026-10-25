@@ -636,6 +636,116 @@ func (s *JoinSetRequest) Validate() error {
 	return nil
 }
 
+func (s *NotesJob) Validate() error {
+	if s == nil {
+		return validate.ErrNilPointer
+	}
+
+	var failures []validate.FieldError
+	if err := func() error {
+		if err := s.State.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "state",
+			Error: err,
+		})
+	}
+	if err := func() error {
+		if value, ok := s.Reason.Get(); ok {
+			if err := func() error {
+				if err := value.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "reason",
+			Error: err,
+		})
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+	return nil
+}
+
+func (s NotesJobReason) Validate() error {
+	switch s {
+	case "unreadable":
+		return nil
+	case "no_text":
+		return nil
+	case "no_cards":
+		return nil
+	case "other_text":
+		return nil
+	case "too_long":
+		return nil
+	case "too_much":
+		return nil
+	case "try_later":
+		return nil
+	default:
+		return errors.Errorf("invalid value: %v", s)
+	}
+}
+
+func (s NotesJobState) Validate() error {
+	switch s {
+	case "queued":
+		return nil
+	case "reading":
+		return nil
+	case "generating":
+		return nil
+	case "done":
+		return nil
+	case "failed":
+		return nil
+	default:
+		return errors.Errorf("invalid value: %v", s)
+	}
+}
+
+func (s *NotesUploadMultipart) Validate() error {
+	if s == nil {
+		return validate.ErrNilPointer
+	}
+
+	var failures []validate.FieldError
+	if err := func() error {
+		if s.Files == nil {
+			return nil // null
+		}
+		if err := (validate.Array{
+			MinLength:    1,
+			MinLengthSet: true,
+			MaxLength:    10,
+			MaxLengthSet: true,
+		}).ValidateLength(len(s.Files)); err != nil {
+			return errors.Wrap(err, "array")
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "files",
+			Error: err,
+		})
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+	return nil
+}
+
 func (s *ProfileRequest) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer

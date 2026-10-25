@@ -295,7 +295,7 @@ func TestProfileAvatarHTTP(t *testing.T) {
 func TestLimitAvatarBody(t *testing.T) {
 	var read int64
 	var readErr error
-	handler := limitAvatarBody(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+	handler := limitUploads(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		read, readErr = io.Copy(io.Discard, r.Body)
 	}))
 	body := strings.Repeat("A", 2*maxAvatarRequest)

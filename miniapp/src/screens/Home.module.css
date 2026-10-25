@@ -141,3 +141,14 @@
     opacity: 0.6;
     transition-duration: 0.06s;
 }
+
+/* The notes' spinner or alert sits where a set's avatar does, so the rows
+   line up. */
+.notesSpinner {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
