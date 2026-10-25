@@ -11,6 +11,7 @@ import (
 
 // SetService defines domain operations on card sets.
 type SetService interface {
+	GetSetRetention(context.Context, uuid.UUID, uuid.UUID) (*contracts.SetRetention, error)
 	CreateSet(context.Context, uuid.UUID, *contracts.CreateSetRequest) (*contracts.CardSet, error)
 	GetSet(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.CardSet, error)
 	UpdateSetTitle(ctx context.Context, userID uuid.UUID, setID uuid.UUID, title string) error

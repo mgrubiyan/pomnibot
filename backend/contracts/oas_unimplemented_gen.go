@@ -221,6 +221,15 @@ func (UnimplementedHandler) GetSetPlan(ctx context.Context, params GetSetPlanPar
 	return r, ht.ErrNotImplemented
 }
 
+// GetSetRetention implements GetSetRetention operation.
+//
+// Forecast fact recall without changing review state.
+//
+// GET /sets/{setId}/retention
+func (UnimplementedHandler) GetSetRetention(ctx context.Context, params GetSetRetentionParams) (r GetSetRetentionRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // GetSetShareCode implements GetSetShareCode operation.
 //
 // Get share code for a set.

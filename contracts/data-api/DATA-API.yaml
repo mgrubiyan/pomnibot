@@ -2133,6 +2133,118 @@ checks:
             format: date-time
   timeoutMs: 5000
   repeatable: true
+- id: GetSetRetention
+  name: Forecast fact recall without changing review state
+  method: GET
+  path: /sets/{setId}/retention
+  role: user
+  request:
+    path:
+      setId: ${setId}
+  expected:
+    statusCodes:
+    - 200
+    contentType: application/json
+    requiredFields:
+    - calculatedAt
+    - current
+    - groups
+    - horizonDays
+    - points
+    - target
+    - totalFacts
+    - withReviews
+    - withoutReviews
+    bodySchema:
+      type: object
+      description: All facts count once, including unavailable and unlearned facts.
+        Empty sets have zero probabilities; display them as unavailable.
+      required:
+      - calculatedAt
+      - horizonDays
+      - target
+      - totalFacts
+      - current
+      - groups
+      - points
+      - withReviews
+      - withoutReviews
+      properties:
+        calculatedAt:
+          type: string
+          format: date-time
+        horizonDays:
+          type: integer
+          enum:
+          - 13
+        target:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+        totalFacts:
+          type: integer
+          minimum: 0
+        current:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+        groups:
+          type: object
+          required:
+          - below70
+          - from70To90
+          - above90
+          properties:
+            below70:
+              type: integer
+              minimum: 0
+            from70To90:
+              type: integer
+              minimum: 0
+              description: Both boundaries are inclusive.
+            above90:
+              type: integer
+              minimum: 0
+        points:
+          type: array
+          items:
+            type: object
+            required:
+            - day
+            - withReviews
+            - withoutReviews
+            properties:
+              day:
+                type: number
+                format: double
+                minimum: 0
+                maximum: 13
+                description: Fractional days since calculatedAt; repeated coordinates
+                  show before and after a review.
+              withReviews:
+                type: number
+                format: double
+                minimum: 0
+                maximum: 1
+              withoutReviews:
+                type: number
+                format: double
+                minimum: 0
+                maximum: 1
+        withReviews:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+        withoutReviews:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+  timeoutMs: 5000
+  repeatable: true
 - id: GetSetShareCode
   name: Get share code for a set
   method: GET

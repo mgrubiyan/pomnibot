@@ -346,6 +346,84 @@ func (q *Queries) GetSetLeaderboard(ctx context.Context, setID pgtype.UUID) ([]G
 	return items, nil
 }
 
+const getSetRetentionFacts = `-- name: GetSetRetentionFacts :many
+SELECT f.id,
+    COALESCE(p.stability, 0)::DOUBLE PRECISION AS stability,
+    COALESCE(p.difficulty, 0)::DOUBLE PRECISION AS difficulty,
+    COALESCE(p.reps, 0)::INT AS reps,
+    COALESCE(p.lapses, 0)::INT AS lapses,
+    COALESCE(p.state, 0)::SMALLINT AS state,
+    p.last_reviewed_at, p.next_review_at,
+    EXISTS (
+        SELECT 1 FROM cards c
+        WHERE c.fact_id = f.id
+          AND NOT EXISTS (
+              SELECT 1 FROM card_issues i
+              JOIN cards reported ON reported.id = i.card_id
+              WHERE reported.fact_id = c.fact_id
+                AND c.id >= reported.id
+                AND i.user_id = $1
+                AND s.author_id <> $1
+                AND i.resolved_at IS NULL
+                AND i.created_at > reported.updated_at
+          )
+    ) AS available
+FROM facts f
+JOIN sets s ON s.id = f.set_id
+LEFT JOIN user_fact_progress p ON p.fact_id = f.id AND p.user_id = $1
+WHERE f.set_id = $2
+ORDER BY f.id
+`
+
+type GetSetRetentionFactsParams struct {
+	UserID pgtype.UUID `json:"user_id"`
+	SetID  pgtype.UUID `json:"set_id"`
+}
+
+type GetSetRetentionFactsRow struct {
+	ID             pgtype.UUID        `json:"id"`
+	Stability      float64            `json:"stability"`
+	Difficulty     float64            `json:"difficulty"`
+	Reps           int32              `json:"reps"`
+	Lapses         int32              `json:"lapses"`
+	State          int16              `json:"state"`
+	LastReviewedAt pgtype.Timestamptz `json:"last_reviewed_at"`
+	NextReviewAt   pgtype.Timestamptz `json:"next_review_at"`
+	Available      bool               `json:"available"`
+}
+
+// One row per fact, even if it has no cards or no progress. Availability
+// matches GetSetFeedCardsForUser: any remaining unblocked card can be reviewed.
+func (q *Queries) GetSetRetentionFacts(ctx context.Context, arg GetSetRetentionFactsParams) ([]GetSetRetentionFactsRow, error) {
+	rows, err := q.db.Query(ctx, getSetRetentionFacts, arg.UserID, arg.SetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetSetRetentionFactsRow
+	for rows.Next() {
+		var i GetSetRetentionFactsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Stability,
+			&i.Difficulty,
+			&i.Reps,
+			&i.Lapses,
+			&i.State,
+			&i.LastReviewedAt,
+			&i.NextReviewAt,
+			&i.Available,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSetStudents = `-- name: GetSetStudents :many
 SELECT u.id, u.first_name, u.last_name, u.username, u.avatar_id,
     (u.data_consent_at IS NOT NULL)::BOOLEAN AS data_consent

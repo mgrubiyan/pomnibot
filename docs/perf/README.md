@@ -1,5 +1,8 @@
 # Local API and PostgreSQL capacity
 
+For isolated retention forecast CPU benchmarks and before/after results, see
+[retention forecast sampling](retention.md).
+
 Run from the repository root with Docker available:
 
 ```sh
