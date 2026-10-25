@@ -217,6 +217,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sets/{setId}/mistakes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mistakes the members of the author's set make, by fact
+         * @description Counts every answer of the current members to the cards of each fact. The author's own answers and those of members who left are not counted.
+         */
+        get: operations["GetSetMistakes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sets/join": {
         parameters: {
             query?: never;
@@ -647,6 +667,38 @@ export interface components {
             /** Format: uuid */
             setId: string;
             items: components["schemas"]["LeaderboardEntry"][];
+        };
+        SetMistakesResponse: {
+            /** Format: uuid */
+            setId: string;
+            /** @description Facts of the set, the ones most members made mistakes on first; facts nobody answered yet come last. */
+            facts: components["schemas"]["FactMistakes"][];
+            /** @description Current members, the author excluded, in the order they joined. */
+            students: components["schemas"]["StudentMistakes"][];
+        };
+        FactMistakes: {
+            /** Format: uuid */
+            factId: string;
+            factName: string;
+            answers: number;
+            mistakes: number;
+            /** @description Members who answered a card of the fact at least once. */
+            studentsAnswered: number;
+            /** @description Members who made at least one mistake on the fact. */
+            studentsMistaken: number;
+            /** @description Counts of the members who answered the fact. */
+            students: components["schemas"]["StudentFactMistakes"][];
+        };
+        StudentFactMistakes: {
+            /** Format: uuid */
+            userId: string;
+            answers: number;
+            mistakes: number;
+        };
+        StudentMistakes: {
+            user: components["schemas"]["User"];
+            answers: number;
+            mistakes: number;
         };
         TodayData: {
             user: components["schemas"]["User"];
@@ -1201,6 +1253,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SetLeaderboardResponse"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    GetSetMistakes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ID of the card set */
+                setId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Mistakes retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetMistakesResponse"];
                 };
             };
             403: components["responses"]["Forbidden"];

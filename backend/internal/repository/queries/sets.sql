@@ -215,3 +215,30 @@ WHERE user_id = sqlc.arg('user_id')::UUID;
 
 -- name: LockSetForAuthor :one
 SELECT id FROM sets WHERE id = $1 AND author_id = $2 FOR UPDATE;
+
+-- name: GetSetStudents :many
+-- Current members of the set; the author may also be a member and is left out.
+SELECT u.id, u.first_name, u.last_name, u.username
+FROM user_sets us
+JOIN sets s ON s.id = us.set_id
+JOIN users u ON u.id = us.user_id
+WHERE us.set_id = $1 AND us.user_id <> s.author_id
+ORDER BY us.joined_at ASC, u.id ASC;
+
+-- name: GetSetFactAnswers :many
+-- Answers and mistakes per fact and member, for the members GetSetStudents
+-- returns: the author's own answers and those of members who left are not
+-- counted. Starting from the members lets idx_answers_attempt find their
+-- answers instead of reading the whole table.
+SELECT
+    c.fact_id,
+    a.user_id,
+    COUNT(*)::INT AS answers,
+    (COUNT(*) FILTER (WHERE NOT a.correct))::INT AS mistakes
+FROM user_sets us
+JOIN sets s ON s.id = us.set_id
+JOIN facts f ON f.set_id = us.set_id
+JOIN cards c ON c.fact_id = f.id
+JOIN answers a ON a.user_id = us.user_id AND a.card_id = c.id
+WHERE us.set_id = $1 AND us.user_id <> s.author_id
+GROUP BY c.fact_id, a.user_id;

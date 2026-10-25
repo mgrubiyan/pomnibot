@@ -40,6 +40,8 @@ export interface SetScreenProps {
     /** Complaints about the cards; only the author gets there. */
     onOpenIssues?: (setId: string) => void;
     onOpenLeaderboard?: (setId: string, setTitle: string) => void;
+    /** Where the members go wrong; only the author gets there. */
+    onOpenMistakes?: (setId: string, setTitle: string) => void;
 }
 
 export function SetScreen({
@@ -53,6 +55,7 @@ export function SetScreen({
     onOpenIssues,
     onOpenWarnings,
     onOpenLeaderboard,
+    onOpenMistakes,
 }: SetScreenProps) {
     const [status, setStatus] = useState<Status>('loading');
     const [set, setSet] = useState<CardSet | null>(null);
@@ -160,6 +163,7 @@ export function SetScreen({
     const hasDue = dueCount > 0;
     const shared = !isOwner;
     const showLeaderboard = isOwner && Boolean(onOpenLeaderboard);
+    const showMistakes = isOwner && Boolean(onOpenMistakes);
     const showWarnings = isOwner && Boolean(set.warnings?.length) && Boolean(onOpenWarnings);
     const showIssues = isOwner && issueCards > 0 && Boolean(onOpenIssues);
 
@@ -231,11 +235,21 @@ export function SetScreen({
                             subtitle="Рейтинг участников"
                         />
                     ) : null}
-                    {isOwner ? (
+                    {showMistakes ? (
                         <CellSimple
                             as="button"
                             showChevron
                             separator={showIssues || showWarnings || showLeaderboard}
+                            onClick={() => onOpenMistakes?.(set.id, set.title)}
+                            title="Ошибки участников"
+                            subtitle="На каких фактах ошибаются"
+                        />
+                    ) : null}
+                    {isOwner ? (
+                        <CellSimple
+                            as="button"
+                            showChevron
+                            separator={showIssues || showWarnings || showLeaderboard || showMistakes}
                             onClick={() => onOpenCards(set.id)}
                             title={`Карточки · ${totalCards}`}
                             subtitle="Просмотр и правка"

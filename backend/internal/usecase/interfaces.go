@@ -19,6 +19,7 @@ type SetService interface {
 	GetSetShareCode(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.CardSet, error)
 	GetSetPlan(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.SetPlanItem, error)
 	GetSetLeaderboard(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error)
+	GetSetMistakes(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.SetMistakesResponse, error)
 	JoinSetByShareCode(ctx context.Context, userID uuid.UUID, code string) (*contracts.CardSet, error)
 	SaveGeneratedSet(ctx context.Context, userID uuid.UUID, title string, genResult generator.Result, warnings []string) (*contracts.CardSet, error)
 }

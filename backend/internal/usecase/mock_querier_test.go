@@ -59,6 +59,8 @@ type mockQuerier struct {
 	upsertFactProgressFunc          func(ctx context.Context, arg db.UpsertFactProgressParams) (db.UserFactProgress, error)
 	ensureUserFunc                  func(ctx context.Context, id pgtype.UUID) (db.User, error)
 	getSetLeaderboardFunc           func(ctx context.Context, setID pgtype.UUID) ([]db.GetSetLeaderboardRow, error)
+	getSetStudentsFunc              func(ctx context.Context, setID pgtype.UUID) ([]db.GetSetStudentsRow, error)
+	getSetFactAnswersFunc           func(ctx context.Context, setID pgtype.UUID) ([]db.GetSetFactAnswersRow, error)
 	getUserSetRatingFunc            func(ctx context.Context, arg db.GetUserSetRatingParams) (db.GetUserSetRatingRow, error)
 	getUsersWithDueFactsFunc        func(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]pgtype.UUID, error)
 	createCardIssueFunc             func(ctx context.Context, arg db.CreateCardIssueParams) (db.CreateCardIssueRow, error)
@@ -379,6 +381,20 @@ func (m *mockQuerier) EnsureUser(ctx context.Context, id pgtype.UUID) (db.User, 
 func (m *mockQuerier) GetSetLeaderboard(ctx context.Context, setID pgtype.UUID) ([]db.GetSetLeaderboardRow, error) {
 	if m.getSetLeaderboardFunc != nil {
 		return m.getSetLeaderboardFunc(ctx, setID)
+	}
+	return nil, nil
+}
+
+func (m *mockQuerier) GetSetStudents(ctx context.Context, setID pgtype.UUID) ([]db.GetSetStudentsRow, error) {
+	if m.getSetStudentsFunc != nil {
+		return m.getSetStudentsFunc(ctx, setID)
+	}
+	return nil, nil
+}
+
+func (m *mockQuerier) GetSetFactAnswers(ctx context.Context, setID pgtype.UUID) ([]db.GetSetFactAnswersRow, error) {
+	if m.getSetFactAnswersFunc != nil {
+		return m.getSetFactAnswersFunc(ctx, setID)
 	}
 	return nil, nil
 }

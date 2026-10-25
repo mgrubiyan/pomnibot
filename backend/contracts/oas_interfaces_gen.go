@@ -65,6 +65,10 @@ type GetSetLeaderboardRes interface {
 	getSetLeaderboardRes()
 }
 
+type GetSetMistakesRes interface {
+	getSetMistakesRes()
+}
+
 type GetSetPlanRes interface {
 	getSetPlanRes()
 }

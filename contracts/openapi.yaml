@@ -497,6 +497,37 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /sets/{setId}/mistakes:
+    get:
+      tags:
+        - Sets
+      summary: Mistakes the members of the author's set make, by fact
+      description: >-
+        Counts every answer of the current members to the cards of each fact.
+        The author's own answers and those of members who left are not counted.
+      operationId: GetSetMistakes
+      parameters:
+        - name: setId
+          in: path
+          required: true
+          description: The ID of the card set
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Mistakes retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetMistakesResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
   /sets/join:
     post:
       tags:
@@ -1419,6 +1450,90 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LeaderboardEntry'
+
+    SetMistakesResponse:
+      type: object
+      required:
+        - setId
+        - facts
+        - students
+      properties:
+        setId:
+          type: string
+          format: uuid
+        facts:
+          description: >-
+            Facts of the set, the ones most members made mistakes on first;
+            facts nobody answered yet come last.
+          type: array
+          items:
+            $ref: '#/components/schemas/FactMistakes'
+        students:
+          description: Current members, the author excluded, in the order they joined.
+          type: array
+          items:
+            $ref: '#/components/schemas/StudentMistakes'
+
+    FactMistakes:
+      type: object
+      required:
+        - factId
+        - factName
+        - answers
+        - mistakes
+        - studentsAnswered
+        - studentsMistaken
+        - students
+      properties:
+        factId:
+          type: string
+          format: uuid
+        factName:
+          type: string
+        answers:
+          type: integer
+        mistakes:
+          type: integer
+        studentsAnswered:
+          description: Members who answered a card of the fact at least once.
+          type: integer
+        studentsMistaken:
+          description: Members who made at least one mistake on the fact.
+          type: integer
+        students:
+          description: Counts of the members who answered the fact.
+          type: array
+          items:
+            $ref: '#/components/schemas/StudentFactMistakes'
+
+    StudentFactMistakes:
+      type: object
+      required:
+        - userId
+        - answers
+        - mistakes
+      properties:
+        userId:
+          type: string
+          format: uuid
+        answers:
+          type: integer
+        mistakes:
+          type: integer
+
+    StudentMistakes:
+      type: object
+      required:
+        - user
+        - answers
+        - mistakes
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        answers:
+          type: integer
+        mistakes:
+          type: integer
 
     TodayData:
       type: object

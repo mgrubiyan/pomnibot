@@ -196,6 +196,57 @@ func (q *Queries) GetSetByShareCode(ctx context.Context, shareCode string) (GetS
 	return i, err
 }
 
+const getSetFactAnswers = `-- name: GetSetFactAnswers :many
+SELECT
+    c.fact_id,
+    a.user_id,
+    COUNT(*)::INT AS answers,
+    (COUNT(*) FILTER (WHERE NOT a.correct))::INT AS mistakes
+FROM user_sets us
+JOIN sets s ON s.id = us.set_id
+JOIN facts f ON f.set_id = us.set_id
+JOIN cards c ON c.fact_id = f.id
+JOIN answers a ON a.user_id = us.user_id AND a.card_id = c.id
+WHERE us.set_id = $1 AND us.user_id <> s.author_id
+GROUP BY c.fact_id, a.user_id
+`
+
+type GetSetFactAnswersRow struct {
+	FactID   pgtype.UUID `json:"fact_id"`
+	UserID   pgtype.UUID `json:"user_id"`
+	Answers  int32       `json:"answers"`
+	Mistakes int32       `json:"mistakes"`
+}
+
+// Answers and mistakes per fact and member, for the members GetSetStudents
+// returns: the author's own answers and those of members who left are not
+// counted. Starting from the members lets idx_answers_attempt find their
+// answers instead of reading the whole table.
+func (q *Queries) GetSetFactAnswers(ctx context.Context, setID pgtype.UUID) ([]GetSetFactAnswersRow, error) {
+	rows, err := q.db.Query(ctx, getSetFactAnswers, setID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetSetFactAnswersRow
+	for rows.Next() {
+		var i GetSetFactAnswersRow
+		if err := rows.Scan(
+			&i.FactID,
+			&i.UserID,
+			&i.Answers,
+			&i.Mistakes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSetLeaderboard = `-- name: GetSetLeaderboard :many
 WITH set_facts AS (
     SELECT f.id FROM facts f WHERE f.set_id = $1::UUID
@@ -278,6 +329,48 @@ func (q *Queries) GetSetLeaderboard(ctx context.Context, setID pgtype.UUID) ([]G
 			&i.Username,
 			&i.Percentile,
 			&i.Rank,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getSetStudents = `-- name: GetSetStudents :many
+SELECT u.id, u.first_name, u.last_name, u.username
+FROM user_sets us
+JOIN sets s ON s.id = us.set_id
+JOIN users u ON u.id = us.user_id
+WHERE us.set_id = $1 AND us.user_id <> s.author_id
+ORDER BY us.joined_at ASC, u.id ASC
+`
+
+type GetSetStudentsRow struct {
+	ID        pgtype.UUID `json:"id"`
+	FirstName string      `json:"first_name"`
+	LastName  pgtype.Text `json:"last_name"`
+	Username  pgtype.Text `json:"username"`
+}
+
+// Current members of the set; the author may also be a member and is left out.
+func (q *Queries) GetSetStudents(ctx context.Context, setID pgtype.UUID) ([]GetSetStudentsRow, error) {
+	rows, err := q.db.Query(ctx, getSetStudents, setID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetSetStudentsRow
+	for rows.Next() {
+		var i GetSetStudentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.Username,
 		); err != nil {
 			return nil, err
 		}

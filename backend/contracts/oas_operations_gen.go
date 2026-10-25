@@ -23,6 +23,7 @@ const (
 	GetSetOperation             OperationName = "GetSet"
 	GetSetIssuesOperation       OperationName = "GetSetIssues"
 	GetSetLeaderboardOperation  OperationName = "GetSetLeaderboard"
+	GetSetMistakesOperation     OperationName = "GetSetMistakes"
 	GetSetPlanOperation         OperationName = "GetSetPlan"
 	GetSetShareCodeOperation    OperationName = "GetSetShareCode"
 	GetTodayOperation           OperationName = "GetToday"

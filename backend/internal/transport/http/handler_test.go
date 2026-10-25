@@ -81,6 +81,12 @@ func TestAPIHandler_SetsDelegation(t *testing.T) {
 			}
 			return &contracts.SetLeaderboardResponse{SetId: id}, nil
 		},
+		getSetMistakesFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID) (*contracts.SetMistakesResponse, error) {
+			if userID != testAPIUserID123 || id != setID {
+				t.Errorf("unexpected args: userID=%s, id=%s", userID, id)
+			}
+			return &contracts.SetMistakesResponse{SetId: id}, nil
+		},
 	}
 
 	h := NewAPIHandler(mockSet, nil, nil, nil)
@@ -153,6 +159,16 @@ func TestAPIHandler_SetsDelegation(t *testing.T) {
 		}
 		if _, ok := res.(*contracts.SetLeaderboardResponse); !ok {
 			t.Fatalf("expected *contracts.SetLeaderboardResponse, got %T", res)
+		}
+	})
+
+	t.Run("GetSetMistakes delegates to setsHandler", func(t *testing.T) {
+		res, err := h.GetSetMistakes(ctx, contracts.GetSetMistakesParams{SetId: setID})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if _, ok := res.(*contracts.SetMistakesResponse); !ok {
+			t.Fatalf("expected *contracts.SetMistakesResponse, got %T", res)
 		}
 	})
 }

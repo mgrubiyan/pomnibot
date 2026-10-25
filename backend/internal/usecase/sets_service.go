@@ -271,33 +271,9 @@ func (s *setServiceImpl) GetSetPlan(ctx context.Context, userID uuid.UUID, setID
 }
 
 func (s *setServiceImpl) GetSetLeaderboard(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (*contracts.SetLeaderboardResponse, error) {
-	var pgUUID pgtype.UUID
-	if err := pgUUID.Scan(setID.String()); err != nil {
-		return nil, fmt.Errorf("%w: invalid set id", ErrValidation)
-	}
-
-	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
-	// Verify set exists and caller has access
-	if _, err := s.querier.GetSetByID(ctx, db.GetSetByIDParams{
-		ID:     pgUUID,
-		UserID: pgUserID,
-	}); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
-		}
-		return nil, fmt.Errorf("get set by id: %w", err)
-	}
-
-	// Verify user is author of the set
-	isAuthor, err := s.querier.IsSetAuthor(ctx, db.IsSetAuthorParams{
-		ID:       pgUUID,
-		AuthorID: pgUserID,
-	})
+	pgUUID, err := s.authorSetID(ctx, userID, setID)
 	if err != nil {
-		return nil, fmt.Errorf("check set author: %w", err)
-	}
-	if !isAuthor {
-		return nil, ErrForbidden
+		return nil, err
 	}
 
 	rows, err := s.querier.GetSetLeaderboard(ctx, pgUUID)
@@ -319,6 +295,34 @@ func (s *setServiceImpl) GetSetLeaderboard(ctx context.Context, userID uuid.UUID
 		SetId: setID,
 		Items: items,
 	}, nil
+}
+
+// authorSetID checks that the set exists for the caller and that the caller
+// wrote it.
+func (s *setServiceImpl) authorSetID(ctx context.Context, userID uuid.UUID, setID uuid.UUID) (pgtype.UUID, error) {
+	pgUUID := pgtype.UUID{Bytes: setID, Valid: true}
+	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
+	if _, err := s.querier.GetSetByID(ctx, db.GetSetByIDParams{
+		ID:     pgUUID,
+		UserID: pgUserID,
+	}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return pgtype.UUID{}, ErrNotFound
+		}
+		return pgtype.UUID{}, fmt.Errorf("get set by id: %w", err)
+	}
+
+	isAuthor, err := s.querier.IsSetAuthor(ctx, db.IsSetAuthorParams{
+		ID:       pgUUID,
+		AuthorID: pgUserID,
+	})
+	if err != nil {
+		return pgtype.UUID{}, fmt.Errorf("check set author: %w", err)
+	}
+	if !isAuthor {
+		return pgtype.UUID{}, ErrForbidden
+	}
+	return pgUUID, nil
 }
 
 func (s *setServiceImpl) JoinSetByShareCode(ctx context.Context, userID uuid.UUID, code string) (*contracts.CardSet, error) {
