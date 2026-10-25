@@ -539,6 +539,8 @@ export function SetCards({
                                                                 className={s.kindTag}
                                                             >
                                                                 {kindLabel(card.kind)}
+                                                                {/* Keeps a screen reader from running the kind into the question. */}
+                                                                <span className={s.visuallyHidden}>.</span>
                                                             </Typography.Text>
                                                             <StudyContent className={s.cardTitle} text={card.question} inControl />
                                                             <StudyIllustration svg={card.questionSvg} alt="Иллюстрация к вопросу" />
