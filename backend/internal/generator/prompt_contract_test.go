@@ -143,6 +143,11 @@ func TestPromptsExampleAndCardFormatContract(t *testing.T) {
 			"деление понятий на группы, виды или режимы",
 			"Запрещено упаковывать булевы проверки",
 			"Запрещено выдавать классификацию",
+			"обучить ученика",
+			"массивах rows",
+			"без предоставления закрытого списка",
+			"Запрещено добавлять карточки kind: \"recall\" в extraCards",
+			"Запрещено оформлять примеры через текстовый ввод",
 		} {
 			if !strings.Contains(prompt, required) {
 				t.Errorf("%s missing required guideline %q", name, required)
