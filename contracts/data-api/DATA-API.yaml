@@ -221,6 +221,9 @@ checks:
             type: string
           sourceQuote:
             type: string
+          comment:
+            type: string
+            description: What the reader wrote; absent when they only picked a reason
           reporter:
             type: object
             required:
@@ -1781,6 +1784,7 @@ checks:
         - cardId
         - reason
         - count
+        - comments
         - lastReportedAt
         properties:
           cardId:
@@ -1797,6 +1801,11 @@ checks:
           count:
             type: integer
             description: How many complaints with this reason
+          comments:
+            type: array
+            description: What readers wrote with this reason, newest first
+            items:
+              type: string
           lastReportedAt:
             type: string
             format: date-time

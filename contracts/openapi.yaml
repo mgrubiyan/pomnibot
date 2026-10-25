@@ -1380,6 +1380,12 @@ components:
       properties:
         reason:
           $ref: '#/components/schemas/CardIssueReason'
+        comment:
+          type: string
+          maxLength: 500
+          description: >-
+            What is wrong, in the reader's words; required with the reason
+            other. Spaces around it are dropped before it is saved.
 
     CardIssueStatus:
       type: string
@@ -1428,6 +1434,9 @@ components:
           type: string
         sourceQuote:
           type: string
+        comment:
+          type: string
+          description: What the reader wrote; absent when they only picked a reason
         reporter:
           $ref: '#/components/schemas/User'
         createdAt:
@@ -1440,6 +1449,7 @@ components:
         - cardId
         - reason
         - count
+        - comments
         - lastReportedAt
       properties:
         cardId:
@@ -1450,6 +1460,11 @@ components:
         count:
           type: integer
           description: How many complaints with this reason
+        comments:
+          type: array
+          description: What readers wrote with this reason, newest first
+          items:
+            type: string
         lastReportedAt:
           type: string
           format: date-time

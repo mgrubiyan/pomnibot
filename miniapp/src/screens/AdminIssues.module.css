@@ -30,6 +30,11 @@
     overflow-wrap: anywhere;
 }
 
+.comment {
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+}
+
 .footer {
     padding-top: 12px;
     border-top: 1px solid var(--divider-primary);

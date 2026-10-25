@@ -11,7 +11,8 @@ import WhyItWorks from './screens/WhyItWorks';
 import { api } from './api';
 import { config } from './config';
 import { useProfile } from './components/profileContext';
-import type { Card, CardIssueReason, Profile as ProfileData, TodayData, User } from './types';
+import type { Card, Profile as ProfileData, TodayData, User } from './types';
+import type { CardIssueReport } from './utils/issues';
 import type { CardPatch } from './utils/cards';
 import type { FeedResume } from './utils/feed';
 
@@ -222,10 +223,10 @@ function App() {
     // Throws when the complaint was not saved, so the screen can say so
     // instead of losing it. The status decides: an error with an empty
     // body, such as a proxy's 502, comes back without an `error`.
-    const reportCardIssue = async (cardId: string, reason: CardIssueReason) => {
+    const reportCardIssue = async (cardId: string, { reason, comment }: CardIssueReport) => {
         const { response } = await api.POST('/cards/{cardId}/issue', {
             params: { path: { cardId } },
-            body: { reason },
+            body: comment ? { reason, comment } : { reason },
         });
         if (!response.ok) {
             throw new Error(`Failed to report card issue: ${response.status}`);
@@ -317,8 +318,8 @@ function App() {
                 setTitle={setTitle ?? 'Набор'}
                 isOwner={isOwner}
                 onBack={backToFeed}
-                onEdit={async (reason) => {
-                    await reportCardIssue(card.id, reason);
+                onEdit={async (report) => {
+                    await reportCardIssue(card.id, report);
                     go({
                         name: 'card-edit',
                         card,
@@ -330,12 +331,12 @@ function App() {
                         feedResume,
                     });
                 }}
-                onRemove={async (reason) => {
-                    await reportCardIssue(card.id, reason);
+                onRemove={async (report) => {
+                    await reportCardIssue(card.id, report);
                     await removeCard(card.id, card.setId, true, feedSetId, feedTitle, feedResume, undefined, feedEarly);
                 }}
-                onReport={async (reason) => {
-                    await reportCardIssue(card.id, reason);
+                onReport={async (report) => {
+                    await reportCardIssue(card.id, report);
                     setRemovedCardIds((current) =>
                         current.includes(card.id) ? current : [...current, card.id],
                     );

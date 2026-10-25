@@ -54,8 +54,8 @@ WITH card AS (
     WHERE c.id = $2
       AND (s.author_id = $1 OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = $1))
 ), saved AS (
-    INSERT INTO card_issues (card_id, set_id, user_id, reason, kind, question, answer_text, explanation, source_quote)
-    SELECT id, set_id, $1, $3, kind, question, answer_text, explanation, source_quote
+    INSERT INTO card_issues (card_id, set_id, user_id, reason, comment, kind, question, answer_text, explanation, source_quote)
+    SELECT id, set_id, $1, $3, $4, kind, question, answer_text, explanation, source_quote
     FROM card
     RETURNING card_id
 )
@@ -74,9 +74,10 @@ JOIN saved ON saved.card_id = card.id
 `
 
 type CreateCardIssueParams struct {
-	UserID pgtype.UUID     `json:"user_id"`
-	CardID pgtype.UUID     `json:"card_id"`
-	Reason CardIssueReason `json:"reason"`
+	UserID  pgtype.UUID     `json:"user_id"`
+	CardID  pgtype.UUID     `json:"card_id"`
+	Reason  CardIssueReason `json:"reason"`
+	Comment pgtype.Text     `json:"comment"`
 }
 
 type CreateCardIssueRow struct {
@@ -90,7 +91,12 @@ type CreateCardIssueRow struct {
 // has an open complaint about the card: the author hears about it once, until
 // they edit the card or keep it. The main query does not see the new row.
 func (q *Queries) CreateCardIssue(ctx context.Context, arg CreateCardIssueParams) (CreateCardIssueRow, error) {
-	row := q.db.QueryRow(ctx, createCardIssue, arg.UserID, arg.CardID, arg.Reason)
+	row := q.db.QueryRow(ctx, createCardIssue,
+		arg.UserID,
+		arg.CardID,
+		arg.Reason,
+		arg.Comment,
+	)
 	var i CreateCardIssueRow
 	err := row.Scan(&i.AuthorID, &i.SetTitle, &i.NotifyAuthor)
 	return i, err
@@ -102,6 +108,7 @@ SELECT
     i.reason,
     -- People, not complaints: a reader may complain again in a later session.
     COUNT(DISTINCT i.user_id)::int AS count,
+    COALESCE(array_agg(i.comment ORDER BY i.created_at DESC) FILTER (WHERE i.comment IS NOT NULL), '{}')::text[] AS comments,
     MAX(i.created_at)::timestamptz AS last_reported_at
 FROM card_issues i
 JOIN cards c ON c.id = i.card_id
@@ -124,6 +131,7 @@ type GetSetIssuesRow struct {
 	CardID         pgtype.UUID        `json:"card_id"`
 	Reason         CardIssueReason    `json:"reason"`
 	Count          int32              `json:"count"`
+	Comments       []string           `json:"comments"`
 	LastReportedAt pgtype.Timestamptz `json:"last_reported_at"`
 }
 
@@ -142,6 +150,7 @@ func (q *Queries) GetSetIssues(ctx context.Context, arg GetSetIssuesParams) ([]G
 			&i.CardID,
 			&i.Reason,
 			&i.Count,
+			&i.Comments,
 			&i.LastReportedAt,
 		); err != nil {
 			return nil, err
@@ -158,6 +167,7 @@ const listCardIssues = `-- name: ListCardIssues :many
 SELECT
     i.id,
     i.reason,
+    i.comment,
     i.kind,
     i.question,
     i.answer_text,
@@ -186,6 +196,7 @@ LIMIT 1000
 type ListCardIssuesRow struct {
 	ID                pgtype.UUID        `json:"id"`
 	Reason            CardIssueReason    `json:"reason"`
+	Comment           pgtype.Text        `json:"comment"`
 	Kind              CardKind           `json:"kind"`
 	Question          string             `json:"question"`
 	AnswerText        pgtype.Text        `json:"answer_text"`
@@ -217,6 +228,7 @@ func (q *Queries) ListCardIssues(ctx context.Context) ([]ListCardIssuesRow, erro
 		if err := rows.Scan(
 			&i.ID,
 			&i.Reason,
+			&i.Comment,
 			&i.Kind,
 			&i.Question,
 			&i.AnswerText,

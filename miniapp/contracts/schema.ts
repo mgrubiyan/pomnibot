@@ -654,6 +654,8 @@ export interface components {
         CardIssueReason: "answer" | "wording" | "not-in-notes" | "other";
         ReportCardIssueRequest: {
             reason: components["schemas"]["CardIssueReason"];
+            /** @description What is wrong, in the reader's words; required with the reason other. Spaces around it are dropped before it is saved. */
+            comment?: string;
         };
         /**
          * @description open until the author answers; fixed when the card was edited after the complaint; kept when the author left the card as it is; deleted when the card is gone.
@@ -674,6 +676,8 @@ export interface components {
             answer?: string;
             explanation: string;
             sourceQuote: string;
+            /** @description What the reader wrote; absent when they only picked a reason */
+            comment?: string;
             reporter: components["schemas"]["User"];
             /** Format: date-time */
             createdAt: string;
@@ -684,6 +688,8 @@ export interface components {
             reason: components["schemas"]["CardIssueReason"];
             /** @description How many complaints with this reason */
             count: number;
+            /** @description What readers wrote with this reason, newest first */
+            comments: string[];
             /** Format: date-time */
             lastReportedAt: string;
         };

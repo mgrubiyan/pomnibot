@@ -88,6 +88,9 @@ func (s *adminServiceImpl) ListCardIssues(ctx context.Context, userID uuid.UUID)
 		if r.AnswerText.Valid {
 			issue.Answer.SetTo(r.AnswerText.String)
 		}
+		if r.Comment.Valid {
+			issue.Comment.SetTo(r.Comment.String)
+		}
 		issues = append(issues, issue)
 	}
 	return issues, nil

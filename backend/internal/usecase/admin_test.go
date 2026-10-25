@@ -93,6 +93,7 @@ func TestAdminService_ListCardIssues(t *testing.T) {
 	deleted := db.ListCardIssuesRow{
 		ID:                pgtype.UUID{Bytes: id, Valid: true},
 		Reason:            db.CardIssueReasonOther,
+		Comment:           pgtype.Text{String: "Таблица перепутана", Valid: true},
 		Kind:              db.CardKindTable,
 		Status:            "deleted",
 		ReporterID:        pgtype.UUID{Bytes: reporterID2, Valid: true},
@@ -106,7 +107,7 @@ func TestAdminService_ListCardIssues(t *testing.T) {
 			Reporter:  contracts.User{ID: reporterID1, FirstName: "Анна", LastName: contracts.NewOptString("Иванова")},
 			CreatedAt: at,
 		},
-		{ID: id, Reason: contracts.CardIssueReasonOther, Status: contracts.CardIssueStatusDeleted, Kind: contracts.CardKindTable, Reporter: contracts.User{ID: reporterID2, FirstName: "Иван"}},
+		{ID: id, Reason: contracts.CardIssueReasonOther, Comment: contracts.NewOptString("Таблица перепутана"), Status: contracts.CardIssueStatusDeleted, Kind: contracts.CardKindTable, Reporter: contracts.User{ID: reporterID2, FirstName: "Иван"}},
 	}
 	errDB := errors.New("connection reset")
 	tests := []struct {

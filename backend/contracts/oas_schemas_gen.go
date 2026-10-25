@@ -24,8 +24,10 @@ type AdminCardIssue struct {
 	Answer      OptString `json:"answer"`
 	Explanation string    `json:"explanation"`
 	SourceQuote string    `json:"sourceQuote"`
-	Reporter    User      `json:"reporter"`
-	CreatedAt   time.Time `json:"createdAt"`
+	// What the reader wrote; absent when they only picked a reason.
+	Comment   OptString `json:"comment"`
+	Reporter  User      `json:"reporter"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 // GetID returns the value of ID.
@@ -71,6 +73,11 @@ func (s *AdminCardIssue) GetExplanation() string {
 // GetSourceQuote returns the value of SourceQuote.
 func (s *AdminCardIssue) GetSourceQuote() string {
 	return s.SourceQuote
+}
+
+// GetComment returns the value of Comment.
+func (s *AdminCardIssue) GetComment() OptString {
+	return s.Comment
 }
 
 // GetReporter returns the value of Reporter.
@@ -126,6 +133,11 @@ func (s *AdminCardIssue) SetExplanation(val string) {
 // SetSourceQuote sets the value of SourceQuote.
 func (s *AdminCardIssue) SetSourceQuote(val string) {
 	s.SourceQuote = val
+}
+
+// SetComment sets the value of Comment.
+func (s *AdminCardIssue) SetComment(val OptString) {
+	s.Comment = val
 }
 
 // SetReporter sets the value of Reporter.
@@ -2609,6 +2621,9 @@ func (*ReportCardIssueNotFound) reportCardIssueRes() {}
 // Ref: #/components/schemas/ReportCardIssueRequest
 type ReportCardIssueRequest struct {
 	Reason CardIssueReason `json:"reason"`
+	// What is wrong, in the reader's words; required with the reason other. Spaces around it are dropped
+	// before it is saved.
+	Comment OptString `json:"comment"`
 }
 
 // GetReason returns the value of Reason.
@@ -2616,9 +2631,19 @@ func (s *ReportCardIssueRequest) GetReason() CardIssueReason {
 	return s.Reason
 }
 
+// GetComment returns the value of Comment.
+func (s *ReportCardIssueRequest) GetComment() OptString {
+	return s.Comment
+}
+
 // SetReason sets the value of Reason.
 func (s *ReportCardIssueRequest) SetReason(val CardIssueReason) {
 	s.Reason = val
+}
+
+// SetComment sets the value of Comment.
+func (s *ReportCardIssueRequest) SetComment(val OptString) {
+	s.Comment = val
 }
 
 type ResolveCardIssuesForbidden ErrorResponse
@@ -2663,7 +2688,9 @@ type SetIssue struct {
 	CardId uuid.UUID       `json:"cardId"`
 	Reason CardIssueReason `json:"reason"`
 	// How many complaints with this reason.
-	Count          int       `json:"count"`
+	Count int `json:"count"`
+	// What readers wrote with this reason, newest first.
+	Comments       []string  `json:"comments"`
 	LastReportedAt time.Time `json:"lastReportedAt"`
 }
 
@@ -2680,6 +2707,11 @@ func (s *SetIssue) GetReason() CardIssueReason {
 // GetCount returns the value of Count.
 func (s *SetIssue) GetCount() int {
 	return s.Count
+}
+
+// GetComments returns the value of Comments.
+func (s *SetIssue) GetComments() []string {
+	return s.Comments
 }
 
 // GetLastReportedAt returns the value of LastReportedAt.
@@ -2700,6 +2732,11 @@ func (s *SetIssue) SetReason(val CardIssueReason) {
 // SetCount sets the value of Count.
 func (s *SetIssue) SetCount(val int) {
 	s.Count = val
+}
+
+// SetComments sets the value of Comments.
+func (s *SetIssue) SetComments(val []string) {
+	s.Comments = val
 }
 
 // SetLastReportedAt sets the value of LastReportedAt.

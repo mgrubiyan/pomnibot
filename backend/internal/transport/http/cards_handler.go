@@ -59,7 +59,10 @@ func (h *CardsHandler) ReportCardIssue(ctx context.Context, req *contracts.Repor
 		return &contracts.ReportCardIssueBadRequest{Message: "reason is required"}, nil
 	}
 	userID, _ := UserIDFromContext(ctx)
-	if err := h.cardService.ReportCardIssue(ctx, userID, params.CardId, req.Reason); err != nil {
+	if err := h.cardService.ReportCardIssue(ctx, userID, params.CardId, req.Reason, req.Comment.Value); err != nil {
+		if errors.Is(err, usecase.ErrValidation) {
+			return &contracts.ReportCardIssueBadRequest{Message: err.Error()}, nil
+		}
 		if errors.Is(err, usecase.ErrNotFound) {
 			return &contracts.ReportCardIssueNotFound{Message: err.Error()}, nil
 		}

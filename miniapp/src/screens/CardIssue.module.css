@@ -7,6 +7,12 @@
     overscroll-behavior: contain;
 }
 
+/* The column scrolls instead of squeezing its blocks: the reasons list
+   clips its corners and would shrink to nothing on a short screen. */
+.body > * {
+    flex-shrink: 0;
+}
+
 .preview {
     box-sizing: border-box;
     padding: 16px 20px;
@@ -57,6 +63,14 @@
 
 .reason + .reason {
     border-top: 1px solid var(--divider-primary);
+}
+
+.label {
+    padding: 0 16px;
+}
+
+.comment {
+    background: var(--background-card);
 }
 
 .note {

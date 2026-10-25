@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -282,14 +283,19 @@ func (s *cardServiceImpl) DeleteCard(ctx context.Context, userID uuid.UUID, card
 // ReportCardIssue saves a complaint about a card the user can see, together
 // with a copy of the card, so it outlives edits and deletion. The author
 // hears about the first reader's complaint until they answer it.
-func (s *cardServiceImpl) ReportCardIssue(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, reason contracts.CardIssueReason) error {
+func (s *cardServiceImpl) ReportCardIssue(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, reason contracts.CardIssueReason, comment string) error {
+	pgComment, err := cleanIssueComment(reason, comment)
+	if err != nil {
+		return err
+	}
 	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
 	pgCardID := pgtype.UUID{Bytes: cardID, Valid: true}
 
 	saved, err := s.querier.CreateCardIssue(ctx, db.CreateCardIssueParams{
-		UserID: pgUserID,
-		Reason: db.CardIssueReason(reason),
-		CardID: pgCardID,
+		UserID:  pgUserID,
+		Reason:  db.CardIssueReason(reason),
+		Comment: pgComment,
+		CardID:  pgCardID,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
@@ -310,6 +316,27 @@ func (s *cardServiceImpl) ReportCardIssue(ctx context.Context, userID uuid.UUID,
 		s.issues.CardIssueReported(ctx, CardIssueReport{AuthorID: uuid.UUID(saved.AuthorID.Bytes), SetTitle: saved.SetTitle})
 	}
 	return nil
+}
+
+// IssueCommentMaxLength is the longest comment, in characters; the contract's
+// maxLength and the mini-app's ISSUE_COMMENT_MAX_LENGTH say the same.
+const IssueCommentMaxLength = 500
+
+// cleanIssueComment keeps the reader's words without surrounding spaces; none
+// is NULL. «Другое» means nothing without them.
+func cleanIssueComment(reason contracts.CardIssueReason, comment string) (pgtype.Text, error) {
+	comment = strings.TrimSpace(comment)
+	// Postgres text cannot hold a NUL, and the save would fail as a server error.
+	if !utf8.ValidString(comment) || strings.ContainsRune(comment, 0) {
+		return pgtype.Text{}, fmt.Errorf("%w: comment is not valid text", ErrValidation)
+	}
+	if utf8.RuneCountInString(comment) > IssueCommentMaxLength {
+		return pgtype.Text{}, fmt.Errorf("%w: comment must be at most %d characters", ErrValidation, IssueCommentMaxLength)
+	}
+	if comment == "" && reason == contracts.CardIssueReasonOther {
+		return pgtype.Text{}, fmt.Errorf("%w: say what is wrong with the card", ErrValidation)
+	}
+	return pgtype.Text{String: comment, Valid: comment != ""}, nil
 }
 
 // GetSetIssues lists the open complaints of the author's set; for anyone
@@ -334,6 +361,7 @@ func (s *cardServiceImpl) GetSetIssues(ctx context.Context, userID uuid.UUID, se
 			CardId:         uuid.UUID(r.CardID.Bytes),
 			Reason:         contracts.CardIssueReason(r.Reason),
 			Count:          int(r.Count),
+			Comments:       r.Comments,
 			LastReportedAt: r.LastReportedAt.Time,
 		})
 	}

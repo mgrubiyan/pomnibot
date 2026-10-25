@@ -230,7 +230,7 @@ func TestAPIHandler_CardsDelegation(t *testing.T) {
 	})
 
 	t.Run("ReportCardIssue delegates to cardsHandler", func(t *testing.T) {
-		res, err := h.ReportCardIssue(ctx, &contracts.ReportCardIssueRequest{Reason: contracts.CardIssueReasonOther}, contracts.ReportCardIssueParams{CardId: cardID})
+		res, err := h.ReportCardIssue(ctx, &contracts.ReportCardIssueRequest{Reason: contracts.CardIssueReasonOther, Comment: contracts.NewOptString("Опечатка")}, contracts.ReportCardIssueParams{CardId: cardID})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

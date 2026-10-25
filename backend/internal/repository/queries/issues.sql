@@ -12,8 +12,8 @@ WITH card AS (
     WHERE c.id = @card_id
       AND (s.author_id = @user_id OR EXISTS (SELECT 1 FROM user_sets us WHERE us.set_id = s.id AND us.user_id = @user_id))
 ), saved AS (
-    INSERT INTO card_issues (card_id, set_id, user_id, reason, kind, question, answer_text, explanation, source_quote)
-    SELECT id, set_id, @user_id, @reason, kind, question, answer_text, explanation, source_quote
+    INSERT INTO card_issues (card_id, set_id, user_id, reason, comment, kind, question, answer_text, explanation, source_quote)
+    SELECT id, set_id, @user_id, @reason, sqlc.narg(comment), kind, question, answer_text, explanation, source_quote
     FROM card
     RETURNING card_id
 )
@@ -38,6 +38,7 @@ SELECT
     i.reason,
     -- People, not complaints: a reader may complain again in a later session.
     COUNT(DISTINCT i.user_id)::int AS count,
+    COALESCE(array_agg(i.comment ORDER BY i.created_at DESC) FILTER (WHERE i.comment IS NOT NULL), '{}')::text[] AS comments,
     MAX(i.created_at)::timestamptz AS last_reported_at
 FROM card_issues i
 JOIN cards c ON c.id = i.card_id
@@ -78,6 +79,7 @@ SELECT EXISTS (SELECT 1 FROM card) AS found;
 SELECT
     i.id,
     i.reason,
+    i.comment,
     i.kind,
     i.question,
     i.answer_text,
