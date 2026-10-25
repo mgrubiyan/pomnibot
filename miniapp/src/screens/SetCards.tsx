@@ -531,8 +531,8 @@ export function SetCards({
                                                             ? () => onOpenCard(card, set.title)
                                                             : undefined
                                                     }
-                                                    title={
-                                                        <div>
+                                                    overline={
+                                                        kindLabel(card.kind) ? (
                                                             <Typography.Text
                                                                 variant="tag-strong"
                                                                 color="secondary"
@@ -540,8 +540,12 @@ export function SetCards({
                                                             >
                                                                 {kindLabel(card.kind)}
                                                                 {/* Keeps a screen reader from running the kind into the question. */}
-                                                                <span className={s.visuallyHidden}>.</span>
+                                                                <span className="visually-hidden">.</span>
                                                             </Typography.Text>
+                                                        ) : undefined
+                                                    }
+                                                    title={
+                                                        <div>
                                                             <StudyContent className={s.cardTitle} text={card.question} inControl />
                                                             <StudyIllustration svg={card.questionSvg} alt="Иллюстрация к вопросу" />
                                                         </div>

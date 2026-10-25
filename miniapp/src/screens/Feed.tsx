@@ -18,6 +18,7 @@ import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
 import { Result } from './Result';
 import { cx } from '../utils/cx';
+import { kindTask } from '../utils/kinds';
 import { motionAllowed } from '../utils/motion';
 import {
     IconCheck,
@@ -135,15 +136,6 @@ async function fetchReveal(cardId: string): Promise<CardReveal | Refusal | typeo
         return LOST;
     }
 }
-
-/** What the card asks of the reader, said above the question. */
-const TASKS: Record<Card['kind'], string> = {
-    flip: 'Вспомните ответ',
-    choice: 'Выберите все верные ответы',
-    boolean: 'Верно или нет?',
-    input: 'Впишите ответ',
-    table: 'Разложите по колонкам',
-};
 
 function optionsOf(card: FeedCard): Option[] {
     if (card.kind === 'boolean') {
@@ -740,7 +732,7 @@ export function Feed({
                     >
                         <Flex direction="column" align="stretch" gap={8}>
                             <Typography.Text variant="label" color="tertiary">
-                                {TASKS[card.kind]}
+                                {kindTask(card.kind)}
                             </Typography.Text>
                             <Typography.Text variant="subheader" asChild>
                                 <StudyContent className={s.question} role="heading" aria-level={1} text={card.question} />
