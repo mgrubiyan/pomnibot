@@ -109,6 +109,10 @@ export function useNotesJob(onFinish?: (job: NotesJob) => void) {
                 const current = await api.GET('/notes');
                 setJob(current.data ?? null);
                 setFollowed(true);
+                // They may have ended in between: no poll would tell then.
+                if (current.data && !isNotesRunning(current.data)) {
+                    finish.current?.(current.data);
+                }
                 return { ok: true };
             }
             if (response.status === 413) {
