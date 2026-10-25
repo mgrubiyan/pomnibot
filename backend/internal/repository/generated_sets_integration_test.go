@@ -107,7 +107,7 @@ func TestGeneratedSetOrderAndChoiceIssuesPostgres(t *testing.T) {
 	}
 	setStep(2)
 	choiceID := all[2].ID
-	if err = cards.ReportCardIssue(ctx, reader, choiceID, contracts.CardIssueReasonAnswer); err != nil {
+	if err = cards.ReportCardIssue(ctx, reader, choiceID, contracts.CardIssueReasonAnswer, ""); err != nil {
 		t.Fatal(err)
 	}
 	feed, err := q.GetFeedCardsForUser(ctx, pgReader)
@@ -187,7 +187,7 @@ func TestGeneratedSetOrderAndChoiceIssuesPostgres(t *testing.T) {
 	}
 	// Keeping the card also restores it, without requiring another edit.
 	setStep(2)
-	if err = cards.ReportCardIssue(ctx, reader, choiceID, contracts.CardIssueReasonWording); err != nil {
+	if err = cards.ReportCardIssue(ctx, reader, choiceID, contracts.CardIssueReasonWording, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err = cards.ResolveCardIssues(ctx, owner, choiceID); err != nil {

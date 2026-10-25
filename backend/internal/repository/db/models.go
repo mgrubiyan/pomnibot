@@ -142,6 +142,7 @@ type CardIssue struct {
 	SourceQuote string             `json:"source_quote"`
 	ResolvedAt  pgtype.Timestamptz `json:"resolved_at"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	Comment     pgtype.Text        `json:"comment"`
 }
 
 type CardOption struct {

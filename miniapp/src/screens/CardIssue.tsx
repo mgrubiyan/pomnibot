@@ -5,7 +5,8 @@ import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StudyContent } from '../components/StudyContent';
 import { StudyIllustration } from '../components/StudyIllustration';
-import { ISSUE_REASONS, answerPreview } from '../utils/issues';
+import { AutoTextarea } from '../components/AutoTextarea';
+import { ISSUE_COMMENT_MAX_LENGTH, ISSUE_REASONS, answerPreview, type CardIssueReport } from '../utils/issues';
 import s from './CardIssue.module.css';
 
 /** Each action saves the complaint first and rejects when it was not saved. */
@@ -14,24 +15,27 @@ export interface CardIssueProps {
     setTitle: string;
     isOwner?: boolean;
     onBack: () => void;
-    onEdit?: (reason: CardIssueReason) => Promise<void>;
-    onRemove?: (reason: CardIssueReason) => Promise<void>;
-    onReport?: (reason: CardIssueReason) => Promise<void>;
+    onEdit?: (report: CardIssueReport) => Promise<void>;
+    onRemove?: (report: CardIssueReport) => Promise<void>;
+    onReport?: (report: CardIssueReport) => Promise<void>;
 }
 
 export function CardIssue({ card, setTitle, isOwner = false, onBack, onEdit, onRemove, onReport }: CardIssueProps) {
     const [reason, setReason] = useState<CardIssueReason>('answer');
+    const [comment, setComment] = useState('');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
+    // «Другое» tells the author nothing without the reader's own words.
+    const needsComment = reason === 'other' && comment.trim() === '';
 
-    const run = async (action?: (reason: CardIssueReason) => Promise<void>) => {
-        if (!action || busy) {
+    const run = async (action?: (report: CardIssueReport) => Promise<void>) => {
+        if (!action || busy || needsComment) {
             return;
         }
         setBusy(true);
         setError('');
         try {
-            await action(reason);
+            await action({ reason, comment: comment.trim() });
         } catch {
             setError('Не удалось отправить. Попробуйте ещё раз.');
             setBusy(false);
@@ -71,26 +75,48 @@ export function CardIssue({ card, setTitle, isOwner = false, onBack, onEdit, onR
                     ))}
                 </fieldset>
 
+                <Flex direction="column" align="stretch" gap={4}>
+                    <Typography.Text variant="label" color="tertiary" asChild>
+                        <label htmlFor="card-issue-comment" className={s.label}>
+                            {reason === 'other' ? 'Что не так' : 'Комментарий, если хотите'}
+                        </label>
+                    </Typography.Text>
+                    <AutoTextarea
+                        id="card-issue-comment"
+                        rows={2}
+                        value={comment}
+                        maxLength={ISSUE_COMMENT_MAX_LENGTH}
+                        className={s.comment}
+                        placeholder={ISSUE_REASONS.find((item) => item.value === reason)?.hint}
+                        onChange={(event) => setComment(event.target.value)}
+                    />
+                </Flex>
+
                 <Typography.Text variant="description" color="secondary" className={s.note}>
                     {isOwner
-                        ? 'Причина сохранится, даже если карточку исправить или удалить: по ней мы делаем карточки точнее.'
-                        : 'Мы передадим причину автору набора. Пока автор не проверит карточку, она вам не попадётся.'}
+                        ? 'Причина и комментарий сохранятся, даже если карточку исправить или удалить: по ним мы делаем карточки точнее.'
+                        : 'Мы передадим причину и комментарий автору набора, без вашего имени. Пока автор не проверит карточку, она вам не попадётся.'}
                 </Typography.Text>
             </Flex>
 
             <Flex direction="column" align="stretch" gap={8}>
                 {error && <Typography.Text role="alert">{error}</Typography.Text>}
+                {needsComment && !error && (
+                    <Typography.Text variant="description" color="tertiary" className={s.note}>
+                        Напишите, что не так, чтобы отправить
+                    </Typography.Text>
+                )}
                 {isOwner ? (
                     <>
-                        <Button size="medium" variant="primary" stretched disabled={busy} onClick={() => run(onEdit)}>
+                        <Button size="medium" variant="primary" stretched disabled={busy || needsComment} onClick={() => run(onEdit)}>
                             Исправить карточку
                         </Button>
-                        <Button size="medium" variant="secondary" stretched disabled={busy} onClick={() => run(onRemove)}>
+                        <Button size="medium" variant="secondary" stretched disabled={busy || needsComment} onClick={() => run(onRemove)}>
                             Удалить из набора
                         </Button>
                     </>
                 ) : (
-                    <Button size="medium" variant="primary" stretched disabled={busy} onClick={() => run(onReport)}>
+                    <Button size="medium" variant="primary" stretched disabled={busy || needsComment} onClick={() => run(onReport)}>
                         Сообщить об ошибке
                     </Button>
                 )}

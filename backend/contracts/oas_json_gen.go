@@ -64,6 +64,12 @@ func (s *AdminCardIssue) encodeFields(e *jx.Encoder) {
 		e.Str(s.SourceQuote)
 	}
 	{
+		if s.Comment.Set {
+			e.FieldStart("comment")
+			s.Comment.Encode(e)
+		}
+	}
+	{
 		e.FieldStart("reporter")
 		s.Reporter.Encode(e)
 	}
@@ -73,7 +79,7 @@ func (s *AdminCardIssue) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfAdminCardIssue = [11]string{
+var jsonFieldsNameOfAdminCardIssue = [12]string{
 	0:  "id",
 	1:  "reason",
 	2:  "status",
@@ -83,8 +89,9 @@ var jsonFieldsNameOfAdminCardIssue = [11]string{
 	6:  "answer",
 	7:  "explanation",
 	8:  "sourceQuote",
-	9:  "reporter",
-	10: "createdAt",
+	9:  "comment",
+	10: "reporter",
+	11: "createdAt",
 }
 
 // Decode decodes AdminCardIssue from json.
@@ -194,8 +201,18 @@ func (s *AdminCardIssue) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"sourceQuote\"")
 			}
+		case "comment":
+			if err := func() error {
+				s.Comment.Reset()
+				if err := s.Comment.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"comment\"")
+			}
 		case "reporter":
-			requiredBitSet[1] |= 1 << 1
+			requiredBitSet[1] |= 1 << 2
 			if err := func() error {
 				if err := s.Reporter.Decode(d); err != nil {
 					return err
@@ -205,7 +222,7 @@ func (s *AdminCardIssue) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"reporter\"")
 			}
 		case "createdAt":
-			requiredBitSet[1] |= 1 << 2
+			requiredBitSet[1] |= 1 << 3
 			if err := func() error {
 				v, err := json.DecodeDateTime(d)
 				s.CreatedAt = v
@@ -227,7 +244,7 @@ func (s *AdminCardIssue) Decode(d *jx.Decoder) error {
 	var failures []validate.FieldError
 	for i, mask := range [2]uint8{
 		0b10110111,
-		0b00000111,
+		0b00001101,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -7516,10 +7533,17 @@ func (s *ReportCardIssueRequest) encodeFields(e *jx.Encoder) {
 		e.FieldStart("reason")
 		s.Reason.Encode(e)
 	}
+	{
+		if s.Comment.Set {
+			e.FieldStart("comment")
+			s.Comment.Encode(e)
+		}
+	}
 }
 
-var jsonFieldsNameOfReportCardIssueRequest = [1]string{
+var jsonFieldsNameOfReportCardIssueRequest = [2]string{
 	0: "reason",
+	1: "comment",
 }
 
 // Decode decodes ReportCardIssueRequest from json.
@@ -7540,6 +7564,16 @@ func (s *ReportCardIssueRequest) Decode(d *jx.Decoder) error {
 				return nil
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"reason\"")
+			}
+		case "comment":
+			if err := func() error {
+				s.Comment.Reset()
+				if err := s.Comment.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"comment\"")
 			}
 		default:
 			return d.Skip()
@@ -7923,16 +7957,25 @@ func (s *SetIssue) encodeFields(e *jx.Encoder) {
 		e.Int(s.Count)
 	}
 	{
+		e.FieldStart("comments")
+		e.ArrStart()
+		for _, elem := range s.Comments {
+			e.Str(elem)
+		}
+		e.ArrEnd()
+	}
+	{
 		e.FieldStart("lastReportedAt")
 		json.EncodeDateTime(e, s.LastReportedAt)
 	}
 }
 
-var jsonFieldsNameOfSetIssue = [4]string{
+var jsonFieldsNameOfSetIssue = [5]string{
 	0: "cardId",
 	1: "reason",
 	2: "count",
-	3: "lastReportedAt",
+	3: "comments",
+	4: "lastReportedAt",
 }
 
 // Decode decodes SetIssue from json.
@@ -7978,8 +8021,28 @@ func (s *SetIssue) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"count\"")
 			}
-		case "lastReportedAt":
+		case "comments":
 			requiredBitSet[0] |= 1 << 3
+			if err := func() error {
+				s.Comments = make([]string, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem string
+					v, err := d.Str()
+					elem = string(v)
+					if err != nil {
+						return err
+					}
+					s.Comments = append(s.Comments, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"comments\"")
+			}
+		case "lastReportedAt":
+			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
 				v, err := json.DecodeDateTime(d)
 				s.LastReportedAt = v
@@ -8000,7 +8063,7 @@ func (s *SetIssue) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b00001111,
+		0b00011111,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.

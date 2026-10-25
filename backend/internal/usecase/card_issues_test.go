@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -43,7 +44,7 @@ func TestCardService_ReportCardIssue(t *testing.T) {
 			}}
 			notifier := &issueNotifierSpy{}
 			svc := usecase.NewCardService(m, usecase.NewUserService(m), usecase.WithIssueNotifier(notifier))
-			err := svc.ReportCardIssue(context.Background(), userUUID, cardID, contracts.CardIssueReasonWording)
+			err := svc.ReportCardIssue(context.Background(), userUUID, cardID, contracts.CardIssueReasonWording, "")
 			if !errors.Is(err, tt.wantErr) || (tt.wantErr == nil && err != nil) {
 				t.Fatalf("err = %v, want %v", err, tt.wantErr)
 			}
@@ -57,6 +58,48 @@ func TestCardService_ReportCardIssue(t *testing.T) {
 	}
 }
 
+// The reader's own words are kept trimmed; «Другое» says nothing without
+// them, so it is refused empty, and so is a comment over 500 characters.
+func TestCardService_ReportCardIssue_Comment(t *testing.T) {
+	long := strings.Repeat("я", 500)
+	tests := []struct {
+		name    string
+		reason  contracts.CardIssueReason
+		comment string
+		want    pgtype.Text
+		wantErr error
+	}{
+		{"no comment", contracts.CardIssueReasonAnswer, "", pgtype.Text{}, nil},
+		{"only spaces", contracts.CardIssueReasonWording, " \n\t", pgtype.Text{}, nil},
+		{"trimmed", contracts.CardIssueReasonAnswer, "  Ответ из другой темы\n", pgtype.Text{String: "Ответ из другой темы", Valid: true}, nil},
+		{"other with a comment", contracts.CardIssueReasonOther, "Опечатка", pgtype.Text{String: "Опечатка", Valid: true}, nil},
+		{"500 characters", contracts.CardIssueReasonOther, long, pgtype.Text{String: long, Valid: true}, nil},
+		{"other without a comment", contracts.CardIssueReasonOther, "  ", pgtype.Text{}, usecase.ErrValidation},
+		{"501 characters", contracts.CardIssueReasonAnswer, long + "я", pgtype.Text{}, usecase.ErrValidation},
+		{"broken text", contracts.CardIssueReasonAnswer, "\xff", pgtype.Text{}, usecase.ErrValidation},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			saved := false
+			m := &mockQuerier{createCardIssueFunc: func(_ context.Context, arg db.CreateCardIssueParams) (db.CreateCardIssueRow, error) {
+				saved = true
+				if arg.Comment != tt.want {
+					t.Errorf("comment = %+v, want %+v", arg.Comment, tt.want)
+				}
+				return db.CreateCardIssueRow{}, nil
+			}}
+			svc := usecase.NewCardService(m, usecase.NewUserService(m))
+			err := svc.ReportCardIssue(context.Background(), uuid.New(), uuid.New(), tt.reason, tt.comment)
+			if !errors.Is(err, tt.wantErr) || (tt.wantErr == nil && err != nil) {
+				t.Fatalf("err = %v, want %v", err, tt.wantErr)
+			}
+			if saved != (tt.wantErr == nil) {
+				t.Errorf("saved = %v", saved)
+			}
+		})
+	}
+}
+
 // Without a notifier, as locally, the complaint is still saved.
 func TestCardService_ReportCardIssue_NoNotifier(t *testing.T) {
 	authorUUID := uuid.New()
@@ -64,7 +107,7 @@ func TestCardService_ReportCardIssue_NoNotifier(t *testing.T) {
 		return db.CreateCardIssueRow{AuthorID: pgtype.UUID{Bytes: authorUUID, Valid: true}, NotifyAuthor: true}, nil
 	}}
 	svc := usecase.NewCardService(m, usecase.NewUserService(m))
-	if err := svc.ReportCardIssue(context.Background(), uuid.New(), uuid.New(), contracts.CardIssueReasonOther); err != nil {
+	if err := svc.ReportCardIssue(context.Background(), uuid.New(), uuid.New(), contracts.CardIssueReasonOther, "Опечатка"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -84,6 +127,7 @@ func TestCardService_GetSetIssues(t *testing.T) {
 		CardID:         pgtype.UUID{Bytes: cardID, Valid: true},
 		Reason:         db.CardIssueReasonNotInNotes,
 		Count:          3,
+		Comments:       []string{"Было в другой лекции", "Не нашёл"},
 		LastReportedAt: pgtype.Timestamptz{Time: at, Valid: true},
 	}}
 	tests := []struct {
@@ -93,7 +137,7 @@ func TestCardService_GetSetIssues(t *testing.T) {
 		want    []contracts.SetIssue
 		wantErr error
 	}{
-		{"author", true, nil, []contracts.SetIssue{{CardId: cardID, Reason: contracts.CardIssueReasonNotInNotes, Count: 3, LastReportedAt: at}}, nil},
+		{"author", true, nil, []contracts.SetIssue{{CardId: cardID, Reason: contracts.CardIssueReasonNotInNotes, Count: 3, Comments: []string{"Было в другой лекции", "Не нашёл"}, LastReportedAt: at}}, nil},
 		{"not the author", false, nil, nil, usecase.ErrNotFound},
 		{"database down", true, errDB, nil, errDB},
 	}
@@ -118,7 +162,7 @@ func TestCardService_GetSetIssues(t *testing.T) {
 			if !errors.Is(err, tt.wantErr) || (tt.wantErr == nil && err != nil) {
 				t.Fatalf("err = %v, want %v", err, tt.wantErr)
 			}
-			if len(got) != len(tt.want) || (len(got) == 1 && got[0] != tt.want[0]) {
+			if len(got) != len(tt.want) || (len(got) == 1 && !reflect.DeepEqual(got[0], tt.want[0])) {
 				t.Errorf("issues = %+v, want %+v", got, tt.want)
 			}
 		})

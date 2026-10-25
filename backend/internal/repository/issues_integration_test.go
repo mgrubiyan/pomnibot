@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -50,41 +51,42 @@ func TestCardIssuesPostgres(t *testing.T) {
 	}
 	cardID := got[0].ID
 
-	if err = svc.ReportCardIssue(ctx, u3, cardID, contracts.CardIssueReasonAnswer); !errors.Is(err, usecase.ErrNotFound) {
+	if err = svc.ReportCardIssue(ctx, u3, cardID, contracts.CardIssueReasonAnswer, ""); !errors.Is(err, usecase.ErrNotFound) {
 		t.Fatalf("outsider: %v", err)
 	}
-	if err = svc.ReportCardIssue(ctx, u2, cardID, contracts.CardIssueReasonNotInNotes); err != nil {
+	if err = svc.ReportCardIssue(ctx, u2, cardID, contracts.CardIssueReasonNotInNotes, "  Было в другой лекции \n"); err != nil {
 		t.Fatal(err)
 	}
-	if err = svc.ReportCardIssue(ctx, u1, cardID, contracts.CardIssueReasonWording); err != nil {
+	if err = svc.ReportCardIssue(ctx, u1, cardID, contracts.CardIssueReasonWording, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err = svc.DeleteCard(ctx, u1, cardID); err != nil {
 		t.Fatal(err)
 	}
-	if err = svc.ReportCardIssue(ctx, u2, cardID, contracts.CardIssueReasonOther); !errors.Is(err, usecase.ErrNotFound) {
+	if err = svc.ReportCardIssue(ctx, u2, cardID, contracts.CardIssueReasonOther, "Опечатка"); !errors.Is(err, usecase.ErrNotFound) {
 		t.Fatalf("deleted card: %v", err)
 	}
 	if err = sets.DeleteSet(ctx, u1, setID); err != nil {
 		t.Fatal(err)
 	}
 
-	rows, err := pool.Query(ctx, `SELECT user_id, reason, kind, question, answer_text, explanation, source_quote, card_id IS NULL, set_id IS NULL
+	rows, err := pool.Query(ctx, `SELECT user_id, reason, COALESCE(comment, '<null>'), kind, question, answer_text, explanation, source_quote, card_id IS NULL, set_id IS NULL
 		FROM card_issues ORDER BY created_at, user_id DESC`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer rows.Close()
 	type issue struct {
-		user                           uuid.UUID
-		reason, kind, question, answer string
-		explanation, quote             string
-		cardGone, setGone              bool
+		user                   uuid.UUID
+		reason, comment        string
+		kind, question, answer string
+		explanation, quote     string
+		cardGone, setGone      bool
 	}
 	var issues []issue
 	for rows.Next() {
 		var i issue
-		if err = rows.Scan(&i.user, &i.reason, &i.kind, &i.question, &i.answer, &i.explanation, &i.quote, &i.cardGone, &i.setGone); err != nil {
+		if err = rows.Scan(&i.user, &i.reason, &i.comment, &i.kind, &i.question, &i.answer, &i.explanation, &i.quote, &i.cardGone, &i.setGone); err != nil {
 			t.Fatal(err)
 		}
 		issues = append(issues, i)
@@ -93,8 +95,8 @@ func TestCardIssuesPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []issue{
-		{u2, "not-in-notes", "input", "Q", "A", "E", "Quote", true, true},
-		{u1, "wording", "input", "Q", "A", "E", "Quote", true, true},
+		{u2, "not-in-notes", "Было в другой лекции", "input", "Q", "A", "E", "Quote", true, true},
+		{u1, "wording", "<null>", "input", "Q", "A", "E", "Quote", true, true},
 	}
 	if len(issues) != len(want) {
 		t.Fatalf("issues = %+v, want %+v", issues, want)
@@ -143,16 +145,17 @@ func TestOpenCardIssuesPostgres(t *testing.T) {
 		t.Fatalf("cards: %d %v", len(got), err)
 	}
 	first, second := got[0].ID, got[1].ID
-	report := func(user uuid.UUID, card uuid.UUID, reason contracts.CardIssueReason) {
+	report := func(user uuid.UUID, card uuid.UUID, reason contracts.CardIssueReason, comment string) {
 		t.Helper()
-		if err := svc.ReportCardIssue(ctx, user, card, reason); err != nil {
+		if err := svc.ReportCardIssue(ctx, user, card, reason, comment); err != nil {
 			t.Fatal(err)
 		}
 	}
 	type open struct {
-		card   uuid.UUID
-		reason contracts.CardIssueReason
-		count  int
+		card     uuid.UUID
+		reason   contracts.CardIssueReason
+		count    int
+		comments string
 	}
 	openIssues := func() []open {
 		t.Helper()
@@ -162,7 +165,7 @@ func TestOpenCardIssuesPostgres(t *testing.T) {
 		}
 		res := []open{}
 		for _, i := range issues {
-			res = append(res, open{i.CardId, i.Reason, i.Count})
+			res = append(res, open{i.CardId, i.Reason, i.Count, strings.Join(i.Comments, " | ")})
 		}
 		return res
 	}
@@ -183,13 +186,13 @@ func TestOpenCardIssuesPostgres(t *testing.T) {
 		}
 	}
 
-	report(u2, first, contracts.CardIssueReasonAnswer)
-	report(u3, first, contracts.CardIssueReasonAnswer)
-	report(u2, second, contracts.CardIssueReasonWording)
+	report(u2, first, contracts.CardIssueReasonAnswer, "")
+	report(u3, first, contracts.CardIssueReasonAnswer, "")
+	report(u2, second, contracts.CardIssueReasonWording, "Непонятно, о каком годе речь")
 	// The card comes back in the next session, and the same reader may
 	// complain again: the count is of people.
-	report(u2, second, contracts.CardIssueReasonWording)
-	sameIssues("reported", open{first, contracts.CardIssueReasonAnswer, 2}, open{second, contracts.CardIssueReasonWording, 1})
+	report(u2, second, contracts.CardIssueReasonWording, "Всё ещё непонятно")
+	sameIssues("reported", open{first, contracts.CardIssueReasonAnswer, 2, ""}, open{second, contracts.CardIssueReasonWording, 1, "Всё ещё непонятно | Непонятно, о каком годе речь"})
 
 	for _, id := range []uuid.UUID{u2, u3} {
 		if _, err = svc.GetSetIssues(ctx, id, setID); !errors.Is(err, usecase.ErrNotFound) {
@@ -203,14 +206,14 @@ func TestOpenCardIssuesPostgres(t *testing.T) {
 	if _, err = svc.UpdateCard(ctx, u1, first, &contracts.UpdateCardRequest{Question: contracts.NewOptString("Q1 fixed")}); err != nil {
 		t.Fatal(err)
 	}
-	sameIssues("edited", open{second, contracts.CardIssueReasonWording, 1})
-	report(u3, first, contracts.CardIssueReasonOther)
-	sameIssues("reported after the edit", open{first, contracts.CardIssueReasonOther, 1}, open{second, contracts.CardIssueReasonWording, 1})
+	sameIssues("edited", open{second, contracts.CardIssueReasonWording, 1, "Всё ещё непонятно | Непонятно, о каком годе речь"})
+	report(u3, first, contracts.CardIssueReasonOther, "Опечатка в слове")
+	sameIssues("reported after the edit", open{first, contracts.CardIssueReasonOther, 1, "Опечатка в слове"}, open{second, contracts.CardIssueReasonWording, 1, "Всё ещё непонятно | Непонятно, о каком годе речь"})
 
 	if err = svc.ResolveCardIssues(ctx, u1, second); err != nil {
 		t.Fatal(err)
 	}
-	sameIssues("kept", open{first, contracts.CardIssueReasonOther, 1})
+	sameIssues("kept", open{first, contracts.CardIssueReasonOther, 1, "Опечатка в слове"})
 	if err = svc.DeleteCard(ctx, u1, first); err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +311,7 @@ func TestFeedSkipsReportedCardPostgres(t *testing.T) {
 	sameFeed("advanced", u2, "Input", "Only")
 
 	// Report the harder card "Input"
-	if err = svc.ReportCardIssue(ctx, u2, byQuestion["Input"], contracts.CardIssueReasonAnswer); err != nil {
+	if err = svc.ReportCardIssue(ctx, u2, byQuestion["Input"], contracts.CardIssueReasonAnswer, ""); err != nil {
 		t.Fatal(err)
 	}
 	// "Input" is hidden, and step rolled back to 0 -> "Easy" and "Only" shown!
@@ -316,7 +319,7 @@ func TestFeedSkipsReportedCardPostgres(t *testing.T) {
 	sameFeed("someone else", u3, "Easy", "Only")
 
 	// The author's own complaint waits in «Жалобы»; the card stays theirs.
-	if err = svc.ReportCardIssue(ctx, u1, byQuestion["Easy"], contracts.CardIssueReasonWording); err != nil {
+	if err = svc.ReportCardIssue(ctx, u1, byQuestion["Easy"], contracts.CardIssueReasonWording, ""); err != nil {
 		t.Fatal(err)
 	}
 	sameFeed("author", u1, "Easy", "Only")
@@ -462,7 +465,7 @@ func TestListCardIssuesPostgres(t *testing.T) {
 	}
 	report := func(user uuid.UUID, question string) {
 		t.Helper()
-		must(svc.ReportCardIssue(ctx, user, card[question], contracts.CardIssueReasonAnswer))
+		must(svc.ReportCardIssue(ctx, user, card[question], contracts.CardIssueReasonAnswer, ""))
 	}
 	edit := func(question string) {
 		t.Helper()

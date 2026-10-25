@@ -141,12 +141,17 @@ export function SetIssues({ setId, onBack, onEditCard }: SetIssuesProps) {
                             </Typography.Text>
                         </Flex>
                         <ul className={s.reasons}>
-                            {reasons.map(({ reason, count }) => (
-                                <li key={reason}>
+                            {reasons.map(({ reason, count, comments }) => (
+                                <li key={reason} className={s.reason}>
                                     <Typography.Text variant="description" color="secondary">
                                         {issueReasonLabel(reason)}
                                         {count > 1 ? ` · ${count}` : ''}
                                     </Typography.Text>
+                                    {comments.map((comment, index) => (
+                                        <Typography.Text key={index} variant="description" asChild>
+                                            <blockquote className={s.comment}>{comment}</blockquote>
+                                        </Typography.Text>
+                                    ))}
                                 </li>
                             ))}
                         </ul>

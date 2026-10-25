@@ -148,6 +148,11 @@ export function AdminIssues({ onBack }: AdminIssuesProps) {
                             ) : null}
                             <Flex direction="column" gap={4} className={s.footer}>
                                 <Typography.Text variant="description">{issueReasonLabel(issue.reason)}</Typography.Text>
+                                {issue.comment ? (
+                                    <Typography.Text variant="description" color="secondary" className={s.comment}>
+                                        {issue.comment}
+                                    </Typography.Text>
+                                ) : null}
                                 <Typography.Text variant="label" color="tertiary" className={s.text}>
                                     {formatAuthorName(issue.reporter)} · {reportedAt(issue.createdAt)}
                                 </Typography.Text>

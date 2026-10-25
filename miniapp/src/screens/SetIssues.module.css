@@ -29,3 +29,22 @@
     list-style: none;
     border-top: 1px solid var(--divider-primary);
 }
+
+.reason {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.reason + .reason {
+    margin-top: 8px;
+}
+
+/* The reader's own words, as in the admin list's quote. */
+.comment {
+    margin: 0;
+    padding-left: 12px;
+    border-left: 2px solid var(--divider-primary);
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+}

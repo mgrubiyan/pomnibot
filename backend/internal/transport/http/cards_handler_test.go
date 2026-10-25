@@ -20,7 +20,7 @@ type mockCardService struct {
 	deleteCardFunc     func(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) error
 	answerQuestionFunc func(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error)
 	revealCardFunc     func(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) (*contracts.CardReveal, error)
-	reportIssueFunc    func(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, reason contracts.CardIssueReason) error
+	reportIssueFunc    func(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, reason contracts.CardIssueReason, comment string) error
 	setIssuesFunc      func(ctx context.Context, userID uuid.UUID, setID uuid.UUID) ([]contracts.SetIssue, error)
 	resolveIssuesFunc  func(ctx context.Context, userID uuid.UUID, cardID uuid.UUID) error
 }
@@ -39,9 +39,9 @@ func (m *mockCardService) ResolveCardIssues(ctx context.Context, userID uuid.UUI
 	return nil
 }
 
-func (m *mockCardService) ReportCardIssue(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, reason contracts.CardIssueReason) error {
+func (m *mockCardService) ReportCardIssue(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, reason contracts.CardIssueReason, comment string) error {
 	if m.reportIssueFunc != nil {
-		return m.reportIssueFunc(ctx, userID, cardID, reason)
+		return m.reportIssueFunc(ctx, userID, cardID, reason, comment)
 	}
 	return nil
 }
@@ -850,6 +850,8 @@ func TestCardsHandler_ReportCardIssue(t *testing.T) {
 		reached bool
 	}{
 		{"saved", &contracts.ReportCardIssueRequest{Reason: contracts.CardIssueReasonNotInNotes}, nil, (*contracts.ReportCardIssueNoContent)(nil), true},
+		{"saved with a comment", &contracts.ReportCardIssueRequest{Reason: contracts.CardIssueReasonOther, Comment: contracts.NewOptString("Опечатка")}, nil, (*contracts.ReportCardIssueNoContent)(nil), true},
+		{"other without a comment", &contracts.ReportCardIssueRequest{Reason: contracts.CardIssueReasonOther}, usecase.ErrValidation, (*contracts.ReportCardIssueBadRequest)(nil), true},
 		{"no body", nil, nil, (*contracts.ReportCardIssueBadRequest)(nil), false},
 		{"unknown reason", &contracts.ReportCardIssueRequest{Reason: "bad"}, nil, (*contracts.ReportCardIssueBadRequest)(nil), false},
 		{"card not visible", &contracts.ReportCardIssueRequest{Reason: contracts.CardIssueReasonAnswer}, usecase.ErrNotFound, (*contracts.ReportCardIssueNotFound)(nil), true},
@@ -859,10 +861,10 @@ func TestCardsHandler_ReportCardIssue(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			reached := false
 			h := NewCardsHandler(&mockCardService{
-				reportIssueFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, reason contracts.CardIssueReason) error {
+				reportIssueFunc: func(_ context.Context, userID uuid.UUID, id uuid.UUID, reason contracts.CardIssueReason, comment string) error {
 					reached = true
-					if userID != testUserID || id != cardID || reason != tt.req.Reason {
-						t.Fatalf("got user %s, card %s, reason %q", userID, id, reason)
+					if userID != testUserID || id != cardID || reason != tt.req.Reason || comment != tt.req.Comment.Value {
+						t.Fatalf("got user %s, card %s, reason %q, comment %q", userID, id, reason, comment)
 					}
 					return tt.err
 				},

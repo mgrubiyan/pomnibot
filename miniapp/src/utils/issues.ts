@@ -1,11 +1,21 @@
 import type { Card, CardIssueReason, SetIssue } from '../types';
 
-export const ISSUE_REASONS: { value: CardIssueReason; label: string }[] = [
-    { value: 'answer', label: 'Ответ не совпадает с конспектом' },
-    { value: 'wording', label: 'Вопрос непонятно сформулирован' },
-    { value: 'not-in-notes', label: 'Этого нет в моём конспекте' },
-    { value: 'other', label: 'Другое' },
+/** `hint` is the comment field's placeholder for the reason. */
+export const ISSUE_REASONS: { value: CardIssueReason; label: string; hint: string }[] = [
+    { value: 'answer', label: 'Ответ не совпадает с конспектом', hint: 'Какой ответ в конспекте?' },
+    { value: 'wording', label: 'Вопрос непонятно сформулирован', hint: 'Что именно непонятно?' },
+    { value: 'not-in-notes', label: 'Этого нет в моём конспекте', hint: 'Например, из какой это темы' },
+    { value: 'other', label: 'Другое', hint: 'Опишите, что не так с карточкой' },
 ];
+
+/** The server takes at most this many characters. */
+export const ISSUE_COMMENT_MAX_LENGTH = 500;
+
+/** What the reader sends: the reason and, for «Другое» always, their words. */
+export interface CardIssueReport {
+    reason: CardIssueReason;
+    comment: string;
+}
 
 export const issueReasonLabel = (reason: CardIssueReason) =>
     ISSUE_REASONS.find((item) => item.value === reason)?.label ?? reason;
@@ -27,7 +37,7 @@ export function answerPreview(card: Card): string {
 export interface CardIssues {
     card: Card;
     total: number;
-    reasons: { reason: CardIssueReason; count: number }[];
+    reasons: { reason: CardIssueReason; count: number; comments: string[] }[];
     lastReportedAt: string;
 }
 
@@ -43,7 +53,7 @@ export function cardsWithIssues(cards: Card[], issues: SetIssue[]): CardIssues[]
         }
         const entry = grouped.get(card.id) ?? { card, total: 0, reasons: [], lastReportedAt: issue.lastReportedAt };
         entry.total += issue.count;
-        entry.reasons.push({ reason: issue.reason, count: issue.count });
+        entry.reasons.push({ reason: issue.reason, count: issue.count, comments: issue.comments });
         if (Date.parse(issue.lastReportedAt) > Date.parse(entry.lastReportedAt)) {
             entry.lastReportedAt = issue.lastReportedAt;
         }
