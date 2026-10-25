@@ -8,6 +8,13 @@ on:
     branches:
       - main
 
+# Runs of a branch go one at a time, in push order, and a newer push replaces
+# one still waiting. Without this, merges a minute apart deployed in the order
+# their builds finished: on 25.10 #122 went out after #123 and dropped it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
   packages: write
