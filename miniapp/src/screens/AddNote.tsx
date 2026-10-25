@@ -163,7 +163,7 @@ export function AddNote({ onBack, onDone, resume = false }: AddNoteProps) {
             {input}
             <StatusScreen
                 icon={<IconDoc size={48} tone="muted" />}
-                title="Загрузите конспект"
+                title="Загрузите конспект или пришлите его боту в чат"
                 text="PDF, Word, презентация, текст или фото страниц — до 20 МБ. Карточки будут готовы через пару минут"
                 action={
                     <Flex direction="column" align="stretch" gap={8}>
@@ -178,9 +178,6 @@ export function AddNote({ onBack, onDone, resume = false }: AddNoteProps) {
                         <Button size="medium" variant="ghost" stretched onClick={onBack}>
                             Отмена
                         </Button>
-                        <Typography.Text variant="description" color="secondary" className={s.hint}>
-                            Конспект можно прислать и боту в чат
-                        </Typography.Text>
                     </Flex>
                 }
             />
