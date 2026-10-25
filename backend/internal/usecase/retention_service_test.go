@@ -72,3 +72,21 @@ func TestRetentionServiceAccessAndErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestRetentionServiceCancellationAfterQuery(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	q := retentionQuerier{
+		getSet: func(context.Context, db.GetSetByIDParams) (db.GetSetByIDRow, error) {
+			return db.GetSetByIDRow{}, nil
+		},
+		getFacts: func(context.Context, db.GetSetRetentionFactsParams) ([]db.GetSetRetentionFactsRow, error) {
+			cancel()
+			return []db.GetSetRetentionFactsRow{{Available: true}}, nil
+		},
+	}
+	result, err := NewSetService(q, nil).GetSetRetention(ctx, uuid.New(), uuid.New())
+	if !errors.Is(err, context.Canceled) || result != nil {
+		t.Fatalf("canceled forecast: result=%+v, err=%v", result, err)
+	}
+}

@@ -15,7 +15,12 @@ import (
 	fsrs "github.com/open-spaced-repetition/go-fsrs"
 )
 
-const retentionDays = 13
+const (
+	retentionDays              = 13
+	retentionSampleInterval    = 12 * time.Hour
+	retentionEventsPerInterval = 2
+	retentionMaxPoints         = 2 * (1 + retentionDays*2*(1+retentionEventsPerInterval))
+)
 
 type retentionFact struct {
 	card      fsrs.Card
@@ -44,32 +49,46 @@ func retentionGroup(probability float64) int {
 	}
 }
 
-func averageRecall(facts []retentionFact, at time.Time) float64 {
+func averageRecall(ctx context.Context, facts []retentionFact, at time.Time) (float64, error) {
 	if len(facts) == 0 {
-		return 0
+		return 0, ctx.Err()
 	}
 	sum := 0.0
 	for _, fact := range facts {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
 		sum += recallProbability(fact.card, at)
 	}
-	return sum / float64(len(facts))
+	return sum / float64(len(facts)), nil
 }
 
-// buildRetention advances copies only. Each shared event gets one pair of
-// samples; the first sample always precedes even an immediately due review.
-func buildRetention(facts []retentionFact, now time.Time) *contracts.SetRetention {
+// buildRetention advances copies only. Display samples use a fixed half-day
+// grid plus at most two event times per interval. Reviews between samples are
+// still replayed at their exact due times, independently for each card. This
+// bounds full-set scans and response size regardless of distinct review times:
+// O(len(facts)*retentionMaxPoints + reviews), rather than O(len(facts)*reviews).
+func buildRetention(ctx context.Context, facts []retentionFact, now time.Time) (*contracts.SetRetention, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	current, err := averageRecall(ctx, facts, now)
+	if err != nil {
+		return nil, err
+	}
 	simulated := append([]retentionFact(nil), facts...)
-	for i := range simulated {
+	result := &contracts.SetRetention{
+		CalculatedAt: now, HorizonDays: retentionDays, Target: 0.9,
+		TotalFacts: len(facts), Current: contracts.RecallProbability(current),
+		Points: make([]contracts.RetentionPoint, 0, retentionMaxPoints),
+	}
+	for i, fact := range facts {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if simulated[i].card.Due.Before(now) {
 			simulated[i].card.Due = now
 		}
-	}
-	result := &contracts.SetRetention{
-		CalculatedAt: now, HorizonDays: retentionDays, Target: 0.9,
-		TotalFacts: len(facts), Current: contracts.RecallProbability(averageRecall(facts, now)),
-		Points: make([]contracts.RetentionPoint, 0, 2*retentionDays+2),
-	}
-	for _, fact := range facts {
 		switch retentionGroup(recallProbability(fact.card, now)) {
 		case 0:
 			result.Groups.Below70++
@@ -79,19 +98,49 @@ func buildRetention(facts []retentionFact, now time.Time) *contracts.SetRetentio
 			result.Groups.Above90++
 		}
 	}
-	sample := func(at time.Time) {
+	sample := func(at time.Time) error {
+		with, err := averageRecall(ctx, simulated, at)
+		if err != nil {
+			return err
+		}
+		without, err := averageRecall(ctx, facts, at)
+		if err != nil {
+			return err
+		}
 		result.Points = append(result.Points, contracts.RetentionPoint{
 			Day:         at.Sub(now).Hours() / 24,
-			WithReviews: contracts.RecallProbability(averageRecall(simulated, at)), WithoutReviews: contracts.RecallProbability(averageRecall(facts, at)),
+			WithReviews: contracts.RecallProbability(with), WithoutReviews: contracts.RecallProbability(without),
 		})
+		return nil
 	}
 	end := now.Add(retentionDays * 24 * time.Hour)
-	at := now
-	sample(at)
+	at, nextGrid := now, now
+	sampledEvents := 0
 	p := factFSRSParameters()
 	for {
+		// Once an interval's event budget is exhausted, advance each card to
+		// the next grid time without scanning the full set at skipped events.
+		for i := range simulated {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			fact := &simulated[i]
+			for fact.available && fact.card.Due.Before(at) {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+				fact.card = p.Repeat(fact.card, fact.card.Due)[fsrs.Good].Card
+			}
+		}
+		// Preserve before/after pairs at sampled events, including now/end.
+		if err := sample(at); err != nil {
+			return nil, err
+		}
 		reviewed := false
 		for i := range simulated {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			fact := &simulated[i]
 			if fact.available && fact.card.Due.Equal(at) {
 				fact.card = p.Repeat(fact.card, at)[fsrs.Good].Card
@@ -99,23 +148,36 @@ func buildRetention(facts []retentionFact, now time.Time) *contracts.SetRetentio
 			}
 		}
 		if reviewed {
-			sample(at)
+			if err := sample(at); err != nil {
+				return nil, err
+			}
 		}
 		if at.Equal(end) {
 			break
 		}
-		next := minTime(at.Add(12*time.Hour), end)
-		for _, fact := range simulated {
-			if fact.available && fact.card.Due.After(at) && fact.card.Due.Before(next) {
-				next = fact.card.Due
+		if at.Equal(nextGrid) {
+			nextGrid = minTime(at.Add(retentionSampleInterval), end)
+			sampledEvents = 0
+		}
+		next := nextGrid
+		if sampledEvents < retentionEventsPerInterval {
+			for _, fact := range simulated {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+				if fact.available && fact.card.Due.After(at) && fact.card.Due.Before(next) {
+					next = fact.card.Due
+				}
+			}
+			if next.Before(nextGrid) {
+				sampledEvents++
 			}
 		}
 		at = next
-		sample(at)
 	}
 	last := result.Points[len(result.Points)-1]
 	result.WithReviews, result.WithoutReviews = last.WithReviews, last.WithoutReviews
-	return result
+	return result, nil
 }
 
 func minTime(a, b time.Time) time.Time {
@@ -143,6 +205,9 @@ func (s *setServiceImpl) GetSetRetention(ctx context.Context, userID, setID uuid
 	now := time.Now().UTC()
 	facts := make([]retentionFact, 0, len(rows))
 	for _, row := range rows {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		card := fsrs.Card{Stability: row.Stability, Difficulty: row.Difficulty,
 			Reps: uint64(row.Reps), Lapses: uint64(row.Lapses), State: fsrs.State(row.State)}
 		if row.LastReviewedAt.Valid {
@@ -153,5 +218,5 @@ func (s *setServiceImpl) GetSetRetention(ctx context.Context, userID, setID uuid
 		}
 		facts = append(facts, retentionFact{card: card, available: row.Available})
 	}
-	return buildRetention(facts, now), nil
+	return buildRetention(ctx, facts, now)
 }
