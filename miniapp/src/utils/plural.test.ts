@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { cardsWord } from './plural';
+import { cardsObjectLabel, cardsWord } from './plural';
 
 describe('cardsWord', () => {
     it('agrees with the number it stands next to', () => {
@@ -10,5 +10,14 @@ describe('cardsWord', () => {
         for (const [count, word] of cases) {
             expect(cardsWord(count)).toBe(word);
         }
+    });
+});
+
+describe('cardsObjectLabel', () => {
+    it('takes the accusative after a verb', () => {
+        expect(cardsObjectLabel(1)).toBe('1 карточку');
+        expect(cardsObjectLabel(21)).toBe('21 карточку');
+        expect(cardsObjectLabel(3)).toBe('3 карточки');
+        expect(cardsObjectLabel(11)).toBe('11 карточек');
     });
 });

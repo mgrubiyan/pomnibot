@@ -867,7 +867,7 @@ export function Feed({
                                             <Flex align="flex-start" gap={4}>
                                                 <IconDoc size={14} tone="muted" className={s.sourceIcon} />
                                                 <span>
-                                                    Из вашего конспекта
+                                                    Из конспекта
                                                     {reveal.sourceRef ? ` · ${reveal.sourceRef}` : ''}
                                                 </span>
                                             </Flex>
@@ -980,7 +980,15 @@ export function Feed({
                                         submit(option.value, option.value);
                                     }}
                                 >
-                                    {card.kind === 'choice' ? <span aria-hidden="true">{selectedOptions.includes(option.value) ? '☑' : '☐'}</span> : null}
+                                    {card.kind === 'choice' ? (
+                                        <span className={s.check} aria-hidden="true">
+                                            {selectedOptions.includes(option.value) ? (
+                                                <svg viewBox="0 0 16 16" width={16} height={16}>
+                                                    <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                                                </svg>
+                                            ) : null}
+                                        </span>
+                                    ) : null}
                                     <Typography.Text variant="body" asChild>
                                         <StudyContent text={option.label} inControl />
                                     </Typography.Text>

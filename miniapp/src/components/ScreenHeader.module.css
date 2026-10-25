@@ -12,9 +12,11 @@
     min-width: 0;
 }
 
+/* Balanced, so a long title does not leave one word on the last line. */
 .title {
     margin: 0;
     overflow-wrap: anywhere;
+    text-wrap: balance;
 }
 
 /* Three lines at most; the rest is behind a tap. */
@@ -41,4 +43,5 @@
 
 .subtitle {
     overflow-wrap: anywhere;
+    text-wrap: balance;
 }

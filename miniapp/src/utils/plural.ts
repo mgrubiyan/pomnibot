@@ -21,6 +21,10 @@ export const cardsWord = (count: number) => plural(count, ['карточка', '
 
 export const cardsLabel = (count: number) => `${count} ${cardsWord(count)}`;
 
+/** «Повторить 1 карточку» needs the accusative, which differs for one. */
+export const cardsObjectLabel = (count: number) =>
+    `${count} ${plural(count, ['карточку', 'карточки', 'карточек'])}`;
+
 export const daysLabel = (count: number) =>
     `${count} ${plural(count, ['день', 'дня', 'дней'])}`;
 

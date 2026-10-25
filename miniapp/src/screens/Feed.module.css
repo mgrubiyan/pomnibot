@@ -164,7 +164,7 @@
 
 .option {
     display: flex;
-    /* The ☑/☐ mark sits on the label's first line, not in the middle of
+    /* The checkbox sits on the label's first line, not in the middle of
        a long one. One line (24px) plus the padding and border below is
        exactly the 52px minimum, so a short option stays centred. */
     align-items: baseline;
@@ -211,9 +211,32 @@
     overflow-wrap: anywhere;
 }
 
-/* The ☑/☐ mark keeps its width however long the label is. */
+/* The checkbox keeps its width however long the label is. */
 .option > [aria-hidden='true'] {
     flex-shrink: 0;
+}
+
+/* A box has no baseline: centred on the 24px first line by hand. */
+.check {
+    display: flex;
+    align-self: flex-start;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    box-sizing: border-box;
+    border: 2px solid var(--text-tertiary);
+    border-radius: 6px;
+    color: var(--button-primary-contrast);
+    transition:
+        background-color 0.12s var(--ease-out),
+        border-color 0.12s var(--ease-out);
+}
+
+.option[aria-pressed='true'] .check {
+    border-color: var(--button-primary);
+    background: var(--button-primary);
 }
 
 .option:active {

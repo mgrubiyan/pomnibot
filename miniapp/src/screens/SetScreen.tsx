@@ -7,7 +7,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusScreen } from '../components/StatusScreen';
 import { IconCheck, IconOffline, IconShare, IconTrash } from '../components/Icons';
 import { loadCards, loadSet, loadSetIssues } from '../utils/sets';
-import { cardsLabel } from '../utils/plural';
+import { cardsLabel, cardsObjectLabel } from '../utils/plural';
 import { formatAuthorName } from '../utils/user';
 import { classifyError } from '../utils/errors';
 import { cx } from '../utils/cx';
@@ -183,7 +183,8 @@ export function SetScreen({
                     subtitle={<>
                         {cardsLabel(totalCards)}
                         {hasDue ? ` · ${dueCount} на повтор` : ''}
-                        {shared && set.author ? ` · автор: ${formatAuthorName(set.author)}` : ''}
+                        {/* A line of its own: «·» would otherwise start the second line. */}
+                        {shared && set.author ? <><br />Автор: {formatAuthorName(set.author)}</> : null}
                     </>}
                     onBack={onBack}
                 />
@@ -208,7 +209,7 @@ export function SetScreen({
                             Место в рейтинге
                         </Typography.Text>
                         <Typography.Text variant="label" color="primary">
-                            {set.userRank ? `${set.userRank} место` : '—'}
+                            {set.userRank ? `${set.userRank}-е место` : '—'}
                         </Typography.Text>
                     </Flex>
                 </Flex>
@@ -310,7 +311,7 @@ export function SetScreen({
                         {hasDue ? (
                             <Button size="medium" variant="primary" stretched onClick={() => onStart(set.id, set.title, false)}>
                                 {/* The minutes do not fit a phone-wide button: «…около 3 ми…» */}
-                                Повторить {cardsLabel(dueCount)}
+                                Повторить {cardsObjectLabel(dueCount)}
                             </Button>
                         ) : (
                             <>
