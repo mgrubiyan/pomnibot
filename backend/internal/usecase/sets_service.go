@@ -283,7 +283,7 @@ func (s *setServiceImpl) GetSetLeaderboard(ctx context.Context, userID uuid.UUID
 
 	items := make([]contracts.LeaderboardEntry, 0, len(rows))
 	for _, r := range rows {
-		user := buildUserContract(r.UserID, r.FirstName, r.LastName, r.Username)
+		user := memberContract(userID, r.UserID, r.FirstName, r.LastName, r.Username, r.DataConsent)
 		items = append(items, contracts.LeaderboardEntry{
 			User:       user,
 			Rank:       int(r.Rank),
@@ -411,6 +411,19 @@ func mapSetRowToContract(id pgtype.UUID, title string, author contracts.User, sh
 		res.ShareCode.SetTo(shareCode)
 	}
 	return res, nil
+}
+
+// memberContract shows the viewer a member of their set by name only when
+// the member agreed to it; the viewer always sees themselves.
+func memberContract(viewer uuid.UUID, id pgtype.UUID, firstName string, lastName, username pgtype.Text, consent bool) contracts.User {
+	if consent || (id.Valid && id.Bytes == viewer) {
+		return buildUserContract(id, firstName, lastName, username)
+	}
+	u := contracts.User{Anonymous: contracts.NewOptBool(true)}
+	if id.Valid {
+		u.ID = id.Bytes
+	}
+	return u
 }
 
 func buildUserContract(id pgtype.UUID, firstName string, lastName, username pgtype.Text) contracts.User {

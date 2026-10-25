@@ -10,7 +10,7 @@ import (
 )
 
 func profileResponse(account usecase.Account) *contracts.ProfileResponse {
-	response := &contracts.ProfileResponse{User: account.User, ProfileComplete: account.ProfileComplete}
+	response := &contracts.ProfileResponse{User: account.User, ProfileComplete: account.ProfileComplete, DataConsent: account.DataConsent}
 	if account.TgID != 0 {
 		response.Platform.SetTo(contracts.ProfileResponsePlatformTelegram)
 	} else if account.MaxID != 0 {
@@ -19,12 +19,55 @@ func profileResponse(account usecase.Account) *contracts.ProfileResponse {
 	return response
 }
 
+// WithBrowserProfile lets the browser test account keep a profile of its
+// own. Only for local development: in production a request without a
+// signature is that shared account.
+func (h *APIHandler) WithBrowserProfile() *APIHandler {
+	h.browserProfile = true
+	return h
+}
+
+// profileAccount returns the account whose profile the request may change.
+func (h *APIHandler) profileAccount(ctx context.Context) (usecase.Account, bool, error) {
+	if account, ok := accountFromContext(ctx); ok {
+		return account, true, nil
+	}
+	if !h.browserProfile || h.users == nil {
+		return usecase.Account{}, false, nil
+	}
+	if err := h.users.EnsureUser(ctx, uuid.Nil); err != nil {
+		return usecase.Account{}, false, err
+	}
+	account, err := h.users.GetAccount(ctx, uuid.Nil)
+	return account, err == nil, err
+}
+
 // GetProfile returns saved names, never unverified SDK profile data.
 func (h *APIHandler) GetProfile(ctx context.Context) (contracts.GetProfileRes, error) {
-	if account, ok := accountFromContext(ctx); ok {
+	account, ok, err := h.profileAccount(ctx)
+	if err != nil {
+		return &contracts.ErrorResponse{Message: internalError(ctx, "GetProfile", err)}, nil
+	}
+	if ok {
 		return profileResponse(account), nil
 	}
 	return profileResponse(usecase.Account{User: contracts.User{ID: uuid.Nil, FirstName: "Browser Test User"}, ProfileComplete: true}), nil
+}
+
+// PutProfileConsent is restricted to verified accounts.
+func (h *APIHandler) PutProfileConsent(ctx context.Context, req *contracts.ConsentRequest) (contracts.PutProfileConsentRes, error) {
+	account, ok, err := h.profileAccount(ctx)
+	if err != nil {
+		return &contracts.PutProfileConsentInternalServerError{Message: internalError(ctx, "PutProfileConsent", err)}, nil
+	}
+	if !ok {
+		return &contracts.PutProfileConsentForbidden{Message: "authorization required"}, nil
+	}
+	saved, err := h.users.SetDataConsent(ctx, account.User.ID, req.Given)
+	if err != nil {
+		return &contracts.PutProfileConsentInternalServerError{Message: internalError(ctx, "PutProfileConsent", err)}, nil
+	}
+	return profileResponse(saved), nil
 }
 
 // PutProfile is restricted to verified Telegram accounts.

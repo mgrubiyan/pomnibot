@@ -17,6 +17,8 @@ type APIHandler struct {
 	facts      *FactsHandler
 	homescreen *HomescreenHandler
 	admin      usecase.AdminService
+	// browserProfile lets the browser test account change its profile.
+	browserProfile bool
 }
 
 var _ contracts.Handler = (*APIHandler)(nil)

@@ -22,6 +22,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/profile/consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Give or withdraw consent to show set authors the user's name and photo
+         * @description Without consent the leaderboard and the mistakes of a set show the member to its author as an anonymous participant.
+         */
+        put: operations["PutProfileConsent"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -435,6 +455,11 @@ export interface components {
             /** @enum {string} */
             platform?: "max" | "telegram";
             profileComplete: boolean;
+            /** @description The user lets set authors see their name and photo */
+            dataConsent: boolean;
+        };
+        ConsentRequest: {
+            given: boolean;
         };
         ProfileRequest: {
             firstName: string;
@@ -618,6 +643,8 @@ export interface components {
             firstName: string;
             lastName?: string;
             username?: string;
+            /** @description The member has not let the set author see their name; firstName is then empty, and lastName and username are left out. */
+            anonymous?: boolean;
         };
         CardSet: {
             /** Format: uuid */
@@ -833,6 +860,32 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    PutProfileConsent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsentRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileResponse"];
+                };
+            };
             403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalServerError"];
         };

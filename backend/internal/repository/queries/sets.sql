@@ -150,12 +150,13 @@ ranked AS (
         u.first_name,
         u.last_name,
         u.username,
+        (u.data_consent_at IS NOT NULL)::BOOLEAN AS data_consent,
         CAST(LEAST(100, GREATEST(0, ROUND(us.avg_mastery * 100.0))) AS INT) AS percentile,
         DENSE_RANK() OVER (ORDER BY us.avg_mastery DESC)::INT AS rank
     FROM user_scores us
     JOIN users u ON u.id = us.user_id
 )
-SELECT user_id, first_name, last_name, username, percentile, rank
+SELECT user_id, first_name, last_name, username, data_consent, percentile, rank
 FROM ranked
 ORDER BY rank ASC, user_id ASC;
 
@@ -218,7 +219,8 @@ SELECT id FROM sets WHERE id = $1 AND author_id = $2 FOR UPDATE;
 
 -- name: GetSetStudents :many
 -- Current members of the set; the author may also be a member and is left out.
-SELECT u.id, u.first_name, u.last_name, u.username
+SELECT u.id, u.first_name, u.last_name, u.username,
+    (u.data_consent_at IS NOT NULL)::BOOLEAN AS data_consent
 FROM user_sets us
 JOIN sets s ON s.id = us.set_id
 JOIN users u ON u.id = us.user_id

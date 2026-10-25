@@ -89,6 +89,10 @@ type JoinSetByShareCodeRes interface {
 	joinSetByShareCodeRes()
 }
 
+type PutProfileConsentRes interface {
+	putProfileConsentRes()
+}
+
 type PutProfileRes interface {
 	putProfileRes()
 }

@@ -112,3 +112,74 @@ func TestProfileHTTP(t *testing.T) {
 		t.Fatalf("MAX can save Telegram profile: %d", w.Code)
 	}
 }
+
+func (u *profileUsers) SetDataConsent(_ context.Context, id uuid.UUID, given bool) (usecase.Account, error) {
+	if id != u.account.User.ID {
+		return usecase.Account{}, errors.New("wrong internal ID")
+	}
+	if u.saveError != nil {
+		return usecase.Account{}, u.saveError
+	}
+	u.account.DataConsent = given
+	return u.account, nil
+}
+
+func (u *profileUsers) EnsureUser(context.Context, uuid.UUID) error { return nil }
+
+func (u *profileUsers) GetAccount(_ context.Context, id uuid.UUID) (usecase.Account, error) {
+	if id != u.account.User.ID {
+		return usecase.Account{}, errors.New("wrong internal ID")
+	}
+	return u.account, nil
+}
+
+func TestProfileConsentHTTP(t *testing.T) {
+	member := uuid.MustParse("00000000-0000-0000-0000-000000000902")
+	users := &profileUsers{account: usecase.Account{User: contracts.User{ID: member, FirstName: "Ann"}, MaxID: 42, ProfileComplete: true}}
+	raw := generateValidInitData(map[string]string{"auth_date": fmt.Sprint(time.Now().Unix()), "user": `{"id":42}`}, "secret")
+	request := func(handler *APIHandler, method, path, body, auth string) *httptest.ResponseRecorder {
+		t.Helper()
+		router, err := NewRouter(handler, fstest.MapFS{}, "secret", "", users)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.Header.Set("Authorization", auth)
+		r.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, r)
+		return w
+	}
+
+	handler := NewAPIHandler(nil, nil, nil, users)
+	if w := request(handler, "GET", "/api/profile", "", "max "+raw); w.Code != 200 || !strings.Contains(w.Body.String(), `"dataConsent":false`) {
+		t.Fatalf("read before consent: %d %s", w.Code, w.Body.String())
+	}
+	if w := request(handler, "PUT", "/api/profile/consent", `{"given":true}`, "max "+raw); w.Code != 200 || !strings.Contains(w.Body.String(), `"dataConsent":true`) || !users.account.DataConsent {
+		t.Fatalf("give: %d %s", w.Code, w.Body.String())
+	}
+	if w := request(handler, "PUT", "/api/profile/consent", `{"given":false}`, "max "+raw); w.Code != 200 || !strings.Contains(w.Body.String(), `"dataConsent":false`) || users.account.DataConsent {
+		t.Fatalf("withdraw: %d %s", w.Code, w.Body.String())
+	}
+	users.saveError = errors.New("database unavailable")
+	if w := request(handler, "PUT", "/api/profile/consent", `{"given":true}`, "max "+raw); w.Code != 500 {
+		t.Fatalf("database: %d %s", w.Code, w.Body.String())
+	}
+	users.saveError = nil
+
+	// Without a signature the request is the shared browser account, which
+	// anyone on the internet may use in production.
+	if w := request(handler, "PUT", "/api/profile/consent", `{"given":true}`, ""); w.Code != 403 || users.account.DataConsent {
+		t.Fatalf("browser can consent in production: %d %s", w.Code, w.Body.String())
+	}
+
+	// Locally the browser account stands for the developer.
+	users.account = usecase.Account{User: contracts.User{ID: uuid.Nil, FirstName: "Browser Test User"}, ProfileComplete: true}
+	local := NewAPIHandler(nil, nil, nil, users).WithBrowserProfile()
+	if w := request(local, "PUT", "/api/profile/consent", `{"given":true}`, ""); w.Code != 200 || !users.account.DataConsent {
+		t.Fatalf("local browser consent: %d %s", w.Code, w.Body.String())
+	}
+	if w := request(local, "GET", "/api/profile", "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), `"dataConsent":true`) {
+		t.Fatalf("local browser profile: %d %s", w.Code, w.Body.String())
+	}
+}

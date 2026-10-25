@@ -982,6 +982,21 @@ func (*CardSet) getSetRes()             {}
 func (*CardSet) getSetShareCodeRes()    {}
 func (*CardSet) joinSetByShareCodeRes() {}
 
+// Ref: #/components/schemas/ConsentRequest
+type ConsentRequest struct {
+	Given bool `json:"given"`
+}
+
+// GetGiven returns the value of Given.
+func (s *ConsentRequest) GetGiven() bool {
+	return s.Given
+}
+
+// SetGiven sets the value of Given.
+func (s *ConsentRequest) SetGiven(val bool) {
+	s.Given = val
+}
+
 type CreateCardBadRequest ErrorResponse
 
 func (*CreateCardBadRequest) createCardRes() {}
@@ -2324,6 +2339,8 @@ type ProfileResponse struct {
 	User            User                       `json:"user"`
 	Platform        OptProfileResponsePlatform `json:"platform"`
 	ProfileComplete bool                       `json:"profileComplete"`
+	// The user lets set authors see their name and photo.
+	DataConsent bool `json:"dataConsent"`
 }
 
 // GetUser returns the value of User.
@@ -2341,6 +2358,11 @@ func (s *ProfileResponse) GetProfileComplete() bool {
 	return s.ProfileComplete
 }
 
+// GetDataConsent returns the value of DataConsent.
+func (s *ProfileResponse) GetDataConsent() bool {
+	return s.DataConsent
+}
+
 // SetUser sets the value of User.
 func (s *ProfileResponse) SetUser(val User) {
 	s.User = val
@@ -2356,8 +2378,14 @@ func (s *ProfileResponse) SetProfileComplete(val bool) {
 	s.ProfileComplete = val
 }
 
-func (*ProfileResponse) getProfileRes() {}
-func (*ProfileResponse) putProfileRes() {}
+// SetDataConsent sets the value of DataConsent.
+func (s *ProfileResponse) SetDataConsent(val bool) {
+	s.DataConsent = val
+}
+
+func (*ProfileResponse) getProfileRes()        {}
+func (*ProfileResponse) putProfileConsentRes() {}
+func (*ProfileResponse) putProfileRes()        {}
 
 type ProfileResponsePlatform string
 
@@ -2403,6 +2431,14 @@ func (s *ProfileResponsePlatform) UnmarshalText(data []byte) error {
 type PutProfileBadRequest ErrorResponse
 
 func (*PutProfileBadRequest) putProfileRes() {}
+
+type PutProfileConsentForbidden ErrorResponse
+
+func (*PutProfileConsentForbidden) putProfileConsentRes() {}
+
+type PutProfileConsentInternalServerError ErrorResponse
+
+func (*PutProfileConsentInternalServerError) putProfileConsentRes() {}
 
 type PutProfileForbidden ErrorResponse
 
@@ -3065,6 +3101,9 @@ type User struct {
 	FirstName string    `json:"firstName"`
 	LastName  OptString `json:"lastName"`
 	Username  OptString `json:"username"`
+	// The member has not let the set author see their name; firstName is then empty, and lastName and
+	// username are left out.
+	Anonymous OptBool `json:"anonymous"`
 }
 
 // GetID returns the value of ID.
@@ -3087,6 +3126,11 @@ func (s *User) GetUsername() OptString {
 	return s.Username
 }
 
+// GetAnonymous returns the value of Anonymous.
+func (s *User) GetAnonymous() OptBool {
+	return s.Anonymous
+}
+
 // SetID sets the value of ID.
 func (s *User) SetID(val uuid.UUID) {
 	s.ID = val
@@ -3105,4 +3149,9 @@ func (s *User) SetLastName(val OptString) {
 // SetUsername sets the value of Username.
 func (s *User) SetUsername(val OptString) {
 	s.Username = val
+}
+
+// SetAnonymous sets the value of Anonymous.
+func (s *User) SetAnonymous(val OptBool) {
+	s.Anonymous = val
 }

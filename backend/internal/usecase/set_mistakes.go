@@ -36,7 +36,7 @@ func (s *setServiceImpl) GetSetMistakes(ctx context.Context, userID uuid.UUID, s
 	students := make([]contracts.StudentMistakes, len(members))
 	order := make(map[uuid.UUID]int, len(members))
 	for i, m := range members {
-		students[i] = contracts.StudentMistakes{User: buildUserContract(m.ID, m.FirstName, m.LastName, m.Username)}
+		students[i] = contracts.StudentMistakes{User: memberContract(userID, m.ID, m.FirstName, m.LastName, m.Username, m.DataConsent)}
 		order[m.ID.Bytes] = i
 	}
 

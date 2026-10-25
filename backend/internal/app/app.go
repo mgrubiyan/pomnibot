@@ -71,6 +71,9 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 	api := httptransport.NewAPIHandler(sets, cards, home, users).
 		WithAdmin(usecase.NewAdminService(queries, users, cfg.Admins)).
 		WithFacts(facts)
+	if cfg.Environment == config.Local {
+		api = api.WithBrowserProfile()
+	}
 	router, err := httptransport.NewRouter(api, assets, cfg.MaxBotToken, cfg.TelegramBotToken, users)
 	if err != nil {
 		return fmt.Errorf("initialize router: %w", err)

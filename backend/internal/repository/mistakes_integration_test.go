@@ -37,7 +37,7 @@ func TestSetMistakesPostgres(t *testing.T) {
 	elsewhereFlip := uuid.MustParse("00000000-0000-0000-0000-00000000c005")
 
 	for _, sql := range []string{
-		fmt.Sprintf(`INSERT INTO users(id,first_name,last_name) VALUES('%s','Анна','Автор'),('%s','Боб',NULL),('%s','Карина','Иванова'),('%s','Ушедший',NULL)`, author, bob, carol, gone),
+		fmt.Sprintf(`INSERT INTO users(id,first_name,last_name,data_consent_at) VALUES('%s','Анна','Автор',NULL),('%s','Боб',NULL,NULL),('%s','Карина','Иванова',NOW()),('%s','Ушедший',NULL,NOW())`, author, bob, carol, gone),
 		fmt.Sprintf(`INSERT INTO sets(id,title,author_id,share_code) VALUES('%s','БД','%s','123456'),('%s','Другой','%s','234567')`, set, author, other, author),
 		// Карина joined after Боб, and Анна joined her own set.
 		fmt.Sprintf(`INSERT INTO user_sets(user_id,set_id,joined_at) VALUES
@@ -109,6 +109,10 @@ func TestSetMistakesPostgres(t *testing.T) {
 	}
 	if last, ok := res.Students[1].User.LastName.Get(); !ok || last != "Иванова" {
 		t.Errorf("student name: %+v", res.Students[1].User)
+	}
+	// Боб never agreed to show the author his name.
+	if u := res.Students[0].User; !u.Anonymous.Value || u.FirstName != "" {
+		t.Errorf("student without consent: %+v", u)
 	}
 
 	want := []struct {

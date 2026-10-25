@@ -29,6 +29,7 @@ const (
 	GetTodayOperation           OperationName = "GetToday"
 	JoinSetByShareCodeOperation OperationName = "JoinSetByShareCode"
 	PutProfileOperation         OperationName = "PutProfile"
+	PutProfileConsentOperation  OperationName = "PutProfileConsent"
 	ReorderCardsOperation       OperationName = "ReorderCards"
 	ReportCardIssueOperation    OperationName = "ReportCardIssue"
 	ResolveCardIssuesOperation  OperationName = "ResolveCardIssues"

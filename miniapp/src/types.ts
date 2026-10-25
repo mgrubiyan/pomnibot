@@ -17,6 +17,7 @@ export interface Answer {
     correct: boolean;
 }
 export type User = components['schemas']['User'];
+export type Profile = components['schemas']['ProfileResponse'];
 export type LeaderboardEntry = components['schemas']['LeaderboardEntry'];
 export type SetLeaderboardResponse = components['schemas']['SetLeaderboardResponse'];
 export type SetMistakes = components['schemas']['SetMistakesResponse'];

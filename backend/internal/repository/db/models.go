@@ -196,6 +196,7 @@ type User struct {
 	PendingLastName string             `json:"pending_last_name"`
 	TgBotStarted    bool               `json:"tg_bot_started"`
 	ID              pgtype.UUID        `json:"id"`
+	DataConsentAt   pgtype.Timestamptz `json:"data_consent_at"`
 }
 
 type UserFactProgress struct {

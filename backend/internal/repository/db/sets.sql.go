@@ -294,23 +294,25 @@ ranked AS (
         u.first_name,
         u.last_name,
         u.username,
+        (u.data_consent_at IS NOT NULL)::BOOLEAN AS data_consent,
         CAST(LEAST(100, GREATEST(0, ROUND(us.avg_mastery * 100.0))) AS INT) AS percentile,
         DENSE_RANK() OVER (ORDER BY us.avg_mastery DESC)::INT AS rank
     FROM user_scores us
     JOIN users u ON u.id = us.user_id
 )
-SELECT user_id, first_name, last_name, username, percentile, rank
+SELECT user_id, first_name, last_name, username, data_consent, percentile, rank
 FROM ranked
 ORDER BY rank ASC, user_id ASC
 `
 
 type GetSetLeaderboardRow struct {
-	UserID     pgtype.UUID `json:"user_id"`
-	FirstName  string      `json:"first_name"`
-	LastName   pgtype.Text `json:"last_name"`
-	Username   pgtype.Text `json:"username"`
-	Percentile int32       `json:"percentile"`
-	Rank       int32       `json:"rank"`
+	UserID      pgtype.UUID `json:"user_id"`
+	FirstName   string      `json:"first_name"`
+	LastName    pgtype.Text `json:"last_name"`
+	Username    pgtype.Text `json:"username"`
+	DataConsent bool        `json:"data_consent"`
+	Percentile  int32       `json:"percentile"`
+	Rank        int32       `json:"rank"`
 }
 
 func (q *Queries) GetSetLeaderboard(ctx context.Context, setID pgtype.UUID) ([]GetSetLeaderboardRow, error) {
@@ -327,6 +329,7 @@ func (q *Queries) GetSetLeaderboard(ctx context.Context, setID pgtype.UUID) ([]G
 			&i.FirstName,
 			&i.LastName,
 			&i.Username,
+			&i.DataConsent,
 			&i.Percentile,
 			&i.Rank,
 		); err != nil {
@@ -341,7 +344,8 @@ func (q *Queries) GetSetLeaderboard(ctx context.Context, setID pgtype.UUID) ([]G
 }
 
 const getSetStudents = `-- name: GetSetStudents :many
-SELECT u.id, u.first_name, u.last_name, u.username
+SELECT u.id, u.first_name, u.last_name, u.username,
+    (u.data_consent_at IS NOT NULL)::BOOLEAN AS data_consent
 FROM user_sets us
 JOIN sets s ON s.id = us.set_id
 JOIN users u ON u.id = us.user_id
@@ -350,10 +354,11 @@ ORDER BY us.joined_at ASC, u.id ASC
 `
 
 type GetSetStudentsRow struct {
-	ID        pgtype.UUID `json:"id"`
-	FirstName string      `json:"first_name"`
-	LastName  pgtype.Text `json:"last_name"`
-	Username  pgtype.Text `json:"username"`
+	ID          pgtype.UUID `json:"id"`
+	FirstName   string      `json:"first_name"`
+	LastName    pgtype.Text `json:"last_name"`
+	Username    pgtype.Text `json:"username"`
+	DataConsent bool        `json:"data_consent"`
 }
 
 // Current members of the set; the author may also be a member and is left out.
@@ -371,6 +376,7 @@ func (q *Queries) GetSetStudents(ctx context.Context, setID pgtype.UUID) ([]GetS
 			&i.FirstName,
 			&i.LastName,
 			&i.Username,
+			&i.DataConsent,
 		); err != nil {
 			return nil, err
 		}

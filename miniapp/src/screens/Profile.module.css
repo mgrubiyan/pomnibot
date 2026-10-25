@@ -1,0 +1,66 @@
+/* Profile: who the user is at the top, what set authors may see below. */
+
+.body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    padding-bottom: 16px;
+}
+
+.body::-webkit-scrollbar {
+    display: none;
+}
+
+.identity {
+    padding: 8px 16px 0;
+}
+
+.name {
+    margin: 0;
+    text-align: center;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+}
+
+.list {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.note {
+    padding: 0 16px;
+    text-wrap: pretty;
+}
+
+.error {
+    padding: 0 16px;
+    color: var(--icon-negative);
+}
+
+.more {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: var(--text-secondary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    white-space: nowrap;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.more:active {
+    opacity: 0.6;
+}
+
+.consentText {
+    box-sizing: border-box;
+    padding: 12px 16px;
+    border-radius: 16px;
+    background: var(--background-card);
+    text-wrap: pretty;
+}

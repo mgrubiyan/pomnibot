@@ -20,6 +20,7 @@ import { estimateMinutes } from '../utils/estimate';
 import { aboutMinutesLabel, cardsLabel, cardsWord } from '../utils/plural';
 import { formatTodayDate } from '../utils/today';
 import { formatAuthorName, formatGreetingName } from '../utils/user';
+import { UserAvatar } from '../components/UserAvatar';
 import { formatNextReviewSubtitle, isNextReviewToday } from '../utils/reviewDate';
 import { cx } from '../utils/cx';
 import { useMoreBelow } from '../utils/useMoreBelow';
@@ -78,9 +79,11 @@ export interface HomeProps {
     onTodayLoaded?: (today: TodayData) => void;
     /** Every complaint across all sets; the row is there for admins only. */
     onOpenAdminIssues?: () => void;
+    /** The avatar in the corner opens the profile once it has loaded. */
+    onOpenProfile?: () => void;
 }
 
-export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, removedSetIds, onTodayLoaded, onOpenAdminIssues }: HomeProps) {
+export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, removedSetIds, onTodayLoaded, onOpenAdminIssues, onOpenProfile }: HomeProps) {
     const [status, setStatus] = useState<Status>('loading');
     const [today, setToday] = useState<TodayData | null>(null);
     const [feedCards, setFeedCards] = useState<FeedCard[]>([]);
@@ -196,13 +199,20 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, remo
 
     return (
         <Screen>
-            <Flex justify="space-between" align="baseline" gap={12} className={s.header}>
-                <Typography.Text variant="description" color="secondary" asChild>
-                    <h1 className={s.greeting}>Привет, {formatGreetingName(today.user)}</h1>
-                </Typography.Text>
-                <Typography.Text variant="description" color="tertiary" className={s.date}>
-                    {formatTodayDate()}
-                </Typography.Text>
+            <Flex justify="space-between" align="center" gap={12} className={s.header}>
+                <Flex direction="column" align="flex-start" gap={2} className={s.headerText}>
+                    <Typography.Text variant="description" color="secondary" asChild>
+                        <h1 className={s.greeting}>Привет, {formatGreetingName(today.user)}</h1>
+                    </Typography.Text>
+                    <Typography.Text variant="description" color="tertiary" className={s.date}>
+                        {formatTodayDate()}
+                    </Typography.Text>
+                </Flex>
+                {onOpenProfile ? (
+                    <button type="button" className={s.profileButton} onClick={onOpenProfile} aria-label="Профиль">
+                        <UserAvatar user={today.user} size={36} />
+                    </button>
+                ) : null}
             </Flex>
 
             <Flex ref={bodyRef} direction="column" align="stretch" gap={20} className={cx(s.body, moreBelow && s.moreBelow)}>

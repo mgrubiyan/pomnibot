@@ -228,6 +228,16 @@ func (UnimplementedHandler) PutProfile(ctx context.Context, req *ProfileRequest)
 	return r, ht.ErrNotImplemented
 }
 
+// PutProfileConsent implements PutProfileConsent operation.
+//
+// Without consent the leaderboard and the mistakes of a set show the member to its author as an
+// anonymous participant.
+//
+// PUT /profile/consent
+func (UnimplementedHandler) PutProfileConsent(ctx context.Context, req *ConsentRequest) (r PutProfileConsentRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // ReorderCards implements ReorderCards operation.
 //
 // Reorder cards in a fact.

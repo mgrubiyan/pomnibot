@@ -154,6 +154,13 @@ type Handler interface {
 	//
 	// PUT /profile
 	PutProfile(ctx context.Context, req *ProfileRequest) (PutProfileRes, error)
+	// PutProfileConsent implements PutProfileConsent operation.
+	//
+	// Without consent the leaderboard and the mistakes of a set show the member to its author as an
+	// anonymous participant.
+	//
+	// PUT /profile/consent
+	PutProfileConsent(ctx context.Context, req *ConsentRequest) (PutProfileConsentRes, error)
 	// ReorderCards implements ReorderCards operation.
 	//
 	// Reorder cards in a fact.

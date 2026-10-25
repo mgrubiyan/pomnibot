@@ -94,6 +94,8 @@ type Querier interface {
 	RollbackFactStepOnCardIssue(ctx context.Context, arg RollbackFactStepOnCardIssueParams) error
 	SaveProcessingReport(ctx context.Context, arg SaveProcessingReportParams) (int64, error)
 	SaveTelegramProfile(ctx context.Context, arg SaveTelegramProfileParams) (User, error)
+	// Giving consent again keeps the time it was first given.
+	SetDataConsent(ctx context.Context, arg SetDataConsentParams) (User, error)
 	SetExists(ctx context.Context, id pgtype.UUID) (bool, error)
 	TelegramProfileInput(ctx context.Context, arg TelegramProfileInputParams) (User, error)
 	UpdateCard(ctx context.Context, arg UpdateCardParams) (UpdateCardRow, error)

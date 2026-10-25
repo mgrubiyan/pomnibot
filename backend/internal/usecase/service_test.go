@@ -88,6 +88,7 @@ func TestSetService_GetSetLeaderboard(t *testing.T) {
 	memberID := testUser2
 	authorUUID := pgtype.UUID{Bytes: authorID, Valid: true}
 	memberUUID := pgtype.UUID{Bytes: memberID, Valid: true}
+	shyUUID := pgtype.UUID{Bytes: testUser3, Valid: true}
 
 	mock := &mockQuerier{
 		getSetByIDFunc: func(_ context.Context, arg db.GetSetByIDParams) (db.GetSetByIDRow, error) {
@@ -110,6 +111,7 @@ func TestSetService_GetSetLeaderboard(t *testing.T) {
 		getSetLeaderboardFunc: func(_ context.Context, setID pgtype.UUID) ([]db.GetSetLeaderboardRow, error) {
 			if setID == pgUUID {
 				return []db.GetSetLeaderboardRow{
+					// The author never gave consent, yet sees themselves.
 					{
 						UserID:     authorUUID,
 						FirstName:  "Alice",
@@ -117,10 +119,19 @@ func TestSetService_GetSetLeaderboard(t *testing.T) {
 						Rank:       1,
 					},
 					{
-						UserID:     memberUUID,
-						FirstName:  "Bob",
-						Percentile: 50,
-						Rank:       2,
+						UserID:      memberUUID,
+						FirstName:   "Bob",
+						DataConsent: true,
+						Percentile:  50,
+						Rank:        2,
+					},
+					{
+						UserID:     shyUUID,
+						FirstName:  "Carol",
+						LastName:   pgtype.Text{String: "Smith", Valid: true},
+						Username:   pgtype.Text{String: "carol", Valid: true},
+						Percentile: 20,
+						Rank:       3,
 					},
 				}, nil
 			}
@@ -138,14 +149,27 @@ func TestSetService_GetSetLeaderboard(t *testing.T) {
 		if res.SetId != setUUID {
 			t.Errorf("expected set ID %s, got %s", setUUID, res.SetId)
 		}
-		if len(res.Items) != 2 {
-			t.Fatalf("expected 2 items, got %d", len(res.Items))
+		if len(res.Items) != 3 {
+			t.Fatalf("expected 3 items, got %d", len(res.Items))
 		}
 		if res.Items[0].User.ID != authorID || res.Items[0].Rank != 1 || res.Items[0].Percentile != 100 {
 			t.Errorf("unexpected item 0: %+v", res.Items[0])
 		}
 		if res.Items[1].User.ID != memberID || res.Items[1].Rank != 2 || res.Items[1].Percentile != 50 {
 			t.Errorf("unexpected item 1: %+v", res.Items[1])
+		}
+		if u := res.Items[0].User; u.FirstName != "Alice" || u.Anonymous.Value {
+			t.Errorf("author does not see themselves: %+v", u)
+		}
+		if u := res.Items[1].User; u.FirstName != "Bob" || u.Anonymous.Value {
+			t.Errorf("member who agreed is hidden: %+v", u)
+		}
+		shy := res.Items[2]
+		if shy.User.ID != testUser3 || shy.Rank != 3 || shy.Percentile != 20 {
+			t.Errorf("unexpected item 2: %+v", shy)
+		}
+		if u := shy.User; !u.Anonymous.Value || u.FirstName != "" || u.LastName.Set || u.Username.Set {
+			t.Errorf("member without consent is shown: %+v", u)
 		}
 	})
 

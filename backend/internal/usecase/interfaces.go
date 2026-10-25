@@ -81,6 +81,8 @@ type Account struct {
 	ProfileComplete bool
 	ProfileStep     string
 	BotStarted      bool
+	// DataConsent lets set authors see the user's name.
+	DataConsent bool
 }
 
 // UserService defines user domain operations.
@@ -90,6 +92,7 @@ type UserService interface {
 	GetAccount(context.Context, uuid.UUID) (Account, error)
 	SaveProfile(context.Context, uuid.UUID, string, string) (Account, error)
 	ProfileInput(context.Context, uuid.UUID, string, bool) (Account, error)
+	SetDataConsent(context.Context, uuid.UUID, bool) (Account, error)
 	EnsureUser(ctx context.Context, userID uuid.UUID) error
 	GetUsersWithDueFacts(ctx context.Context, now time.Time, tz string) ([]uuid.UUID, error)
 }

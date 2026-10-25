@@ -77,6 +77,18 @@ func TestSetRatingPostgres(t *testing.T) {
 			t.Fatalf("rating %v: %+v %v", want.id, rating, err)
 		}
 	}
+	if _, err := pool.Exec(ctx, fmt.Sprintf(`UPDATE users SET data_consent_at = NOW() WHERE id = '%s'`, u22)); err != nil {
+		t.Fatal(err)
+	}
+	board, err = q.GetSetLeaderboard(ctx, shared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range board {
+		if row.DataConsent != (row.UserID.Bytes == u22) {
+			t.Fatalf("consent of %v: %v", row.UserID, row.DataConsent)
+		}
+	}
 	// GetUserSetRating includes its requested user even without membership.
 	outsider, err := q.GetUserSetRating(ctx, db.GetUserSetRatingParams{SetID: shared, UserID: pgtype.UUID{Bytes: u55, Valid: true}})
 	if err != nil || outsider.Rank != 1 || outsider.Percentile != 100 {

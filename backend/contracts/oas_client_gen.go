@@ -174,6 +174,13 @@ type Invoker interface {
 	//
 	// PUT /profile
 	PutProfile(ctx context.Context, request *ProfileRequest) (PutProfileRes, error)
+	// PutProfileConsent invokes PutProfileConsent operation.
+	//
+	// Without consent the leaderboard and the mistakes of a set show the member to its author as an
+	// anonymous participant.
+	//
+	// PUT /profile/consent
+	PutProfileConsent(ctx context.Context, request *ConsentRequest) (PutProfileConsentRes, error)
 	// ReorderCards invokes ReorderCards operation.
 	//
 	// Reorder cards in a fact.
@@ -2440,6 +2447,90 @@ func (c *Client) sendPutProfile(ctx context.Context, request *ProfileRequest) (r
 
 	stage = "DecodeResponse"
 	result, err := decodePutProfileResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// PutProfileConsent invokes PutProfileConsent operation.
+//
+// Without consent the leaderboard and the mistakes of a set show the member to its author as an
+// anonymous participant.
+//
+// PUT /profile/consent
+func (c *Client) PutProfileConsent(ctx context.Context, request *ConsentRequest) (PutProfileConsentRes, error) {
+	res, err := c.sendPutProfileConsent(ctx, request)
+	return res, err
+}
+
+func (c *Client) sendPutProfileConsent(ctx context.Context, request *ConsentRequest) (res PutProfileConsentRes, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("PutProfileConsent"),
+		semconv.HTTPRequestMethodKey.String("PUT"),
+		semconv.URLTemplateKey.String("/profile/consent"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, PutProfileConsentOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/profile/consent"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "PUT", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodePutProfileConsentRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer func() {
+		// Drain the body to EOF before closing, so the underlying
+		// connection can be reused by the Transport regardless of the
+		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
+		_, _ = io.Copy(io.Discard, body)
+		_ = body.Close()
+	}()
+
+	stage = "DecodeResponse"
+	result, err := decodePutProfileConsentResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}

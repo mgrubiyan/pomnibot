@@ -58,3 +58,11 @@ UPDATE users SET
     profile_step = CASE WHEN sqlc.arg(restart)::boolean THEN 'last_name' WHEN sqlc.arg(input)::text = '' THEN profile_step WHEN profile_step = 'last_name' THEN 'first_name' ELSE '' END
 WHERE id = sqlc.arg(id) AND tg_id IS NOT NULL
 RETURNING *;
+
+-- name: SetDataConsent :one
+-- Giving consent again keeps the time it was first given.
+UPDATE users SET data_consent_at = CASE
+    WHEN sqlc.arg(given)::boolean THEN COALESCE(data_consent_at, CURRENT_TIMESTAMP)
+END
+WHERE id = sqlc.arg(id)
+RETURNING *;

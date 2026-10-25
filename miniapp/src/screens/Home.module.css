@@ -11,9 +11,30 @@
     overflow-wrap: anywhere;
 }
 
+.headerText {
+    min-width: 0;
+}
+
 .date {
-    flex-shrink: 0;
     white-space: nowrap;
+}
+
+/* The avatar opens the profile; a press dims it, as on the other links. */
+.profileButton {
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.12s var(--ease-out);
+}
+
+.profileButton:active {
+    opacity: 0.6;
+    transition-duration: 0.06s;
 }
 
 /* The list scrolls inside the screen: no scrollbar painted over the cards,

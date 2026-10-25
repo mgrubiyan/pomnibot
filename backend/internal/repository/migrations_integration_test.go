@@ -40,13 +40,17 @@ func TestProcessingReportsMigrationPostgres(t *testing.T) {
 				if err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM cards").Scan(&before); err != nil || before == 0 {
 					t.Fatalf("missing main demo data: %d, %v", before, err)
 				}
+				// Real accounts carry a platform ID and must not be taken as agreeing.
+				if _, err = pool.Exec(ctx, "INSERT INTO users (first_name, max_id, tg_id) VALUES ('Real MAX', 777, NULL), ('Real Telegram', NULL, 888)"); err != nil {
+					t.Fatal(err)
+				}
 			}
 			for range 2 {
 				if err := repository.RunMigrations(ctx, url); err != nil {
 					t.Fatal(err)
 				}
 				var version, applied int
-				if err := pool.QueryRow(ctx, "SELECT MAX(version_id), COUNT(*) FILTER (WHERE version_id IN (14, 15, 16, 17, 18) AND is_applied) FROM goose_db_version").Scan(&version, &applied); err != nil || version != 18 || applied != 5 {
+				if err := pool.QueryRow(ctx, "SELECT MAX(version_id), COUNT(*) FILTER (WHERE version_id IN (14, 15, 16, 17, 18, 19) AND is_applied) FROM goose_db_version").Scan(&version, &applied); err != nil || version != 19 || applied != 6 {
 					t.Fatalf("migration version=%d applications=%d error=%v", version, applied, err)
 				}
 				var nonemptyWarnings int
@@ -60,6 +64,19 @@ func TestProcessingReportsMigrationPostgres(t *testing.T) {
 				var reports int
 				if err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM set_processing_reports").Scan(&reports); err != nil || reports != 0 {
 					t.Fatalf("reports=%d error=%v", reports, err)
+				}
+				var demo, demoAgreed, platform, platformAgreed int
+				if err := pool.QueryRow(ctx, `SELECT
+					COUNT(*) FILTER (WHERE max_id IS NULL AND tg_id IS NULL),
+					COUNT(*) FILTER (WHERE max_id IS NULL AND tg_id IS NULL AND data_consent_at IS NOT NULL),
+					COUNT(*) FILTER (WHERE max_id IS NOT NULL OR tg_id IS NOT NULL),
+					COUNT(*) FILTER (WHERE (max_id IS NOT NULL OR tg_id IS NOT NULL) AND data_consent_at IS NOT NULL)
+					FROM users`).Scan(&demo, &demoAgreed, &platform, &platformAgreed); err != nil || demoAgreed != demo || platformAgreed != 0 {
+					t.Fatalf("consent: demo %d/%d agreed, platform %d/%d agreed, error=%v", demoAgreed, demo, platformAgreed, platform, err)
+				}
+				// The demo sets' author is a real MAX account, so it stays out too.
+				if fromMain && (demo != 31 || platform != 3) {
+					t.Fatalf("consent fixture: demo=%d platform=%d", demo, platform)
 				}
 				if fromMain {
 					var after int
