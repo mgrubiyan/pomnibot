@@ -45,6 +45,7 @@ export function RetentionWidgets({ setId }: { setId: string }) {
                 <div className={s.legend}>
                     <span><i className={s.reviewKey} />будешь повторять</span>
                     <span><i className={s.pauseKey} />сделаешь паузу</span>
+                    <span><i className={s.targetKey} />цель</span>
                 </div>
             </div>
             <div className={`${s.card} ${s.ringSkeleton}`} />
@@ -71,7 +72,6 @@ export function RetentionWidgets({ setId }: { setId: string }) {
                     <svg viewBox="0 0 342 140" className={s.chart} role="img"
                         aria-label={`Через ${data.horizonDays} дней: с повторами ${percent(data.withReviews)}, с паузой ${percent(data.withoutReviews)}`}>
                         <line x1="0" y1={graph.targetY} x2="342" y2={graph.targetY} className={s.targetLine} />
-                        <text x="0" y={graph.targetY - 6} className={s.targetText}>цель {retentionPercent(data.target)}</text>
                         <path d={graph.area} className={s.area} />
                         <path d={graph.pause} className={s.pauseLine} />
                         <path d={graph.reviews} className={s.reviewLine} />
@@ -84,6 +84,7 @@ export function RetentionWidgets({ setId }: { setId: string }) {
                 <div className={s.legend} aria-hidden="true">
                     <span><i className={s.reviewKey} />будешь повторять</span>
                     <span><i className={s.pauseKey} />сделаешь паузу</span>
+                    <span><i className={s.targetKey} />цель {retentionPercent(data.target)}</span>
                 </div>
             </section>
             <section className={`${s.card} ${s.summary}`} aria-label="Текущая память">

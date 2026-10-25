@@ -26,20 +26,28 @@
 .assumption { margin: 0; font-size: 12px; color: var(--text-secondary); }
 .chart { display: block; width: 100%; overflow: visible; }
 .targetLine { stroke: var(--text-secondary); stroke-width: 1; stroke-dasharray: 4 4; }
-.targetText { fill: var(--text-secondary); font-size: 11px; }
 .area { fill: var(--icon-negative); fill-opacity: 0.14; }
 .pauseLine, .reviewLine { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
 .pauseLine { stroke: var(--icon-negative); stroke-dasharray: 6 5; }
 .reviewLine { stroke: var(--button-primary); }
 .start { fill: var(--text-primary); }
-.reviewText { fill: var(--text-primary); font-size: 11px; }
-.pauseText { fill: var(--icon-negative); font-size: 11px; }
+/* A halo in the card colour keeps a label readable where it crosses a line. */
+.reviewText, .pauseText {
+    font-size: 12px;
+    paint-order: stroke;
+    stroke: var(--background-card);
+    stroke-width: 4px;
+    stroke-linejoin: round;
+}
+.reviewText { fill: var(--text-primary); }
+.pauseText { fill: var(--icon-negative); }
 .axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); }
 .legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12px; color: var(--text-secondary); align-items: center; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend i { width: 16px; flex: none; }
 .reviewKey { height: 3px; border-radius: 2px; background: var(--button-primary); }
 .pauseKey { height: 0; border-top: 2px dashed var(--icon-negative); }
+.targetKey { height: 0; border-top: 1px dashed var(--text-secondary); }
 .summary { display: flex; align-items: center; gap: 18px; padding: 16px; }
 .ring { position: relative; width: 108px; height: 108px; flex: none; }
 .ringTrack, .ringFill { fill: none; stroke-width: 10; }
