@@ -91,6 +91,26 @@
     overflow-wrap: anywhere;
 }
 
+/* What kind of card it is, small enough not to compete with the question. */
+/* A block, not inline-block: the title's line box would add its own gap. */
+.kindTag {
+    display: block;
+    width: fit-content;
+    margin-bottom: 4px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    background: var(--background-surface);
+}
+
+.visuallyHidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
 .dragHandle {
     touch-action: none;
     user-select: none;
