@@ -5,17 +5,6 @@ import { cardsLabel, plural } from './plural';
 export const MAX_NOTES_BYTES = 20 * 1024 * 1024;
 export const MAX_NOTES_FILES = 10;
 
-/** What the server reads; it tells a file by its content, so this only
-    narrows the picker. */
-export const NOTES_ACCEPT = [
-    '.pdf', '.docx', '.pptx', '.txt', '.md',
-    'application/pdf',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    'text/plain',
-    'image/jpeg', 'image/png', 'image/webp',
-].join(',');
-
 /** The job is still on its way to done or failed. */
 export function isNotesRunning(job: NotesJob | null | undefined): boolean {
     return job?.state === 'queued' || job?.state === 'reading' || job?.state === 'generating';

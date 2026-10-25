@@ -2,7 +2,7 @@ import { useRef, useState, type ChangeEvent } from 'react';
 import { Button, Flex, Spinner, Typography } from '@maxhub/max-ui';
 import { StatusScreen } from '../components/StatusScreen';
 import { IconAlert, IconDoc } from '../components/Icons';
-import { NOTES_ACCEPT, isNotesRunning, notesFailureText, notesFilesProblem, notesProgress } from '../utils/notes';
+import { isNotesRunning, notesFailureText, notesFilesProblem, notesProgress } from '../utils/notes';
 import { plural } from '../utils/plural';
 import { useNotesJob } from '../utils/useNotesJob';
 import s from './AddNote.module.css';
@@ -69,7 +69,9 @@ export function AddNote({ onBack, onDone }: AddNoteProps) {
             ref={fileRef}
             type="file"
             multiple
-            accept={NOTES_ACCEPT}
+            // No accept: an Android webview may pass only its first type to
+            // the picker, leaving photos or PDFs out. The server tells the
+            // format by content and says when it cannot read a file.
             className={s.file}
             tabIndex={-1}
             aria-hidden="true"
