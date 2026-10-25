@@ -5,6 +5,9 @@ import { cardsLabel, plural } from './plural';
 export const MAX_NOTES_BYTES = 20 * 1024 * 1024;
 export const MAX_NOTES_FILES = 10;
 
+/** The client checks the limit first; the server says the same with 413. */
+export const NOTES_TOO_BIG = 'Файлы больше 20 МБ вместе. Выберите меньше страниц или разделите конспект на части.';
+
 /** The job is still on its way to done or failed. */
 export function isNotesRunning(job: NotesJob | null | undefined): boolean {
     return job?.state === 'queued' || job?.state === 'reading' || job?.state === 'generating';
@@ -22,7 +25,7 @@ export function notesFilesProblem(files: readonly { size: number }[]): string {
         return 'Один из файлов пустой. Выберите другой.';
     }
     if (files.reduce((sum, file) => sum + file.size, 0) > MAX_NOTES_BYTES) {
-        return 'Файлы больше 20 МБ вместе. Выберите меньше страниц или разделите конспект на части.';
+        return NOTES_TOO_BIG;
     }
     return '';
 }

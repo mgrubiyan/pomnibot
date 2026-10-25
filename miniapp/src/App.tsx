@@ -46,7 +46,7 @@ type Screen =
     | { name: 'set-mistakes'; setId: string; setTitle?: string }
     | { name: 'why' }
     | { name: 'profile'; returnTo: Screen }
-    | { name: 'add' }
+    | { name: 'add'; resume?: boolean }
     | { name: 'create-method' }
     | { name: 'manual'; setId?: string; setTitle?: string; factId?: string }
     | { name: 'join' }
@@ -270,7 +270,7 @@ function App() {
             onStart={() => go({ name: 'feed' })}
             onOpenSet={(setId) => go({ name: 'set', setId })}
             onAddNote={() => go({ name: 'create-method' })}
-            onOpenNotes={() => go({ name: 'add' })}
+            onOpenNotes={() => go({ name: 'add', resume: true })}
             onJoinSet={() => go({ name: 'join' })}
             onOpenWhy={() => go({ name: 'why' })}
             onOpenAdminIssues={() => go({ name: 'admin-issues' })}
@@ -295,7 +295,7 @@ function App() {
     }
 
     if (screen.name === 'add') {
-        return <AddNote onBack={goHome} onDone={(setId) => go({ name: 'set', setId })} />;
+        return <AddNote onBack={goHome} onDone={(setId) => go({ name: 'set', setId })} resume={screen.resume} />;
     }
 
     if (screen.name === 'join') {

@@ -23,7 +23,7 @@ import { UserAvatar } from '../components/UserAvatar';
 import { formatNextReviewSubtitle, isNextReviewToday } from '../utils/reviewDate';
 import { cx } from '../utils/cx';
 import { useMoreBelow } from '../utils/useMoreBelow';
-import { isNotesRunning, notesProgress } from '../utils/notes';
+import { NOTES_LOST, isNotesRunning, notesProgress } from '../utils/notes';
 import { useNotesJob } from '../utils/useNotesJob';
 import s from './Home.module.css';
 
@@ -106,9 +106,12 @@ export function Home({ onStart, onOpenSet, onAddNote, onOpenNotes, onJoinSet, on
     const notesRunning = isNotesRunning(notesJob);
     const notesRow = notesJob && notesRunning
         ? { ...notesProgress(notesJob), spinner: true }
-        : notesJob && notesFailed
-            ? { title: 'Не получилось сделать карточки', text: 'Посмотреть почему', spinner: false }
-            : null;
+        : notesJob === NOTES_LOST
+            // The server restarted and forgot them: there is no reason to show.
+            ? { title: 'Обработка прервалась', text: 'Загрузите конспект ещё раз', spinner: false }
+            : notesJob && notesFailed
+                ? { title: 'Не получилось сделать карточки', text: 'Посмотреть почему', spinner: false }
+                : null;
 
     useEffect(() => {
         let cancelled = false;

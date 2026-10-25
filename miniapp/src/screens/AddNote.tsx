@@ -11,6 +11,8 @@ export interface AddNoteProps {
     onBack: () => void;
     /** The set is made: open it. */
     onDone: (setId: string) => void;
+    /** Opened from home's row: notes that failed within the hour say why. */
+    resume?: boolean;
 }
 
 const filesLabel = (count: number) => `${count} ${plural(count, ['файл', 'файла', 'файлов'])}`;
@@ -28,14 +30,15 @@ const MAY_LEAVE = 'Можно выйти: набор появится на гл�
  * same. Where the mini app cannot send them, as outside MAX and Telegram,
  * the screen points to the bot as before.
  */
-export function AddNote({ onBack, onDone }: AddNoteProps) {
+export function AddNote({ onBack, onDone, resume = false }: AddNoteProps) {
     const { access, job, followed, upload } = useNotesJob((done) => {
         if (done.state === 'done' && done.setId) {
             onDone(done.setId);
         }
-    });
+    }, { followFailed: resume });
     const fileRef = useRef<HTMLInputElement>(null);
     const [sending, setSending] = useState<File[] | null>(null);
+    const abort = useRef<AbortController | null>(null);
     // A refusal of the picked files; it shows over an older job's end.
     const [problem, setProblem] = useState('');
     const running = isNotesRunning(job);
@@ -57,7 +60,9 @@ export function AddNote({ onBack, onDone }: AddNoteProps) {
             return;
         }
         setSending(files);
-        const result = await upload(files);
+        abort.current = new AbortController();
+        const result = await upload(files, abort.current.signal);
+        abort.current = null;
         setSending(null);
         if (!result.ok) {
             setProblem(result.error);
@@ -106,7 +111,18 @@ export function AddNote({ onBack, onDone }: AddNoteProps) {
 
     if (sending) {
         const bytes = sending.reduce((sum, file) => sum + file.size, 0);
-        return <StatusScreen icon={spinner} title="Отправляем конспект" text={`${filesLabel(sending.length)} · ${sizeLabel(bytes)}`} />;
+        return (
+            <StatusScreen
+                icon={spinner}
+                title="Отправляем конспект"
+                text={`${filesLabel(sending.length)} · ${sizeLabel(bytes)}`}
+                action={
+                    <Button size="medium" variant="ghost" stretched onClick={() => abort.current?.abort()}>
+                        Отмена
+                    </Button>
+                }
+            />
+        );
     }
 
     if (following && job && (running || job.state === 'done')) {
