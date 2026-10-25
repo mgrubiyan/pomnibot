@@ -119,8 +119,9 @@
     text-wrap: pretty;
 }
 
-/* «Почему это работает» sits in the «Мои наборы» header. The text is a
-   label, the place to tap it 44 px tall. */
+/* «Почему это работает» sits in the «Мои наборы» header, or under the
+   empty-state text when there are no sets. The text is a label, the place
+   to tap it 44 px tall. */
 .why {
     flex-shrink: 0;
     margin: -12px -8px;

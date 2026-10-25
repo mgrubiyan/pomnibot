@@ -196,6 +196,14 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, remo
         </Flex>
     );
 
+    const whyLink = (
+        <button type="button" className={s.why} onClick={onOpenWhy}>
+            <Typography.Text variant="label" color="secondary">
+                Почему это работает
+            </Typography.Text>
+        </button>
+    );
+
     return (
         <Screen>
             <Flex justify="space-between" align="center" gap={12} className={s.header}>
@@ -255,13 +263,7 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, remo
                         <Flex direction="column" align="stretch" gap={8} className={s.setsSection}>
                             <CellHeader
                                 titleStyle="normal"
-                                after={
-                                    <button type="button" className={s.why} onClick={onOpenWhy}>
-                                        <Typography.Text variant="label" color="secondary">
-                                            Почему это работает
-                                        </Typography.Text>
-                                    </button>
-                                }
+                                after={whyLink}
                             >
                                 Мои наборы
                             </CellHeader>
@@ -302,6 +304,7 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, remo
                         <Typography.Text variant="body" color="secondary" className={s.emptyText}>
                             Загрузите конспект, и мы сделаем из него карточки
                         </Typography.Text>
+                        {whyLink}
                     </Flex>
                 )}
 
