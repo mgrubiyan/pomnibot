@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
@@ -72,6 +73,30 @@ func TestSetMistakesPostgres(t *testing.T) {
 	}
 
 	q := db.New(pool)
+	// The query itself leaves out the author, the gone member and the other
+	// set; the service would hide them too, so check the rows directly.
+	rows, err := q.GetSetFactAnswers(ctx, pgtype.UUID{Bytes: set, Valid: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[[2]uuid.UUID][2]int32{}
+	for _, r := range rows {
+		got[[2]uuid.UUID{r.FactID.Bytes, r.UserID.Bytes}] = [2]int32{r.Answers, r.Mistakes}
+	}
+	wantRows := map[[2]uuid.UUID][2]int32{
+		{keys, bob}:   {4, 2},
+		{joins, bob}:  {1, 0},
+		{keys, carol}: {1, 1},
+	}
+	if len(got) != len(wantRows) {
+		t.Fatalf("rows: %v", got)
+	}
+	for k, v := range wantRows {
+		if got[k] != v {
+			t.Fatalf("rows: %v, want %v", got, wantRows)
+		}
+	}
+
 	res, err := usecase.NewSetService(q, usecase.NewUserService(q)).GetSetMistakes(ctx, author, set)
 	if err != nil {
 		t.Fatal(err)

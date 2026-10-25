@@ -42,7 +42,7 @@ func (s *setServiceImpl) GetSetMistakes(ctx context.Context, userID uuid.UUID, s
 
 	byFact := make(map[uuid.UUID][]contracts.StudentFactMistakes, len(facts))
 	for _, c := range counts {
-		// The author's own answers and those of members who left.
+		// A member who joined between the two queries.
 		i, ok := order[c.UserID.Bytes]
 		if !ok {
 			continue

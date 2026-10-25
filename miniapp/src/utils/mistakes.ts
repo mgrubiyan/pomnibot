@@ -21,7 +21,7 @@ export function factLabel(fact: FactMistakes): string {
     return `Ошибались ${fact.studentsMistaken} из ${fact.studentsAnswered} · ${mistakesLabel(fact.mistakes, fact.answers)}`;
 }
 
-export interface Counts {
+interface Counts {
     answers: number;
     mistakes: number;
 }

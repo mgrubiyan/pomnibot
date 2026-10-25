@@ -58,8 +58,10 @@ type Querier interface {
 	GetProcessingReport(ctx context.Context, arg GetProcessingReportParams) ([]byte, error)
 	GetSetByID(ctx context.Context, arg GetSetByIDParams) (GetSetByIDRow, error)
 	GetSetByShareCode(ctx context.Context, shareCode string) (GetSetByShareCodeRow, error)
-	// Answers and mistakes per fact and user, whoever answered: the caller keeps
-	// the members it needs.
+	// Answers and mistakes per fact and member, for the members GetSetStudents
+	// returns: the author's own answers and those of members who left are not
+	// counted. Starting from the members lets idx_answers_attempt find their
+	// answers instead of reading the whole table.
 	GetSetFactAnswers(ctx context.Context, setID pgtype.UUID) ([]GetSetFactAnswersRow, error)
 	GetSetFeedCardsForUser(ctx context.Context, arg GetSetFeedCardsForUserParams) ([]GetSetFeedCardsForUserRow, error)
 	// Open complaints of the author's set: made after the card's last edit and

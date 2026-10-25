@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button, CellHeader, CellList, CellSimple, Flex, Spinner, Typography } from '@maxhub/max-ui';
 import type { SetMistakes as Mistakes } from '../types';
 import { api } from '../api';
@@ -11,7 +11,7 @@ import { factLabel, factStudents, mistakesLabel, studentFacts } from '../utils/m
 import { plural } from '../utils/plural';
 import s from './SetMistakes.module.css';
 
-type Status = 'loading' | 'error' | 'forbidden' | 'ready';
+type Status = 'loading' | 'error' | 'forbidden' | 'missing' | 'ready';
 
 /** A member or a fact opened from the overview; only those with answers open. */
 type Focus = { kind: 'student'; id: string } | { kind: 'fact'; id: string };
@@ -33,6 +33,21 @@ export function SetMistakes({ setId, setTitle, onBack }: SetMistakesProps) {
     const [data, setData] = useState<Mistakes | null>(null);
     const [focus, setFocus] = useState<Focus | null>(null);
     const [attempt, setAttempt] = useState(0);
+    // The overview unmounts while a member or a fact is open; coming back
+    // puts the list where it was.
+    const bodyRef = useRef<HTMLDivElement>(null);
+    const overviewScroll = useRef(0);
+
+    useLayoutEffect(() => {
+        if (!focus && bodyRef.current) {
+            bodyRef.current.scrollTop = overviewScroll.current;
+        }
+    }, [focus]);
+
+    const open = (next: Focus) => {
+        overviewScroll.current = bodyRef.current?.scrollTop ?? 0;
+        setFocus(next);
+    };
 
     useEffect(() => {
         let cancelled = false;
@@ -46,6 +61,10 @@ export function SetMistakes({ setId, setTitle, onBack }: SetMistakesProps) {
                 }
                 if (response.status === 403) {
                     setStatus('forbidden');
+                    return;
+                }
+                if (response.status === 404) {
+                    setStatus('missing');
                     return;
                 }
                 if (!next) {
@@ -87,6 +106,21 @@ export function SetMistakes({ setId, setTitle, onBack }: SetMistakesProps) {
                 icon={<IconOffline size={48} tone="muted" />}
                 title="Доступ ограничен"
                 text="Ошибки участников видит только автор набора"
+                action={
+                    <Button size="medium" variant="primary" stretched onClick={onBack}>
+                        Назад
+                    </Button>
+                }
+            />
+        );
+    }
+
+    if (status === 'missing') {
+        return (
+            <StatusScreen
+                icon={<IconOffline size={48} tone="muted" />}
+                title="Набор не найден"
+                text="Возможно, его удалили"
                 action={
                     <Button size="medium" variant="primary" stretched onClick={onBack}>
                         Назад
@@ -185,30 +219,36 @@ export function SetMistakes({ setId, setTitle, onBack }: SetMistakesProps) {
                     </Typography.Text>
                 </div>
             ) : (
-                <Flex direction="column" align="stretch" gap={16} className={s.body}>
+                <Flex ref={bodyRef} direction="column" align="stretch" gap={16} className={s.body}>
                     <Typography.Text variant="description" color="secondary" className={s.hint}>
                         Сверху — факты, на которых ошибалось больше всего участников. Ваши ответы не считаются.
                     </Typography.Text>
 
                     <Flex direction="column" align="stretch" gap={8}>
                         <CellHeader titleStyle="normal">Факты · {data.facts.length}</CellHeader>
-                        <CellList mode="island" filled className={s.list}>
-                            {data.facts.map((item, index) => (
-                                <CellSimple
-                                    key={item.factId}
-                                    separator={index > 0}
-                                    as={item.studentsAnswered > 0 ? 'button' : undefined}
-                                    showChevron={item.studentsAnswered > 0}
-                                    onClick={
-                                        item.studentsAnswered > 0
-                                            ? () => setFocus({ kind: 'fact', id: item.factId })
-                                            : undefined
-                                    }
-                                    title={<span className={s.wrap}>{item.factName}</span>}
-                                    subtitle={factLabel(item)}
-                                />
-                            ))}
-                        </CellList>
+                        {data.facts.length === 0 ? (
+                            <Typography.Text variant="description" color="secondary" className={s.hint}>
+                                В наборе пока нет фактов
+                            </Typography.Text>
+                        ) : (
+                            <CellList mode="island" filled className={s.list}>
+                                {data.facts.map((item, index) => (
+                                    <CellSimple
+                                        key={item.factId}
+                                        separator={index > 0}
+                                        as={item.studentsAnswered > 0 ? 'button' : undefined}
+                                        showChevron={item.studentsAnswered > 0}
+                                        onClick={
+                                            item.studentsAnswered > 0
+                                                ? () => open({ kind: 'fact', id: item.factId })
+                                                : undefined
+                                        }
+                                        title={<span className={s.wrap}>{item.factName}</span>}
+                                        subtitle={factLabel(item)}
+                                    />
+                                ))}
+                            </CellList>
+                        )}
                     </Flex>
 
                     <Flex direction="column" align="stretch" gap={8}>
@@ -222,7 +262,7 @@ export function SetMistakes({ setId, setTitle, onBack }: SetMistakesProps) {
                                     showChevron={item.answers > 0}
                                     onClick={
                                         item.answers > 0
-                                            ? () => setFocus({ kind: 'student', id: item.user.id })
+                                            ? () => open({ kind: 'student', id: item.user.id })
                                             : undefined
                                     }
                                     title={<span className={s.wrap}>{formatAuthorName(item.user)}</span>}

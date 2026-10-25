@@ -202,10 +202,12 @@ SELECT
     a.user_id,
     COUNT(*)::INT AS answers,
     (COUNT(*) FILTER (WHERE NOT a.correct))::INT AS mistakes
-FROM answers a
-JOIN cards c ON c.id = a.card_id
-JOIN facts f ON f.id = c.fact_id
-WHERE f.set_id = $1
+FROM user_sets us
+JOIN sets s ON s.id = us.set_id
+JOIN facts f ON f.set_id = us.set_id
+JOIN cards c ON c.fact_id = f.id
+JOIN answers a ON a.user_id = us.user_id AND a.card_id = c.id
+WHERE us.set_id = $1 AND us.user_id <> s.author_id
 GROUP BY c.fact_id, a.user_id
 `
 
@@ -216,8 +218,10 @@ type GetSetFactAnswersRow struct {
 	Mistakes int32       `json:"mistakes"`
 }
 
-// Answers and mistakes per fact and user, whoever answered: the caller keeps
-// the members it needs.
+// Answers and mistakes per fact and member, for the members GetSetStudents
+// returns: the author's own answers and those of members who left are not
+// counted. Starting from the members lets idx_answers_attempt find their
+// answers instead of reading the whole table.
 func (q *Queries) GetSetFactAnswers(ctx context.Context, setID pgtype.UUID) ([]GetSetFactAnswersRow, error) {
 	rows, err := q.db.Query(ctx, getSetFactAnswers, setID)
 	if err != nil {
