@@ -155,6 +155,16 @@ func (UnimplementedHandler) GetHealth(ctx context.Context) (r GetHealthRes, _ er
 	return r, ht.ErrNotImplemented
 }
 
+// GetNotesJob implements GetNotesJob operation.
+//
+// The last document the user sent from the mini app, for an hour after it is done. Kept in memory: a
+// restart forgets it, and its set, if made, is among the user's sets.
+//
+// GET /notes
+func (UnimplementedHandler) GetNotesJob(ctx context.Context) (r GetNotesJobRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // GetProfile implements GetProfile operation.
 //
 // Read the saved profile and verified platform.
@@ -329,5 +339,15 @@ func (UnimplementedHandler) UpdateFact(ctx context.Context, req *UpdateFactReque
 //
 // PATCH /sets/{setId}
 func (UnimplementedHandler) UpdateSet(ctx context.Context, req *UpdateSetRequest, params UpdateSetParams) (r UpdateSetRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// UploadNotes implements UploadNotes operation.
+//
+// Takes the files and makes the set in the background, in the same queue as the bots' documents;
+// GetNotesJob tells how it goes. Only for a signed in account, and one document at a time.
+//
+// POST /notes
+func (UnimplementedHandler) UploadNotes(ctx context.Context, req *NotesUploadMultipart) (r UploadNotesRes, _ error) {
 	return r, ht.ErrNotImplemented
 }

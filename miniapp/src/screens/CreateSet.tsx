@@ -37,7 +37,7 @@ export function CreateSet({ onFromNotes, onManual, onBack }: CreateSetProps) {
                         }
                         innerClassNames={{ before: s.icon }}
                         title="Из конспекта"
-                        subtitle="PDF, Word, слайды или фото страниц — карточки соберёт бот"
+                        subtitle="PDF, Word, слайды или фото страниц — карточки соберём сами"
                     />
                     <CellSimple
                         as="button"

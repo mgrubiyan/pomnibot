@@ -1,0 +1,14 @@
+.file {
+    display: none;
+}
+
+.problem {
+    color: var(--icon-negative);
+    text-align: center;
+    text-wrap: pretty;
+}
+
+.hint {
+    text-align: center;
+    text-wrap: balance;
+}

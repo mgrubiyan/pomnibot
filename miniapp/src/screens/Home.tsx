@@ -15,7 +15,7 @@ import type { CardSet, FeedCard, TodayData } from '../types';
 import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { StatusScreen } from '../components/StatusScreen';
-import { IconCheck, IconDoc, IconOffline } from '../components/Icons';
+import { IconAlert, IconCheck, IconDoc, IconOffline } from '../components/Icons';
 import { estimateMinutes } from '../utils/estimate';
 import { aboutMinutesLabel, cardsLabel, cardsWord } from '../utils/plural';
 import { formatAuthorName, formatGreetingName } from '../utils/user';
@@ -23,6 +23,8 @@ import { UserAvatar } from '../components/UserAvatar';
 import { formatNextReviewSubtitle, isNextReviewToday } from '../utils/reviewDate';
 import { cx } from '../utils/cx';
 import { useMoreBelow } from '../utils/useMoreBelow';
+import { isNotesRunning, notesProgress } from '../utils/notes';
+import { useNotesJob } from '../utils/useNotesJob';
 import s from './Home.module.css';
 
 type Status = 'loading' | 'error' | 'ready';
@@ -69,6 +71,8 @@ export interface HomeProps {
     /** Tapping a set opens the set screen first; the feed starts there. */
     onOpenSet: (setId: string) => void;
     onAddNote: () => void;
+    /** Notes on their way to a set: how they go. */
+    onOpenNotes: () => void;
     onJoinSet: () => void;
     /** The research behind the reviews, on its own screen. */
     onOpenWhy: () => void;
@@ -82,13 +86,29 @@ export interface HomeProps {
     onOpenProfile?: () => void;
 }
 
-export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, removedSetIds, onTodayLoaded, onOpenAdminIssues, onOpenProfile }: HomeProps) {
+export function Home({ onStart, onOpenSet, onAddNote, onOpenNotes, onJoinSet, onOpenWhy, removedSetIds, onTodayLoaded, onOpenAdminIssues, onOpenProfile }: HomeProps) {
     const [status, setStatus] = useState<Status>('loading');
     const [today, setToday] = useState<TodayData | null>(null);
     const [feedCards, setFeedCards] = useState<FeedCard[]>([]);
     const [attempt, setAttempt] = useState(0);
     const [now, setNow] = useState(() => new Date());
     const [bodyRef, moreBelow] = useMoreBelow<HTMLDivElement>(status === 'ready');
+    // Notes made while home is on screen bring their set in; notes that fail
+    // here say so, rather than their row just going.
+    const [notesFailed, setNotesFailed] = useState(false);
+    const { job: notesJob } = useNotesJob((job) => {
+        if (job.state === 'done') {
+            setAttempt((value) => value + 1);
+        } else {
+            setNotesFailed(true);
+        }
+    });
+    const notesRunning = isNotesRunning(notesJob);
+    const notesRow = notesJob && notesRunning
+        ? { ...notesProgress(notesJob), spinner: true }
+        : notesJob && notesFailed
+            ? { title: 'Не получилось сделать карточки', text: 'Посмотреть почему', spinner: false }
+            : null;
 
     useEffect(() => {
         let cancelled = false;
@@ -218,6 +238,21 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, remo
             </Flex>
 
             <Flex ref={bodyRef} direction="column" align="stretch" gap={20} className={cx(s.body, moreBelow && s.moreBelow)}>
+                {notesRow ? (
+                    <CellList mode="island" filled className={s.setsList}>
+                        <CellSimple
+                            as="button"
+                            showChevron
+                            onClick={onOpenNotes}
+                            before={notesRow.spinner
+                                ? <Spinner size={24} appearance="neutral-themed" />
+                                : <IconAlert size={24} tone="muted" />}
+                            innerClassNames={{ before: s.notesSpinner }}
+                            title={notesRow.title}
+                            subtitle={<span className={s.oneLine}>{notesRow.text}</span>}
+                        />
+                    </CellList>
+                ) : null}
                 {hasSets ? (
                     <>
                         <Flex direction="column" align="stretch" gap={4} className={s.todayCard}>

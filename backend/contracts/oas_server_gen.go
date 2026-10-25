@@ -105,6 +105,13 @@ type Handler interface {
 	//
 	// GET /health
 	GetHealth(ctx context.Context) (GetHealthRes, error)
+	// GetNotesJob implements GetNotesJob operation.
+	//
+	// The last document the user sent from the mini app, for an hour after it is done. Kept in memory: a
+	// restart forgets it, and its set, if made, is among the user's sets.
+	//
+	// GET /notes
+	GetNotesJob(ctx context.Context) (GetNotesJobRes, error)
 	// GetProfile implements GetProfile operation.
 	//
 	// Read the saved profile and verified platform.
@@ -225,6 +232,13 @@ type Handler interface {
 	//
 	// PATCH /sets/{setId}
 	UpdateSet(ctx context.Context, req *UpdateSetRequest, params UpdateSetParams) (UpdateSetRes, error)
+	// UploadNotes implements UploadNotes operation.
+	//
+	// Takes the files and makes the set in the background, in the same queue as the bots' documents;
+	// GetNotesJob tells how it goes. Only for a signed in account, and one document at a time.
+	//
+	// POST /notes
+	UploadNotes(ctx context.Context, req *NotesUploadMultipart) (UploadNotesRes, error)
 }
 
 // Server implements http server based on OpenAPI v3 specification and

@@ -315,6 +315,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How the user's latest document goes
+         * @description The last document the user sent from the mini app, for an hour after it is done. Kept in memory: a restart forgets it, and its set, if made, is among the user's sets.
+         */
+        get: operations["GetNotesJob"];
+        put?: never;
+        /**
+         * Make a card set from notes
+         * @description Takes the files and makes the set in the background, in the same queue as the bots' documents; GetNotesJob tells how it goes. Only for a signed in account, and one document at a time.
+         */
+        post: operations["UploadNotes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/": {
         parameters: {
             query?: never;
@@ -518,6 +542,35 @@ export interface components {
         HealthResponse: {
             /** @example ok */
             status: string;
+        };
+        NotesUpload: {
+            /** @description Text, PDF, Word, PowerPoint or photos of the pages, at most 10 files and 20 MB in all */
+            files: string[];
+        };
+        NotesJob: {
+            /**
+             * @description queued waits for a turn, reading reads the files, generating makes the cards; done and failed are final
+             * @enum {string}
+             */
+            state: "queued" | "reading" | "generating" | "done" | "failed";
+            /** @description Documents ahead in the queue, while queued */
+            ahead?: number;
+            /** @description Cards made so far, while generating */
+            cards?: number;
+            /**
+             * Format: uuid
+             * @description The new set, when done
+             */
+            setId?: string;
+            /** @description When done, whether the set has remarks to look at */
+            remarks?: boolean;
+            /**
+             * @description Why the document failed. unreadable comes with a message naming what is wrong with the files; too_long means the notes could not be taken in whole, too_much that they ran out of the processing limit
+             * @enum {string}
+             */
+            reason?: "unreadable" | "no_text" | "no_cards" | "other_text" | "too_long" | "too_much" | "try_later";
+            /** @description For unreadable, what is wrong with the files, for the student */
+            message?: string;
         };
         ErrorResponse: {
             /** @description Machine-readable error code, including profile_required and sign_in_expired */
@@ -850,6 +903,15 @@ export interface components {
         };
         /** @description Forbidden; code profile_required means a Telegram profile must be completed */
         Forbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description Making cards is off here, as on a local server without models */
+        Unavailable: {
             headers: {
                 [name: string]: unknown;
             };
@@ -1497,6 +1559,76 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
+        };
+    };
+    GetNotesJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The latest document */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotesJob"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    UploadNotes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["NotesUpload"];
+            };
+        };
+        responses: {
+            /** @description The document is in the queue */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotesJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            /** @description The user's previous document is still being made */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The files weigh over 20 MB in all */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["Unavailable"];
         };
     };
     GetToday: {

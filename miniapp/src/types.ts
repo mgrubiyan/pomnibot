@@ -11,6 +11,7 @@ export type CardReveal = components['schemas']['CardReveal'];
 export type AnswerResult = components['schemas']['AnswerQuestionResponse'];
 export type CardSet = components['schemas']['CardSet'];
 export type TodayData = components['schemas']['TodayData'];
+export type NotesJob = components['schemas']['NotesJob'];
 /** How the reader did on a card of a run; the backend has recorded it. */
 export interface Answer {
     cardId: string;

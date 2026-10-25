@@ -324,6 +324,123 @@ checks:
                   type: string
   timeoutMs: 5000
   repeatable: true
+- id: GetNotesJob
+  name: How the user's latest document goes
+  method: GET
+  path: /notes
+  role: user
+  expected:
+    statusCodes:
+    - 200
+    contentType: application/json
+    requiredFields:
+    - state
+    bodySchema:
+      type: object
+      required:
+      - state
+      properties:
+        state:
+          type: string
+          enum:
+          - queued
+          - reading
+          - generating
+          - done
+          - failed
+          description: queued waits for a turn, reading reads the files, generating
+            makes the cards; done and failed are final
+        ahead:
+          type: integer
+          description: Documents ahead in the queue, while queued
+        cards:
+          type: integer
+          description: Cards made so far, while generating
+        setId:
+          type: string
+          format: uuid
+          description: The new set, when done
+        remarks:
+          type: boolean
+          description: When done, whether the set has remarks to look at
+        reason:
+          type: string
+          enum:
+          - unreadable
+          - no_text
+          - no_cards
+          - other_text
+          - too_long
+          - too_much
+          - try_later
+          description: Why the document failed. unreadable comes with a message naming
+            what is wrong with the files; too_long means the notes could not be taken
+            in whole, too_much that they ran out of the processing limit
+        message:
+          type: string
+          description: For unreadable, what is wrong with the files, for the student
+  timeoutMs: 5000
+  repeatable: true
+- id: UploadNotes
+  name: Make a card set from notes
+  method: POST
+  path: /notes
+  role: user
+  request:
+    headers:
+      Content-Type: multipart/form-data
+  expected:
+    statusCodes:
+    - 202
+    contentType: application/json
+    requiredFields:
+    - state
+    bodySchema:
+      type: object
+      required:
+      - state
+      properties:
+        state:
+          type: string
+          enum:
+          - queued
+          - reading
+          - generating
+          - done
+          - failed
+          description: queued waits for a turn, reading reads the files, generating
+            makes the cards; done and failed are final
+        ahead:
+          type: integer
+          description: Documents ahead in the queue, while queued
+        cards:
+          type: integer
+          description: Cards made so far, while generating
+        setId:
+          type: string
+          format: uuid
+          description: The new set, when done
+        remarks:
+          type: boolean
+          description: When done, whether the set has remarks to look at
+        reason:
+          type: string
+          enum:
+          - unreadable
+          - no_text
+          - no_cards
+          - other_text
+          - too_long
+          - too_much
+          - try_later
+          description: Why the document failed. unreadable comes with a message naming
+            what is wrong with the files; too_long means the notes could not be taken
+            in whole, too_much that they ran out of the processing limit
+        message:
+          type: string
+          description: For unreadable, what is wrong with the files, for the student
+  timeoutMs: 5000
+  repeatable: false
 - id: GetProfile
   name: Read the saved profile and verified platform
   method: GET

@@ -4,10 +4,14 @@ package contracts
 
 import (
 	"bytes"
+	"mime"
+	"mime/multipart"
 	"net/http"
 
+	"github.com/go-faster/errors"
 	"github.com/go-faster/jx"
 	ht "github.com/ogen-go/ogen/http"
+	"github.com/ogen-go/ogen/uri"
 )
 
 func encodeAnswerQuestionRequest(
@@ -203,5 +207,33 @@ func encodeUpdateSetRequest(
 	}
 	encoded := e.Bytes()
 	ht.SetBody(r, bytes.NewReader(encoded), contentType)
+	return nil
+}
+
+func encodeUploadNotesRequest(
+	req *NotesUploadMultipart,
+	r *http.Request,
+) error {
+	const contentType = "multipart/form-data"
+	request := req
+
+	q := uri.NewFormEncoder(map[string]string{})
+	body, boundary := ht.CreateMultipartBody(func(w *multipart.Writer) error {
+		if err := func() error {
+			for idx, val := range request.Files {
+				if err := val.WriteMultipart("files", w); err != nil {
+					return errors.Wrapf(err, "file [%d]", idx)
+				}
+			}
+			return nil
+		}(); err != nil {
+			return errors.Wrap(err, "write \"files\"")
+		}
+		if err := q.WriteMultipart(w); err != nil {
+			return errors.Wrap(err, "write multipart")
+		}
+		return nil
+	})
+	ht.SetCloserBody(r, body, mime.FormatMediaType(contentType, map[string]string{"boundary": boundary}))
 	return nil
 }

@@ -1,12 +1,15 @@
 package notes
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
+	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
@@ -75,5 +78,38 @@ func TestSuccessText(t *testing.T) {
 		if got := SuccessText(result); got != want {
 			t.Errorf("SuccessText = %q, want %q", got, want)
 		}
+	}
+}
+
+func TestFailureNamesTheReasonForClientsThatWordItThemselves(t *testing.T) {
+	unreadable := &ingest.Error{File: "lecture.docx", Message: "Не удалось открыть документ Word: сохраните его заново или пришлите PDF.", Err: ingest.ErrUnsupported}
+	for _, tc := range []struct {
+		name        string
+		err         error
+		reason      Reason
+		message     string
+		botTextWant string
+	}{
+		{"gave up", fmt.Errorf("%w: %w", ErrGaveUp, context.Canceled), ReasonGaveUp, "", ""},
+		{"budget", fmt.Errorf("generate cards: %w", providers.ErrBudget), ReasonTooMuch, "", TextBudgetExceeded},
+		{"capability", fmt.Errorf("generate cards: %w", providers.ErrCapability), ReasonTooLong, "", TextSourceLimit},
+		{"refused", fmt.Errorf("generate cards: %w", providers.ErrRefused), ReasonOtherText, "", TextOtherText},
+		{"no files", ErrNoFiles, ReasonNoFiles, "", TextResend},
+		{"no text", ErrNoText, ReasonNoText, "", TextNoText},
+		{"no cards", ErrNoCards, ReasonNoCards, "", TextNoCards},
+		{"one file unreadable", &extractError{err: unreadable, files: 1}, ReasonUnreadable, unreadable.Message, "😕 " + unreadable.Message},
+		{"one of several unreadable", &extractError{err: unreadable, files: 2}, ReasonUnreadable, "Файл «lecture.docx»: " + unreadable.Message, "😕 Файл «lecture.docx»: " + unreadable.Message},
+		{"unreadable without a message", &extractError{err: errors.New("vision down"), files: 1}, ReasonTryLater, "", TextTryLater},
+		{"our own failure", fmt.Errorf("save set: %w", errors.New("db down")), ReasonTryLater, "", TextTryLater},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reason, message := Failure(tc.err)
+			if reason != tc.reason || message != tc.message {
+				t.Errorf("Failure = (%q, %q), want (%q, %q)", reason, message, tc.reason, tc.message)
+			}
+			if got := FailureText(tc.err); got != tc.botTextWant {
+				t.Errorf("FailureText = %q, want %q", got, tc.botTextWant)
+			}
+		})
 	}
 }

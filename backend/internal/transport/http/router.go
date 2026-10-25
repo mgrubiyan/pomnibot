@@ -1,8 +1,11 @@
 package http
 
 import (
+	"errors"
 	"io/fs"
+	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
@@ -22,18 +25,30 @@ func NewRouter(handler contracts.Handler, staticFS fs.FS, maxToken, telegramToke
 	}
 
 	authMiddleware := AuthMiddleware(maxToken, telegramToken, userService)
-	return LoggingMiddleware(limitAvatarBody(authMiddleware(apiServer))), nil
+	return LoggingMiddleware(limitUploads(authMiddleware(apiServer))), nil
 }
 
 // maxAvatarRequest fits the largest photo the API takes, in base64 and JSON.
 const maxAvatarRequest = 512 << 10
 
-// limitAvatarBody stops reading a photo upload past its limit, before the
-// whole body is held in memory.
-func limitAvatarBody(next http.Handler) http.Handler {
+// limitUploads stops reading an upload past its limit, before the whole body
+// is held in memory. Notes get longer to arrive than the server's timeouts.
+func limitUploads(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/profile/avatar" {
+		switch {
+		case r.URL.Path == "/api/profile/avatar":
 			r.Body = http.MaxBytesReader(w, r.Body, maxAvatarRequest)
+		case r.URL.Path == "/api/notes" && r.Method == http.MethodPost:
+			if r.ContentLength > maxNotesRequest {
+				writeAuthError(w, http.StatusRequestEntityTooLarge, "files over 20 MB in all", "")
+				return
+			}
+			rc := http.NewResponseController(w)
+			deadline := time.Now().Add(notesUploadTime)
+			if err := errors.Join(rc.SetReadDeadline(deadline), rc.SetWriteDeadline(deadline)); err != nil && !errors.Is(err, http.ErrNotSupported) {
+				slog.Warn("notes upload keeps the server timeouts", "error", err)
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, maxNotesRequest)
 		}
 		next.ServeHTTP(w, r)
 	})

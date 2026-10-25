@@ -61,6 +61,10 @@ type GetHealthRes interface {
 	getHealthRes()
 }
 
+type GetNotesJobRes interface {
+	getNotesJobRes()
+}
+
 type GetProfileRes interface {
 	getProfileRes()
 }
@@ -135,4 +139,8 @@ type UpdateFactRes interface {
 
 type UpdateSetRes interface {
 	updateSetRes()
+}
+
+type UploadNotesRes interface {
+	uploadNotesRes()
 }

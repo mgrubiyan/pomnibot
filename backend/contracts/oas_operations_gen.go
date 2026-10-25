@@ -21,6 +21,7 @@ const (
 	GetFactsBySetIDOperation     OperationName = "GetFactsBySetID"
 	GetFeedQuestionsOperation    OperationName = "GetFeedQuestions"
 	GetHealthOperation           OperationName = "GetHealth"
+	GetNotesJobOperation         OperationName = "GetNotesJob"
 	GetProfileOperation          OperationName = "GetProfile"
 	GetSetOperation              OperationName = "GetSet"
 	GetSetIssuesOperation        OperationName = "GetSetIssues"
@@ -40,4 +41,5 @@ const (
 	UpdateCardOperation          OperationName = "UpdateCard"
 	UpdateFactOperation          OperationName = "UpdateFact"
 	UpdateSetOperation           OperationName = "UpdateSet"
+	UploadNotesOperation         OperationName = "UploadNotes"
 )

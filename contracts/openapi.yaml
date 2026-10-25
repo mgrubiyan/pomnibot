@@ -10,6 +10,8 @@ tags:
     description: Cards
   - name: Homescreen
     description: Homescreen
+  - name: Notes
+    description: Card sets made from notes
 
 servers:
   - url: /api
@@ -653,6 +655,74 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /notes:
+    post:
+      tags:
+        - Notes
+      summary: Make a card set from notes
+      description: >-
+        Takes the files and makes the set in the background, in the same queue
+        as the bots' documents; GetNotesJob tells how it goes. Only for a signed
+        in account, and one document at a time.
+      operationId: UploadNotes
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/NotesUpload'
+      responses:
+        '202':
+          description: The document is in the queue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotesJob'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: The user's previous document is still being made
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: The files weigh over 20 MB in all
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    get:
+      tags:
+        - Notes
+      summary: How the user's latest document goes
+      description: >-
+        The last document the user sent from the mini app, for an hour after it
+        is done. Kept in memory: a restart forgets it, and its set, if made,
+        is among the user's sets.
+      operationId: GetNotesJob
+      responses:
+        '200':
+          description: The latest document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotesJob'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
   /:
     get:
       tags:
@@ -994,6 +1064,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    Unavailable:
+      description: Making cards is off here, as on a local server without models
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     InternalServerError:
       description: Internal server error
       content:
@@ -1054,6 +1130,53 @@ components:
           type: string
           example: ok
 
+    NotesUpload:
+      type: object
+      required: [files]
+      properties:
+        files:
+          description: >-
+            Text, PDF, Word, PowerPoint or photos of the pages, at most 10 files
+            and 20 MB in all
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            type: string
+            format: binary
+    NotesJob:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [queued, reading, generating, done, failed]
+          description: >-
+            queued waits for a turn, reading reads the files, generating makes
+            the cards; done and failed are final
+        ahead:
+          type: integer
+          description: Documents ahead in the queue, while queued
+        cards:
+          type: integer
+          description: Cards made so far, while generating
+        setId:
+          type: string
+          format: uuid
+          description: The new set, when done
+        remarks:
+          type: boolean
+          description: When done, whether the set has remarks to look at
+        reason:
+          type: string
+          enum: [unreadable, no_text, no_cards, other_text, too_long, too_much, try_later]
+          description: >-
+            Why the document failed. unreadable comes with a message naming
+            what is wrong with the files; too_long means the notes could not be
+            taken in whole, too_much that they ran out of the processing limit
+        message:
+          type: string
+          description: For unreadable, what is wrong with the files, for the student
     ErrorResponse:
       type: object
       required:

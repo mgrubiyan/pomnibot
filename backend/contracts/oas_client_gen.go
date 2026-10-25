@@ -125,6 +125,13 @@ type Invoker interface {
 	//
 	// GET /health
 	GetHealth(ctx context.Context) (GetHealthRes, error)
+	// GetNotesJob invokes GetNotesJob operation.
+	//
+	// The last document the user sent from the mini app, for an hour after it is done. Kept in memory: a
+	// restart forgets it, and its set, if made, is among the user's sets.
+	//
+	// GET /notes
+	GetNotesJob(ctx context.Context) (GetNotesJobRes, error)
 	// GetProfile invokes GetProfile operation.
 	//
 	// Read the saved profile and verified platform.
@@ -245,6 +252,13 @@ type Invoker interface {
 	//
 	// PATCH /sets/{setId}
 	UpdateSet(ctx context.Context, request *UpdateSetRequest, params UpdateSetParams) (UpdateSetRes, error)
+	// UploadNotes invokes UploadNotes operation.
+	//
+	// Takes the files and makes the set in the background, in the same queue as the bots' documents;
+	// GetNotesJob tells how it goes. Only for a signed in account, and one document at a time.
+	//
+	// POST /notes
+	UploadNotes(ctx context.Context, request *NotesUploadMultipart) (UploadNotesRes, error)
 }
 
 // Client implements OAS client.
@@ -1725,6 +1739,87 @@ func (c *Client) sendGetHealth(ctx context.Context) (res GetHealthRes, err error
 
 	stage = "DecodeResponse"
 	result, err := decodeGetHealthResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// GetNotesJob invokes GetNotesJob operation.
+//
+// The last document the user sent from the mini app, for an hour after it is done. Kept in memory: a
+// restart forgets it, and its set, if made, is among the user's sets.
+//
+// GET /notes
+func (c *Client) GetNotesJob(ctx context.Context) (GetNotesJobRes, error) {
+	res, err := c.sendGetNotesJob(ctx)
+	return res, err
+}
+
+func (c *Client) sendGetNotesJob(ctx context.Context) (res GetNotesJobRes, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("GetNotesJob"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/notes"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, GetNotesJobOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/notes"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer func() {
+		// Drain the body to EOF before closing, so the underlying
+		// connection can be reused by the Transport regardless of the
+		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
+		_, _ = io.Copy(io.Discard, body)
+		_ = body.Close()
+	}()
+
+	stage = "DecodeResponse"
+	result, err := decodeGetNotesJobResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -3521,6 +3616,90 @@ func (c *Client) sendUpdateSet(ctx context.Context, request *UpdateSetRequest, p
 
 	stage = "DecodeResponse"
 	result, err := decodeUpdateSetResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// UploadNotes invokes UploadNotes operation.
+//
+// Takes the files and makes the set in the background, in the same queue as the bots' documents;
+// GetNotesJob tells how it goes. Only for a signed in account, and one document at a time.
+//
+// POST /notes
+func (c *Client) UploadNotes(ctx context.Context, request *NotesUploadMultipart) (UploadNotesRes, error) {
+	res, err := c.sendUploadNotes(ctx, request)
+	return res, err
+}
+
+func (c *Client) sendUploadNotes(ctx context.Context, request *NotesUploadMultipart) (res UploadNotesRes, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("UploadNotes"),
+		semconv.HTTPRequestMethodKey.String("POST"),
+		semconv.URLTemplateKey.String("/notes"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, UploadNotesOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/notes"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "POST", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeUploadNotesRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer func() {
+		// Drain the body to EOF before closing, so the underlying
+		// connection can be reused by the Transport regardless of the
+		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
+		_, _ = io.Copy(io.Discard, body)
+		_ = body.Close()
+	}()
+
+	stage = "DecodeResponse"
+	result, err := decodeUploadNotesResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}

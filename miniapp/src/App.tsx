@@ -270,6 +270,7 @@ function App() {
             onStart={() => go({ name: 'feed' })}
             onOpenSet={(setId) => go({ name: 'set', setId })}
             onAddNote={() => go({ name: 'create-method' })}
+            onOpenNotes={() => go({ name: 'add' })}
             onJoinSet={() => go({ name: 'join' })}
             onOpenWhy={() => go({ name: 'why' })}
             onOpenAdminIssues={() => go({ name: 'admin-issues' })}
@@ -294,7 +295,7 @@ function App() {
     }
 
     if (screen.name === 'add') {
-        return <AddNote onBack={goHome} />;
+        return <AddNote onBack={goHome} onDone={(setId) => go({ name: 'set', setId })} />;
     }
 
     if (screen.name === 'join') {

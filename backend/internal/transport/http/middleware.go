@@ -11,6 +11,9 @@ type responseRecorder struct {
 	statusCode int
 }
 
+// Unwrap lets http.ResponseController reach the connection.
+func (rec *responseRecorder) Unwrap() http.ResponseWriter { return rec.ResponseWriter }
+
 func (rec *responseRecorder) WriteHeader(statusCode int) {
 	rec.statusCode = statusCode
 	rec.ResponseWriter.WriteHeader(statusCode)
