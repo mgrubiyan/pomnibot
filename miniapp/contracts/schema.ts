@@ -154,7 +154,7 @@ export interface paths {
         };
         /**
          * Get cards
-         * @description Only the author can get cards of a set; other users receive 403 Forbidden.
+         * @description The author gets whole cards; a member gets only the questions, without answers, options, tables, explanations and quotes.
          */
         get: operations["GetCardsBySetID"];
         put?: never;
@@ -662,6 +662,11 @@ export interface components {
             isAdmin?: boolean;
         };
         AnswerQuestionRequest: {
+            /**
+             * Format: uuid
+             * @description Unique submission ID, reused for retries and renewed for each new review
+             */
+            attemptId: string;
             /** @description input: the typed answer; choice: a JSON-encoded array of the selected option texts; boolean: true or false; table: a JSON-encoded array of TableItem, every term with the column it was put in; flip: true when the reader knew the answer, false when not */
             answer: string;
         };
@@ -1255,7 +1260,12 @@ export interface operations {
     };
     GetFeedQuestions: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter questions by set, or request set questions for review */
+                setId?: string;
+                /** @description When true and setId is provided, includes set cards even if not yet due according to FSRS */
+                early?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;

@@ -26,6 +26,7 @@ type answerFixture struct {
 	inFeed   atomic.Bool
 	recorded atomic.Int32
 	last     atomic.Pointer[bool]
+	attempts sync.Map
 }
 
 func newAnswerFixture(card db.GetCardByIDRow) *answerFixture {
@@ -43,9 +44,21 @@ func newAnswerFixture(card db.GetCardByIDRow) *answerFixture {
 		}
 		return []db.GetFeedCardsForUserRow{db.GetFeedCardsForUserRow(f.card)}, nil
 	}
+	f.getSetFeedCardsForUserFunc = func(context.Context, db.GetSetFeedCardsForUserParams) ([]db.GetSetFeedCardsForUserRow, error) {
+		if !f.inFeed.Load() {
+			return nil, nil
+		}
+		return []db.GetSetFeedCardsForUserRow{db.GetSetFeedCardsForUserRow(f.card)}, nil
+	}
 	f.getLastAnswerFunc = func(context.Context, db.GetLastAnswerParams) (bool, error) {
 		if v := f.last.Load(); v != nil {
 			return *v, nil
+		}
+		return false, pgx.ErrNoRows
+	}
+	f.getAnswerByAttemptFunc = func(_ context.Context, arg db.GetAnswerByAttemptParams) (bool, error) {
+		if v, ok := f.attempts.Load(arg.AttemptID); ok {
+			return v.(bool), nil
 		}
 		return false, pgx.ErrNoRows
 	}
@@ -53,6 +66,7 @@ func newAnswerFixture(card db.GetCardByIDRow) *answerFixture {
 		f.recorded.Add(1)
 		correct := arg.Correct
 		f.last.Store(&correct)
+		f.attempts.Store(arg.AttemptID, correct)
 		f.inFeed.Store(false)
 		return db.Answer{}, nil
 	}
@@ -88,7 +102,7 @@ func TestAnswerQuestionGradesEachKind(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newAnswerFixture(testCard(tc.kind, tc.stored))
 			svc := usecase.NewCardService(f, usecase.NewUserService(f))
-			res, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(f.card.ID.Bytes), tc.given)
+			res, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(f.card.ID.Bytes), tc.given, uuid.New())
 			if err != nil || res.IsCorrect != tc.want || res.Method != contracts.AnswerQuestionResponseMethodLocal {
 				t.Fatalf("AnswerQuestion() = %+v, %v; want correct=%v", res, err, tc.want)
 			}
@@ -110,7 +124,7 @@ func TestAnswerQuestionRejectsMalformedAnswers(t *testing.T) {
 	} {
 		f := newAnswerFixture(testCard(tc.kind, tc.stored))
 		svc := usecase.NewCardService(f, usecase.NewUserService(f))
-		if _, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(f.card.ID.Bytes), tc.given); !errors.Is(err, usecase.ErrValidation) {
+		if _, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(f.card.ID.Bytes), tc.given, uuid.New()); !errors.Is(err, usecase.ErrValidation) {
 			t.Fatalf("%s %q: err = %v, want ErrValidation", tc.kind, tc.given, err)
 		}
 		if f.recorded.Load() != 0 {
@@ -141,7 +155,7 @@ func TestAnswerQuestionGradesTableByPlaces(t *testing.T) {
 		f.getCardTableColumnsFunc = columns
 		f.getCardTableItemsFunc = items
 		svc := usecase.NewCardService(f, usecase.NewUserService(f))
-		res, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(card.ID.Bytes), tc.given)
+		res, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(card.ID.Bytes), tc.given, uuid.New())
 		if err != nil || res.IsCorrect != tc.want {
 			t.Fatalf("%s: %+v, %v; want correct=%v", tc.given, res, err, tc.want)
 		}
@@ -174,7 +188,7 @@ func TestAnswerQuestionGradesRepeatedTerms(t *testing.T) {
 			}, nil
 		}
 		svc := usecase.NewCardService(f, usecase.NewUserService(f))
-		res, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(card.ID.Bytes), tc.given)
+		res, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(card.ID.Bytes), tc.given, uuid.New())
 		if err != nil || res.IsCorrect != tc.want {
 			t.Fatalf("%s: %+v, %v; want correct=%v", tc.given, res, err, tc.want)
 		}
@@ -189,7 +203,7 @@ func TestAnswerQuestionGradesChoiceByTheRevealedOptions(t *testing.T) {
 		return []db.CardOption{{Text: "A", IsCorrect: true}, {Text: "B"}}, nil
 	}
 	svc := usecase.NewCardService(f, usecase.NewUserService(f))
-	res, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(f.card.ID.Bytes), `["A"]`)
+	res, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(f.card.ID.Bytes), `["A"]`, uuid.New())
 	if err != nil || !res.IsCorrect {
 		t.Fatalf("AnswerQuestion() = %+v, %v; want correct", res, err)
 	}
@@ -204,28 +218,30 @@ func TestAnswerQuestionOnlyGradesTheFeedCard(t *testing.T) {
 	f := newAnswerFixture(testCard("flip", "отсортированный"))
 	f.inFeed.Store(false)
 	svc := usecase.NewCardService(f, usecase.NewUserService(f))
-	_, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(f.card.ID.Bytes), "true")
+	_, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(f.card.ID.Bytes), "true", uuid.New())
 	if !errors.Is(err, usecase.ErrConflict) || f.recorded.Load() != 0 {
 		t.Fatalf("err = %v, recorded %d; want ErrConflict and nothing recorded", err, f.recorded.Load())
 	}
 
-	if _, err := svc.AnswerQuestion(context.Background(), testUser2, uuid.UUID(f.card.ID.Bytes), "true"); !errors.Is(err, usecase.ErrNotFound) {
+	if _, err := svc.AnswerQuestion(context.Background(), testUser2, uuid.UUID(f.card.ID.Bytes), "true", uuid.New()); !errors.Is(err, usecase.ErrNotFound) {
 		t.Fatalf("someone else's card: err = %v, want ErrNotFound", err)
 	}
 }
 
-// Asked again after the answer was recorded — a lost response retried, or
-// a second try at a wrong answer — the endpoint repeats the verdict.
+// Retrying the same submission repeats its verdict, even if the client
+// changes the answer text. A new review must use another attempt ID.
 func TestAnswerQuestionRepeatsTheRecordedVerdict(t *testing.T) {
+	attemptID := uuid.New()
 	f := newAnswerFixture(testCard("choice", `["A","B"]`))
 	svc := usecase.NewCardService(f, usecase.NewUserService(f))
 	id := uuid.UUID(f.card.ID.Bytes)
 
-	first, err := svc.AnswerQuestion(context.Background(), testUser1, id, `["A"]`)
+	first, err := svc.AnswerQuestion(context.Background(), testUser1, id, `["A"]`, attemptID)
 	if err != nil || first.IsCorrect {
 		t.Fatalf("first answer = %+v, %v; want wrong", first, err)
 	}
-	again, err := svc.AnswerQuestion(context.Background(), testUser1, id, `["A","B"]`)
+	f.inFeed.Store(true)
+	again, err := svc.AnswerQuestion(context.Background(), testUser1, id, `["A","B"]`, attemptID)
 	if err != nil || again.IsCorrect || !again.Reveal.Set {
 		t.Fatalf("second answer = %+v, %v; want the recorded wrong verdict with the reveal", again, err)
 	}
@@ -234,24 +250,43 @@ func TestAnswerQuestionRepeatsTheRecordedVerdict(t *testing.T) {
 	}
 }
 
-// Only a verdict recorded moments ago is repeated: a lost response retried.
-// An answer from an earlier pass is not the verdict for this one.
-func TestAnswerQuestionRepeatsOnlyARecentVerdict(t *testing.T) {
+// A new attempt outside the feed must not reuse an unrelated verdict.
+func TestAnswerQuestionRejectsNewAttemptOutsideFeed(t *testing.T) {
 	f := newAnswerFixture(testCard("boolean", "true"))
-	f.inFeed.Store(false)
-	var since time.Time
-	f.getLastAnswerFunc = func(_ context.Context, arg db.GetLastAnswerParams) (bool, error) {
-		sec, nsec := uuid.UUID(arg.SinceID.Bytes).Time().UnixTime()
-		since = time.Unix(sec, nsec)
-		return false, pgx.ErrNoRows
-	}
 	svc := usecase.NewCardService(f, usecase.NewUserService(f))
-	_, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(f.card.ID.Bytes), "true")
-	if !errors.Is(err, usecase.ErrConflict) {
+	id := uuid.UUID(f.card.ID.Bytes)
+	if _, err := svc.AnswerQuestion(context.Background(), testUser1, id, "true", uuid.New()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.AnswerQuestion(context.Background(), testUser1, id, "false", uuid.New()); !errors.Is(err, usecase.ErrConflict) {
 		t.Fatalf("err = %v, want ErrConflict", err)
 	}
-	if ago := time.Since(since); ago < 30*time.Second || ago > 5*time.Minute {
-		t.Fatalf("verdicts are repeated from %v ago, want a few minutes at most", ago)
+}
+
+// A fresh early review may ask the same card immediately, even with the same answer.
+func TestAnswerQuestionGradesNewEarlyReview(t *testing.T) {
+	for _, given := range []string{"true", "false"} {
+		t.Run(given, func(t *testing.T) {
+			f := newAnswerFixture(testCard("boolean", "true"))
+			var progressWrites int
+			f.upsertFactProgressFunc = func(context.Context, db.UpsertFactProgressParams) (db.UserFactProgress, error) {
+				progressWrites++
+				return db.UserFactProgress{}, nil
+			}
+			svc := usecase.NewCardService(f, usecase.NewUserService(f))
+			id := uuid.UUID(f.card.ID.Bytes)
+			if _, err := svc.AnswerQuestion(context.Background(), testUser1, id, "true", uuid.New()); err != nil {
+				t.Fatal(err)
+			}
+			// Only the set's early-review feed contains the card now.
+			f.getSetFeedCardsForUserFunc = func(context.Context, db.GetSetFeedCardsForUserParams) ([]db.GetSetFeedCardsForUserRow, error) {
+				return []db.GetSetFeedCardsForUserRow{db.GetSetFeedCardsForUserRow(f.card)}, nil
+			}
+			res, err := svc.AnswerQuestion(context.Background(), testUser1, id, given, uuid.New())
+			if err != nil || res.IsCorrect != (given == "true") || f.recorded.Load() != 2 || progressWrites != 2 {
+				t.Fatalf("new review = %+v, %v; recorded %d, want new verdict and two answers", res, err, f.recorded.Load())
+			}
+		})
 	}
 }
 
@@ -289,7 +324,7 @@ func TestAnswerQuestionWritesInOneTransaction(t *testing.T) {
 		return db.UserFactProgress{}, errors.New("connection reset")
 	}
 	svc := usecase.NewCardService(f, usecase.NewUserService(f), usecase.WithTransactions(tx))
-	if _, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(f.card.ID.Bytes), "true"); err == nil {
+	if _, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(f.card.ID.Bytes), "true", uuid.New()); err == nil {
 		t.Fatal("a failed write must fail the answer")
 	}
 	if !tx.rolledBack {
@@ -311,6 +346,7 @@ func (m slowModel) Complete(ctx context.Context, _ providers.Request) (providers
 // Overlapping answers to one card — a double tap, or a retry while the
 // model still judges the first — are recorded once.
 func TestAnswerQuestionRecordsOverlappingAnswersOnce(t *testing.T) {
+	attemptID := uuid.New()
 	f := newAnswerFixture(testCard("input", "на отсортированном массиве"))
 	model := grader.Grader{Model: slowModel{delay: 20 * time.Millisecond}, Timeout: time.Second}
 	svc := usecase.NewCardService(f, usecase.NewUserService(f), usecase.WithGrader(&model))
@@ -322,7 +358,7 @@ func TestAnswerQuestionRecordsOverlappingAnswersOnce(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			res, err := svc.AnswerQuestion(context.Background(), testUser1, id, "упорядоченный")
+			res, err := svc.AnswerQuestion(context.Background(), testUser1, id, "упорядоченный", attemptID)
 			results[i] = err == nil && res.IsCorrect
 		}()
 	}
@@ -352,7 +388,7 @@ func TestAnswerQuestionFallbackRecordsNothing(t *testing.T) {
 	model := grader.Grader{Model: silentModel{}, Timeout: 10 * time.Millisecond}
 	svc := usecase.NewCardService(f, usecase.NewUserService(f), usecase.WithGrader(&model))
 
-	res, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(f.card.ID.Bytes), "упорядоченный")
+	res, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(f.card.ID.Bytes), "упорядоченный", uuid.New())
 	if err != nil || res.Method != contracts.AnswerQuestionResponseMethodFallback {
 		t.Fatalf("AnswerQuestion() = %+v, %v; want fallback", res, err)
 	}
@@ -398,7 +434,7 @@ func TestGetFeedQuestionsHidesAnswers(t *testing.T) {
 		},
 	}
 	batches := &detailBatchQuerier{mockQuerier: *q}
-	cards, err := usecase.NewHomescreenService(batches, usecase.NewUserService(batches)).GetFeedQuestions(context.Background(), testUser1)
+	cards, err := usecase.NewHomescreenService(batches, usecase.NewUserService(batches)).GetFeedQuestions(context.Background(), testUser1, usecase.FeedOptions{})
 	if err != nil || len(cards) != 1 {
 		t.Fatalf("GetFeedQuestions() = %+v, %v", cards, err)
 	}
@@ -408,7 +444,7 @@ func TestGetFeedQuestionsHidesAnswers(t *testing.T) {
 	}
 }
 
-func TestGetCardsBySetIDForbidsNonAuthor(t *testing.T) {
+func TestGetCardsBySetIDGivesMembersQuestionsOnly(t *testing.T) {
 	setID := uuid.New()
 	pgSetID := pgtype.UUID{Bytes: setID, Valid: true}
 	author := pgtype.UUID{Bytes: testUser3, Valid: true}
@@ -430,9 +466,13 @@ func TestGetCardsBySetIDForbidsNonAuthor(t *testing.T) {
 	}
 	svc := usecase.NewSetService(q, usecase.NewUserService(q))
 
-	_, err := svc.GetCardsBySetID(context.Background(), testUser1, setID)
-	if !errors.Is(err, usecase.ErrForbidden) {
-		t.Fatalf("expected ErrForbidden for member, got: %v", err)
+	member, err := svc.GetCardsBySetID(context.Background(), testUser1, setID)
+	if err != nil || len(member) != 1 {
+		t.Fatalf("member: %+v, %v", member, err)
+	}
+	c := member[0]
+	if c.Question != choice.Question || c.Answer.Set || c.Explanation.Set || c.SourceQuote.Set || len(c.Options) != 0 || c.Table.Set {
+		t.Fatalf("a member must get only the question: %+v", c)
 	}
 
 	own, err := svc.GetCardsBySetID(context.Background(), testUser3, setID)
@@ -453,7 +493,7 @@ func TestGetFeedQuestionsShufflesOptionsAndTerms(t *testing.T) {
 	svc := usecase.NewHomescreenService(q, usecase.NewUserService(q))
 	firstOption, firstTerm := map[string]bool{}, map[string]bool{}
 	for range 40 {
-		cards, err := svc.GetFeedQuestions(context.Background(), testUser1)
+		cards, err := svc.GetFeedQuestions(context.Background(), testUser1, usecase.FeedOptions{})
 		if err != nil || len(cards) != 2 || len(cards[0].Options) != 4 || len(cards[1].Table.Value.Items) != 4 {
 			t.Fatalf("GetFeedQuestions() = %+v, %v", cards, err)
 		}
@@ -494,4 +534,69 @@ func (shuffleDetails) GetCardTableItemsBatch(_ context.Context, ids []pgtype.UUI
 		}
 	}
 	return rows, nil
+}
+
+func TestGetFeedQuestions_EarlyReviewForSet(t *testing.T) {
+	setID := uuid.New()
+	card := testCard("choice", `["A"]`)
+	card.SetID = pgtype.UUID{Bytes: setID, Valid: true}
+
+	var getSetFeedCalled bool
+	q := &mockQuerier{
+		getFeedCardsForUserFunc: func(context.Context, pgtype.UUID) ([]db.GetFeedCardsForUserRow, error) {
+			// Regular feed has no cards due
+			return nil, nil
+		},
+		getSetFeedCardsForUserFunc: func(_ context.Context, arg db.GetSetFeedCardsForUserParams) ([]db.GetSetFeedCardsForUserRow, error) {
+			if arg.SetID.Bytes != setID {
+				t.Fatalf("expected SetID %v, got %v", setID, arg.SetID)
+			}
+			getSetFeedCalled = true
+			return []db.GetSetFeedCardsForUserRow{db.GetSetFeedCardsForUserRow(card)}, nil
+		},
+	}
+	batches := &detailBatchQuerier{mockQuerier: *q}
+	svc := usecase.NewHomescreenService(batches, usecase.NewUserService(batches))
+
+	cards, err := svc.GetFeedQuestions(context.Background(), testUser1, usecase.FeedOptions{
+		SetID: &setID,
+		Early: true,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !getSetFeedCalled {
+		t.Fatal("expected GetSetFeedCardsForUser to be called")
+	}
+	if len(cards) != 1 || cards[0].ID != uuid.UUID(card.ID.Bytes) {
+		t.Fatalf("unexpected cards: %+v", cards)
+	}
+}
+
+func TestAnswerQuestion_EarlyReview(t *testing.T) {
+	card := testCard("boolean", "true")
+	f := newAnswerFixture(card)
+	// Regular feed has no cards (card is NOT due)
+	f.getFeedCardsForUserFunc = func(context.Context, pgtype.UUID) ([]db.GetFeedCardsForUserRow, error) {
+		return nil, nil
+	}
+	// Early review feed has the card
+	f.getSetFeedCardsForUserFunc = func(_ context.Context, _ db.GetSetFeedCardsForUserParams) ([]db.GetSetFeedCardsForUserRow, error) {
+		if !f.inFeed.Load() {
+			return nil, nil
+		}
+		return []db.GetSetFeedCardsForUserRow{db.GetSetFeedCardsForUserRow(f.card)}, nil
+	}
+
+	svc := usecase.NewCardService(f, usecase.NewUserService(f))
+	res, err := svc.AnswerQuestion(context.Background(), testUser1, uuid.UUID(card.ID.Bytes), "true", uuid.New())
+	if err != nil {
+		t.Fatalf("expected success for early review, got: %v", err)
+	}
+	if !res.IsCorrect {
+		t.Fatalf("expected IsCorrect true, got %v", res.IsCorrect)
+	}
+	if f.recorded.Load() != 1 {
+		t.Fatalf("expected answer to be recorded, got %d", f.recorded.Load())
+	}
 }

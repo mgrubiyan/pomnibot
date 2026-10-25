@@ -10,6 +10,7 @@ import (
 	ht "github.com/ogen-go/ogen/http"
 
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
+	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
 var (
@@ -251,7 +252,7 @@ func TestAPIHandler_HomescreenDelegation(t *testing.T) {
 			}
 			return &contracts.TodayData{User: contracts.User{ID: testAPIUserID789, FirstName: "Alex"}, DueCount: 10, EstimatedMinutes: 15}, nil
 		},
-		getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID) ([]contracts.FeedCard, error) {
+		getFeedQuestionsFunc: func(_ context.Context, userID uuid.UUID, _ usecase.FeedOptions) ([]contracts.FeedCard, error) {
 			if userID != testAPIUserID789 {
 				t.Errorf("unexpected userID: %s", userID)
 			}
@@ -273,7 +274,7 @@ func TestAPIHandler_HomescreenDelegation(t *testing.T) {
 	})
 
 	t.Run("GetFeedQuestions delegates to homescreenHandler", func(t *testing.T) {
-		res, err := h.GetFeedQuestions(ctx)
+		res, err := h.GetFeedQuestions(ctx, contracts.GetFeedQuestionsParams{})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -353,7 +354,7 @@ func TestAPIHandler_NilServicesFallback(t *testing.T) {
 			t.Fatalf("expected ErrNotImplemented, got %v", err)
 		}
 
-		_, err = h.GetFeedQuestions(ctx)
+		_, err = h.GetFeedQuestions(ctx, contracts.GetFeedQuestionsParams{})
 		if !errors.Is(err, ht.ErrNotImplemented) {
 			t.Fatalf("expected ErrNotImplemented, got %v", err)
 		}

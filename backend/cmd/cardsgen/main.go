@@ -396,7 +396,7 @@ func formatCards(facts []generator.Fact) string {
 		fmt.Fprintf(&w, "\n== Факт %d: %s — стр. %v\n", i+1, f.Name, f.Pages)
 		for _, c := range f.Cards {
 			base := c.Base()
-			kind, answer := "", ""
+			kind, answer, extra := "", "", ""
 			switch v := c.(type) {
 			case generator.FlipCard:
 				kind, answer = "flip", v.Answer
@@ -408,13 +408,17 @@ func formatCards(facts []generator.Fact) string {
 				kind = "choice"
 				a, _ := json.Marshal(v.RightAnswers)
 				answer = string(a)
-				fmt.Fprintf(&w, "     Варианты: %v\n", append(append([]string{}, v.RightAnswers...), v.WrongAnswers...))
+				extra = fmt.Sprintf("     Варианты: %v\n", append(append([]string{}, v.RightAnswers...), v.WrongAnswers...))
 			case generator.TableCard:
 				kind = "table"
 				a, _ := json.Marshal(v.Columns)
 				answer = string(a)
 			}
-			fmt.Fprintf(&w, "  [%s] %s\n     О: %s\n     Объяснение: %s\n     Цитата: «%s»\n", kind, base.Question, answer, base.Source, base.SourceQuote)
+			fmt.Fprintf(&w, "  [%s] %s\n     О: %s\n", kind, base.Question, answer)
+			if extra != "" {
+				w.WriteString(extra)
+			}
+			fmt.Fprintf(&w, "     Объяснение: %s\n     Цитата: «%s»\n", base.Source, base.SourceQuote)
 		}
 	}
 	return w.String()

@@ -388,7 +388,8 @@ paths:
         - Sets
       summary: Get cards
       description: >-
-        Only the author can get cards of a set; other users receive 403 Forbidden.
+        The author gets whole cards; a member gets only the questions, without
+        answers, options, tables, explanations and quotes.
       operationId: GetCardsBySetID
       parameters:
         - name: setId
@@ -552,6 +553,20 @@ paths:
         Questions only: what answers a card comes back from AnswerQuestion,
         or from RevealCard for a flip card.
       operationId: GetFeedQuestions
+      parameters:
+        - name: setId
+          in: query
+          required: false
+          description: Filter questions by set, or request set questions for review
+          schema:
+            type: string
+            format: uuid
+        - name: early
+          in: query
+          required: false
+          description: When true and setId is provided, includes set cards even if not yet due according to FSRS
+          schema:
+            type: boolean
       responses:
         '403':
           $ref: '#/components/responses/Forbidden'
@@ -1437,7 +1452,12 @@ components:
       type: object
       required:
         - answer
+        - attemptId
       properties:
+        attemptId:
+          type: string
+          format: uuid
+          description: Unique submission ID, reused for retries and renewed for each new review
         answer:
           type: string
           description: >-

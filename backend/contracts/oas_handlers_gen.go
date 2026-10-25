@@ -1368,7 +1368,8 @@ func (s *Server) handleGetAdminIssuesRequest(args [0]string, argsEscaped bool, w
 
 // handleGetCardsBySetIDRequest handles GetCardsBySetID operation.
 //
-// Only the author can get cards of a set; other users receive 403 Forbidden.
+// The author gets whole cards; a member gets only the questions, without answers, options, tables,
+// explanations and quotes.
 //
 // GET /sets/{setId}/cards
 func (s *Server) handleGetCardsBySetIDRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -1723,8 +1724,22 @@ func (s *Server) handleGetFeedQuestionsRequest(args [0]string, argsEscaped bool,
 
 			s.errors.Add(ctx, 1, metric.WithAttributes(attrs...))
 		}
-		err error
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: GetFeedQuestionsOperation,
+			ID:   "GetFeedQuestions",
+		}
 	)
+	params, err := decodeGetFeedQuestionsParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
 
 	var rawBody []byte
 
@@ -1737,13 +1752,22 @@ func (s *Server) handleGetFeedQuestionsRequest(args [0]string, argsEscaped bool,
 			OperationID:      "GetFeedQuestions",
 			Body:             nil,
 			RawBody:          rawBody,
-			Params:           middleware.Parameters{},
-			Raw:              r,
+			Params: middleware.Parameters{
+				{
+					Name: "setId",
+					In:   "query",
+				}: params.SetId,
+				{
+					Name: "early",
+					In:   "query",
+				}: params.Early,
+			},
+			Raw: r,
 		}
 
 		type (
 			Request  = struct{}
-			Params   = struct{}
+			Params   = GetFeedQuestionsParams
 			Response = GetFeedQuestionsRes
 		)
 		response, err = middleware.HookMiddleware[
@@ -1753,14 +1777,14 @@ func (s *Server) handleGetFeedQuestionsRequest(args [0]string, argsEscaped bool,
 		](
 			m,
 			mreq,
-			nil,
+			unpackGetFeedQuestionsParams,
 			func(ctx context.Context, request Request, params Params) (response Response, err error) {
-				response, err = s.h.GetFeedQuestions(ctx)
+				response, err = s.h.GetFeedQuestions(ctx, params)
 				return response, err
 			},
 		)
 	} else {
-		response, err = s.h.GetFeedQuestions(ctx)
+		response, err = s.h.GetFeedQuestions(ctx, params)
 	}
 	if err != nil {
 		defer recordError("Internal", err)

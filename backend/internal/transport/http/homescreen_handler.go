@@ -30,9 +30,15 @@ func (h *HomescreenHandler) GetToday(ctx context.Context) (contracts.GetTodayRes
 }
 
 // GetFeedQuestions implements contracts.Handler.GetFeedQuestions.
-func (h *HomescreenHandler) GetFeedQuestions(ctx context.Context) (contracts.GetFeedQuestionsRes, error) {
+func (h *HomescreenHandler) GetFeedQuestions(ctx context.Context, params contracts.GetFeedQuestionsParams) (contracts.GetFeedQuestionsRes, error) {
 	userID, _ := UserIDFromContext(ctx)
-	cards, err := h.homescreenService.GetFeedQuestions(ctx, userID)
+	opts := usecase.FeedOptions{
+		Early: params.Early.Value,
+	}
+	if params.SetId.IsSet() {
+		opts.SetID = &params.SetId.Value
+	}
+	cards, err := h.homescreenService.GetFeedQuestions(ctx, userID, opts)
 	if err != nil {
 		return &contracts.GetFeedQuestionsInternalServerError{Message: internalError(ctx, "GetFeedQuestions", err)}, nil
 	}

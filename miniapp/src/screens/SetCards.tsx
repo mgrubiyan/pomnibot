@@ -19,7 +19,6 @@ import {
 } from '../utils/sets';
 import { groupCardsByFacts } from '../utils/factGroups';
 import { getFactCardIds, reorderCardsInFact } from '../utils/cardsOrder';
-import { classifyError } from '../utils/errors';
 import { StudyContent } from '../components/StudyContent';
 import { StudyIllustration } from '../components/StudyIllustration';
 import s from './SetCards.module.css';
@@ -49,7 +48,6 @@ export function SetCards({
     const [set, setSet] = useState<CardSet | null>(null);
     const [cards, setCards] = useState<Card[]>([]);
     const [facts, setFacts] = useState<Fact[]>([]);
-    const [loadError, setLoadError] = useState<unknown>(null);
     const [attempt, setAttempt] = useState(0);
 
     // Dialog states
@@ -88,23 +86,14 @@ export function SetCards({
                 setFacts(nextFacts);
                 setStatus('ready');
             })
-            .catch((err) => {
-                if (!cancelled) {
-                    setLoadError(err);
-                    setStatus('error');
-                }
+            .catch(() => {
+                if (!cancelled) setStatus('error');
             });
 
         return () => {
             cancelled = true;
         };
     }, [attempt, setId]);
-
-    useEffect(() => {
-        if (status === 'ready' && set && currentUser && set.author && set.author.id !== currentUser.id) {
-            onBack();
-        }
-    }, [status, set, currentUser, onBack]);
 
     const retry = () => {
         setStatus('loading');
@@ -369,19 +358,16 @@ export function SetCards({
     }
 
     if (status === 'error' || !set) {
-        const errorInfo = classifyError(loadError);
         return (
             <StatusScreen
-                icon={errorInfo.kind === 'offline' ? <IconOffline size={48} tone="muted" /> : undefined}
-                title={errorInfo.title}
-                text={errorInfo.text}
+                icon={<IconOffline size={48} tone="muted" />}
+                title="Нет соединения"
+                text="Проверьте интернет и попробуйте ещё раз"
                 action={
                     <Flex direction="column" align="stretch" gap={8}>
-                        {errorInfo.canRetry && (
-                            <Button size="medium" variant="primary" stretched onClick={retry}>
-                                Повторить
-                            </Button>
-                        )}
+                        <Button size="medium" variant="primary" stretched onClick={retry}>
+                            Повторить
+                        </Button>
                         <Button size="medium" variant="ghost" stretched onClick={onBack}>
                             Назад
                         </Button>

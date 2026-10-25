@@ -27,7 +27,7 @@ func TestChoiceCheckRequiresAllAnswers(t *testing.T) {
 		given string
 		want  bool
 	}{{`["B","A"]`, true}, {`["A"]`, false}, {`["A","B","C"]`, false}, {`["A","A"]`, false}} {
-		r, err := svc.AnswerQuestion(context.Background(), uuid.New(), cardID, tc.given)
+		r, err := svc.AnswerQuestion(context.Background(), uuid.New(), cardID, tc.given, uuid.New())
 		if err != nil || r.IsCorrect != tc.want || r.Method != contracts.AnswerQuestionResponseMethodLocal {
 			t.Fatalf("%s: %+v %v", tc.given, r, err)
 		}

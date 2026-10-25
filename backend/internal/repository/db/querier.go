@@ -36,6 +36,7 @@ type Querier interface {
 	DeleteSet(ctx context.Context, arg DeleteSetParams) (int64, error)
 	EnsureUser(ctx context.Context, id pgtype.UUID) (User, error)
 	FactExists(ctx context.Context, id pgtype.UUID) (bool, error)
+	GetAnswerByAttempt(ctx context.Context, arg GetAnswerByAttemptParams) (bool, error)
 	GetCardByID(ctx context.Context, arg GetCardByIDParams) (GetCardByIDRow, error)
 	GetCardByIDForAuthor(ctx context.Context, arg GetCardByIDForAuthorParams) (GetCardByIDForAuthorRow, error)
 	GetCardOptions(ctx context.Context, cardID pgtype.UUID) ([]CardOption, error)
@@ -57,6 +58,7 @@ type Querier interface {
 	GetProcessingReport(ctx context.Context, arg GetProcessingReportParams) ([]byte, error)
 	GetSetByID(ctx context.Context, arg GetSetByIDParams) (GetSetByIDRow, error)
 	GetSetByShareCode(ctx context.Context, shareCode string) (GetSetByShareCodeRow, error)
+	GetSetFeedCardsForUser(ctx context.Context, arg GetSetFeedCardsForUserParams) ([]GetSetFeedCardsForUserRow, error)
 	// Open complaints of the author's set: made after the card's last edit and
 	// not dismissed. Complaints about deleted cards are not listed.
 	GetSetIssues(ctx context.Context, arg GetSetIssuesParams) ([]GetSetIssuesRow, error)

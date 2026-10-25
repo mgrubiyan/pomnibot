@@ -69,7 +69,8 @@ type Handler interface {
 	GetAdminIssues(ctx context.Context) (GetAdminIssuesRes, error)
 	// GetCardsBySetID implements GetCardsBySetID operation.
 	//
-	// Only the author can get cards of a set; other users receive 403 Forbidden.
+	// The author gets whole cards; a member gets only the questions, without answers, options, tables,
+	// explanations and quotes.
 	//
 	// GET /sets/{setId}/cards
 	GetCardsBySetID(ctx context.Context, params GetCardsBySetIDParams) (GetCardsBySetIDRes, error)
@@ -85,7 +86,7 @@ type Handler interface {
 	// card.
 	//
 	// GET /feed
-	GetFeedQuestions(ctx context.Context) (GetFeedQuestionsRes, error)
+	GetFeedQuestions(ctx context.Context, params GetFeedQuestionsParams) (GetFeedQuestionsRes, error)
 	// GetHealth implements getHealth operation.
 	//
 	// Health check endpoint.

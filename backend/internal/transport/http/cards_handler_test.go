@@ -60,7 +60,7 @@ func (m *mockCardService) DeleteCard(ctx context.Context, userID uuid.UUID, card
 	return nil
 }
 
-func (m *mockCardService) AnswerQuestion(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string) (*contracts.AnswerQuestionResponse, error) {
+func (m *mockCardService) AnswerQuestion(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, answer string, _ uuid.UUID) (*contracts.AnswerQuestionResponse, error) {
 	if m.answerQuestionFunc != nil {
 		return m.answerQuestionFunc(ctx, userID, cardID, answer)
 	}

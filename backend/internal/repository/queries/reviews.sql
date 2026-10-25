@@ -1,6 +1,6 @@
 -- name: RecordAnswer :one
-INSERT INTO answers (user_id, card_id, correct)
-VALUES ($1, $2, $3)
+INSERT INTO answers (user_id, card_id, correct, attempt_id)
+VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: UpsertFactProgress :one
@@ -37,3 +37,7 @@ WHERE user_id = @user_id AND card_id = @card_id
   AND id >= @since_id::uuid
 ORDER BY id DESC
 LIMIT 1;
+
+-- name: GetAnswerByAttempt :one
+SELECT correct FROM answers
+WHERE user_id = @user_id AND card_id = @card_id AND attempt_id = @attempt_id;
