@@ -134,7 +134,7 @@ export function Leaderboard({ setId, setTitle, onBack }: LeaderboardProps) {
                                         key={item.user.id}
                                         separator={index > 0}
                                         before={
-                                            <Flex align="center" gap={12}>
+                                            <Flex align="center" gap={8}>
                                                 <div className={`${s.rankBadge} ${rankClass}`}>
                                                     {item.rank}
                                                 </div>

@@ -25,12 +25,17 @@
     background: none;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
-    transition: opacity 0.12s var(--ease-out);
+    transition: transform 160ms var(--ease-out);
 }
 
-.photo:active,
+/* A photo is pressed in, not dimmed; during the upload the spinner on the
+   button says enough. */
+.photo:active:not(:disabled) {
+    transform: scale(0.96);
+}
+
 .photo:disabled {
-    opacity: 0.6;
+    cursor: default;
 }
 
 /* Opened by the buttons; a visible file field looks foreign in MAX. */
@@ -78,10 +83,12 @@
     white-space: nowrap;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.12s var(--ease-out);
 }
 
 .more:active {
     opacity: 0.6;
+    transition-duration: 0.06s;
 }
 
 .consentText {
@@ -90,4 +97,20 @@
     border-radius: 16px;
     background: var(--background-card);
     text-wrap: pretty;
+    transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
+
+    @starting-style {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .consentText {
+        transition: opacity 200ms var(--ease-out);
+
+        @starting-style {
+            transform: none;
+        }
+    }
 }

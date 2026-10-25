@@ -31,10 +31,16 @@ export function Profile({ profile, onChange, onBack }: ProfileProps) {
     const [failed, setFailed] = useState<false | 'network' | 'signed-out'>(false);
     const [showText, setShowText] = useState(false);
     const textId = useId();
-    const consent = profile.dataConsent;
+    // The switch moves on the tap; the answer of the server confirms it or
+    // takes it back.
+    const [pending, setPending] = useState<boolean | null>(null);
+    const consent = pending ?? profile.dataConsent;
     const fileRef = useRef<HTMLInputElement>(null);
     const [photoBusy, setPhotoBusy] = useState(false);
     const [photoError, setPhotoError] = useState('');
+    // The cut square shows at once, while it is still being uploaded.
+    const [preview, setPreview] = useState<string | null>(null);
+    const shownUser = preview ? { ...profile.user, avatarUrl: preview } : profile.user;
     const hasPhoto = Boolean(profile.user.avatarUrl);
 
     const pickPhoto = () => fileRef.current?.click();
@@ -56,6 +62,7 @@ export function Profile({ profile, onChange, onBack }: ProfileProps) {
                 setPhotoError('Не получилось открыть это фото. Выберите другое.');
                 return;
             }
+            setPreview(`data:image/jpeg;base64,${image}`);
             const { data, response } = await api.PUT('/profile/avatar', { body: { image } });
             if (response.status === 400) {
                 setPhotoError('Это фото не подходит. Выберите другое.');
@@ -68,10 +75,18 @@ export function Profile({ profile, onChange, onBack }: ProfileProps) {
             if (!response.ok || !data) {
                 throw new Error('photo upload failed');
             }
+            // The preview stays until the saved photo can be drawn, so the
+            // letter does not flash in between.
+            if (data.user.avatarUrl) {
+                const saved = new Image();
+                saved.src = data.user.avatarUrl;
+                await saved.decode().catch(() => undefined);
+            }
             onChange(data);
         } catch {
             setPhotoError('Не получилось загрузить фото. Проверьте соединение и попробуйте ещё раз.');
         } finally {
+            setPreview(null);
             setPhotoBusy(false);
         }
     };
@@ -105,6 +120,7 @@ export function Profile({ profile, onChange, onBack }: ProfileProps) {
         }
         setSaving(true);
         setFailed(false);
+        setPending(given);
         try {
             const { data, response } = await api.PUT('/profile/consent', { body: { given } });
             if (response.status === 403) {
@@ -118,6 +134,7 @@ export function Profile({ profile, onChange, onBack }: ProfileProps) {
         } catch {
             setFailed('network');
         } finally {
+            setPending(null);
             setSaving(false);
         }
     };
@@ -135,7 +152,7 @@ export function Profile({ profile, onChange, onBack }: ProfileProps) {
                         disabled={photoBusy}
                         aria-label={hasPhoto ? 'Сменить фото' : 'Добавить фото'}
                     >
-                        <UserAvatar user={profile.user} size={88} />
+                        <UserAvatar user={shownUser} size={88} />
                     </button>
                     <input
                         ref={fileRef}
@@ -174,7 +191,6 @@ export function Profile({ profile, onChange, onBack }: ProfileProps) {
                             after={
                                 <Switch
                                     checked={consent}
-                                    disabled={saving}
                                     aria-describedby={textId}
                                     onChange={(event) => void toggle(event.target.checked)}
                                 />
