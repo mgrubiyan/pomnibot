@@ -164,9 +164,8 @@
 
 .option {
     display: flex;
-    /* The ☑/☐ mark sits on the label's first line, not in the middle of
-       a long one. One line (24px) plus the padding and border below is
-       exactly the 52px minimum, so a short option stays centred. */
+    /* One line (24px) plus the padding and border below is exactly the
+       52px minimum, so a short option stays centred. */
     align-items: baseline;
     width: 100%;
     gap: 8px;
@@ -209,11 +208,6 @@
 .option > * {
     min-width: 0;
     overflow-wrap: anywhere;
-}
-
-/* The ☑/☐ mark keeps its width however long the label is. */
-.option > [aria-hidden='true'] {
-    flex-shrink: 0;
 }
 
 .option:active {

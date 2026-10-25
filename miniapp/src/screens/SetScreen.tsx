@@ -10,7 +10,7 @@ import { RetentionWidgets } from '../components/RetentionWidgets';
 import { StatusScreen } from '../components/StatusScreen';
 import { IconCheck, IconOffline } from '../components/Icons';
 import { loadCards, loadSet, loadSetIssues } from '../utils/sets';
-import { cardsLabel } from '../utils/plural';
+import { cardsLabel, cardsObjectLabel } from '../utils/plural';
 import { formatAuthorName } from '../utils/user';
 import { classifyError } from '../utils/errors';
 import { cx } from '../utils/cx';
@@ -186,7 +186,8 @@ export function SetScreen({
                     subtitle={<>
                         {cardsLabel(totalCards)}
                         {hasDue ? ` · ${dueCount} на повтор` : ''}
-                        {shared && set.author ? ` · автор: ${formatAuthorName(set.author)}` : ''}
+                        {/* A line of its own: «·» would otherwise start the second line. */}
+                        {shared && set.author ? <><br />Автор: {formatAuthorName(set.author)}</> : null}
                     </>}
                     onBack={onBack}
                     actions={<SetActionsMenu shared={shared}
@@ -265,7 +266,7 @@ export function SetScreen({
                 {hasDue ? (
                     <Button size="medium" variant="primary" stretched onClick={() => onStart(set.id, set.title, false)}>
                         {/* The minutes do not fit a phone-wide button: «…около 3 ми…» */}
-                        Повторить {cardsLabel(dueCount)}
+                        Повторить {cardsObjectLabel(dueCount)}
                     </Button>
                 ) : (
                     <>
