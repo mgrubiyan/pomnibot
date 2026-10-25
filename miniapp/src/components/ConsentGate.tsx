@@ -8,6 +8,7 @@ import { ConsentText } from './ConsentText';
 import { IconPerson } from './Icons';
 import { useProfile } from './profileContext';
 import { Screen } from './Screen';
+import { useMoreBelow } from '../utils/useMoreBelow';
 import s from './ConsentGate.module.css';
 
 /** A quick save shows nothing; a slow one says it is saving. */
@@ -26,7 +27,9 @@ export function ConsentGate({ children }: { children: ReactNode }) {
     // Without a signature nobody can answer, except locally, where the
     // browser account stands for the developer.
     const canAnswer = state && (state.profile.platform || config.environment === 'local');
-    if (!state || !canAnswer || state.profile.dataConsentAnswered || later) {
+    const asking = Boolean(state && canAnswer && !state.profile.dataConsentAnswered && !later);
+    const [bodyRef, moreBelow] = useMoreBelow<HTMLDivElement>(asking);
+    if (!state || !asking) {
         return children;
     }
 
@@ -54,22 +57,27 @@ export function ConsentGate({ children }: { children: ReactNode }) {
 
     return (
         <Screen>
-            <Flex direction="column" align="center" justify="center" gap={12} className={cx(s.body, s.enter)}>
-                <IconPerson size={48} tone="muted" />
-                <Typography.Text variant="subheader" className={s.title}>
-                    Показывать вас авторам наборов?
-                </Typography.Text>
-                <Typography.Text variant="body" color="secondary" className={s.text}>
-                    Автор увидит ваши имя, фото и ошибки в таблице лидеров и списке ошибок — так он поймёт, кому и с чем помочь.
-                    Без разрешения вы для него «{ANONYMOUS_MEMBER}».
-                </Typography.Text>
-                <Typography.Text variant="body" color="secondary" className={s.text}>
-                    Это можно изменить в любой момент в профиле.
-                </Typography.Text>
+            {/* The question and the opened consent scroll, the buttons stay put.
+                The block rises in as a whole: a child moved inside it would make
+                it scroll by the distance until the move ends. */}
+            <Flex ref={bodyRef} direction="column" align="stretch" gap={12} className={cx(s.body, s.enter, moreBelow && s.moreBelow)}>
+                <Flex direction="column" align="center" gap={12} className={s.question}>
+                    <IconPerson size={48} tone="muted" />
+                    <Typography.Text variant="subheader" className={s.title}>
+                        Показывать вас авторам наборов?
+                    </Typography.Text>
+                    <Typography.Text variant="body" color="secondary" className={s.text}>
+                        Автор увидит ваши имя, фото и ошибки в таблице лидеров и списке ошибок — так он поймёт, кому и с чем помочь.
+                        Без разрешения вы для него «{ANONYMOUS_MEMBER}».
+                    </Typography.Text>
+                    <Typography.Text variant="body" color="secondary" className={s.text}>
+                        Это можно изменить в любой момент в профиле.
+                    </Typography.Text>
+                </Flex>
+                <ConsentText lead="Нажимая «Разрешить»" />
             </Flex>
 
-            <Flex direction="column" align="stretch" gap={12} className={cx(s.enter, s.enterLater)}>
-                <ConsentText lead="Нажимая «Разрешить»" />
+            <Flex direction="column" align="stretch" gap={12} className={cx(s.answers, s.enter, s.enterLater)}>
                 {failed ? (
                     <Typography.Text variant="description" className={cx(s.error, s.appear)} role="alert">
                         {failed === 'signed-out' ? PROFILE_SIGNED_OUT : 'Не получилось сохранить. Проверьте соединение и попробуйте ещё раз.'}

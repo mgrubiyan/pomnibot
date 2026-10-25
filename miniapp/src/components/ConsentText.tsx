@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Flex, Typography } from '@maxhub/max-ui';
 import { ANONYMOUS_MEMBER } from '../utils/user';
 import s from './ConsentText.module.css';
@@ -21,6 +21,16 @@ export interface ConsentTextProps {
 /** One line on what the control means, and the full text under a tap. */
 export function ConsentText({ id, lead }: ConsentTextProps) {
     const [open, setOpen] = useState(false);
+    const textRef = useRef<HTMLDivElement>(null);
+
+    // The text opens under the fold on a short phone; bring it up so the
+    // tap visibly did something.
+    useEffect(() => {
+        if (!open) return;
+        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        textRef.current?.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+    }, [open]);
+
     return (
         <Flex direction="column" align="stretch" gap={8} id={id}>
             <Typography.Text variant="label" color="tertiary" className={s.lead}>
@@ -30,7 +40,7 @@ export function ConsentText({ id, lead }: ConsentTextProps) {
                 </button>
             </Typography.Text>
             {open ? (
-                <Flex direction="column" align="stretch" gap={8} className={s.text}>
+                <Flex ref={textRef} direction="column" align="stretch" gap={8} className={s.text}>
                     {CONSENT_TEXT.map((paragraph) => (
                         <Typography.Text key={paragraph} variant="label" color="secondary">
                             {paragraph}
