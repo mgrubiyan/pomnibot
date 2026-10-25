@@ -2,7 +2,7 @@ import { useSyncExternalStore, type ReactNode } from 'react';
 import { Button } from '@maxhub/max-ui';
 import { closeMiniApp } from '../platform';
 import { onSignInExpired, signInExpired } from '../utils/signIn';
-import { IconAlert } from './Icons';
+import { IconClock } from './Icons';
 import { StatusScreen } from './StatusScreen';
 
 /**
@@ -17,9 +17,9 @@ export function SignInGate({ children }: { children: ReactNode }) {
     const close = closeMiniApp();
     return (
         <StatusScreen
-            icon={<IconAlert size={48} tone="muted" />}
-            title="Вход устарел"
-            text="Закройте приложение и откройте его снова"
+            icon={<IconClock size={48} tone="muted" />}
+            title="Приложение открыто уже давно"
+            text="Откройте его ещё раз — все ваши ответы на месте"
             action={
                 close ? (
                     <Button size="medium" variant="primary" stretched onClick={close}>

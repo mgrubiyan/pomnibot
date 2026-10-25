@@ -114,7 +114,11 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
     };
 
     const handleColumnAdd = () => {
-        const newColName = `Столбец ${tableColumns.length + 1}`;
+        // Terms are tied to columns by name, so the new name must be free:
+        // after a removal, «Столбец 3» may still be taken.
+        let number = tableColumns.length + 1;
+        while (tableColumns.includes(`Столбец ${number}`)) number++;
+        const newColName = `Столбец ${number}`;
         setTableColumns((current) => [...current, newColName]);
     };
 
@@ -139,40 +143,41 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
     };
 
     // --- Validation logic ---
-    const isQuestionValid = question.trim().length > 0;
-
-    const isAnswerValid = (() => {
+    // The first thing still missing, shown under the disabled «Сохранить»;
+    // null when the card can be saved.
+    const saveHint = ((): string | null => {
+        if (question.trim().length === 0) return 'Напишите вопрос';
         if (kind === 'choice') {
             const trimmedOptions = options.map((opt) => opt.trim());
-            const allNonEmpty = trimmedOptions.every((opt) => opt.length > 0);
-            return (
-                trimmedOptions.length >= 2 &&
-                allNonEmpty &&
-                new Set(trimmedOptions).size === trimmedOptions.length &&
-                correctOptionIndices.length > 0 &&
-                correctOptionIndices.every((i) => i >= 0 && i < trimmedOptions.length)
-            );
+            if (trimmedOptions.length < 2) return 'Нужно хотя бы два варианта';
+            if (!trimmedOptions.every((opt) => opt.length > 0)) return 'Заполните все варианты';
+            if (new Set(trimmedOptions).size !== trimmedOptions.length) return 'Варианты не должны повторяться';
+            if (correctOptionIndices.length === 0 || !correctOptionIndices.every((i) => i >= 0 && i < trimmedOptions.length)) {
+                return 'Отметьте верный вариант';
+            }
+            return null;
         }
         if (kind === 'boolean') {
-            return typeof booleanAnswer === 'boolean';
+            return typeof booleanAnswer === 'boolean' ? null : 'Выберите верный ответ';
         }
         if (kind === 'table') {
             const trimmedCols = tableColumns.map((c) => c.trim());
-            const hasValidCols = trimmedCols.length >= 2 && trimmedCols.every((c) => c.length > 0) && new Set(trimmedCols).size === trimmedCols.length;
-            const hasValidItems =
-                tableItems.length >= 2 &&
-                tableItems.every((it) => it.text.trim().length > 0 && trimmedCols.includes(it.column.trim()));
+            if (trimmedCols.length < 2) return 'Нужно хотя бы два столбца';
+            if (!trimmedCols.every((c) => c.length > 0)) return 'Назовите все столбцы';
+            if (new Set(trimmedCols).size !== trimmedCols.length) return 'Названия столбцов не должны повторяться';
+            if (!tableItems.every((it) => it.text.trim().length > 0)) return 'Заполните все термины';
+            if (!tableItems.every((it) => trimmedCols.includes(it.column.trim()))) return 'Разложите термины по столбцам';
             // Each column should have at least 1 item
-            const allColsCovered = trimmedCols.every((col) =>
-                tableItems.some((it) => it.column.trim() === col && it.text.trim().length > 0),
-            );
-            return hasValidCols && hasValidItems && allColsCovered;
+            if (tableItems.length < 2 || !trimmedCols.every((col) => tableItems.some((it) => it.column.trim() === col))) {
+                return 'В каждом столбце нужен хотя бы один термин';
+            }
+            return null;
         }
         // 'input' or 'flip'
-        return textAnswer.trim().length > 0;
+        return textAnswer.trim().length > 0 ? null : 'Напишите ответ';
     })();
 
-    const canSave = isQuestionValid && isAnswerValid;
+    const canSave = saveHint === null;
 
     const snapshot = JSON.stringify([kind, question, explanation, options, correctOptionIndices, booleanAnswer, textAnswer, tableColumns, tableItems]);
     const [initialSnapshot] = useState(snapshot);
@@ -551,6 +556,11 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                             <Button size="medium" variant="primary" stretched disabled={!canSave || saving} onClick={save}>
                                 {saving ? 'Сохраняем…' : 'Сохранить'}
                             </Button>
+                            {saveHint && !saving ? (
+                                <Typography.Text variant="description" color="tertiary" className={s.saveHint}>
+                                    {saveHint}
+                                </Typography.Text>
+                            ) : null}
                             {onRemove && <Button
                                 size="small"
                                 variant="ghost"

@@ -42,7 +42,7 @@ const BOOLEAN_OPTIONS: Option[] = [
 ];
 
 /** Matches the transform duration in Feed.module.css. */
-const FLIP_MS = 350;
+const FLIP_MS = 300;
 /** Matches the cardOut animation in Feed.module.css. */
 const CARD_OUT_MS = 150;
 
@@ -235,6 +235,8 @@ export function Feed({
     // An answer the backend is grading — a typed one stays on the card while
     // it waits — and why it counts or not.
     const [check, setCheck] = useState<{ stage: CheckStage; typed: string | null } | null>(null);
+    /** The option tapped on a single-answer card, outlined while the backend checks it. */
+    const [sentOption, setSentOption] = useState<string | null>(null);
     const [reason, setReason] = useState<string | null>(null);
     // What the card hid until it was answered or, for a flip card, opened.
     const [reveal, setReveal] = useState<CardReveal | null>(null);
@@ -309,6 +311,7 @@ export function Feed({
     const reset = useCallback(() => {
         checkRunRef.current += 1;
         setCheck(null);
+        setSentOption(null);
         setReason(null);
         setReveal(null);
         setOpening(false);
@@ -571,6 +574,31 @@ export function Feed({
     // Every answer is recorded as it is given, so leaving sends nothing.
     const handleBack = onBack ?? onExit;
 
+    // When the next review comes: FSRS may bring cards back in minutes,
+    // and Result says so. Asked once the run is over, when every answer
+    // has been recorded.
+    const finished = !card && results.length > 0;
+    const [nextReviewAt, setNextReviewAt] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!finished) {
+            return;
+        }
+        let cancelled = false;
+        api.GET('/')
+            .then(({ data }) => {
+                if (!cancelled && data) {
+                    setNextReviewAt(data.nextReviewAt ?? null);
+                }
+            })
+            .catch(() => {
+                // Result just goes without the line.
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [finished]);
+
     if (status === 'loading') {
         return (
             <StatusScreen
@@ -610,6 +638,7 @@ export function Feed({
                     setTitle={setTitle}
                     cards={cards}
                     results={results}
+                    nextReviewAt={nextReviewAt}
                     onExit={onExit}
                     onShare={onShare}
                 />
@@ -619,7 +648,7 @@ export function Feed({
             <StatusScreen
                 icon={<IconCheck size={48} tone="muted" />}
                 title="На сегодня всё"
-                text="Сложные карточки вернутся через 2 дня"
+                text="Карточки вернутся, когда подойдёт срок повторения"
                 action={
                     <Button size="medium" variant="secondary" stretched onClick={onExit}>
                         {setId ? 'К набору' : 'На главную'}
@@ -667,11 +696,12 @@ export function Feed({
                             size="small"
                             variant="ghost"
                             aria-label="Назад"
+                            className={s.back}
                             onClick={handleBack}
                         >
                             <IconChevronLeft size={20} />
                         </IconButton>
-                        <Typography.Text variant="label" color="secondary">
+                        <Typography.Text variant="label" color="secondary" className={s.topic}>
                             {card.factName}
                         </Typography.Text>
                     </Flex>
@@ -794,11 +824,11 @@ export function Feed({
 
                         <Flex direction="column" align="stretch" gap={12}>
                             {!layout && hasGiven ? (
-                                <Flex align="center" gap={12} className={s.answerRow}>
+                                <Flex align="flex-start" gap={12} className={s.answerRow}>
                                     {verdict === 'correct' ? (
-                                        <IconCheck tone="positive" />
+                                        <IconCheck tone="positive" className={s.answerIcon} />
                                     ) : (
-                                        <IconCross tone="negative" />
+                                        <IconCross tone="negative" className={s.answerIcon} />
                                     )}
                                     <Flex direction="column" className={s.answerBody}>
                                         <Typography.Text variant="label" color="tertiary">
@@ -812,8 +842,8 @@ export function Feed({
                             ) : null}
 
                             {!layout && reveal && showRightAnswer ? (
-                                <Flex align="center" gap={12} className={s.answerRow}>
-                                    <IconCheck tone="positive" />
+                                <Flex align="flex-start" gap={12} className={s.answerRow}>
+                                    <IconCheck tone="positive" className={s.answerIcon} />
                                     <Flex direction="column" className={s.answerBody}>
                                         <Typography.Text variant="label" color="tertiary">
                                             Верный ответ
@@ -937,7 +967,7 @@ export function Feed({
                     </Button>
                 </Flex>
             ) : (
-                <Flex direction="column" align="stretch" gap={8}>
+                <Flex direction="column" align="stretch" gap={8} className={s.controls}>
                     {options.length > 0 ? (
                         <div className={s.options}>
                             {options.map((option) => (
@@ -947,10 +977,16 @@ export function Feed({
                                     className={s.option}
                                     disabled={check !== null}
                                     aria-pressed={card.kind === 'choice' ? selectedOptions.includes(option.value) : undefined}
-                                    onClick={() => card.kind === 'choice'
-                                        ? setSelectedOptions((current) => current.includes(option.value)
-                                            ? current.filter((value) => value !== option.value) : [...current, option.value])
-                                        : submit(option.value, option.value)}
+                                    data-sent={check !== null && sentOption === option.value ? '' : undefined}
+                                    onClick={() => {
+                                        if (card.kind === 'choice') {
+                                            setSelectedOptions((current) => current.includes(option.value)
+                                                ? current.filter((value) => value !== option.value) : [...current, option.value]);
+                                            return;
+                                        }
+                                        setSentOption(option.value);
+                                        submit(option.value, option.value);
+                                    }}
                                 >
                                     {card.kind === 'choice' ? <span aria-hidden="true">{selectedOptions.includes(option.value) ? '☑' : '☐'}</span> : null}
                                     <Typography.Text variant="body" asChild>
@@ -974,7 +1010,14 @@ export function Feed({
                                 size="large"
                                 value={draft}
                                 placeholder="Ваш ответ"
+                                enterKeyHint="send"
+                                autoCorrect="off"
                                 onChange={(event) => setDraft(event.target.value)}
+                                onKeyDown={(event) => {
+                                    // A held key repeats, and Enter also ends an IME composition.
+                                    if (event.key !== 'Enter' || event.repeat || event.nativeEvent.isComposing) return;
+                                    if (draft.trim().length > 0) submit(draft, draft);
+                                }}
                             />
                             <Button
                                 size="medium"

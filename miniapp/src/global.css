@@ -1,0 +1,21 @@
+/* Page-wide rules MAX UI leaves to the app. */
+
+:root {
+    /* Shared curve for everything that moves: starts fast, settles softly. */
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+html,
+body {
+    /* The app scrolls inside its screens; dragging the header or the button
+       row must not bounce the page or pull the messenger's own gesture. */
+    overscroll-behavior: none;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+/* Quick taps in the feed must not zoom the page on a double tap. */
+button,
+[role='button'] {
+    touch-action: manipulation;
+}

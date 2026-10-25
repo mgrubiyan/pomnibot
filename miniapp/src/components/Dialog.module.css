@@ -1,7 +1,8 @@
 .dialog {
     box-sizing: border-box;
-    width: min(400px, calc(100vw - 32px));
-    max-width: calc(100vw - 32px);
+    /* 100%, not 100vw: in MAX web the viewport width counts the scrollbar. */
+    width: min(400px, calc(100% - 32px));
+    max-width: calc(100% - 32px);
     max-height: calc(100dvh - 48px);
     margin: auto;
     padding: 24px;
@@ -14,8 +15,32 @@
     overscroll-behavior: contain;
 }
 
+.dialog[open] {
+    animation: dialogIn 0.2s var(--ease-out);
+}
+
 .dialog::backdrop {
     background: rgb(0 0 0 / 48%);
+    animation: fadeIn 0.2s var(--ease-out);
+}
+
+@keyframes dialogIn {
+    from {
+        opacity: 0;
+        transform: scale(0.96);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dialog[open] {
+        animation-name: fadeIn;
+    }
 }
 
 .title {

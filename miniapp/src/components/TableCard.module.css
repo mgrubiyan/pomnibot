@@ -19,6 +19,9 @@
 
 .columnTitle {
     overflow-wrap: anywhere;
+    /* Three columns are narrow on a phone: break by syllable, with a hyphen. */
+    -webkit-hyphens: auto;
+    hyphens: auto;
 }
 
 /* A term */
@@ -42,7 +45,9 @@
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     /* Same press feedback as an answer option in the feed. */
-    transition: transform 0.12s ease-out;
+    transition:
+        transform 0.12s var(--ease-out),
+        opacity 0.12s var(--ease-out);
 }
 
 /* A placed term sits on the card, hence the different background. */
@@ -75,6 +80,8 @@
 .chipText {
     min-width: 0;
     overflow-wrap: anywhere;
+    -webkit-hyphens: auto;
+    hyphens: auto;
 }
 
 /* The slot a picked term goes into */
@@ -85,12 +92,23 @@
     margin: 0;
     padding: 8px 12px;
     border: 1.5px dashed var(--divider-primary);
+    -webkit-hyphens: auto;
+    hyphens: auto;
     border-radius: 12px;
     background: transparent;
     color: var(--text-secondary);
     font-family: inherit;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+    transition:
+        transform 0.12s var(--ease-out),
+        opacity 0.12s var(--ease-out);
+}
+
+.slot:active:not(:disabled) {
+    opacity: 0.6;
+    transform: scale(0.97);
+    transition-duration: 0.06s;
 }
 
 .slot:disabled {
@@ -112,7 +130,13 @@
         transition: none;
     }
 
-    .chip:active {
+    .chip,
+    .slot {
+        transition: none;
+    }
+
+    .chip:active,
+    .slot:active:not(:disabled) {
         transform: none;
     }
 }

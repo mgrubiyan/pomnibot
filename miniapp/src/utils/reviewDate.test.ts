@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { formatNextReviewSubtitle } from './reviewDate';
+import { formatNextReviewSubtitle, isNextReviewToday } from './reviewDate';
 
 describe('formatNextReviewSubtitle', () => {
     it('returns null for null, undefined or empty input', () => {
@@ -50,6 +50,31 @@ describe('formatNextReviewSubtitle', () => {
         // If Tuesday is next week, it shows date.
     });
 
+    it('counts minutes when the review is within the hour', () => {
+        const now = new Date(2026, 9, 24, 12, 0, 0);
+        const at = (minutes: number, seconds = 0) => new Date(2026, 9, 24, 12, minutes, seconds).toISOString();
+
+        expect(formatNextReviewSubtitle(at(0, 20), now)).toBe('Следующий повтор через минуту');
+        expect(formatNextReviewSubtitle(at(1), now)).toBe('Следующий повтор через минуту');
+        // A part of a minute counts as a whole one: never «через 0 минут».
+        expect(formatNextReviewSubtitle(at(1, 10), now)).toBe('Следующий повтор через 2 минуты');
+        expect(formatNextReviewSubtitle(at(5), now)).toBe('Следующий повтор через 5 минут');
+        expect(formatNextReviewSubtitle(at(21), now)).toBe('Следующий повтор через 21 минуту');
+        expect(formatNextReviewSubtitle(at(59), now)).toBe('Следующий повтор через 59 минут');
+    });
+
+    it('names the time when the review is later today', () => {
+        const now = new Date(2026, 9, 24, 12, 0, 0);
+        const evening = new Date(2026, 9, 24, 18, 30, 0);
+        expect(formatNextReviewSubtitle(evening.toISOString(), now)).toBe('Следующий повтор сегодня в 18:30');
+    });
+
+    it('says «сейчас» when the review is already due', () => {
+        const now = new Date(2026, 9, 24, 12, 0, 0);
+        const past = new Date(2026, 9, 24, 11, 0, 0);
+        expect(formatNextReviewSubtitle(past.toISOString(), now)).toBe('Следующий повтор сейчас');
+    });
+
     it('returns date for reviews in future weeks', () => {
         // Now is Friday, 2026-10-02
         const now = new Date(2026, 9, 2, 12, 0, 0);
@@ -61,5 +86,15 @@ describe('formatNextReviewSubtitle', () => {
         // Two weeks later, 2026-10-15
         const midOctober = new Date(2026, 9, 15, 10, 0, 0);
         expect(formatNextReviewSubtitle(midOctober.toISOString(), now)).toBe('Следующий повтор 15 октября');
+    });
+});
+
+describe('isNextReviewToday', () => {
+    it('compares calendar days, not 24 hours', () => {
+        const now = new Date(2026, 9, 24, 23, 50, 0);
+        expect(isNextReviewToday(new Date(2026, 9, 24, 23, 59, 0).toISOString(), now)).toBe(true);
+        expect(isNextReviewToday(new Date(2026, 9, 25, 0, 5, 0).toISOString(), now)).toBe(false);
+        expect(isNextReviewToday(null, now)).toBe(false);
+        expect(isNextReviewToday('invalid-date', now)).toBe(false);
     });
 });

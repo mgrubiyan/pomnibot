@@ -45,6 +45,14 @@
     box-sizing: border-box;
     padding: 8px 16px;
     cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    /* Releases softly, presses at once — like the library's own cells. */
+    transition: background-color 0.12s var(--ease-out);
+}
+
+.reason:active {
+    background-color: var(--states-background-pressed-transparent);
+    transition-duration: 0s;
 }
 
 .reason + .reason {

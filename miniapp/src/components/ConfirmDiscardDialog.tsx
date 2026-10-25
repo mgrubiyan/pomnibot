@@ -1,6 +1,6 @@
 import { useId, useLayoutEffect, useRef } from 'react';
 import { Button, Flex, Typography } from '@maxhub/max-ui';
-import s from './ConfirmDiscardDialog.module.css';
+import s from './Dialog.module.css';
 
 export function ConfirmDiscardDialog({ onConfirm, onCancel }: {
     onConfirm: () => void;

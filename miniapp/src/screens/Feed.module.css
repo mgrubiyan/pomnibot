@@ -21,7 +21,7 @@
     /* The bar fills by scaling, not by width: the card change should
        move it on the compositor, same as everything else here. */
     transform-origin: left;
-    transition: transform 0.2s ease-out;
+    transition: transform 0.2s var(--ease-out);
 }
 
 /* Moving on to the next card: the current one slides up and dissolves,
@@ -50,18 +50,19 @@
 
 .flip {
     flex: 1;
-    /* min-height keeps a long breakdown scrolling inside the card
-       instead of stretching the screen. */
-    min-height: 0;
+    /* A long breakdown scrolls inside the card instead of stretching the
+       screen. The floor is for a short phone: there the options give way
+       and scroll, so the question is never squeezed to a couple of lines. */
+    min-height: 35dvh;
     perspective: 1000px;
-    animation: cardIn 0.2s ease-out;
+    animation: cardIn 0.2s var(--ease-out);
 }
 
 /* Leaving is short on purpose: nothing to look at while the card is gone.
    The duration is mirrored in Feed.tsx (CARD_OUT_MS), which holds the
    index back until the card is out of the way. */
 .leaving {
-    animation: cardOut 0.15s ease-in forwards;
+    animation: cardOut 0.15s var(--ease-out) forwards;
 }
 
 .flipInner {
@@ -70,7 +71,7 @@
     transform-style: preserve-3d;
     /* The duration is mirrored in Feed.tsx (FLIP_MS): the buttons
        stay disabled for exactly as long. */
-    transition: transform 0.35s ease-out;
+    transition: transform 0.3s var(--ease-out);
 }
 
 .flipped {
@@ -103,6 +104,9 @@
        the card itself does not grow. */
     overflow-y: auto;
     overscroll-behavior: contain;
+    /* One unbroken word (a long chemical name, an answer quoted back)
+       must wrap instead of scrolling the card sideways. */
+    overflow-wrap: anywhere;
 }
 
 /* A flip card has no options to choose from, so the whole side opens the
@@ -111,9 +115,15 @@
 .tappable {
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+    /* A long press reveals the answer too, not a text selection. */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
 }
 
-/* The question sits in the middle of the card, the breakdown at the top. */
+/* The question sits in the middle of the card, the breakdown at the top.
+   Centred by margins, not justify-content: a question taller than the card
+   then starts at the top and scrolls instead of losing its first lines. */
 .cardCentered > :first-child {
     margin-top: auto;
 }
@@ -141,18 +151,33 @@
     text-wrap: pretty;
 }
 
+/* A short phone, or MAX's own bar on top: one step smaller type, so a long
+   question still fits the card without scrolling. */
+@media (max-height: 700px) {
+    .card .question {
+        font-size: var(--font-size-title);
+        line-height: var(--line-height-title);
+    }
+}
+
 /* Answer options */
 
 .option {
     display: flex;
-    align-items: center;
+    /* The ☑/☐ mark sits on the label's first line, not in the middle of
+       a long one. One line (24px) plus the padding and border below is
+       exactly the 52px minimum, so a short option stays centred. */
+    align-items: baseline;
     width: 100%;
     gap: 8px;
     min-height: 52px;
     box-sizing: border-box;
     margin: 0;
-    padding: 12px 16px;
-    border: 0;
+    /* 2px less at the sides than the 16 the eye sees: the border takes it. */
+    padding: 12px 14px;
+    /* A transparent border is always there, so that picking an option
+       recolours it instead of moving the label. */
+    border: 2px solid transparent;
     border-radius: 12px;
     background: var(--background-card);
     color: var(--text-primary);
@@ -162,7 +187,33 @@
     -webkit-tap-highlight-color: transparent;
     /* Springs back slower than it goes down, so the press reads as
        a squeeze rather than a jump. */
-    transition: transform 0.12s ease-out;
+    transition:
+        transform 0.12s var(--ease-out),
+        opacity 0.12s var(--ease-out);
+}
+
+/* A picked option in a multiple choice, outlined like a picked table term;
+   the same for the option just sent while the backend checks it. */
+.option[aria-pressed='true'],
+.option[data-sent] {
+    border-color: var(--text-primary);
+}
+
+/* While the answer is being checked the other options step back, so the
+   tap reads as heard even before the verdict comes. */
+.option:disabled:not([aria-pressed='true'], [data-sent]) {
+    opacity: 0.5;
+}
+
+/* Lets a long word in the label wrap inside the button. */
+.option > * {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* The ☑/☐ mark keeps its width however long the label is. */
+.option > [aria-hidden='true'] {
+    flex-shrink: 0;
 }
 
 .option:active {
@@ -176,6 +227,19 @@
 }
 
 
+/* A long topic must not squeeze the back button out of its 40px. */
+.back {
+    flex-shrink: 0;
+}
+
+/* One line, so a long topic does not move the card from one card to the next. */
+.topic {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Answer breakdown */
 
 .divider {
@@ -187,6 +251,12 @@
 .answerRow {
     /* The verdict icon must not shrink next to a long answer. */
     min-width: 0;
+}
+
+/* Level with the answer's first line, under the «Ваш ответ» label. */
+.answerIcon {
+    flex-shrink: 0;
+    margin-top: 16px;
 }
 
 .answerText {
@@ -214,10 +284,20 @@
     text-wrap: pretty;
 }
 
-/* Reduced motion: no turn, the sides simply replace one another. */
+/* Reduced motion: no turn, the sides simply replace one another
+   and the next card fades in where it stands. */
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+}
 
 @media (prefers-reduced-motion: reduce) {
-    .flip,
+    .flip {
+        animation: fadeIn 0.15s var(--ease-out);
+    }
+
     .leaving {
         animation: none;
     }
@@ -269,6 +349,12 @@
     min-width: 0;
 }
 
+/* Lets the options give way to the card on a short phone: without it the
+   column keeps its full height and pushes the button off the screen. */
+.controls {
+    min-height: 0;
+}
+
 .options {
     display: flex;
     flex-direction: column;
@@ -277,4 +363,10 @@
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
+}
+
+/* Past 40dvh the list scrolls; without this the options shrink instead
+   and a long label runs into its own border. */
+.options > * {
+    flex-shrink: 0;
 }

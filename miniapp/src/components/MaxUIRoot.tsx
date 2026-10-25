@@ -46,6 +46,21 @@ function PageBackground({ root }: { root: RefObject<HTMLElement | null> }) {
         if (!color) return;
 
         document.documentElement.style.backgroundColor = color;
+        // Native controls and scrollbars follow the theme too (MAX web).
+        document.documentElement.style.colorScheme = colorScheme;
+
+        // Telegram ignores theme-color and paints its bars itself; it takes #RRGGBB only.
+        // Clients older than 6.9 throw on a color value, which must not take the app down.
+        const telegram = telegramApp();
+        if (telegram && /^#[0-9a-f]{6}$/i.test(color)) {
+            try {
+                telegram.setHeaderColor?.(color);
+                telegram.setBackgroundColor?.(color);
+                telegram.setBottomBarColor?.(color);
+            } catch {
+                // The bars keep Telegram's own color.
+            }
+        }
 
         let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
         if (!meta) {
