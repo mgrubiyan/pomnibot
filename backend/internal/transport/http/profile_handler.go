@@ -11,7 +11,8 @@ import (
 )
 
 func profileResponse(account usecase.Account) *contracts.ProfileResponse {
-	response := &contracts.ProfileResponse{User: account.User, ProfileComplete: account.ProfileComplete, DataConsent: account.DataConsent}
+	response := &contracts.ProfileResponse{User: account.User, ProfileComplete: account.ProfileComplete,
+		DataConsent: account.DataConsent, DataConsentAnswered: account.DataConsentAnswered}
 	if account.TgID != 0 {
 		response.Platform.SetTo(contracts.ProfileResponsePlatformTelegram)
 	} else if account.MaxID != 0 {
@@ -52,7 +53,8 @@ func (h *APIHandler) GetProfile(ctx context.Context) (contracts.GetProfileRes, e
 	if ok {
 		return profileResponse(account), nil
 	}
-	return profileResponse(usecase.Account{User: contracts.User{ID: uuid.Nil, FirstName: "Browser Test User"}, ProfileComplete: true}), nil
+	// Nobody can answer for the shared account, so it is never asked.
+	return profileResponse(usecase.Account{User: contracts.User{ID: uuid.Nil, FirstName: "Browser Test User"}, ProfileComplete: true, DataConsentAnswered: true}), nil
 }
 
 // PutProfileConsent is restricted to verified accounts.

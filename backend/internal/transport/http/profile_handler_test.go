@@ -127,6 +127,7 @@ func (u *profileUsers) SetDataConsent(_ context.Context, id uuid.UUID, given boo
 		return usecase.Account{}, u.saveError
 	}
 	u.account.DataConsent = given
+	u.account.DataConsentAnswered = true
 	return u.account, nil
 }
 
@@ -158,8 +159,11 @@ func TestProfileConsentHTTP(t *testing.T) {
 	}
 
 	handler := NewAPIHandler(nil, nil, nil, users)
-	if w := request(handler, "GET", "/api/profile", "", "max "+raw); w.Code != 200 || !strings.Contains(w.Body.String(), `"dataConsent":false`) {
+	if w := request(handler, "GET", "/api/profile", "", "max "+raw); w.Code != 200 || !strings.Contains(w.Body.String(), `"dataConsent":false`) || !strings.Contains(w.Body.String(), `"dataConsentAnswered":false`) {
 		t.Fatalf("read before consent: %d %s", w.Code, w.Body.String())
+	}
+	if w := request(handler, "PUT", "/api/profile/consent", `{"given":false}`, "max "+raw); w.Code != 200 || !strings.Contains(w.Body.String(), `"dataConsent":false`) || !strings.Contains(w.Body.String(), `"dataConsentAnswered":true`) {
+		t.Fatalf("decline: %d %s", w.Code, w.Body.String())
 	}
 	if w := request(handler, "PUT", "/api/profile/consent", `{"given":true}`, "max "+raw); w.Code != 200 || !strings.Contains(w.Body.String(), `"dataConsent":true`) || !users.account.DataConsent {
 		t.Fatalf("give: %d %s", w.Code, w.Body.String())
@@ -177,6 +181,10 @@ func TestProfileConsentHTTP(t *testing.T) {
 	// anyone on the internet may use in production.
 	if w := request(handler, "PUT", "/api/profile/consent", `{"given":true}`, ""); w.Code != 403 || users.account.DataConsent {
 		t.Fatalf("browser can consent in production: %d %s", w.Code, w.Body.String())
+	}
+	// Nobody can answer for it, so it is never asked.
+	if w := request(handler, "GET", "/api/profile", "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), `"dataConsentAnswered":true`) {
+		t.Fatalf("browser is asked in production: %d %s", w.Code, w.Body.String())
 	}
 
 	// Locally the browser account stands for the developer.

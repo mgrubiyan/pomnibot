@@ -1,0 +1,16 @@
+.body {
+    flex: 1;
+    padding: 0 24px;
+    text-align: center;
+}
+
+.title,
+.text {
+    /* Centred lines of even length: no lone word left on the last one. */
+    text-wrap: balance;
+}
+
+.error {
+    padding: 0 16px;
+    color: var(--icon-negative);
+}

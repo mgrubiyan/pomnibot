@@ -498,6 +498,8 @@ export interface components {
             profileComplete: boolean;
             /** @description The user lets set authors see their name and photo */
             dataConsent: boolean;
+            /** @description The user has said yes or no to the consent once; until then the mini-app asks */
+            dataConsentAnswered: boolean;
         };
         ConsentRequest: {
             given: boolean;

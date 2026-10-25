@@ -81,7 +81,7 @@ func accountFromUser(row db.User) Account {
 	setAvatar(&user, row.AvatarID)
 	return Account{User: user, MaxID: row.MaxID.Int64, TgID: row.TgID.Int64,
 		ProfileComplete: row.ProfileComplete, ProfileStep: row.ProfileStep, BotStarted: row.TgBotStarted,
-		DataConsent: row.DataConsentAt.Valid}
+		DataConsent: row.DataConsentAt.Valid, DataConsentAnswered: row.DataConsentAnsweredAt.Valid}
 }
 
 // EnsureUser ensures a record exists for the internal user ID, including the browser test user.

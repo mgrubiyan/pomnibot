@@ -17,7 +17,7 @@ WITH removed AS (
 )
 UPDATE users SET avatar_id = NULL
 WHERE users.id = $1
-RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id
+RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id, data_consent_answered_at
 `
 
 func (q *Queries) DeleteAvatar(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -38,6 +38,7 @@ func (q *Queries) DeleteAvatar(ctx context.Context, id pgtype.UUID) (User, error
 		&i.ID,
 		&i.DataConsentAt,
 		&i.AvatarID,
+		&i.DataConsentAnsweredAt,
 	)
 	return i, err
 }
@@ -47,7 +48,7 @@ INSERT INTO users (id, first_name, last_name, username, is_bot, last_active_at)
 VALUES ($1, '', NULL, NULL, FALSE, CURRENT_TIMESTAMP)
 ON CONFLICT (id) DO UPDATE
 SET last_active_at = CURRENT_TIMESTAMP
-RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id
+RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id, data_consent_answered_at
 `
 
 func (q *Queries) EnsureUser(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -68,6 +69,7 @@ func (q *Queries) EnsureUser(ctx context.Context, id pgtype.UUID) (User, error) 
 		&i.ID,
 		&i.DataConsentAt,
 		&i.AvatarID,
+		&i.DataConsentAnsweredAt,
 	)
 	return i, err
 }
@@ -84,7 +86,7 @@ func (q *Queries) GetAvatarImage(ctx context.Context, id pgtype.UUID) ([]byte, e
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id FROM users WHERE id = $1
+SELECT last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id, data_consent_answered_at FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -105,6 +107,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 		&i.ID,
 		&i.DataConsentAt,
 		&i.AvatarID,
+		&i.DataConsentAnsweredAt,
 	)
 	return i, err
 }
@@ -157,7 +160,7 @@ WITH added AS (
 )
 UPDATE users SET avatar_id = (SELECT id FROM added)
 WHERE users.id = $1
-RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id
+RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id, data_consent_answered_at
 `
 
 type SaveAvatarParams struct {
@@ -184,6 +187,7 @@ func (q *Queries) SaveAvatar(ctx context.Context, arg SaveAvatarParams) (User, e
 		&i.ID,
 		&i.DataConsentAt,
 		&i.AvatarID,
+		&i.DataConsentAnsweredAt,
 	)
 	return i, err
 }
@@ -192,7 +196,7 @@ const saveTelegramProfile = `-- name: SaveTelegramProfile :one
 UPDATE users SET first_name = $1, last_name = $2,
     profile_complete = TRUE, profile_step = '', pending_last_name = ''
 WHERE id = $3 AND tg_id IS NOT NULL
-RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id
+RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id, data_consent_answered_at
 `
 
 type SaveTelegramProfileParams struct {
@@ -219,6 +223,7 @@ func (q *Queries) SaveTelegramProfile(ctx context.Context, arg SaveTelegramProfi
 		&i.ID,
 		&i.DataConsentAt,
 		&i.AvatarID,
+		&i.DataConsentAnsweredAt,
 	)
 	return i, err
 }
@@ -233,9 +238,10 @@ UPDATE users SET
     data_consent_at = CASE
         WHEN $1::boolean THEN COALESCE(data_consent_at, CURRENT_TIMESTAMP)
     END,
+    data_consent_answered_at = COALESCE(data_consent_answered_at, CURRENT_TIMESTAMP),
     avatar_id = COALESCE((SELECT id FROM moved), avatar_id)
 WHERE users.id = $2
-RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id
+RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id, data_consent_answered_at
 `
 
 type SetDataConsentParams struct {
@@ -243,8 +249,9 @@ type SetDataConsentParams struct {
 	ID    pgtype.UUID `json:"id"`
 }
 
-// Giving consent again keeps the time it was first given. Withdrawing it
-// moves the photo to a new address: authors may still hold the old one.
+// Giving consent again keeps the time it was first given, and any answer
+// keeps the time of the first one. Withdrawing it moves the photo to a new
+// address: authors may still hold the old one.
 func (q *Queries) SetDataConsent(ctx context.Context, arg SetDataConsentParams) (User, error) {
 	row := q.db.QueryRow(ctx, setDataConsent, arg.Given, arg.ID)
 	var i User
@@ -263,6 +270,7 @@ func (q *Queries) SetDataConsent(ctx context.Context, arg SetDataConsentParams) 
 		&i.ID,
 		&i.DataConsentAt,
 		&i.AvatarID,
+		&i.DataConsentAnsweredAt,
 	)
 	return i, err
 }
@@ -275,7 +283,7 @@ UPDATE users SET
     pending_last_name = CASE WHEN $1::boolean OR (profile_step = 'first_name' AND $2::text <> '') THEN '' WHEN profile_step = 'last_name' AND $2::text <> '' THEN $2 ELSE pending_last_name END,
     profile_step = CASE WHEN $1::boolean THEN 'last_name' WHEN $2::text = '' THEN profile_step WHEN profile_step = 'last_name' THEN 'first_name' ELSE '' END
 WHERE id = $3 AND tg_id IS NOT NULL
-RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id
+RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id, data_consent_answered_at
 `
 
 type TelegramProfileInputParams struct {
@@ -302,6 +310,7 @@ func (q *Queries) TelegramProfileInput(ctx context.Context, arg TelegramProfileI
 		&i.ID,
 		&i.DataConsentAt,
 		&i.AvatarID,
+		&i.DataConsentAnsweredAt,
 	)
 	return i, err
 }
@@ -315,7 +324,7 @@ ON CONFLICT (max_id) DO UPDATE SET
     username = COALESCE(EXCLUDED.username, users.username),
     is_bot = EXCLUDED.is_bot,
     last_active_at = CURRENT_TIMESTAMP
-RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id
+RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id, data_consent_answered_at
 `
 
 type UpsertMAXUserParams struct {
@@ -350,6 +359,7 @@ func (q *Queries) UpsertMAXUser(ctx context.Context, arg UpsertMAXUserParams) (U
 		&i.ID,
 		&i.DataConsentAt,
 		&i.AvatarID,
+		&i.DataConsentAnsweredAt,
 	)
 	return i, err
 }
@@ -362,7 +372,7 @@ ON CONFLICT (tg_id) DO UPDATE SET
     is_bot = EXCLUDED.is_bot,
     tg_bot_started = users.tg_bot_started OR EXCLUDED.tg_bot_started,
     last_active_at = CURRENT_TIMESTAMP
-RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id
+RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id, data_consent_answered_at
 `
 
 type UpsertTelegramUserParams struct {
@@ -395,6 +405,7 @@ func (q *Queries) UpsertTelegramUser(ctx context.Context, arg UpsertTelegramUser
 		&i.ID,
 		&i.DataConsentAt,
 		&i.AvatarID,
+		&i.DataConsentAnsweredAt,
 	)
 	return i, err
 }

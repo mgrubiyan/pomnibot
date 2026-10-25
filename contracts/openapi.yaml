@@ -1004,7 +1004,7 @@ components:
   schemas:
     ProfileResponse:
       type: object
-      required: [user, profileComplete, dataConsent]
+      required: [user, profileComplete, dataConsent, dataConsentAnswered]
       properties:
         user:
           $ref: '#/components/schemas/User'
@@ -1016,6 +1016,9 @@ components:
         dataConsent:
           type: boolean
           description: The user lets set authors see their name and photo
+        dataConsentAnswered:
+          type: boolean
+          description: The user has said yes or no to the consent once; until then the mini-app asks
     ConsentRequest:
       type: object
       required: [given]

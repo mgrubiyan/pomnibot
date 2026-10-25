@@ -50,7 +50,7 @@ func TestProcessingReportsMigrationPostgres(t *testing.T) {
 					t.Fatal(err)
 				}
 				var version, applied int
-				if err := pool.QueryRow(ctx, "SELECT MAX(version_id), COUNT(*) FILTER (WHERE version_id IN (14, 15, 16, 17, 18, 19, 20) AND is_applied) FROM goose_db_version").Scan(&version, &applied); err != nil || version != 20 || applied != 7 {
+				if err := pool.QueryRow(ctx, "SELECT MAX(version_id), COUNT(*) FILTER (WHERE version_id IN (14, 15, 16, 17, 18, 19, 20, 21) AND is_applied) FROM goose_db_version").Scan(&version, &applied); err != nil || version != 21 || applied != 8 {
 					t.Fatalf("migration version=%d applications=%d error=%v", version, applied, err)
 				}
 				var nonemptyWarnings int
@@ -75,6 +75,12 @@ func TestProcessingReportsMigrationPostgres(t *testing.T) {
 					COUNT(*) FILTER (WHERE (max_id IS NOT NULL OR tg_id IS NOT NULL OR id = '00000000-0000-0000-0000-000000000000') AND data_consent_at IS NOT NULL)
 					FROM users`).Scan(&demo, &demoAgreed, &platform, &platformAgreed); err != nil || demoAgreed != demo || platformAgreed != 0 {
 					t.Fatalf("consent: demo %d/%d agreed, platform %d/%d agreed, error=%v", demoAgreed, demo, platformAgreed, platform, err)
+				}
+				// Whoever has agreed has answered; everyone else is asked on
+				// the next visit.
+				var mismatched int
+				if err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE (data_consent_answered_at IS NULL) <> (data_consent_at IS NULL)").Scan(&mismatched); err != nil || mismatched != 0 {
+					t.Fatalf("answered differs from agreed for %d users, error=%v", mismatched, err)
 				}
 				// The demo sets' author is a real MAX account, so it stays out too:
 				// with the browser account and the two above, four.
