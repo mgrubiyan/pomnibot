@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Button, Flex, Input, Typography } from '@maxhub/max-ui';
 import { api } from '../api';
 import type { components } from '../../contracts/schema';
@@ -50,6 +50,16 @@ export function ProfileGate({ children }: { children: ReactNode }) {
         };
     }, [load]);
 
+    // A screen that saved the profile has the newest one: a reload sent
+    // before the save must not bring the old one back.
+    const shared = useMemo(() => profile ? {
+        profile,
+        setProfile: (next: Profile) => {
+            requestId.current++;
+            setProfile(next);
+        },
+    } : null, [profile]);
+
     const reload = () => { setLoading(true); setLoadError(''); void load(); };
 
     const save = async () => {
@@ -70,11 +80,13 @@ export function ProfileGate({ children }: { children: ReactNode }) {
     };
 
     if (loading) return <StatusScreen icon={null} title="Загружаем профиль" text="Одну секунду…" />;
-    if (!profile || loadError) {
+    // A reload that fails in the background, as on the way back from the
+    // photo picker, keeps the profile already on screen.
+    if (!profile) {
         return <StatusScreen icon={null} title="Профиль недоступен" text={loadError} action={<Button onClick={reload}>Повторить</Button>} />;
     }
     if (profile.platform !== 'telegram' || profile.profileComplete) {
-        return <ProfileContext.Provider value={{ profile, setProfile }}>{children}</ProfileContext.Provider>;
+        return <ProfileContext.Provider value={shared}>{children}</ProfileContext.Provider>;
     }
 
     const validName = (value: string) => {

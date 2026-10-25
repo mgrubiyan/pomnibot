@@ -5,8 +5,11 @@
 ALTER TABLE users ADD COLUMN data_consent_at TIMESTAMPTZ;
 
 -- The shipped demonstration accounts cannot sign in and belong to nobody, so
--- the demo sets keep their names. Real accounts always carry a platform ID.
-UPDATE users SET data_consent_at = CURRENT_TIMESTAMP WHERE max_id IS NULL AND tg_id IS NULL;
+-- the demo sets keep their names. Real accounts always carry a platform ID;
+-- the browser account is shared by everyone without one, and nobody can
+-- agree for it.
+UPDATE users SET data_consent_at = CURRENT_TIMESTAMP
+WHERE max_id IS NULL AND tg_id IS NULL AND id <> '00000000-0000-0000-0000-000000000000';
 
 -- +goose Down
 ALTER TABLE users DROP COLUMN data_consent_at;

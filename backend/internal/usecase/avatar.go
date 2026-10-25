@@ -31,8 +31,10 @@ func CleanAvatar(data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("%w: photo must be at most 300 KB", ErrValidation)
 	}
 	// The header tells the size before any pixel is allocated.
-	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
-	if err != nil {
+	// What image.Decode reads depends on the decoders linked anywhere in the
+	// binary, so the formats are named here.
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || (format != "jpeg" && format != "png") {
 		return nil, fmt.Errorf("%w: photo must be JPEG or PNG", ErrValidation)
 	}
 	if cfg.Width < 1 || cfg.Height < 1 || cfg.Width > maxAvatarSide || cfg.Height > maxAvatarSide {
@@ -42,12 +44,16 @@ func CleanAvatar(data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: photo is damaged", ErrValidation)
 	}
-	// JPEG has no transparency: what was see-through becomes white, not black.
-	flat := image.NewRGBA(img.Bounds())
-	draw.Draw(flat, flat.Bounds(), image.White, image.Point{}, draw.Src)
-	draw.Draw(flat, flat.Bounds(), img, img.Bounds().Min, draw.Over)
+	// JPEG has no transparency: what was see-through becomes white, not
+	// black. An opaque photo, such as every JPEG, is encoded as it is.
+	if o, ok := img.(interface{ Opaque() bool }); !ok || !o.Opaque() {
+		flat := image.NewRGBA(img.Bounds())
+		draw.Draw(flat, flat.Bounds(), image.White, image.Point{}, draw.Src)
+		draw.Draw(flat, flat.Bounds(), img, img.Bounds().Min, draw.Over)
+		img = flat
+	}
 	var out bytes.Buffer
-	if err := jpeg.Encode(&out, flat, &jpeg.Options{Quality: 85}); err != nil {
+	if err := jpeg.Encode(&out, img, &jpeg.Options{Quality: 85}); err != nil {
 		return nil, fmt.Errorf("encode photo: %w", err)
 	}
 	return out.Bytes(), nil

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"image"
 	"image/color"
+	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"testing"
@@ -84,6 +85,8 @@ func TestCleanAvatar(t *testing.T) {
 		"too wide":     testImage(t, 1025, 8, encodePNG),
 		"too tall":     testImage(t, 8, 1025, encodePNG),
 		"too heavy":    append(testImage(t, 8, 8, encodePNG), make([]byte, maxAvatarBytes)...),
+		// Its decoder is linked in here, as WebP's is elsewhere in the binary.
+		"a GIF": testImage(t, 8, 8, func(buf *bytes.Buffer, img image.Image) error { return gif.Encode(buf, img, nil) }),
 	} {
 		t.Run("refuses "+name, func(t *testing.T) {
 			if _, err := CleanAvatar(data); !errors.Is(err, ErrValidation) {

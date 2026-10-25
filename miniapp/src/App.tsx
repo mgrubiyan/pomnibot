@@ -9,6 +9,7 @@ import Share from './screens/Share';
 import Leaderboard from './screens/Leaderboard';
 import WhyItWorks from './screens/WhyItWorks';
 import { api } from './api';
+import { config } from './config';
 import { useProfile } from './components/profileContext';
 import type { Card, CardIssueReason, Profile as ProfileData, TodayData, User } from './types';
 import type { CardPatch } from './utils/cards';
@@ -91,7 +92,11 @@ function App() {
 
     // Whether set authors may see the user decides the hint on others' sets.
     const profileState = useProfile();
-    const profile = profileState?.profile ?? null;
+    // Without a signature the server keeps no profile of its own, except
+    // locally, where the browser account stands for the developer.
+    const profile = profileState && (profileState.profile.platform || config.environment === 'local')
+        ? profileState.profile
+        : null;
     const setProfile = (next: ProfileData) => profileState?.setProfile(next);
 
     const [removedSetIds, setRemovedSetIds] = useState<string[]>([]);
