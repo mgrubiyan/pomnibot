@@ -106,6 +106,8 @@ export function InputDialog({
                     wraps and grows instead of scrolling sideways. */}
                 <AutoTextarea
                     rows={1}
+                    // Enter saves, so the keyboard says so.
+                    enterKeyHint="done"
                     mode="secondary"
                     className={s.field}
                     value={value}

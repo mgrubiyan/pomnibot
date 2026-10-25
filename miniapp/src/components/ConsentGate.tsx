@@ -23,12 +23,13 @@ export function ConsentGate({ children }: { children: ReactNode }) {
     const [failed, setFailed] = useState<false | 'network' | 'signed-out'>(false);
     // After a failed save the user may go on and be asked on the next visit.
     const [later, setLater] = useState(false);
-    const [bodyRef, moreBelow] = useMoreBelow<HTMLDivElement>(true);
 
     // Without a signature nobody can answer, except locally, where the
     // browser account stands for the developer.
     const canAnswer = state && (state.profile.platform || config.environment === 'local');
-    if (!state || !canAnswer || state.profile.dataConsentAnswered || later) {
+    const asking = Boolean(state && canAnswer && !state.profile.dataConsentAnswered && !later);
+    const [bodyRef, moreBelow] = useMoreBelow<HTMLDivElement>(asking);
+    if (!state || !asking) {
         return children;
     }
 
@@ -56,9 +57,11 @@ export function ConsentGate({ children }: { children: ReactNode }) {
 
     return (
         <Screen>
-            {/* The question and the opened consent scroll, the buttons stay put. */}
-            <Flex ref={bodyRef} direction="column" align="stretch" gap={12} className={cx(s.body, moreBelow && s.moreBelow)}>
-                <Flex direction="column" align="center" gap={12} className={cx(s.question, s.enter)}>
+            {/* The question and the opened consent scroll, the buttons stay put.
+                The block rises in as a whole: a child moved inside it would make
+                it scroll by the distance until the move ends. */}
+            <Flex ref={bodyRef} direction="column" align="stretch" gap={12} className={cx(s.body, s.enter, moreBelow && s.moreBelow)}>
+                <Flex direction="column" align="center" gap={12} className={s.question}>
                     <IconPerson size={48} tone="muted" />
                     <Typography.Text variant="subheader" className={s.title}>
                         Показывать вас авторам наборов?
@@ -71,12 +74,10 @@ export function ConsentGate({ children }: { children: ReactNode }) {
                         Это можно изменить в любой момент в профиле.
                     </Typography.Text>
                 </Flex>
-                <div className={cx(s.enter, s.enterLater)}>
-                    <ConsentText lead="Нажимая «Разрешить»" />
-                </div>
+                <ConsentText lead="Нажимая «Разрешить»" />
             </Flex>
 
-            <Flex direction="column" align="stretch" gap={12} className={cx(s.enter, s.enterLater)}>
+            <Flex direction="column" align="stretch" gap={12} className={cx(s.answers, s.enter, s.enterLater)}>
                 {failed ? (
                     <Typography.Text variant="description" className={cx(s.error, s.appear)} role="alert">
                         {failed === 'signed-out' ? PROFILE_SIGNED_OUT : 'Не получилось сохранить. Проверьте соединение и попробуйте ещё раз.'}

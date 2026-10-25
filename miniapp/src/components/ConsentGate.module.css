@@ -9,6 +9,14 @@
     /* Transparent until there is more below; then a line marks the edge. */
     border-bottom: 1px solid transparent;
     transition: border-color 0.2s;
+    /* The tap area of «Текст согласия» reaches 14px under the line; without
+       this room the closed screen would scroll by that much. */
+    padding-bottom: 14px;
+}
+
+/* The fine print belongs to the buttons: take back most of that room. */
+.answers {
+    margin-top: -12px;
 }
 
 .body::-webkit-scrollbar {
