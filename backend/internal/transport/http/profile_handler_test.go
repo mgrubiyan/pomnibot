@@ -263,7 +263,7 @@ func TestProfileAvatarHTTP(t *testing.T) {
 
 	// An image tag sends no authorization.
 	w = request("GET", "/api/avatars/"+testPhotoID.String(), "", "")
-	if w.Code != 200 || w.Header().Get("Content-Type") != "image/jpeg" || !strings.Contains(w.Header().Get("Cache-Control"), "immutable") {
+	if w.Code != 200 || w.Header().Get("Content-Type") != "image/jpeg" || w.Header().Get("Cache-Control") != "private, max-age=31536000, immutable" {
 		t.Fatalf("photo: %d %v", w.Code, w.Header())
 	}
 	if _, format, err := image.DecodeConfig(w.Body); err != nil || format != "jpeg" {
@@ -299,5 +299,26 @@ func TestLimitAvatarBody(t *testing.T) {
 	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("POST", "/api/sets", strings.NewReader(body)))
 	if readErr != nil || read != int64(len(body)) {
 		t.Fatalf("other request read %d bytes, error %v", read, readErr)
+	}
+}
+
+func TestProfileWritesWithoutUserService(t *testing.T) {
+	account := usecase.Account{User: contracts.User{ID: uuid.New()}, MaxID: 42, ProfileComplete: true}
+	ctx := context.WithValue(context.Background(), accountContextKey, account)
+	handler := NewAPIHandler(nil, nil, nil, nil)
+	if res, _ := handler.PutProfileConsent(ctx, &contracts.ConsentRequest{Given: true}); res == nil {
+		t.Fatal("consent: no response")
+	} else if _, ok := res.(*contracts.PutProfileConsentInternalServerError); !ok {
+		t.Fatalf("consent: %T", res)
+	}
+	if res, _ := handler.PutProfileAvatar(ctx, &contracts.AvatarRequest{}); res == nil {
+		t.Fatal("avatar: no response")
+	} else if _, ok := res.(*contracts.PutProfileAvatarInternalServerError); !ok {
+		t.Fatalf("avatar: %T", res)
+	}
+	if res, _ := handler.DeleteProfileAvatar(ctx); res == nil {
+		t.Fatal("delete: no response")
+	} else if _, ok := res.(*contracts.DeleteProfileAvatarInternalServerError); !ok {
+		t.Fatalf("delete: %T", res)
 	}
 }

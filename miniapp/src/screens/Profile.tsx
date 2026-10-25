@@ -17,6 +17,9 @@ const CONSENT_TEXT = [
     `Согласие действует, пока я его не отзову. Отозвать его можно в любой момент этим же переключателем в профиле — после этого авторы видят меня как «${ANONYMOUS_MEMBER}».`,
 ];
 
+/** Outside MAX and Telegram the server does not know who is asking. */
+const SIGNED_OUT = 'Профиль можно изменить только в приложении в MAX или Telegram.';
+
 export interface ProfileProps {
     profile: ProfileData;
     onChange: (profile: ProfileData) => void;
@@ -25,7 +28,7 @@ export interface ProfileProps {
 
 export function Profile({ profile, onChange, onBack }: ProfileProps) {
     const [saving, setSaving] = useState(false);
-    const [failed, setFailed] = useState(false);
+    const [failed, setFailed] = useState<false | 'network' | 'signed-out'>(false);
     const [showText, setShowText] = useState(false);
     const textId = useId();
     const consent = profile.dataConsent;
@@ -58,6 +61,10 @@ export function Profile({ profile, onChange, onBack }: ProfileProps) {
                 setPhotoError('Это фото не подходит. Выберите другое.');
                 return;
             }
+            if (response.status === 403) {
+                setPhotoError(SIGNED_OUT);
+                return;
+            }
             if (!response.ok || !data) {
                 throw new Error('photo upload failed');
             }
@@ -77,6 +84,10 @@ export function Profile({ profile, onChange, onBack }: ProfileProps) {
         setPhotoError('');
         try {
             const { data, response } = await api.DELETE('/profile/avatar');
+            if (response.status === 403) {
+                setPhotoError(SIGNED_OUT);
+                return;
+            }
             if (!response.ok || !data) {
                 throw new Error('photo removal failed');
             }
@@ -96,12 +107,16 @@ export function Profile({ profile, onChange, onBack }: ProfileProps) {
         setFailed(false);
         try {
             const { data, response } = await api.PUT('/profile/consent', { body: { given } });
+            if (response.status === 403) {
+                setFailed('signed-out');
+                return;
+            }
             if (!response.ok || !data) {
                 throw new Error('consent request failed');
             }
             onChange(data);
         } catch {
-            setFailed(true);
+            setFailed('network');
         } finally {
             setSaving(false);
         }
@@ -173,7 +188,7 @@ export function Profile({ profile, onChange, onBack }: ProfileProps) {
                     </Typography.Text>
                     {failed ? (
                         <Typography.Text variant="description" className={s.error} role="alert">
-                            Не получилось сохранить. Проверьте соединение и попробуйте ещё раз.
+                            {failed === 'signed-out' ? SIGNED_OUT : 'Не получилось сохранить. Проверьте соединение и попробуйте ещё раз.'}
                         </Typography.Text>
                     ) : null}
                 </Flex>

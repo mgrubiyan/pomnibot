@@ -414,18 +414,16 @@ func mapSetRowToContract(id pgtype.UUID, title string, author contracts.User, sh
 }
 
 // memberContract shows the viewer a member of their set by name and photo only when
-// the member agreed to it; the viewer always sees themselves.
+// the member agreed to it; the viewer always sees themselves. An anonymous
+// member gets a new random ID on every call: their own ID would let the viewer
+// find their name wherever else it shows, such as on a set they wrote.
 func memberContract(viewer uuid.UUID, id pgtype.UUID, firstName string, lastName, username pgtype.Text, avatar pgtype.UUID, consent bool) contracts.User {
 	if consent || (id.Valid && id.Bytes == viewer) {
 		u := buildUserContract(id, firstName, lastName, username)
 		setAvatar(&u, avatar)
 		return u
 	}
-	u := contracts.User{Anonymous: contracts.NewOptBool(true)}
-	if id.Valid {
-		u.ID = id.Bytes
-	}
-	return u
+	return contracts.User{ID: uuid.New(), Anonymous: contracts.NewOptBool(true)}
 }
 
 func buildUserContract(id pgtype.UUID, firstName string, lastName, username pgtype.Text) contracts.User {

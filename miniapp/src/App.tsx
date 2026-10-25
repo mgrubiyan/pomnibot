@@ -9,6 +9,7 @@ import Share from './screens/Share';
 import Leaderboard from './screens/Leaderboard';
 import WhyItWorks from './screens/WhyItWorks';
 import { api } from './api';
+import { useProfile } from './components/profileContext';
 import type { Card, CardIssueReason, Profile as ProfileData, TodayData, User } from './types';
 import type { CardPatch } from './utils/cards';
 import type { FeedResume } from './utils/feed';
@@ -89,16 +90,9 @@ function App() {
     }, []);
 
     // Whether set authors may see the user decides the hint on others' sets.
-    const [profile, setProfile] = useState<ProfileData | null>(null);
-    useEffect(() => {
-        api.GET('/profile').then(({ data }) => {
-            if (data) {
-                setProfile(data);
-            }
-        }).catch(() => {
-            // Without it the profile stays closed and the hint hidden.
-        });
-    }, []);
+    const profileState = useProfile();
+    const profile = profileState?.profile ?? null;
+    const setProfile = (next: ProfileData) => profileState?.setProfile(next);
 
     const [removedSetIds, setRemovedSetIds] = useState<string[]>([]);
     const [removedCardIds, setRemovedCardIds] = useState<string[]>([]);

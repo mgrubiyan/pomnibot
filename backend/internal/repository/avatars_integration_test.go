@@ -54,6 +54,28 @@ func TestAvatarsPostgres(t *testing.T) {
 		t.Fatalf("new photo: %q %v", image, err)
 	}
 
+	// Withdrawing consent moves the photo to a new address: authors may
+	// still hold the old one.
+	agreed, err := q.SetDataConsent(ctx, db.SetDataConsentParams{ID: ann, Given: true})
+	if err != nil || agreed.AvatarID != second.AvatarID {
+		t.Fatalf("consent moved the photo: %v → %v, %v", second.AvatarID, agreed.AvatarID, err)
+	}
+	withdrawn, err := q.SetDataConsent(ctx, db.SetDataConsentParams{ID: ann, Given: false})
+	if err != nil || !withdrawn.AvatarID.Valid || withdrawn.AvatarID == second.AvatarID {
+		t.Fatalf("photo kept its address after withdrawal: %v → %v, %v", second.AvatarID, withdrawn.AvatarID, err)
+	}
+	if _, err := q.GetAvatarImage(ctx, second.AvatarID); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("old address still served after withdrawal: %v", err)
+	}
+	if image, err := q.GetAvatarImage(ctx, withdrawn.AvatarID); err != nil || !bytes.Equal(image, []byte("second")) {
+		t.Fatalf("photo lost on withdrawal: %q %v", image, err)
+	}
+	second = withdrawn
+	nobody, err := q.SetDataConsent(ctx, db.SetDataConsentParams{ID: bob, Given: false})
+	if err != nil || !nobody.AvatarID.Valid {
+		t.Fatalf("withdrawal without consent: %+v %v", nobody, err)
+	}
+
 	removed, err := q.DeleteAvatar(ctx, ann)
 	if err != nil || removed.AvatarID.Valid {
 		t.Fatalf("delete: %+v %v", removed, err)

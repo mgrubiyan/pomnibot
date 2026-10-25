@@ -172,7 +172,7 @@ func TestSetService_GetSetLeaderboard(t *testing.T) {
 			t.Errorf("author without a photo got one: %+v", u)
 		}
 		shy := res.Items[2]
-		if shy.User.ID != testUser3 || shy.Rank != 3 || shy.Percentile != 20 {
+		if shy.User.ID == testUser3 || shy.User.ID == uuid.Nil || shy.Rank != 3 || shy.Percentile != 20 {
 			t.Errorf("unexpected item 2: %+v", shy)
 		}
 		if u := shy.User; !u.Anonymous.Value || u.FirstName != "" || u.LastName.Set || u.Username.Set || u.AvatarUrl.Set {

@@ -1030,7 +1030,6 @@ components:
           description: JPEG or PNG of at most 300 KB and 1024 px a side
           type: string
           format: byte
-          maxLength: 409600
     ProfileRequest:
       type: object
       required: [firstName, lastName]

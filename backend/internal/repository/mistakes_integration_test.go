@@ -102,15 +102,21 @@ func TestSetMistakesPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(res.Students) != 2 ||
-		res.Students[0].User.ID != bob || res.Students[0].Answers != 5 || res.Students[0].Mistakes != 2 ||
+	// Боб never agreed to show the author his name, so his ID is a stand-in.
+	if len(res.Students) != 2 {
+		t.Fatalf("students: %+v", res.Students)
+	}
+	shownBob := res.Students[0].User.ID
+	if shownBob == bob {
+		t.Errorf("anonymous student keeps his ID")
+	}
+	if res.Students[0].Answers != 5 || res.Students[0].Mistakes != 2 ||
 		res.Students[1].User.ID != carol || res.Students[1].Answers != 1 || res.Students[1].Mistakes != 1 {
 		t.Fatalf("students: %+v", res.Students)
 	}
 	if last, ok := res.Students[1].User.LastName.Get(); !ok || last != "Иванова" {
 		t.Errorf("student name: %+v", res.Students[1].User)
 	}
-	// Боб never agreed to show the author his name.
 	if u := res.Students[0].User; !u.Anonymous.Value || u.FirstName != "" {
 		t.Errorf("student without consent: %+v", u)
 	}
@@ -134,7 +140,7 @@ func TestSetMistakesPostgres(t *testing.T) {
 			t.Errorf("fact %d: %+v want %+v", i, got, w)
 		}
 	}
-	if s := res.Facts[0].Students; s[0].UserId != bob || s[0].Answers != 4 || s[0].Mistakes != 2 || s[1].UserId != carol {
+	if s := res.Facts[0].Students; s[0].UserId != shownBob || s[0].Answers != 4 || s[0].Mistakes != 2 || s[1].UserId != carol {
 		t.Errorf("Ключи by student: %+v", s)
 	}
 

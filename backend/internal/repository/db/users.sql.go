@@ -224,10 +224,17 @@ func (q *Queries) SaveTelegramProfile(ctx context.Context, arg SaveTelegramProfi
 }
 
 const setDataConsent = `-- name: SetDataConsent :one
-UPDATE users SET data_consent_at = CASE
-    WHEN $1::boolean THEN COALESCE(data_consent_at, CURRENT_TIMESTAMP)
-END
-WHERE id = $2
+WITH moved AS (
+    UPDATE avatars SET id = gen_random_uuid()
+    WHERE user_id = $2 AND NOT $1::boolean
+    RETURNING id
+)
+UPDATE users SET
+    data_consent_at = CASE
+        WHEN $1::boolean THEN COALESCE(data_consent_at, CURRENT_TIMESTAMP)
+    END,
+    avatar_id = COALESCE((SELECT id FROM moved), avatar_id)
+WHERE users.id = $2
 RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id
 `
 
@@ -236,7 +243,8 @@ type SetDataConsentParams struct {
 	ID    pgtype.UUID `json:"id"`
 }
 
-// Giving consent again keeps the time it was first given.
+// Giving consent again keeps the time it was first given. Withdrawing it
+// moves the photo to a new address: authors may still hold the old one.
 func (q *Queries) SetDataConsent(ctx context.Context, arg SetDataConsentParams) (User, error) {
 	row := q.db.QueryRow(ctx, setDataConsent, arg.Given, arg.ID)
 	var i User

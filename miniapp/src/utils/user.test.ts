@@ -21,6 +21,10 @@ describe('avatarLetter', () => {
         expect(avatarLetter({ id: '1', firstName: '😀 Ann' })).toBe('😀');
     });
 
+    test('has no letter for a user without a name', () => {
+        expect(avatarLetter({ id: '00000000-0000-0000-0000-000000000000', firstName: '' })).toBe('');
+    });
+
     test('has no letter for an anonymous member', () => {
         expect(avatarLetter({ id: '1', firstName: '', anonymous: true })).toBe('');
     });

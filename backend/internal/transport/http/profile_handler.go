@@ -57,6 +57,9 @@ func (h *APIHandler) GetProfile(ctx context.Context) (contracts.GetProfileRes, e
 
 // PutProfileConsent is restricted to verified accounts.
 func (h *APIHandler) PutProfileConsent(ctx context.Context, req *contracts.ConsentRequest) (contracts.PutProfileConsentRes, error) {
+	if h.users == nil {
+		return &contracts.PutProfileConsentInternalServerError{Message: "profile service unavailable"}, nil
+	}
 	account, ok, err := h.profileAccount(ctx)
 	if err != nil {
 		return &contracts.PutProfileConsentInternalServerError{Message: internalError(ctx, "PutProfileConsent", err)}, nil
@@ -92,6 +95,9 @@ func (h *APIHandler) PutProfile(ctx context.Context, req *contracts.ProfileReque
 
 // PutProfileAvatar is restricted to verified accounts.
 func (h *APIHandler) PutProfileAvatar(ctx context.Context, req *contracts.AvatarRequest) (contracts.PutProfileAvatarRes, error) {
+	if h.users == nil {
+		return &contracts.PutProfileAvatarInternalServerError{Message: "profile service unavailable"}, nil
+	}
 	account, ok, err := h.profileAccount(ctx)
 	if err != nil {
 		return &contracts.PutProfileAvatarInternalServerError{Message: internalError(ctx, "PutProfileAvatar", err)}, nil
@@ -111,6 +117,9 @@ func (h *APIHandler) PutProfileAvatar(ctx context.Context, req *contracts.Avatar
 
 // DeleteProfileAvatar is restricted to verified accounts.
 func (h *APIHandler) DeleteProfileAvatar(ctx context.Context) (contracts.DeleteProfileAvatarRes, error) {
+	if h.users == nil {
+		return &contracts.DeleteProfileAvatarInternalServerError{Message: "profile service unavailable"}, nil
+	}
 	account, ok, err := h.profileAccount(ctx)
 	if err != nil {
 		return &contracts.DeleteProfileAvatarInternalServerError{Message: internalError(ctx, "DeleteProfileAvatar", err)}, nil
@@ -139,7 +148,9 @@ func (h *APIHandler) GetAvatar(ctx context.Context, params contracts.GetAvatarPa
 		return &contracts.GetAvatarInternalServerError{Message: internalError(ctx, "GetAvatar", err)}, nil
 	}
 	return &contracts.GetAvatarOKHeaders{
-		CacheControl: contracts.NewOptString("public, max-age=31536000, immutable"),
+		// Private: a shared cache would keep serving the photo after it is
+		// deleted or its address changes.
+		CacheControl: contracts.NewOptString("private, max-age=31536000, immutable"),
 		Response:     contracts.GetAvatarOK{Data: bytes.NewReader(photo)},
 	}, nil
 }

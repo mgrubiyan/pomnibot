@@ -200,7 +200,7 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, remo
     return (
         <Screen>
             <Flex justify="space-between" align="center" gap={12} className={s.header}>
-                <Flex direction="column" align="flex-start" gap={2} className={s.headerText}>
+                <Flex direction="column" align="flex-start" gap={4} className={s.headerText}>
                     <Typography.Text variant="description" color="secondary" asChild>
                         <h1 className={s.greeting}>Привет, {formatGreetingName(today.user)}</h1>
                     </Typography.Text>

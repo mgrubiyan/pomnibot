@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/draw"
 	"image/jpeg"
 	_ "image/png" // users may send PNG
 
@@ -41,8 +42,12 @@ func CleanAvatar(data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: photo is damaged", ErrValidation)
 	}
+	// JPEG has no transparency: what was see-through becomes white, not black.
+	flat := image.NewRGBA(img.Bounds())
+	draw.Draw(flat, flat.Bounds(), image.White, image.Point{}, draw.Src)
+	draw.Draw(flat, flat.Bounds(), img, img.Bounds().Min, draw.Over)
 	var out bytes.Buffer
-	if err := jpeg.Encode(&out, img, &jpeg.Options{Quality: 85}); err != nil {
+	if err := jpeg.Encode(&out, flat, &jpeg.Options{Quality: 85}); err != nil {
 		return nil, fmt.Errorf("encode photo: %w", err)
 	}
 	return out.Bytes(), nil

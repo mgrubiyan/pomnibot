@@ -59,6 +59,25 @@ func TestCleanAvatar(t *testing.T) {
 		}
 	})
 
+	t.Run("puts a transparent PNG on white", func(t *testing.T) {
+		seeThrough := image.NewNRGBA(image.Rect(0, 0, 8, 8))
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, seeThrough); err != nil {
+			t.Fatal(err)
+		}
+		out, err := CleanAvatar(buf.Bytes())
+		if err != nil {
+			t.Fatal(err)
+		}
+		img, err := jpeg.Decode(bytes.NewReader(out))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r, g, b, _ := img.At(4, 4).RGBA(); r>>8 < 250 || g>>8 < 250 || b>>8 < 250 {
+			t.Fatalf("transparent pixel came out as %d,%d,%d", r>>8, g>>8, b>>8)
+		}
+	})
+
 	for name, data := range map[string][]byte{
 		"not an image": []byte("hello"),
 		"empty":        nil,

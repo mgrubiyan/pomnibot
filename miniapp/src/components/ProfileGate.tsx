@@ -3,6 +3,7 @@ import { Button, Flex, Input, Typography } from '@maxhub/max-ui';
 import { api } from '../api';
 import type { components } from '../../contracts/schema';
 import { telegramApp } from '../platform';
+import { ProfileContext } from './profileContext';
 import { Screen } from './Screen';
 import { StatusScreen } from './StatusScreen';
 import s from './ProfileGate.module.css';
@@ -72,7 +73,9 @@ export function ProfileGate({ children }: { children: ReactNode }) {
     if (!profile || loadError) {
         return <StatusScreen icon={null} title="Профиль недоступен" text={loadError} action={<Button onClick={reload}>Повторить</Button>} />;
     }
-    if (profile.platform !== 'telegram' || profile.profileComplete) return children;
+    if (profile.platform !== 'telegram' || profile.profileComplete) {
+        return <ProfileContext.Provider value={{ profile, setProfile }}>{children}</ProfileContext.Provider>;
+    }
 
     const validName = (value: string) => {
         const name = value.trim();

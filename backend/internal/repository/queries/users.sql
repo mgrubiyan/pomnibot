@@ -60,11 +60,19 @@ WHERE id = sqlc.arg(id) AND tg_id IS NOT NULL
 RETURNING *;
 
 -- name: SetDataConsent :one
--- Giving consent again keeps the time it was first given.
-UPDATE users SET data_consent_at = CASE
-    WHEN sqlc.arg(given)::boolean THEN COALESCE(data_consent_at, CURRENT_TIMESTAMP)
-END
-WHERE id = sqlc.arg(id)
+-- Giving consent again keeps the time it was first given. Withdrawing it
+-- moves the photo to a new address: authors may still hold the old one.
+WITH moved AS (
+    UPDATE avatars SET id = gen_random_uuid()
+    WHERE user_id = sqlc.arg(id) AND NOT sqlc.arg(given)::boolean
+    RETURNING id
+)
+UPDATE users SET
+    data_consent_at = CASE
+        WHEN sqlc.arg(given)::boolean THEN COALESCE(data_consent_at, CURRENT_TIMESTAMP)
+    END,
+    avatar_id = COALESCE((SELECT id FROM moved), avatar_id)
+WHERE users.id = sqlc.arg(id)
 RETURNING *;
 
 -- name: SaveAvatar :one
