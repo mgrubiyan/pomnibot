@@ -28,18 +28,51 @@ const data: SetMistakes = {
 };
 
 describe('mistakesLabel', () => {
-    it('agrees the words with the numbers', () => {
-        expect(mistakesLabel(1, 1)).toBe('1 ошибка из 1 ответа');
-        expect(mistakesLabel(2, 21)).toBe('2 ошибки из 21 ответа');
-        expect(mistakesLabel(5, 12)).toBe('5 ошибок из 12 ответов');
-        expect(mistakesLabel(0, 3)).toBe('0 ошибок из 3 ответов');
+    it('agrees the words with any number', () => {
+        const cases: [number, number, string][] = [
+            [1, 1, '1 ошибка в 1 ответе'],
+            [2, 2, '2 ошибки в 2 ответах'],
+            [3, 4, '3 ошибки в 4 ответах'],
+            [5, 5, '5 ошибок в 5 ответах'],
+            [11, 11, '11 ошибок в 11 ответах'],
+            [12, 21, '12 ошибок в 21 ответе'],
+            [13, 22, '13 ошибок в 22 ответах'],
+            [14, 25, '14 ошибок в 25 ответах'],
+            [21, 101, '21 ошибка в 101 ответе'],
+            [22, 111, '22 ошибки в 111 ответах'],
+            [111, 112, '111 ошибок в 112 ответах'],
+        ];
+        for (const [mistakes, answers, text] of cases) {
+            expect(mistakesLabel(mistakes, answers)).toBe(text);
+        }
+    });
+
+    it('says there were no mistakes instead of counting zero', () => {
+        expect(mistakesLabel(0, 1)).toBe('Без ошибок · 1 ответ');
+        expect(mistakesLabel(0, 3)).toBe('Без ошибок · 3 ответа');
+        expect(mistakesLabel(0, 11)).toBe('Без ошибок · 11 ответов');
+        expect(mistakesLabel(0, 21)).toBe('Без ошибок · 21 ответ');
         expect(mistakesLabel(0, 0)).toBe('Пока без ответов');
     });
 });
 
 describe('factLabel', () => {
+    const counts = (answered: number, mistaken: number, answers: number, mistakes: number) =>
+        ({ ...data.facts[0], studentsAnswered: answered, studentsMistaken: mistaken, answers, mistakes });
+
     it('says how many of those who answered got the fact wrong', () => {
-        expect(factLabel(data.facts[0])).toBe('Ошибались 2 из 2 · 4 ошибки из 8 ответов');
+        expect(factLabel(data.facts[0])).toBe('Ошиблись 2 из 2 · 4 ошибки в 8 ответах');
+        expect(factLabel(counts(13, 1, 21, 1))).toBe('Ошиблись 1 из 13 · 1 ошибка в 21 ответе');
+    });
+
+    it('drops the zeros when nobody erred', () => {
+        expect(factLabel(counts(1, 0, 1, 0))).toBe('Без ошибок · 1 ответ');
+        expect(factLabel(counts(2, 0, 4, 0))).toBe('Все без ошибок · 4 ответа');
+        expect(factLabel(counts(3, 0, 5, 0))).toBe('Все 3 без ошибок · 5 ответов');
+        expect(factLabel(counts(21, 0, 42, 0))).toBe('Все 21 без ошибок · 42 ответа');
+    });
+
+    it('waits for the first answer', () => {
         expect(factLabel(data.facts[3])).toBe('Пока без ответов');
     });
 });

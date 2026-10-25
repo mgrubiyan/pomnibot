@@ -1,24 +1,38 @@
 import type { FactMistakes, SetMistakes, User } from '../types';
 import { errorsLabel, plural } from './plural';
 
-/** «из 5 ответов» needs the genitive: «из 1 ответа», «из 21 ответа». */
-const ofAnswersLabel = (count: number) =>
-    `из ${count} ${plural(count, ['ответа', 'ответов', 'ответов'])}`;
+/** «4 ответа»: how many answers a row stands on. */
+const answersLabel = (count: number) =>
+    `${count} ${plural(count, ['ответ', 'ответа', 'ответов'])}`;
 
-/** «2 ошибки из 5 ответов», or that nothing was answered yet. */
+/** «в 5 ответах» needs the prepositional: «в 1 ответе», «в 21 ответе». */
+const inAnswersLabel = (count: number) =>
+    `в ${count} ${plural(count, ['ответе', 'ответах', 'ответах'])}`;
+
+/** «2 ошибки в 5 ответах», «Без ошибок · 4 ответа», or that nothing was
+    answered yet. */
 export function mistakesLabel(mistakes: number, answers: number): string {
     if (answers === 0) {
         return 'Пока без ответов';
     }
-    return `${errorsLabel(mistakes)} ${ofAnswersLabel(answers)}`;
+    if (mistakes === 0) {
+        return `Без ошибок · ${answersLabel(answers)}`;
+    }
+    return `${errorsLabel(mistakes)} ${inAnswersLabel(answers)}`;
 }
 
-/** How many of those who answered a fact got it wrong at least once. */
+/** How many of those who answered a fact got it wrong at least once.
+    «Все 2 без ошибок» does not read, so two get no number. */
 export function factLabel(fact: FactMistakes): string {
-    if (fact.studentsAnswered === 0) {
+    const { studentsAnswered: answered, studentsMistaken: mistaken } = fact;
+    if (answered === 0) {
         return 'Пока без ответов';
     }
-    return `Ошибались ${fact.studentsMistaken} из ${fact.studentsAnswered} · ${mistakesLabel(fact.mistakes, fact.answers)}`;
+    if (mistaken > 0) {
+        return `Ошиблись ${mistaken} из ${answered} · ${mistakesLabel(fact.mistakes, fact.answers)}`;
+    }
+    const everyone = answered === 1 ? 'Без ошибок' : answered === 2 ? 'Все без ошибок' : `Все ${answered} без ошибок`;
+    return `${everyone} · ${answersLabel(fact.answers)}`;
 }
 
 interface Counts {
