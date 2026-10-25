@@ -17,6 +17,9 @@ export function useMoreBelow<T extends HTMLElement>(active: boolean) {
         const check = () => setMoreBelow(el.scrollHeight - el.scrollTop - el.clientHeight > 1);
         check();
         el.addEventListener('scroll', check, { passive: true });
+        // A child that moves in with a transform changes the overflow without
+        // changing any size: look again once it has settled.
+        el.addEventListener('transitionend', check);
         // The block and what is in it change size as the data comes in.
         const observer = new ResizeObserver(check);
         observer.observe(el);
@@ -25,6 +28,7 @@ export function useMoreBelow<T extends HTMLElement>(active: boolean) {
         }
         return () => {
             el.removeEventListener('scroll', check);
+            el.removeEventListener('transitionend', check);
             observer.disconnect();
         };
     }, [active]);
