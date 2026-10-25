@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -195,5 +196,24 @@ func TestPresentationResolvesEmbeddedImageTargets(t *testing.T) {
 				t.Fatalf("embedded image content lost: %+v", res)
 			}
 		})
+	}
+}
+
+func TestPresentationNamesOversizedEmbeddedImage(t *testing.T) {
+	data := zipOf(t, map[string]string{
+		"ppt/slides/slide1.xml":            `<sld xmlns:r="r"><cSld><spTree><sp><txBody><p><r><t>Митоз — непрямое деление соматических клеток.</t></r></p></txBody></sp><pic><blipFill><blip r:embed="image"/></blipFill></pic></spTree></cSld></sld>`,
+		"ppt/slides/_rels/slide1.xml.rels": `<Relationships><Relationship Id="image" Target="../media/image1.png"/></Relationships>`,
+		"ppt/media/image1.png":             string(bombPNG(overLimit, overLimit)),
+	})
+	ocr := &fakeOCR{}
+	res, err := newOCRExtractor(t, ocr, &fakePDF{}).Extract(context.Background(), []File{{Name: "deck.pptx", Data: data}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ocr.reqs) != 0 {
+		t.Errorf("OCR called for an image over the pixel limit: %+v", ocr.reqs)
+	}
+	if len(res.Pages) != 1 || !slices.Contains(res.Pages[0].Issues, "Изображение внутри слайда слишком большое") {
+		t.Errorf("pages = %+v, want the slide to name the image as too large", res.Pages)
 	}
 }

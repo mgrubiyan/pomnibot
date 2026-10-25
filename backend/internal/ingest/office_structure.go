@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"path"
@@ -220,6 +221,10 @@ func (e *Extractor) structuredSlides(ctx context.Context, data []byte) ([]native
 						return nil, fmt.Errorf("embedded slide image exceeds size limit")
 					}
 					fitted, mime, _, fitErr := fitImage(data, e.lim)
+					if errors.Is(fitErr, ErrImageTooLarge) {
+						s.issues = append(s.issues, "Изображение внутри слайда слишком большое")
+						continue
+					}
 					if fitErr != nil {
 						s.issues = append(s.issues, "Формат изображения внутри слайда не распознан")
 						continue

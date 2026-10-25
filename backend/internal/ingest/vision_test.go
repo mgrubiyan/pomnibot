@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
+	"os/exec"
 	"slices"
 	"sync"
 	"testing"
@@ -196,19 +197,94 @@ func TestVisionDropsLinesOnlyMarkedIllegible(t *testing.T) {
 	}
 }
 
-// A PDF page can be drawn at any size, so its rendering is checked too.
-func TestVisionRejectsHugeRenderedPage(t *testing.T) {
+// A page rendered over the limit is refused before the checker is paid for
+// it; the text layer stands in for it, as for a page that did not render.
+func TestVisionRefusesHugeRenderedPageBeforeChecker(t *testing.T) {
 	for _, fullPage := range []bool{false, true} {
 		model := &fakeModel{texts: []string{"Страница."}}
-		ocr := &VisionOCR{Model: model, FullPage: fullPage, Render: func(context.Context, []byte, int) ([]byte, error) {
-			return bombPNG(10_001, 10_001), nil
+		checker := &fakeChecker{text: "Страница."}
+		ocr := &VisionOCR{Model: model, Checker: checker, FullPage: fullPage, Render: func(context.Context, []byte, int) ([]byte, error) {
+			return bombPNG(overLimit, overLimit), nil
 		}}
 		_, err := ocr.Recognize(context.Background(), OCRRequest{Data: pdfBytes, MimeType: "application/pdf", Pages: 1})
 		if !errors.Is(err, ErrImageTooLarge) {
 			t.Errorf("full page %v: error = %v, want ErrImageTooLarge", fullPage, err)
 		}
-		if len(model.sizes) != 0 {
-			t.Errorf("full page %v: the model saw %v", fullPage, model.sizes)
+		if len(model.sizes) != 0 || len(checker.reqs) != 0 {
+			t.Errorf("full page %v: model saw %v, checker %d requests; want neither called", fullPage, model.sizes, len(checker.reqs))
+		}
+	}
+
+	ocr := &VisionOCR{Model: &fakeModel{}, FullPage: true, Render: func(context.Context, []byte, int) ([]byte, error) {
+		return bombPNG(overLimit, overLimit), nil
+	}}
+	pages, err := ocr.Recognize(context.Background(), OCRRequest{Data: pdfBytes, MimeType: "application/pdf", Pages: 1, TextLayers: []string{page(1)}})
+	if err != nil || len(pages) != 1 || pages[0].Text != page(1) || !pages[0].ReadFailed {
+		t.Errorf("with a text layer: got %+v, %v; want the text layer, marked unread", pages, err)
+	}
+}
+
+// pdfPage is a one-page PDF of the given size in points, blank.
+func pdfPage(w, h int) []byte {
+	objs := []string{
+		"<< /Type /Catalog /Pages 2 0 R >>",
+		"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+		fmt.Sprintf("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %d %d] >>", w, h),
+	}
+	var b bytes.Buffer
+	b.WriteString("%PDF-1.4\n")
+	offsets := make([]int, len(objs))
+	for i, o := range objs {
+		offsets[i] = b.Len()
+		fmt.Fprintf(&b, "%d 0 obj\n%s\nendobj\n", i+1, o)
+	}
+	xref := b.Len()
+	fmt.Fprintf(&b, "xref\n0 %d\n0000000000 65535 f \n", len(objs)+1)
+	for _, off := range offsets {
+		fmt.Fprintf(&b, "%010d 00000 n \n", off)
+	}
+	fmt.Fprintf(&b, "trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n", len(objs)+1, xref)
+	return b.Bytes()
+}
+
+// A page as large as a poster is rendered at a lower resolution, so that
+// pdftoppm does not hold a gigabyte bitmap; an A4 page keeps renderDPI.
+func TestRenderPDFPageFitsPixelLimit(t *testing.T) {
+	for _, tool := range []string{"pdftoppm", "pdfinfo"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skipf("%s not installed", tool)
+		}
+	}
+	a4, err := renderPDFPage(context.Background(), pdfPage(595, 842), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg, _, err := image.DecodeConfig(bytes.NewReader(a4)); err != nil || cfg.Width != 1240 || cfg.Height != 1755 {
+		t.Errorf("A4: %+v, %v; want 1240×1755 at %d dpi", cfg, err, renderDPI)
+	}
+	poster, err := renderPDFPage(context.Background(), pdfPage(7000, 7000), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(poster))
+	if err != nil || cfg.Width*cfg.Height > MaxOCRPixels || cfg.Width < 3000 {
+		t.Errorf("poster: %+v, %v; want just within %d pixels", cfg, err, MaxOCRPixels)
+	}
+}
+
+func TestPDFPageDPI(t *testing.T) {
+	cases := []struct {
+		info string
+		want int
+	}{
+		{"Pages:           1\nPage    1 size:  595.28 x 841.89 pts (A4)\nPage    1 rot:   0\n", renderDPI},
+		{"Page    3 size: 7000 x 7000 pts\n", 45},
+		{"Page    1 size: 14400 x 200 pts\n", 150},
+		{"no size here\n", renderDPI},
+	}
+	for _, c := range cases {
+		if got := pageDPI(c.info); got != c.want {
+			t.Errorf("pageDPI(%q) = %d, want %d", c.info, got, c.want)
 		}
 	}
 }
