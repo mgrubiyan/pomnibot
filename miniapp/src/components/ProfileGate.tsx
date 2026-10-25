@@ -97,7 +97,7 @@ export function ProfileGate({ children }: { children: ReactNode }) {
         <Screen>
             <form className={s.form} onSubmit={event => { event.preventDefault(); void save(); }}>
                 <Typography.Title>Как вас зовут?</Typography.Title>
-                <Typography.Text>Авторы наборов увидят фамилию и имя, только если вы разрешите это в профиле.</Typography.Text>
+                <Typography.Text>Авторы наборов увидят фамилию и имя, только если вы это разрешите.</Typography.Text>
                 <Flex direction="column" align="stretch" gap={8}>
                     <label htmlFor="profile-last-name">Фамилия</label>
                     <Input id="profile-last-name" autoComplete="family-name" value={lastName} disabled={saving} onChange={event => setLastName(event.target.value)} />
