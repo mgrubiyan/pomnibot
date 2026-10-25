@@ -2,18 +2,13 @@ import type { CardKind } from '../types';
 
 /** Card kinds as the reader sees them, in the order they are offered. */
 export const CARD_KINDS: { kind: CardKind; label: string; hint: string }[] = [
-    { kind: 'flip', label: 'Флип-карточка', hint: 'Вопрос на лицевой стороне, ответ на обороте' },
-    { kind: 'choice', label: 'Выбор ответа', hint: 'Один или несколько верных вариантов' },
-    { kind: 'boolean', label: 'Верно / Неверно', hint: 'Утверждение, которое нужно оценить' },
-    { kind: 'input', label: 'Ввод текста', hint: 'Ответ вписывают словом или числом' },
+    { kind: 'flip', label: 'Вопрос и ответ', hint: 'Вопрос на лицевой стороне, ответ на обороте' },
+    { kind: 'choice', label: 'Тест', hint: 'Один или несколько верных вариантов' },
+    { kind: 'boolean', label: 'Верно или нет', hint: 'Утверждение, которое нужно оценить' },
+    { kind: 'input', label: 'Свой ответ', hint: 'Ответ вписывают словом или числом' },
     { kind: 'table', label: 'Таблица', hint: 'Понятия раскладывают по колонкам' },
 ];
 
-/** A card kind in a word or two, for a marker next to the question. */
-export const CARD_KIND_TAGS: Record<CardKind, string> = {
-    flip: 'Флип',
-    choice: 'Выбор',
-    boolean: 'Верно / Неверно',
-    input: 'Ввод',
-    table: 'Таблица',
-};
+/** The label of a card kind, for a marker next to the question. */
+export const kindLabel = (kind: CardKind): string =>
+    CARD_KINDS.find((item) => item.kind === kind)?.label ?? kind;

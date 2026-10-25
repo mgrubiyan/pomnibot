@@ -22,7 +22,7 @@ import { getFactCardIds, reorderCardsInFact } from '../utils/cardsOrder';
 import { StudyContent } from '../components/StudyContent';
 import { StudyIllustration } from '../components/StudyIllustration';
 import { classifyError } from '../utils/errors';
-import { CARD_KIND_TAGS } from '../utils/kinds';
+import { kindLabel } from '../utils/kinds';
 import s from './SetCards.module.css';
 
 type Status = 'loading' | 'error' | 'ready';
@@ -538,7 +538,7 @@ export function SetCards({
                                                                 color="secondary"
                                                                 className={s.kindTag}
                                                             >
-                                                                {CARD_KIND_TAGS[card.kind]}
+                                                                {kindLabel(card.kind)}
                                                             </Typography.Text>
                                                             <StudyContent className={s.cardTitle} text={card.question} inControl />
                                                             <StudyIllustration svg={card.questionSvg} alt="Иллюстрация к вопросу" />
