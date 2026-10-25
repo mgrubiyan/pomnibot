@@ -71,6 +71,9 @@ type Querier interface {
 	GetSetIssues(ctx context.Context, arg GetSetIssuesParams) ([]GetSetIssuesRow, error)
 	GetSetLeaderboard(ctx context.Context, setID pgtype.UUID) ([]GetSetLeaderboardRow, error)
 	GetSetPlan(ctx context.Context, arg GetSetPlanParams) ([]GetSetPlanRow, error)
+	// One row per fact, even if it has no cards or no progress. Availability
+	// matches GetSetFeedCardsForUser: any remaining unblocked card can be reviewed.
+	GetSetRetentionFacts(ctx context.Context, arg GetSetRetentionFactsParams) ([]GetSetRetentionFactsRow, error)
 	// Current members of the set; the author may also be a member and is left out.
 	GetSetStudents(ctx context.Context, setID pgtype.UUID) ([]GetSetStudentsRow, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)

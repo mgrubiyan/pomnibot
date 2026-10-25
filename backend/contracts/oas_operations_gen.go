@@ -28,6 +28,7 @@ const (
 	GetSetLeaderboardOperation   OperationName = "GetSetLeaderboard"
 	GetSetMistakesOperation      OperationName = "GetSetMistakes"
 	GetSetPlanOperation          OperationName = "GetSetPlan"
+	GetSetRetentionOperation     OperationName = "GetSetRetention"
 	GetSetShareCodeOperation     OperationName = "GetSetShareCode"
 	GetTodayOperation            OperationName = "GetToday"
 	JoinSetByShareCodeOperation  OperationName = "JoinSetByShareCode"

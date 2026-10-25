@@ -25,7 +25,7 @@ func NewRouter(handler contracts.Handler, staticFS fs.FS, maxToken, telegramToke
 	}
 
 	authMiddleware := AuthMiddleware(maxToken, telegramToken, userService)
-	return LoggingMiddleware(limitUploads(authMiddleware(apiServer))), nil
+	return LoggingMiddleware(authMiddleware(limitUploads(apiServer))), nil
 }
 
 // maxAvatarRequest fits the largest photo the API takes, in base64 and JSON.
@@ -41,6 +41,13 @@ func limitUploads(next http.Handler) http.Handler {
 		case r.URL.Path == "/api/notes" && r.Method == http.MethodPost:
 			if r.ContentLength > maxNotesRequest {
 				writeAuthError(w, http.StatusRequestEntityTooLarge, "files over 20 MB in all", "")
+				return
+			}
+			// Only a signed account may send notes. The rest are refused
+			// before the body is read, so nobody can hold the server for
+			// minutes or fill its memory without signing in.
+			if _, ok := accountFromContext(r.Context()); !ok {
+				writeAuthError(w, http.StatusForbidden, "authorization required", "")
 				return
 			}
 			rc := http.NewResponseController(w)

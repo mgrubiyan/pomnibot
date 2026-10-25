@@ -176,3 +176,16 @@ func (h *SetsHandler) CreateSet(ctx context.Context, req *contracts.CreateSetReq
 	}
 	return res, nil
 }
+
+// GetSetRetention returns an in-memory forecast for the current reader.
+func (h *SetsHandler) GetSetRetention(ctx context.Context, params contracts.GetSetRetentionParams) (contracts.GetSetRetentionRes, error) {
+	userID, _ := UserIDFromContext(ctx)
+	res, err := h.setService.GetSetRetention(ctx, userID, params.SetId)
+	if err != nil {
+		if errors.Is(err, usecase.ErrNotFound) || errors.Is(err, usecase.ErrForbidden) {
+			return &contracts.GetSetRetentionNotFound{Message: err.Error()}, nil
+		}
+		return &contracts.GetSetRetentionInternalServerError{Message: internalError(ctx, "GetSetRetention", err)}, nil
+	}
+	return res, nil
+}

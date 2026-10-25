@@ -42,12 +42,17 @@ func (h *APIHandler) WithNotes(ctx context.Context, maker NoteMaker) *APIHandler
 	return h
 }
 
-// WaitNotes waits for the documents being made to stop, once the context of
-// WithNotes is done.
+// WaitNotes takes no more documents and waits for those being made to stop,
+// once the context of WithNotes is done. An upload may still be arriving
+// when the server gives up waiting for it on shutdown.
 func (h *APIHandler) WaitNotes() {
-	if h.notes != nil {
-		h.notes.wg.Wait()
+	if h.notes == nil {
+		return
 	}
+	h.notes.mu.Lock()
+	h.notes.closed = true
+	h.notes.mu.Unlock()
+	h.notes.wg.Wait()
 }
 
 // noteJobs keeps the latest document of each user in memory: production
@@ -59,8 +64,9 @@ type noteJobs struct {
 	now   func() time.Time
 	wg    sync.WaitGroup
 
-	mu   sync.Mutex
-	jobs map[uuid.UUID]*noteJob
+	mu     sync.Mutex
+	jobs   map[uuid.UUID]*noteJob
+	closed bool // WaitNotes has begun: no wg.Add after it
 }
 
 type noteJob struct {
@@ -68,13 +74,19 @@ type noteJob struct {
 	done   time.Time // zero while the document is made
 }
 
-var errNotesBusy = errors.New("previous document is still being made")
+var (
+	errNotesBusy   = errors.New("previous document is still being made")
+	errNotesClosed = errors.New("the server is shutting down")
+)
 
 // start makes the set in the background, one document of a user at a time.
 func (j *noteJobs) start(userID uuid.UUID, files []ingest.File) (contracts.NotesJob, error) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	j.forget()
+	if j.closed || j.ctx.Err() != nil {
+		return contracts.NotesJob{}, errNotesClosed
+	}
 	if job, ok := j.jobs[userID]; ok && job.done.IsZero() {
 		return contracts.NotesJob{}, errNotesBusy
 	}
@@ -166,8 +178,14 @@ func (h *APIHandler) UploadNotes(ctx context.Context, req *contracts.NotesUpload
 	if len(req.Files) == 0 {
 		return &contracts.UploadNotesBadRequest{Message: "no files"}, nil
 	}
+	var size int64
+	for _, f := range req.Files {
+		size += f.Size
+	}
+	if size > MaxNotesBytes {
+		return &contracts.UploadNotesRequestEntityTooLarge{Message: "files over 20 MB in all"}, nil
+	}
 	files := make([]ingest.File, 0, len(req.Files))
-	size := 0
 	for _, f := range req.Files {
 		data, err := io.ReadAll(f.File)
 		if err != nil {
@@ -175,9 +193,6 @@ func (h *APIHandler) UploadNotes(ctx context.Context, req *contracts.NotesUpload
 		}
 		if len(data) == 0 {
 			return &contracts.UploadNotesBadRequest{Message: fmt.Sprintf("file %q is empty", f.Name)}, nil
-		}
-		if size += len(data); size > MaxNotesBytes {
-			return &contracts.UploadNotesRequestEntityTooLarge{Message: "files over 20 MB in all"}, nil
 		}
 		name := f.Name
 		if name == "" {
@@ -188,6 +203,9 @@ func (h *APIHandler) UploadNotes(ctx context.Context, req *contracts.NotesUpload
 	status, err := h.notes.start(account.User.ID, files)
 	if errors.Is(err, errNotesBusy) {
 		return &contracts.UploadNotesConflict{Message: err.Error()}, nil
+	}
+	if errors.Is(err, errNotesClosed) {
+		return &contracts.UploadNotesServiceUnavailable{Message: err.Error()}, nil
 	}
 	return &status, nil
 }

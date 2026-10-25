@@ -1,0 +1,70 @@
+.card {
+    box-sizing: border-box;
+    flex-shrink: 0;
+    min-width: 0;
+    border-radius: 20px;
+    background: var(--background-card);
+    color: var(--text-primary);
+}
+.graphCard {
+    padding: 16px 18px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.heading { margin: 0; font-size: 15px; font-weight: 700; line-height: normal; }
+.headingButton {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.headingButton:focus-visible { outline: 2px solid var(--button-primary); outline-offset: 4px; border-radius: 2px; }
+.assumption { margin: 0; font-size: 12px; color: var(--text-secondary); }
+.chart { display: block; width: 100%; overflow: visible; }
+.targetLine { stroke: var(--text-secondary); stroke-width: 1; stroke-dasharray: 4 4; }
+.targetText { fill: var(--text-secondary); font-size: 11px; }
+.area { fill: var(--icon-negative); fill-opacity: 0.14; }
+.pauseLine, .reviewLine { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.pauseLine { stroke: var(--icon-negative); stroke-dasharray: 6 5; }
+.reviewLine { stroke: var(--button-primary); }
+.start { fill: var(--text-primary); }
+.reviewText { fill: var(--text-primary); font-size: 11px; }
+.pauseText { fill: var(--icon-negative); font-size: 11px; }
+.axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12px; color: var(--text-secondary); align-items: center; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 16px; flex: none; }
+.reviewKey { height: 3px; border-radius: 2px; background: var(--button-primary); }
+.pauseKey { height: 0; border-top: 2px dashed var(--icon-negative); }
+.summary { display: flex; align-items: center; gap: 18px; padding: 16px; }
+.ring { position: relative; width: 108px; height: 108px; flex: none; }
+.ringTrack, .ringFill { fill: none; stroke-width: 10; }
+.ringTrack { stroke: var(--divider-primary); }
+.ringFill { stroke: var(--button-primary); stroke-linecap: round; }
+.ringLabel { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.current { font-size: 28px; font-weight: 800; line-height: 1; }
+.remember { font-size: 11px; color: var(--text-secondary); margin-top: 3px; }
+.comparison { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 15px; line-height: 1.35; }
+.targetBadge { display: inline-flex; align-self: flex-start; padding: 6px 10px; border-radius: 999px; background: var(--background-surface); font-size: 13px; }
+.groups { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+.bar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; gap: 2px; background: var(--divider-primary); }
+.group0 { background: var(--icon-negative); }
+.group1 { background: var(--counter-attention); }
+.group2 { background: var(--icon-positive); }
+.columns { display: flex; justify-content: space-between; font-size: 13px; }
+.columns > div { display: flex; flex-direction: column; }
+.columns > div:last-child { align-items: flex-end; }
+.columns strong { font-size: 16px; font-weight: 700; }
+.columns span { color: var(--text-secondary); }
+.empty { display: grid; place-items: center; aspect-ratio: 342 / 140; color: var(--text-secondary); }
+.error { margin: 0 0 12px; }
+.card:has(.error) { padding: 16px 18px; }
+.loading { display: flex; flex-direction: column; gap: 16px; }
+.loading .card { background: var(--background-card); }
+.graphSkeleton > * { visibility: hidden; }
+.ringSkeleton { height: 140px; }
+.groupsSkeleton { height: 120px; }

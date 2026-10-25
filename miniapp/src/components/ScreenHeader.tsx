@@ -9,13 +9,14 @@ export interface ScreenHeaderProps {
     /** A line under the title: the set, its size, its author. */
     subtitle?: ReactNode;
     onBack: () => void;
+    actions?: ReactNode;
 }
 
 /** The back arrow and the title. The arrow stays on the first line of a
     title that wraps, instead of drifting down to the middle of the block.
     A long title stops at three lines, so it does not take half of a short
     screen; a tap on it shows the rest. */
-export function ScreenHeader({ title, subtitle, onBack }: ScreenHeaderProps) {
+export function ScreenHeader({ title, subtitle, onBack, actions }: ScreenHeaderProps) {
     const titleRef = useRef<HTMLHeadingElement>(null);
     const [clamped, setClamped] = useState(false);
     const [expanded, setExpanded] = useState(false);
@@ -58,6 +59,7 @@ export function ScreenHeader({ title, subtitle, onBack }: ScreenHeaderProps) {
                     </Typography.Text>
                 ) : null}
             </Flex>
+            {actions && <div className={s.actions}>{actions}</div>}
         </Flex>
     );
 }

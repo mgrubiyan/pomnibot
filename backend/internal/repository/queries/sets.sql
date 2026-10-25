@@ -245,3 +245,33 @@ JOIN cards c ON c.fact_id = f.id
 JOIN answers a ON a.user_id = us.user_id AND a.card_id = c.id
 WHERE us.set_id = $1 AND us.user_id <> s.author_id
 GROUP BY c.fact_id, a.user_id;
+
+-- name: GetSetRetentionFacts :many
+-- One row per fact, even if it has no cards or no progress. Availability
+-- matches GetSetFeedCardsForUser: any remaining unblocked card can be reviewed.
+SELECT f.id,
+    COALESCE(p.stability, 0)::DOUBLE PRECISION AS stability,
+    COALESCE(p.difficulty, 0)::DOUBLE PRECISION AS difficulty,
+    COALESCE(p.reps, 0)::INT AS reps,
+    COALESCE(p.lapses, 0)::INT AS lapses,
+    COALESCE(p.state, 0)::SMALLINT AS state,
+    p.last_reviewed_at, p.next_review_at,
+    EXISTS (
+        SELECT 1 FROM cards c
+        WHERE c.fact_id = f.id
+          AND NOT EXISTS (
+              SELECT 1 FROM card_issues i
+              JOIN cards reported ON reported.id = i.card_id
+              WHERE reported.fact_id = c.fact_id
+                AND c.id >= reported.id
+                AND i.user_id = sqlc.arg('user_id')
+                AND s.author_id <> sqlc.arg('user_id')
+                AND i.resolved_at IS NULL
+                AND i.created_at > reported.updated_at
+          )
+    ) AS available
+FROM facts f
+JOIN sets s ON s.id = f.set_id
+LEFT JOIN user_fact_progress p ON p.fact_id = f.id AND p.user_id = sqlc.arg('user_id')
+WHERE f.set_id = sqlc.arg('set_id')
+ORDER BY f.id;

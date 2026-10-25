@@ -28,3 +28,5 @@ export type SetIssue = components['schemas']['SetIssue'];
 export type CardIssueStatus = components['schemas']['CardIssueStatus'];
 export type AdminCardIssue = components['schemas']['AdminCardIssue'];
 export type Fact = components['schemas']['Fact'];
+
+export type SetRetention = components['schemas']['SetRetention'];

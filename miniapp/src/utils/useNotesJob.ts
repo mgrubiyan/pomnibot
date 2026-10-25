@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import type { NotesJob } from '../types';
-import { NOTES_LOST, isNotesRunning } from './notes';
+import { NOTES_LOST, NOTES_TOO_BIG, isNotesRunning } from './notes';
 
 /** How often to ask how the notes go; the bot edits its message as often. */
 const POLL_MS = 2000;
@@ -17,10 +17,10 @@ export type NotesUpload = { ok: true } | { ok: false; error: string };
 /**
  * The user's latest notes on the server, followed while they are made.
  * The job outlives the screen: it is the server's, kept for an hour.
- * `followed` is whether this screen saw it running, sent it or found it
- * failed; onFinish hears when a job seen running ends.
+ * `followed` is whether this screen saw it running or sent it, or, with
+ * followFailed, found it failed; onFinish hears when a job seen running ends.
  */
-export function useNotesJob(onFinish?: (job: NotesJob) => void) {
+export function useNotesJob(onFinish?: (job: NotesJob) => void, { followFailed = false } = {}) {
     const [access, setAccess] = useState<NotesAccess>('loading');
     const [job, setJob] = useState<NotesJob | null>(null);
     const [followed, setFollowed] = useState(false);
@@ -43,8 +43,7 @@ export function useNotesJob(onFinish?: (job: NotesJob) => void) {
                 }
                 setAccess('ready');
                 setJob(response.ok && data ? data : null);
-                // A failure within the hour is still news: it says why.
-                setFollowed(isNotesRunning(data) || data?.state === 'failed');
+                setFollowed(isNotesRunning(data) || (followFailed && data?.state === 'failed'));
             })
             .catch(() => {
                 // The upload will tell about the connection.
@@ -55,6 +54,8 @@ export function useNotesJob(onFinish?: (job: NotesJob) => void) {
         return () => {
             cancelled = true;
         };
+        // The first answer decides; the option does not change on a screen.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
@@ -91,9 +92,11 @@ export function useNotesJob(onFinish?: (job: NotesJob) => void) {
         };
     }, [running, job]);
 
-    const upload = useCallback(async (files: File[]): Promise<NotesUpload> => {
+    /** An aborted upload ends with no error to show. */
+    const upload = useCallback(async (files: File[], signal?: AbortSignal): Promise<NotesUpload> => {
         try {
             const { data, response } = await api.POST('/notes', {
+                signal,
                 // The schema types binary parts as strings.
                 body: { files: files as unknown as string[] },
                 bodySerializer: (body) => {
@@ -109,10 +112,14 @@ export function useNotesJob(onFinish?: (job: NotesJob) => void) {
                 const current = await api.GET('/notes');
                 setJob(current.data ?? null);
                 setFollowed(true);
+                // They may have ended in between: no poll would tell then.
+                if (current.data && !isNotesRunning(current.data)) {
+                    finish.current?.(current.data);
+                }
                 return { ok: true };
             }
             if (response.status === 413) {
-                return { ok: false, error: 'Файлы больше 20 МБ вместе. Выберите меньше страниц или разделите конспект на части.' };
+                return { ok: false, error: NOTES_TOO_BIG };
             }
             if (response.status === 403 || response.status === 503) {
                 setAccess('off');
@@ -125,6 +132,9 @@ export function useNotesJob(onFinish?: (job: NotesJob) => void) {
             setFollowed(true);
             return { ok: true };
         } catch {
+            if (signal?.aborted) {
+                return { ok: false, error: '' };
+            }
             return { ok: false, error: 'Не получилось отправить конспект. Проверьте соединение и попробуйте ещё раз.' };
         }
     }, []);
