@@ -434,7 +434,7 @@ function App() {
                 onExit={setId ? () => openSet(setId) : goHome}
                 onBack={setId ? () => openSet(setId) : goHome}
                 onReportCard={(card, feedResume) => openCardIssue(card, setId, feedResume, early)}
-                onShare={setId ? () => go({ name: 'share', setId }) : undefined}
+                onHome={goHome}
             />
         );
     }

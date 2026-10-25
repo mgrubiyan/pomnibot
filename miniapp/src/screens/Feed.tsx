@@ -198,8 +198,8 @@ export interface FeedProps {
      * Resolves to false when the complaint screen could not be opened.
      */
     onReportCard: (card: Card, resume: FeedResume) => Promise<boolean>;
-    /** Opens sharing from the result screen; absent for the daily mix. */
-    onShare?: () => void;
+    /** The result screen's main button: back to the main menu. */
+    onHome: () => void;
 }
 
 export function Feed({
@@ -212,7 +212,7 @@ export function Feed({
     onExit,
     onBack,
     onReportCard,
-    onShare,
+    onHome,
 }: FeedProps) {
     const [status, setStatus] = useState<Status>(resume ? 'ready' : 'loading');
     const [cards, setCards] = useState<FeedCard[]>(() =>
@@ -632,7 +632,7 @@ export function Feed({
                     results={results}
                     nextReviewAt={nextReviewAt}
                     onExit={onExit}
-                    onShare={onShare}
+                    onHome={onHome}
                 />
             );
         }

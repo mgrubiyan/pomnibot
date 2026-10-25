@@ -14,13 +14,13 @@ export interface ResultProps {
     results: Answer[];
     /** Read after the answers are saved; null until then or if there is none. */
     nextReviewAt?: string | null;
+    /** Back to the set; only offered when a single set was gone through. */
     onExit: () => void;
-    /** Only a single set can be shared; the daily mix has nothing to share. */
-    onShare?: () => void;
+    onHome: () => void;
 }
 
 /** End of a run: the score and the facts that went worst. */
-export function Result({ setTitle, cards, results, nextReviewAt, onExit, onShare }: ResultProps) {
+export function Result({ setTitle, cards, results, nextReviewAt, onExit, onHome }: ResultProps) {
     const correct = results.filter((result) => result.correct).length;
     const facts = factsWithErrors(cards, results);
     const allRight = allCorrect(results);
@@ -92,19 +92,14 @@ export function Result({ setTitle, cards, results, nextReviewAt, onExit, onShare
             </Flex>
 
             <Flex direction="column" align="stretch" gap={8}>
-                {onShare ? (
-                    <Button size="medium" variant="primary" stretched onClick={onShare}>
-                        Поделиться набором
+                <Button size="medium" variant="primary" stretched onClick={onHome}>
+                    На главную
+                </Button>
+                {setTitle ? (
+                    <Button size="medium" variant="ghost" stretched onClick={onExit}>
+                        К набору
                     </Button>
                 ) : null}
-                <Button
-                    size="medium"
-                    variant={onShare ? 'ghost' : 'secondary'}
-                    stretched
-                    onClick={onExit}
-                >
-                    {setTitle ? 'К набору' : 'На главную'}
-                </Button>
             </Flex>
         </Screen>
     );
