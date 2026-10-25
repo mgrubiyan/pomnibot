@@ -18,7 +18,6 @@ import { StatusScreen } from '../components/StatusScreen';
 import { IconCheck, IconDoc, IconOffline } from '../components/Icons';
 import { estimateMinutes } from '../utils/estimate';
 import { aboutMinutesLabel, cardsLabel, cardsWord } from '../utils/plural';
-import { formatTodayDate } from '../utils/today';
 import { formatAuthorName, formatGreetingName } from '../utils/user';
 import { UserAvatar } from '../components/UserAvatar';
 import { formatNextReviewSubtitle, isNextReviewToday } from '../utils/reviewDate';
@@ -200,14 +199,9 @@ export function Home({ onStart, onOpenSet, onAddNote, onJoinSet, onOpenWhy, remo
     return (
         <Screen>
             <Flex justify="space-between" align="center" gap={12} className={s.header}>
-                <Flex direction="column" align="flex-start" gap={4} className={s.headerText}>
-                    <Typography.Text variant="description" color="secondary" asChild>
-                        <h1 className={s.greeting}>Привет, {formatGreetingName(today.user)}</h1>
-                    </Typography.Text>
-                    <Typography.Text variant="description" color="tertiary" className={s.date}>
-                        {formatTodayDate()}
-                    </Typography.Text>
-                </Flex>
+                <Typography.Text variant="description" color="secondary" asChild>
+                    <h1 className={s.greeting}>Привет, {formatGreetingName(today.user)}</h1>
+                </Typography.Text>
                 {onOpenProfile ? (
                     <button type="button" className={s.profileButton} onClick={onOpenProfile} aria-label="Профиль">
                         <UserAvatar user={today.user} size={36} />

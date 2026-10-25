@@ -11,14 +11,6 @@
     overflow-wrap: anywhere;
 }
 
-.headerText {
-    min-width: 0;
-}
-
-.date {
-    white-space: nowrap;
-}
-
 /* The avatar opens the profile and is pressed in like a button. It is
    36 px, the place to tap it 44 px. */
 .profileButton {
