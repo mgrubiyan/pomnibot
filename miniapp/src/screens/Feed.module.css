@@ -50,9 +50,10 @@
 
 .flip {
     flex: 1;
-    /* min-height keeps a long breakdown scrolling inside the card
-       instead of stretching the screen. */
-    min-height: 0;
+    /* A long breakdown scrolls inside the card instead of stretching the
+       screen. The floor is for a short phone: there the options give way
+       and scroll, so the question is never squeezed to a couple of lines. */
+    min-height: 35dvh;
     perspective: 1000px;
     animation: cardIn 0.2s var(--ease-out);
 }
@@ -150,6 +151,15 @@
     text-wrap: pretty;
 }
 
+/* A short phone, or MAX's own bar on top: one step smaller type, so a long
+   question still fits the card without scrolling. */
+@media (max-height: 700px) {
+    .card .question {
+        font-size: var(--font-size-title);
+        line-height: var(--line-height-title);
+    }
+}
+
 /* Answer options */
 
 .option {
@@ -216,6 +226,11 @@
     cursor: default;
 }
 
+
+/* A long topic must not squeeze the back button out of its 40px. */
+.back {
+    flex-shrink: 0;
+}
 
 /* One line, so a long topic does not move the card from one card to the next. */
 .topic {
@@ -332,6 +347,12 @@
 .answerBody {
     flex: 1;
     min-width: 0;
+}
+
+/* Lets the options give way to the card on a short phone: without it the
+   column keeps its full height and pushes the button off the screen. */
+.controls {
+    min-height: 0;
 }
 
 .options {

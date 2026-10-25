@@ -668,6 +668,7 @@ export function Feed({
                             size="small"
                             variant="ghost"
                             aria-label="Назад"
+                            className={s.back}
                             onClick={handleBack}
                         >
                             <IconChevronLeft size={20} />
@@ -938,7 +939,7 @@ export function Feed({
                     </Button>
                 </Flex>
             ) : (
-                <Flex direction="column" align="stretch" gap={8}>
+                <Flex direction="column" align="stretch" gap={8} className={s.controls}>
                     {options.length > 0 ? (
                         <div className={s.options}>
                             {options.map((option) => (
