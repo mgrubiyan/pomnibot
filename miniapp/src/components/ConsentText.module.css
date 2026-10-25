@@ -3,7 +3,9 @@
     text-wrap: pretty;
 }
 
+/* The link is a line of label text; the place to tap it is 44 px tall. */
 .more {
+    position: relative;
     margin: 0;
     padding: 0;
     border: 0;
@@ -16,6 +18,12 @@
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     transition: opacity 0.12s var(--ease-out);
+}
+
+.more::after {
+    content: '';
+    position: absolute;
+    inset: -14px -4px;
 }
 
 .more:active {
