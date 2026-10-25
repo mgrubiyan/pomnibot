@@ -2,6 +2,7 @@ package repository_test
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -132,9 +133,12 @@ func TestPlatformUsersMigrationAndSharedLearning(t *testing.T) {
 	if _, err = sets.JoinSetByShareCode(ctx, telegramID, set.ShareCode.Value); err != nil {
 		t.Fatal(err)
 	}
-	list, err := sets.GetCardsBySetID(ctx, telegramID, set.ID)
+	if _, err = sets.GetCardsBySetID(ctx, telegramID, set.ID); !errors.Is(err, usecase.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden for shared member: %v", err)
+	}
+	list, err := sets.GetCardsBySetID(ctx, maxAccount.User.ID, set.ID)
 	if err != nil || len(list) != 1 {
-		t.Fatalf("shared cards: %v %v", list, err)
+		t.Fatalf("author cards: %v %v", list, err)
 	}
 	if _, err = cards.AnswerQuestion(ctx, telegramID, list[0].ID, "true", uuid.New()); err != nil {
 		t.Fatal(err)

@@ -67,15 +67,9 @@ func TestGeneratedSetOrderAndChoiceIssuesPostgres(t *testing.T) {
 	if err != nil || len(all) != 125 {
 		t.Fatalf("cards=%d error=%v", len(all), err)
 	}
-	// A member answers these cards in the feed, so their list has only the questions.
-	listed, err := sets.GetCardsBySetID(ctx, reader, set.ID)
-	if err != nil || len(listed) != 125 {
-		t.Fatalf("member cards=%d error=%v", len(listed), err)
-	}
-	for i, card := range listed {
-		if card.Question != all[i].Question || card.Answer.Set || card.Explanation.Set || card.SourceQuote.Set || card.Options != nil || card.Table.Set {
-			t.Fatalf("member card %d gives the answer away: %+v", i, card)
-		}
+	// A member cannot view the cards list; only the author can.
+	if _, err := sets.GetCardsBySetID(ctx, reader, set.ID); !errors.Is(err, usecase.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden for member, got: %v", err)
 	}
 	kinds := []contracts.CardKind{contracts.CardKindFlip, contracts.CardKindBoolean, contracts.CardKindChoice, contracts.CardKindTable, contracts.CardKindInput}
 	for i, card := range all {

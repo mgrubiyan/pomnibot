@@ -101,8 +101,7 @@ func (UnimplementedHandler) GetAdminIssues(ctx context.Context) (r GetAdminIssue
 
 // GetCardsBySetID implements GetCardsBySetID operation.
 //
-// The author gets whole cards; a member gets only the questions, without answers, options, tables,
-// explanations and quotes.
+// Only the author can get cards of a set; other users receive 403 Forbidden.
 //
 // GET /sets/{setId}/cards
 func (UnimplementedHandler) GetCardsBySetID(ctx context.Context, params GetCardsBySetIDParams) (r GetCardsBySetIDRes, _ error) {

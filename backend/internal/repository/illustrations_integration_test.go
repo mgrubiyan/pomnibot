@@ -2,6 +2,7 @@ package repository_test
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -73,9 +74,8 @@ func TestIllustrationsRoundTripAndEditPostgres(t *testing.T) {
 	if _, err = sets.JoinSetByShareCode(ctx, reader, set.ShareCode.Value); err != nil {
 		t.Fatal(err)
 	}
-	memberCards, err := sets.GetCardsBySetID(ctx, reader, set.ID)
-	if err != nil || len(memberCards) != 1 || memberCards[0].QuestionSvg.Value != question || memberCards[0].ExplanationSvg.Set {
-		t.Fatalf("member images: %+v %v", memberCards, err)
+	if _, err = sets.GetCardsBySetID(ctx, reader, set.ID); !errors.Is(err, usecase.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden for member, got: %v", err)
 	}
 	stored, err := q.GetCardByID(ctx, db.GetCardByIDParams{ID: pgtype.UUID{Bytes: all[0].ID, Valid: true}, UserID: pgtype.UUID{Bytes: owner, Valid: true}})
 	if err != nil || stored.QuestionSvg.String != question || stored.ExplanationSvg.String != explanation || stored.AnswerText.String != `$$\frac{4}{2}$$` {
