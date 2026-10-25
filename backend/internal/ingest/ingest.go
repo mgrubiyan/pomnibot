@@ -396,6 +396,10 @@ func (e *Extractor) recognizePDF(ctx context.Context, res *Result, f File, pages
 		Only:       scanned,
 		TextLayers: append([]string(nil), pages...),
 	})
+	if errors.Is(err, ErrImageTooLarge) {
+		return &Error{File: f.Name, Err: err,
+			Message: "Страница PDF слишком большая, чтобы её распознать. Сохраните файл в формате A4."}
+	}
 	if err != nil {
 		return e.ocrError(ctx, f, err)
 	}

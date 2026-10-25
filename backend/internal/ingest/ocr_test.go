@@ -255,12 +255,25 @@ func TestExtractShrinksLargePhotos(t *testing.T) {
 
 func TestExtractRejectsHugePhoto(t *testing.T) {
 	ocr := &fakeOCR{}
-	_, err := newOCRExtractor(t, ocr, &fakePDF{}).Extract(context.Background(), []File{{Name: "bomb.png", Data: bombPNG(65_535, 65_535)}})
+	_, err := newOCRExtractor(t, ocr, &fakePDF{}).Extract(context.Background(), []File{{Name: "bomb.png", Data: bombPNG(overLimit, overLimit)}})
 	var ie *Error
 	if !errors.As(err, &ie) || !errors.Is(err, ErrImageTooLarge) || !strings.Contains(ie.Message, "слишком большое") {
 		t.Errorf("error = %v, want *Error with ErrImageTooLarge telling the photo is too large", err)
 	}
 	if len(ocr.reqs) != 0 {
 		t.Error("the service was called for a photo over the pixel limit")
+	}
+}
+
+// A scanned page drawn too large fails every time: retrying later is no advice.
+func TestExtractSaysScannedPageIsTooLarge(t *testing.T) {
+	ocr := &fakeOCR{answer: func(int, OCRRequest) ([]OCRPage, error) {
+		return nil, fmt.Errorf("render page 2: %w", ErrImageTooLarge)
+	}}
+	_, err := newOCRExtractor(t, ocr, &fakePDF{pages: []string{page(1), ""}}).
+		Extract(context.Background(), []File{{Name: "poster.pdf", Data: pdfBytes}})
+	var ie *Error
+	if !errors.As(err, &ie) || !errors.Is(err, ErrImageTooLarge) || !strings.Contains(ie.Message, "слишком большая") {
+		t.Errorf("error = %v, want *Error with ErrImageTooLarge telling the page is too large", err)
 	}
 }

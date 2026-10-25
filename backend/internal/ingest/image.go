@@ -3,6 +3,7 @@ package ingest
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -23,8 +24,9 @@ const (
 
 // MaxDecodePixels caps an image decoded here. Decoding allocates the whole
 // bitmap its header announces, so a file of a few hundred kilobytes can ask
-// for gigabytes; 100 megapixels still takes a full-size camera photo.
-const MaxDecodePixels = 100_000_000
+// for gigabytes, and a progressive JPEG holds several bytes a pixel on top.
+// Phones save 12–24 megapixels by default.
+const MaxDecodePixels = 40_000_000
 
 // maxLongSide caps a photo that has to be shrunk anyway: 4096 px along the
 // long side keeps handwriting legible and a JPEG well under the size limit.
@@ -47,12 +49,12 @@ var serviceLimits = limits{bytes: MaxOCRBytes, pixels: MaxOCRPixels, pages: MaxO
 // to fit the pixel limit, converted to grayscale and encoded as JPEG,
 // lowering quality and then size until it fits the byte limit.
 func fitImage(data []byte, lim limits) (out []byte, mime string, resized bool, err error) {
-	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
+	cfg, format, err := imageConfig(data)
+	if errors.Is(err, ErrImageTooLarge) {
+		return nil, "", false, err
+	}
 	if err != nil {
 		return nil, "", false, fmt.Errorf("read image: %w", err)
-	}
-	if err := checkPixels(cfg); err != nil {
-		return nil, "", false, err
 	}
 	mime = "image/" + format
 	accepted := format == "jpeg" || format == "png"
@@ -91,22 +93,22 @@ func fitImage(data []byte, lim limits) (out []byte, mime string, resized bool, e
 	}
 }
 
-// checkPixels refuses an image whose header announces more than
-// MaxDecodePixels, before anything is allocated for it.
-func checkPixels(cfg image.Config) error {
-	if int64(cfg.Width)*int64(cfg.Height) > MaxDecodePixels {
-		return fmt.Errorf("%w: %dx%d", ErrImageTooLarge, cfg.Width, cfg.Height)
+// imageConfig reads an image's header and refuses one that announces more
+// than MaxDecodePixels, before anything is allocated for it.
+func imageConfig(data []byte) (image.Config, string, error) {
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return cfg, format, err
 	}
-	return nil
+	if int64(cfg.Width)*int64(cfg.Height) > MaxDecodePixels {
+		return cfg, format, fmt.Errorf("%w: %dx%d", ErrImageTooLarge, cfg.Width, cfg.Height)
+	}
+	return cfg, format, nil
 }
 
 // decodeImage decodes an image within MaxDecodePixels.
 func decodeImage(data []byte) (image.Image, error) {
-	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	if err := checkPixels(cfg); err != nil {
+	if _, _, err := imageConfig(data); err != nil {
 		return nil, err
 	}
 	img, _, err := image.Decode(bytes.NewReader(data))

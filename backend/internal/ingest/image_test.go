@@ -7,6 +7,7 @@ import (
 	"hash/crc32"
 	"image"
 	"image/png"
+	"math"
 	"math/rand/v2"
 	"testing"
 )
@@ -100,6 +101,10 @@ func TestShrinkAveragesPixels(t *testing.T) {
 	}
 }
 
+// overLimit is the side of a square image just over MaxDecodePixels: if the
+// check is lost, decoding it costs tens of megabytes, not gigabytes.
+var overLimit = uint32(math.Sqrt(MaxDecodePixels)) + 1
+
 // bombPNG is the start of a PNG whose header announces w×h pixels: enough
 // for DecodeConfig, while Decode would allocate the whole bitmap.
 func bombPNG(w, h uint32) []byte {
@@ -116,7 +121,7 @@ func bombPNG(w, h uint32) []byte {
 }
 
 func TestFitImageRejectsBombBeforeDecoding(t *testing.T) {
-	_, _, _, err := fitImage(bombPNG(10_001, 10_001), serviceLimits)
+	_, _, _, err := fitImage(bombPNG(overLimit, overLimit), serviceLimits)
 	if !errors.Is(err, ErrImageTooLarge) {
 		t.Errorf("fitImage() error = %v, want ErrImageTooLarge", err)
 	}

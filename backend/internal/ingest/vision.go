@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/jpeg"
 	"log/slog"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -82,6 +83,10 @@ const (
 // nil); pages not read come back empty.
 func (v *VisionOCR) Recognize(ctx context.Context, req OCRRequest) ([]OCRPage, error) {
 	if req.MimeType != "application/pdf" {
+		// Checked before the checker, a paid service, sees it.
+		if _, _, err := imageConfig(req.Data); err != nil {
+			return nil, fmt.Errorf("read image: %w", err)
+		}
 		if v.FullPage {
 			p, err := v.readFullPage(ctx, req.Data, req.MimeType, req.Model, "")
 			return []OCRPage{p}, err
@@ -107,6 +112,11 @@ func (v *VisionOCR) Recognize(ctx context.Context, req OCRRequest) ([]OCRPage, e
 	defer cancel()
 	readOne := func(n int) error {
 		img, err := render(runCtx, req.Data, n)
+		if err == nil {
+			// Checked before the checker, a paid service, sees it; a page
+			// over the limit is handled as one that did not render.
+			_, _, err = imageConfig(img)
+		}
 		if err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
@@ -421,10 +431,37 @@ func renderPDFPage(ctx context.Context, pdf []byte, page int) ([]byte, error) {
 	}
 	out := filepath.Join(dir, "page")
 	n := strconv.Itoa(page + 1)
+	info, err := exec.CommandContext(ctx, "pdfinfo", "-f", n, "-l", n, in).Output()
+	if err != nil {
+		return nil, fmt.Errorf("pdfinfo: %w", err)
+	}
 	cmd := exec.CommandContext(ctx, "pdftoppm", "-f", n, "-l", n, "-singlefile",
-		"-r", strconv.Itoa(renderDPI), "-jpeg", in, out)
+		"-r", strconv.Itoa(pageDPI(string(info))), "-jpeg", in, out)
 	if msg, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("pdftoppm: %w: %s", err, strings.TrimSpace(string(msg)))
 	}
 	return os.ReadFile(out + ".jpg")
+}
+
+// pageSize finds a page's size in points in pdfinfo's output.
+var pageSize = regexp.MustCompile(`size:\s+([\d.]+) x ([\d.]+) pts`)
+
+// pageDPI is renderDPI, lowered for a page so large that its rendering would
+// pass MaxOCRPixels: a page can be drawn hundreds of inches wide, and
+// pdftoppm holds the whole bitmap. pdftoppm rounds each side up.
+func pageDPI(info string) int {
+	m := pageSize.FindStringSubmatch(info)
+	if m == nil {
+		return renderDPI
+	}
+	w, errW := strconv.ParseFloat(m[1], 64)
+	h, errH := strconv.ParseFloat(m[2], 64)
+	if errW != nil || errH != nil || w <= 0 || h <= 0 {
+		return renderDPI
+	}
+	dpi := renderDPI
+	for dpi > 1 && math.Ceil(w*float64(dpi)/72)*math.Ceil(h*float64(dpi)/72) > MaxOCRPixels {
+		dpi--
+	}
+	return dpi
 }
