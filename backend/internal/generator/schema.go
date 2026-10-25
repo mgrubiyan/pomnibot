@@ -36,19 +36,18 @@ func factSchema() map[string]any {
 		fields["sourceQuote"] = map[string]any{"type": "string", "description": "Verbatim quote for this card from the supplied text or readable original PDF on the fact pages; empty string if unavailable or not confidently readable."}
 		return schemaObject(fields)
 	}
+	recall := variant("recall", map[string]any{"answer": s}).(map[string]any)
+	props := recall["properties"].(map[string]any)
+	delete(props, "kind")
+	recall = schemaObject(props)
 	variants := []any{
-		variant("recall", map[string]any{"answer": s}),
 		variant("boolean", map[string]any{"answer": map[string]any{"type": "boolean"}}),
 		variant("choice", map[string]any{"rightAnswers": nonempty(s), "wrongAnswers": nonempty(s)}),
 		variant("table", map[string]any{"columns": tableColumnsSchema(s)}),
 	}
 	// Distinct kind constants make the variants mutually exclusive under anyOf.
 	cs := schemaArray(map[string]any{"anyOf": variants})
-	cs["description"] = "Optional additional recall pairs or boolean, choice and table cards; may be empty."
-	recall := variant("recall", map[string]any{"answer": s}).(map[string]any)
-	props := recall["properties"].(map[string]any)
-	delete(props, "kind")
-	recall = schemaObject(props)
+	cs["description"] = "Optional additional boolean, choice and table cards; may be empty."
 	pages := nonempty(map[string]any{"type": "integer"})
 	pages["description"] = "Source pages for this fact, numbered from 1 across all files."
 	return schemaObject(map[string]any{"name": map[string]any{"type": "string", "description": "Nonempty plain-text fact name, without Markdown or math."}, "pages": pages, "recall": recall, "extraCards": cs})

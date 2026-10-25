@@ -152,35 +152,8 @@ func TestValidationDiagnosticsUseWireIndicesWithoutPrivateValues(t *testing.T) {
 		{"outside pages", "pages[0]", "page is outside document range 1..1", func(f *Fact) { f.Pages = []int{2} }},
 		{"duplicate pages", "pages[1]", "duplicate fact page", func(f *Fact) { f.Pages = []int{1, 1} }},
 		{"blank question", "recall.question", "question is empty", func(f *Fact) { v := f.Cards[4].(FlipCard); v.Question = " "; f.Cards[4] = v }},
-		{"blank source", "extraCards[2].source", "source is empty", func(f *Fact) { v := f.Cards[3].(BooleanCard); v.Source = " "; f.Cards[3] = v }},
 		{"blank input", "recall.answer", "answer is empty", func(f *Fact) { v := f.Cards[4].(FlipCard); v.Answer = " "; f.Cards[4] = v }},
 		{"blank flip", "recall.answer", "answer is empty", func(f *Fact) { v := f.Cards[4].(FlipCard); v.Answer = " "; f.Cards[4] = v }},
-		{"missing right answers", "extraCards[1].rightAnswers", "right answers are empty", func(f *Fact) { v := f.Cards[2].(ChoiceCard); v.RightAnswers = []string{}; f.Cards[2] = v }},
-		{"missing wrong answers", "extraCards[1].wrongAnswers", "wrong answers are empty", func(f *Fact) { v := f.Cards[2].(ChoiceCard); v.WrongAnswers = []string{}; f.Cards[2] = v }},
-		{"blank choice", "extraCards[1].rightAnswers[1]", "choice answer is empty", func(f *Fact) { v := f.Cards[2].(ChoiceCard); v.RightAnswers[1] = " "; f.Cards[2] = v }},
-		{"duplicate choice", "extraCards[1].wrongAnswers[0]", "duplicate choice answer", func(f *Fact) {
-			v := f.Cards[2].(ChoiceCard)
-			v.RightAnswers[0] = privateDiagnosticText
-			v.WrongAnswers[0] = privateDiagnosticText
-			f.Cards[2] = v
-		}},
-		{"short table", "extraCards[0].columns", "table requires at least two categories", func(f *Fact) { v := f.Cards[1].(TableCard); v.Columns = v.Columns[:1]; f.Cards[1] = v }},
-		{"blank category", "extraCards[0].columns[0].name", "table category name is empty", func(f *Fact) { v := f.Cards[1].(TableCard); v.Columns[0].Name = " "; f.Cards[1] = v }},
-		{"duplicate category", "extraCards[0].columns[1].name", "duplicate table category", func(f *Fact) {
-			v := f.Cards[1].(TableCard)
-			v.Columns[0].Name = privateDiagnosticText
-			v.Columns[1].Name = privateDiagnosticText
-			f.Cards[1] = v
-		}},
-		{"empty rows", "extraCards[0].columns[1].rows", "table rows are empty", func(f *Fact) { v := f.Cards[1].(TableCard); v.Columns[1].Rows = nil; f.Cards[1] = v }},
-		{"blank row", "extraCards[0].columns[1].rows[0]", "table row is empty", func(f *Fact) { v := f.Cards[1].(TableCard); v.Columns[1].Rows[0] = " "; f.Cards[1] = v }},
-		{"duplicate row", "extraCards[0].columns[1].rows[0]", "duplicate table row", func(f *Fact) {
-			v := f.Cards[1].(TableCard)
-			v.Columns[0].Rows[0] = privateDiagnosticText
-			v.Columns[1].Rows[0] = privateDiagnosticText
-			f.Cards[1] = v
-		}},
-		{"duplicate question", "extraCards[3].question", "duplicate card question of the same kind", func(f *Fact) { f.Cards = append(f.Cards, f.Cards[4]) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			fact := requiredFormatsFixture()
@@ -196,6 +169,66 @@ func TestValidationDiagnosticsUseWireIndicesWithoutPrivateValues(t *testing.T) {
 			}
 			if r.Stats.Stages["generation"].Error != err.Error() || r.Stats.InvalidResponses != 1 {
 				t.Errorf("inconsistent stats: %+v", r.Stats)
+			}
+		})
+	}
+}
+
+func TestExtraCardDefectsAreDroppedAndLoggedWithoutPrivateValues(t *testing.T) {
+	for _, tc := range []struct {
+		name, path, reason string
+		mutate             func(*Fact)
+	}{
+		{"blank source", "extraCards[2].source", "source is empty", func(f *Fact) { v := f.Cards[3].(BooleanCard); v.Source = " "; f.Cards[3] = v }},
+		{"missing right answers", "extraCards[1].rightAnswers", "right answers are empty", func(f *Fact) { v := f.Cards[2].(ChoiceCard); v.RightAnswers = []string{}; f.Cards[2] = v }},
+		{"missing wrong answers", "extraCards[1].wrongAnswers", "wrong answers are empty", func(f *Fact) { v := f.Cards[2].(ChoiceCard); v.WrongAnswers = []string{}; f.Cards[2] = v }},
+		{"duplicate choice empty after clean", "extraCards[1].wrongAnswers", "wrong answers are empty", func(f *Fact) {
+			v := f.Cards[2].(ChoiceCard)
+			v.RightAnswers = []string{privateDiagnosticText}
+			v.WrongAnswers = []string{privateDiagnosticText}
+			f.Cards[2] = v
+		}},
+		{"short table", "extraCards[0].columns", "table requires at least two categories", func(f *Fact) { v := f.Cards[1].(TableCard); v.Columns = v.Columns[:1]; f.Cards[1] = v }},
+		{"blank category", "extraCards[0].columns[0].name", "table category name is empty", func(f *Fact) { v := f.Cards[1].(TableCard); v.Columns[0].Name = " "; f.Cards[1] = v }},
+		{"duplicate category", "extraCards[0].columns[1].name", "duplicate table category", func(f *Fact) {
+			v := f.Cards[1].(TableCard)
+			v.Columns[0].Name = privateDiagnosticText
+			v.Columns[1].Name = privateDiagnosticText
+			f.Cards[1] = v
+		}},
+		{"empty rows", "extraCards[0].columns[1].rows", "table rows are empty", func(f *Fact) { v := f.Cards[1].(TableCard); v.Columns[1].Rows = nil; f.Cards[1] = v }},
+		{"blank row", "extraCards[0].columns[1].rows", "table rows are empty", func(f *Fact) { v := f.Cards[1].(TableCard); v.Columns[1].Rows[0] = " "; f.Cards[1] = v }},
+		{"duplicate row", "extraCards[0].columns[1].rows[0]", "duplicate table row", func(f *Fact) {
+			v := f.Cards[1].(TableCard)
+			v.Columns[0].Rows[0] = privateDiagnosticText
+			v.Columns[1].Rows[0] = privateDiagnosticText
+			f.Cards[1] = v
+		}},
+		{"duplicate card signature", "extraCards[3]", "duplicate card with identical signature", func(f *Fact) { f.Cards = append(f.Cards, f.Cards[3]) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fact := requiredFormatsFixture()
+			fact.Name = privateDiagnosticText
+			tc.mutate(&fact)
+			r, err := NewGenerator(stageFixture(fact), Options{}).Generate(t.Context(), Document{Text: privateDiagnosticText})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			found := false
+			expectedPath := "facts[0]." + tc.path
+			for _, issue := range r.Coverage.Issues {
+				if strings.Contains(issue, expectedPath) && strings.Contains(issue, tc.reason) {
+					found = true
+				}
+				if strings.Contains(issue, privateDiagnosticText) {
+					t.Errorf("issue leaked private value: %s", issue)
+				}
+			}
+			if !found {
+				t.Errorf("expected issue for path %s with reason %q, got issues: %v", expectedPath, tc.reason, r.Coverage.Issues)
+			}
+			if r.Stats.DroppedInvalid+r.Stats.DroppedDuplicate == 0 {
+				t.Errorf("expected dropped item in stats: %+v", r.Stats)
 			}
 		})
 	}
