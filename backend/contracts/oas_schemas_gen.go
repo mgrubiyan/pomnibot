@@ -3,6 +3,7 @@
 package contracts
 
 import (
+	"io"
 	"time"
 
 	"github.com/go-faster/errors"
@@ -289,6 +290,22 @@ func (s *AnswerQuestionResponseMethod) UnmarshalText(data []byte) error {
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
+}
+
+// Ref: #/components/schemas/AvatarRequest
+type AvatarRequest struct {
+	// JPEG or PNG of at most 300 KB and 1024 px a side.
+	Image []byte `json:"image"`
+}
+
+// GetImage returns the value of Image.
+func (s *AvatarRequest) GetImage() []byte {
+	return s.Image
+}
+
+// SetImage sets the value of Image.
+func (s *AvatarRequest) SetImage(val []byte) {
+	s.Image = val
 }
 
 // Answer, explanation, explanationSvg and sourceQuote are absent in a set member's list of the set's
@@ -982,6 +999,21 @@ func (*CardSet) getSetRes()             {}
 func (*CardSet) getSetShareCodeRes()    {}
 func (*CardSet) joinSetByShareCodeRes() {}
 
+// Ref: #/components/schemas/ConsentRequest
+type ConsentRequest struct {
+	Given bool `json:"given"`
+}
+
+// GetGiven returns the value of Given.
+func (s *ConsentRequest) GetGiven() bool {
+	return s.Given
+}
+
+// SetGiven sets the value of Given.
+func (s *ConsentRequest) SetGiven(val bool) {
+	s.Given = val
+}
+
 type CreateCardBadRequest ErrorResponse
 
 func (*CreateCardBadRequest) createCardRes() {}
@@ -1187,6 +1219,14 @@ func (*DeleteFactNoContent) deleteFactRes() {}
 type DeleteFactNotFound ErrorResponse
 
 func (*DeleteFactNotFound) deleteFactRes() {}
+
+type DeleteProfileAvatarForbidden ErrorResponse
+
+func (*DeleteProfileAvatarForbidden) deleteProfileAvatarRes() {}
+
+type DeleteProfileAvatarInternalServerError ErrorResponse
+
+func (*DeleteProfileAvatarInternalServerError) deleteProfileAvatarRes() {}
 
 type DeleteSetForbidden ErrorResponse
 
@@ -1504,6 +1544,56 @@ func (*GetAdminIssuesInternalServerError) getAdminIssuesRes() {}
 type GetAdminIssuesOKApplicationJSON []AdminCardIssue
 
 func (*GetAdminIssuesOKApplicationJSON) getAdminIssuesRes() {}
+
+type GetAvatarInternalServerError ErrorResponse
+
+func (*GetAvatarInternalServerError) getAvatarRes() {}
+
+type GetAvatarNotFound ErrorResponse
+
+func (*GetAvatarNotFound) getAvatarRes() {}
+
+type GetAvatarOK struct {
+	Data io.Reader
+}
+
+// Read reads data from the Data reader.
+//
+// Kept to satisfy the io.Reader interface.
+func (s GetAvatarOK) Read(p []byte) (n int, err error) {
+	if s.Data == nil {
+		return 0, io.EOF
+	}
+	return s.Data.Read(p)
+}
+
+// GetAvatarOKHeaders wraps GetAvatarOK with response headers.
+type GetAvatarOKHeaders struct {
+	CacheControl OptString
+	Response     GetAvatarOK
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *GetAvatarOKHeaders) GetCacheControl() OptString {
+	return s.CacheControl
+}
+
+// GetResponse returns the value of Response.
+func (s *GetAvatarOKHeaders) GetResponse() GetAvatarOK {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *GetAvatarOKHeaders) SetCacheControl(val OptString) {
+	s.CacheControl = val
+}
+
+// SetResponse sets the value of Response.
+func (s *GetAvatarOKHeaders) SetResponse(val GetAvatarOK) {
+	s.Response = val
+}
+
+func (*GetAvatarOKHeaders) getAvatarRes() {}
 
 type GetCardsBySetIDForbidden ErrorResponse
 
@@ -2324,6 +2414,8 @@ type ProfileResponse struct {
 	User            User                       `json:"user"`
 	Platform        OptProfileResponsePlatform `json:"platform"`
 	ProfileComplete bool                       `json:"profileComplete"`
+	// The user lets set authors see their name and photo.
+	DataConsent bool `json:"dataConsent"`
 }
 
 // GetUser returns the value of User.
@@ -2341,6 +2433,11 @@ func (s *ProfileResponse) GetProfileComplete() bool {
 	return s.ProfileComplete
 }
 
+// GetDataConsent returns the value of DataConsent.
+func (s *ProfileResponse) GetDataConsent() bool {
+	return s.DataConsent
+}
+
 // SetUser sets the value of User.
 func (s *ProfileResponse) SetUser(val User) {
 	s.User = val
@@ -2356,8 +2453,16 @@ func (s *ProfileResponse) SetProfileComplete(val bool) {
 	s.ProfileComplete = val
 }
 
-func (*ProfileResponse) getProfileRes() {}
-func (*ProfileResponse) putProfileRes() {}
+// SetDataConsent sets the value of DataConsent.
+func (s *ProfileResponse) SetDataConsent(val bool) {
+	s.DataConsent = val
+}
+
+func (*ProfileResponse) deleteProfileAvatarRes() {}
+func (*ProfileResponse) getProfileRes()          {}
+func (*ProfileResponse) putProfileAvatarRes()    {}
+func (*ProfileResponse) putProfileConsentRes()   {}
+func (*ProfileResponse) putProfileRes()          {}
 
 type ProfileResponsePlatform string
 
@@ -2400,9 +2505,29 @@ func (s *ProfileResponsePlatform) UnmarshalText(data []byte) error {
 	}
 }
 
+type PutProfileAvatarBadRequest ErrorResponse
+
+func (*PutProfileAvatarBadRequest) putProfileAvatarRes() {}
+
+type PutProfileAvatarForbidden ErrorResponse
+
+func (*PutProfileAvatarForbidden) putProfileAvatarRes() {}
+
+type PutProfileAvatarInternalServerError ErrorResponse
+
+func (*PutProfileAvatarInternalServerError) putProfileAvatarRes() {}
+
 type PutProfileBadRequest ErrorResponse
 
 func (*PutProfileBadRequest) putProfileRes() {}
+
+type PutProfileConsentForbidden ErrorResponse
+
+func (*PutProfileConsentForbidden) putProfileConsentRes() {}
+
+type PutProfileConsentInternalServerError ErrorResponse
+
+func (*PutProfileConsentInternalServerError) putProfileConsentRes() {}
 
 type PutProfileForbidden ErrorResponse
 
@@ -3065,6 +3190,11 @@ type User struct {
 	FirstName string    `json:"firstName"`
 	LastName  OptString `json:"lastName"`
 	Username  OptString `json:"username"`
+	// The user's photo, when they have one and the viewer may see it.
+	AvatarUrl OptString `json:"avatarUrl"`
+	// The member has not let the set author see their name; firstName is then empty, and lastName and
+	// username are left out.
+	Anonymous OptBool `json:"anonymous"`
 }
 
 // GetID returns the value of ID.
@@ -3087,6 +3217,16 @@ func (s *User) GetUsername() OptString {
 	return s.Username
 }
 
+// GetAvatarUrl returns the value of AvatarUrl.
+func (s *User) GetAvatarUrl() OptString {
+	return s.AvatarUrl
+}
+
+// GetAnonymous returns the value of Anonymous.
+func (s *User) GetAnonymous() OptBool {
+	return s.Anonymous
+}
+
 // SetID sets the value of ID.
 func (s *User) SetID(val uuid.UUID) {
 	s.ID = val
@@ -3105,4 +3245,14 @@ func (s *User) SetLastName(val OptString) {
 // SetUsername sets the value of Username.
 func (s *User) SetUsername(val OptString) {
 	s.Username = val
+}
+
+// SetAvatarUrl sets the value of AvatarUrl.
+func (s *User) SetAvatarUrl(val OptString) {
+	s.AvatarUrl = val
+}
+
+// SetAnonymous sets the value of Anonymous.
+func (s *User) SetAnonymous(val OptBool) {
+	s.Anonymous = val
 }

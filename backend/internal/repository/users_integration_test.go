@@ -92,6 +92,15 @@ func TestMigration00009UpDown(t *testing.T) {
 	upSQL := parts[0]
 	downSQL := parts[1]
 
+	// Remove the photos' foreign key before 00009 rebuilds user IDs.
+	m20Data, err := repository.MigrationsFS.ReadFile("migrations/00020_avatars.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, strings.Split(string(m20Data), "-- +goose Down")[1]); err != nil {
+		t.Fatalf("failed to run 00020 Down: %v", err)
+	}
+
 	// Remove the report's foreign key before older migrations rebuild set IDs.
 	m14Data, err := repository.MigrationsFS.ReadFile("migrations/00014_processing_reports.sql")
 	if err != nil {

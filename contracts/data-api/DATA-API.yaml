@@ -69,6 +69,14 @@ checks:
               type: string
             username:
               type: string
+            avatarUrl:
+              type: string
+              description: The user's photo, when they have one and the viewer may
+                see it
+            anonymous:
+              type: boolean
+              description: The member has not let the set author see their name; firstName
+                is then empty, and lastName and username are left out.
         dueCount:
           type: integer
         estimatedMinutes:
@@ -115,6 +123,15 @@ checks:
                     type: string
                   username:
                     type: string
+                  avatarUrl:
+                    type: string
+                    description: The user's photo, when they have one and the viewer
+                      may see it
+                  anonymous:
+                    type: boolean
+                    description: The member has not let the set author see their name;
+                      firstName is then empty, and lastName and username are left
+                      out.
               shareCode:
                 type: string
                 pattern: \d{6}
@@ -219,6 +236,14 @@ checks:
                 type: string
               username:
                 type: string
+              avatarUrl:
+                type: string
+                description: The user's photo, when they have one and the viewer may
+                  see it
+              anonymous:
+                type: boolean
+                description: The member has not let the set author see their name;
+                  firstName is then empty, and lastName and username are left out.
           createdAt:
             type: string
             format: date-time
@@ -306,6 +331,7 @@ checks:
     - 200
     contentType: application/json
     requiredFields:
+    - dataConsent
     - profileComplete
     - user
     bodySchema:
@@ -313,6 +339,7 @@ checks:
       required:
       - user
       - profileComplete
+      - dataConsent
       properties:
         user:
           type: object
@@ -329,6 +356,14 @@ checks:
               type: string
             username:
               type: string
+            avatarUrl:
+              type: string
+              description: The user's photo, when they have one and the viewer may
+                see it
+            anonymous:
+              type: boolean
+              description: The member has not let the set author see their name; firstName
+                is then empty, and lastName and username are left out.
         platform:
           type: string
           enum:
@@ -336,6 +371,9 @@ checks:
           - telegram
         profileComplete:
           type: boolean
+        dataConsent:
+          type: boolean
+          description: The user lets set authors see their name and photo
   timeoutMs: 5000
   repeatable: true
 - id: PutProfile
@@ -351,6 +389,7 @@ checks:
     - 200
     contentType: application/json
     requiredFields:
+    - dataConsent
     - profileComplete
     - user
     bodySchema:
@@ -358,6 +397,7 @@ checks:
       required:
       - user
       - profileComplete
+      - dataConsent
       properties:
         user:
           type: object
@@ -374,6 +414,14 @@ checks:
               type: string
             username:
               type: string
+            avatarUrl:
+              type: string
+              description: The user's photo, when they have one and the viewer may
+                see it
+            anonymous:
+              type: boolean
+              description: The member has not let the set author see their name; firstName
+                is then empty, and lastName and username are left out.
         platform:
           type: string
           enum:
@@ -381,6 +429,125 @@ checks:
           - telegram
         profileComplete:
           type: boolean
+        dataConsent:
+          type: boolean
+          description: The user lets set authors see their name and photo
+  timeoutMs: 5000
+  repeatable: false
+- id: PutProfileAvatar
+  name: Replace the user's photo
+  method: PUT
+  path: /profile/avatar
+  role: user
+  request:
+    headers:
+      Content-Type: application/json
+  expected:
+    statusCodes:
+    - 200
+    contentType: application/json
+    requiredFields:
+    - dataConsent
+    - profileComplete
+    - user
+    bodySchema:
+      type: object
+      required:
+      - user
+      - profileComplete
+      - dataConsent
+      properties:
+        user:
+          type: object
+          required:
+          - id
+          - firstName
+          properties:
+            id:
+              type: string
+              format: uuid
+            firstName:
+              type: string
+            lastName:
+              type: string
+            username:
+              type: string
+            avatarUrl:
+              type: string
+              description: The user's photo, when they have one and the viewer may
+                see it
+            anonymous:
+              type: boolean
+              description: The member has not let the set author see their name; firstName
+                is then empty, and lastName and username are left out.
+        platform:
+          type: string
+          enum:
+          - max
+          - telegram
+        profileComplete:
+          type: boolean
+        dataConsent:
+          type: boolean
+          description: The user lets set authors see their name and photo
+  timeoutMs: 5000
+  repeatable: false
+- id: PutProfileConsent
+  name: Give or withdraw consent to show set authors the user's name and photo
+  method: PUT
+  path: /profile/consent
+  role: user
+  request:
+    headers:
+      Content-Type: application/json
+  expected:
+    statusCodes:
+    - 200
+    contentType: application/json
+    requiredFields:
+    - dataConsent
+    - profileComplete
+    - user
+    bodySchema:
+      type: object
+      required:
+      - user
+      - profileComplete
+      - dataConsent
+      properties:
+        user:
+          type: object
+          required:
+          - id
+          - firstName
+          properties:
+            id:
+              type: string
+              format: uuid
+            firstName:
+              type: string
+            lastName:
+              type: string
+            username:
+              type: string
+            avatarUrl:
+              type: string
+              description: The user's photo, when they have one and the viewer may
+                see it
+            anonymous:
+              type: boolean
+              description: The member has not let the set author see their name; firstName
+                is then empty, and lastName and username are left out.
+        platform:
+          type: string
+          enum:
+          - max
+          - telegram
+        profileComplete:
+          type: boolean
+        dataConsent:
+          type: boolean
+          description: The user lets set authors see their name and photo
   timeoutMs: 5000
   repeatable: false
 - id: CreateSet
@@ -436,6 +603,14 @@ checks:
               type: string
             username:
               type: string
+            avatarUrl:
+              type: string
+              description: The user's photo, when they have one and the viewer may
+                see it
+            anonymous:
+              type: boolean
+              description: The member has not let the set author see their name; firstName
+                is then empty, and lastName and username are left out.
         shareCode:
           type: string
           pattern: \d{6}
@@ -511,6 +686,14 @@ checks:
               type: string
             username:
               type: string
+            avatarUrl:
+              type: string
+              description: The user's photo, when they have one and the viewer may
+                see it
+            anonymous:
+              type: boolean
+              description: The member has not let the set author see their name; firstName
+                is then empty, and lastName and username are left out.
         shareCode:
           type: string
           pattern: \d{6}
@@ -531,6 +714,20 @@ checks:
           example: 85
   timeoutMs: 5000
   repeatable: false
+- id: GetAvatar
+  name: A user's photo
+  method: GET
+  path: /avatars/{avatarId}
+  role: user
+  request:
+    path:
+      avatarId: sample-id
+  expected:
+    statusCodes:
+    - 200
+    contentType: image/jpeg
+  timeoutMs: 5000
+  repeatable: true
 - id: UpdateCard
   name: Update a card
   method: PUT
@@ -1128,6 +1325,14 @@ checks:
               type: string
             username:
               type: string
+            avatarUrl:
+              type: string
+              description: The user's photo, when they have one and the viewer may
+                see it
+            anonymous:
+              type: boolean
+              description: The member has not let the set author see their name; firstName
+                is then empty, and lastName and username are left out.
         shareCode:
           type: string
           pattern: \d{6}
@@ -1621,6 +1826,15 @@ checks:
                     type: string
                   username:
                     type: string
+                  avatarUrl:
+                    type: string
+                    description: The user's photo, when they have one and the viewer
+                      may see it
+                  anonymous:
+                    type: boolean
+                    description: The member has not let the set author see their name;
+                      firstName is then empty, and lastName and username are left
+                      out.
               rank:
                 type: integer
                 example: 1
@@ -1727,6 +1941,15 @@ checks:
                     type: string
                   username:
                     type: string
+                  avatarUrl:
+                    type: string
+                    description: The user's photo, when they have one and the viewer
+                      may see it
+                  anonymous:
+                    type: boolean
+                    description: The member has not let the set author see their name;
+                      firstName is then empty, and lastName and username are left
+                      out.
               answers:
                 type: integer
               mistakes:
@@ -1813,6 +2036,14 @@ checks:
               type: string
             username:
               type: string
+            avatarUrl:
+              type: string
+              description: The user's photo, when they have one and the viewer may
+                see it
+            anonymous:
+              type: boolean
+              description: The member has not let the set author see their name; firstName
+                is then empty, and lastName and username are left out.
         shareCode:
           type: string
           pattern: \d{6}
@@ -1834,6 +2065,17 @@ checks:
   timeoutMs: 5000
   repeatable: true
 cleanup:
+- id: DeleteProfileAvatar
+  method: DELETE
+  path: /profile/avatar
+  role: user
+  expected:
+    statusCodes:
+    - 200
+    - 403
+    - 404
+    - 500
+  timeoutMs: 5000
 - id: DeleteCard
   method: DELETE
   path: /cards/{cardId}

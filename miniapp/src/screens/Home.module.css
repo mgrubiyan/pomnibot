@@ -11,9 +11,30 @@
     overflow-wrap: anywhere;
 }
 
+.headerText {
+    min-width: 0;
+}
+
 .date {
-    flex-shrink: 0;
     white-space: nowrap;
+}
+
+/* The avatar opens the profile and is pressed in like a button. It is
+   36 px, the place to tap it 44 px. */
+.profileButton {
+    flex-shrink: 0;
+    margin: -4px;
+    padding: 4px;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 160ms var(--ease-out);
+}
+
+.profileButton:active {
+    transform: scale(0.96);
 }
 
 /* The list scrolls inside the screen: no scrollbar painted over the cards,

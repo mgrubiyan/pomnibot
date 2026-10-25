@@ -46,9 +46,9 @@ func TestSetService_GetSetMistakes(t *testing.T) {
 		},
 		getSetStudentsFunc: func(_ context.Context, _ pgtype.UUID) ([]db.GetSetStudentsRow, error) {
 			return []db.GetSetStudentsRow{
-				{ID: bob, FirstName: "Bob"},
-				{ID: carol, FirstName: "Carol"},
-				{ID: dan, FirstName: "Dan"},
+				{ID: bob, FirstName: "Bob", DataConsent: true},
+				{ID: carol, FirstName: "Carol", Username: pgtype.Text{String: "carol", Valid: true}},
+				{ID: dan, FirstName: "Dan", DataConsent: true},
 			}, nil
 		},
 		getSetFactAnswersFunc: func(_ context.Context, _ pgtype.UUID) ([]db.GetSetFactAnswersRow, error) {
@@ -98,10 +98,20 @@ func TestSetService_GetSetMistakes(t *testing.T) {
 			}
 		}
 
+		// Carol has not agreed: the author gets a stand-in for her ID, the
+		// same throughout the response, so that her rows still link up.
+		if len(res.Students) < 2 {
+			t.Fatalf("students = %+v", res.Students)
+		}
+		carolID := res.Students[1].User.ID
+		if carolID == testUser3 || carolID == uuid.Nil {
+			t.Fatalf("anonymous member keeps her ID: %v", carolID)
+		}
+
 		// Members inside a fact keep the order they joined in.
 		indexStudents := res.Facts[1].Students
 		if indexStudents[0].UserId != testUser2 || indexStudents[0].Answers != 5 || indexStudents[0].Mistakes != 4 ||
-			indexStudents[1].UserId != testUser3 || indexStudents[1].Answers != 2 || indexStudents[1].Mistakes != 0 {
+			indexStudents[1].UserId != carolID || indexStudents[1].Answers != 2 || indexStudents[1].Mistakes != 0 {
 			t.Errorf("index students = %+v", indexStudents)
 		}
 
@@ -110,7 +120,7 @@ func TestSetService_GetSetMistakes(t *testing.T) {
 			answers, mistakes int
 		}{
 			{testUser2, 14, 7},
-			{testUser3, 5, 1},
+			{carolID, 5, 1},
 			{testOther, 0, 0},
 		}
 		if len(res.Students) != len(wantStudents) {
@@ -124,6 +134,12 @@ func TestSetService_GetSetMistakes(t *testing.T) {
 		}
 		if res.Students[2].User.FirstName != "Dan" {
 			t.Errorf("student without answers lost the name: %+v", res.Students[2].User)
+		}
+		if u := res.Students[1].User; !u.Anonymous.Value || u.FirstName != "" || u.Username.Set {
+			t.Errorf("member without consent is shown: %+v", u)
+		}
+		if u := res.Students[0].User; u.Anonymous.Value || u.FirstName != "Bob" {
+			t.Errorf("member who agreed is hidden: %+v", u)
 		}
 	})
 

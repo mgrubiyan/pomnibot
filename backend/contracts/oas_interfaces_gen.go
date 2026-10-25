@@ -29,12 +29,20 @@ type DeleteFactRes interface {
 	deleteFactRes()
 }
 
+type DeleteProfileAvatarRes interface {
+	deleteProfileAvatarRes()
+}
+
 type DeleteSetRes interface {
 	deleteSetRes()
 }
 
 type GetAdminIssuesRes interface {
 	getAdminIssuesRes()
+}
+
+type GetAvatarRes interface {
+	getAvatarRes()
 }
 
 type GetCardsBySetIDRes interface {
@@ -87,6 +95,14 @@ type GetTodayRes interface {
 
 type JoinSetByShareCodeRes interface {
 	joinSetByShareCodeRes()
+}
+
+type PutProfileAvatarRes interface {
+	putProfileAvatarRes()
+}
+
+type PutProfileConsentRes interface {
+	putProfileConsentRes()
 }
 
 type PutProfileRes interface {

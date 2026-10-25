@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Button, Flex, Input, Typography } from '@maxhub/max-ui';
 import { api } from '../api';
 import type { components } from '../../contracts/schema';
 import { telegramApp } from '../platform';
+import { ProfileContext } from './profileContext';
 import { Screen } from './Screen';
 import { StatusScreen } from './StatusScreen';
 import s from './ProfileGate.module.css';
@@ -49,6 +50,16 @@ export function ProfileGate({ children }: { children: ReactNode }) {
         };
     }, [load]);
 
+    // A screen that saved the profile has the newest one: a reload sent
+    // before the save must not bring the old one back.
+    const shared = useMemo(() => profile ? {
+        profile,
+        setProfile: (next: Profile) => {
+            requestId.current++;
+            setProfile(next);
+        },
+    } : null, [profile]);
+
     const reload = () => { setLoading(true); setLoadError(''); void load(); };
 
     const save = async () => {
@@ -69,10 +80,14 @@ export function ProfileGate({ children }: { children: ReactNode }) {
     };
 
     if (loading) return <StatusScreen icon={null} title="Загружаем профиль" text="Одну секунду…" />;
-    if (!profile || loadError) {
+    // A reload that fails in the background, as on the way back from the
+    // photo picker, keeps the profile already on screen.
+    if (!profile) {
         return <StatusScreen icon={null} title="Профиль недоступен" text={loadError} action={<Button onClick={reload}>Повторить</Button>} />;
     }
-    if (profile.platform !== 'telegram' || profile.profileComplete) return children;
+    if (profile.platform !== 'telegram' || profile.profileComplete) {
+        return <ProfileContext.Provider value={shared}>{children}</ProfileContext.Provider>;
+    }
 
     const validName = (value: string) => {
         const name = value.trim();
@@ -82,7 +97,7 @@ export function ProfileGate({ children }: { children: ReactNode }) {
         <Screen>
             <form className={s.form} onSubmit={event => { event.preventDefault(); void save(); }}>
                 <Typography.Title>Как вас зовут?</Typography.Title>
-                <Typography.Text>Фамилия и имя будут видны в общем рейтинге наборов.</Typography.Text>
+                <Typography.Text>Авторы наборов увидят фамилию и имя, только если вы разрешите это в профиле.</Typography.Text>
                 <Flex direction="column" align="stretch" gap={8}>
                     <label htmlFor="profile-last-name">Фамилия</label>
                     <Input id="profile-last-name" autoComplete="family-name" value={lastName} disabled={saving} onChange={event => setLastName(event.target.value)} />

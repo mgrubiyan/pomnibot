@@ -37,7 +37,7 @@ func TestSetMistakesPostgres(t *testing.T) {
 	elsewhereFlip := uuid.MustParse("00000000-0000-0000-0000-00000000c005")
 
 	for _, sql := range []string{
-		fmt.Sprintf(`INSERT INTO users(id,first_name,last_name) VALUES('%s','Анна','Автор'),('%s','Боб',NULL),('%s','Карина','Иванова'),('%s','Ушедший',NULL)`, author, bob, carol, gone),
+		fmt.Sprintf(`INSERT INTO users(id,first_name,last_name,data_consent_at) VALUES('%s','Анна','Автор',NULL),('%s','Боб',NULL,NULL),('%s','Карина','Иванова',NOW()),('%s','Ушедший',NULL,NOW())`, author, bob, carol, gone),
 		fmt.Sprintf(`INSERT INTO sets(id,title,author_id,share_code) VALUES('%s','БД','%s','123456'),('%s','Другой','%s','234567')`, set, author, other, author),
 		// Карина joined after Боб, and Анна joined her own set.
 		fmt.Sprintf(`INSERT INTO user_sets(user_id,set_id,joined_at) VALUES
@@ -102,13 +102,23 @@ func TestSetMistakesPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(res.Students) != 2 ||
-		res.Students[0].User.ID != bob || res.Students[0].Answers != 5 || res.Students[0].Mistakes != 2 ||
+	// Боб never agreed to show the author his name, so his ID is a stand-in.
+	if len(res.Students) != 2 {
+		t.Fatalf("students: %+v", res.Students)
+	}
+	shownBob := res.Students[0].User.ID
+	if shownBob == bob {
+		t.Errorf("anonymous student keeps his ID")
+	}
+	if res.Students[0].Answers != 5 || res.Students[0].Mistakes != 2 ||
 		res.Students[1].User.ID != carol || res.Students[1].Answers != 1 || res.Students[1].Mistakes != 1 {
 		t.Fatalf("students: %+v", res.Students)
 	}
 	if last, ok := res.Students[1].User.LastName.Get(); !ok || last != "Иванова" {
 		t.Errorf("student name: %+v", res.Students[1].User)
+	}
+	if u := res.Students[0].User; !u.Anonymous.Value || u.FirstName != "" {
+		t.Errorf("student without consent: %+v", u)
 	}
 
 	want := []struct {
@@ -130,7 +140,7 @@ func TestSetMistakesPostgres(t *testing.T) {
 			t.Errorf("fact %d: %+v want %+v", i, got, w)
 		}
 	}
-	if s := res.Facts[0].Students; s[0].UserId != bob || s[0].Answers != 4 || s[0].Mistakes != 2 || s[1].UserId != carol {
+	if s := res.Facts[0].Students; s[0].UserId != shownBob || s[0].Answers != 4 || s[0].Mistakes != 2 || s[1].UserId != carol {
 		t.Errorf("Ключи by student: %+v", s)
 	}
 

@@ -52,6 +52,103 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /profile/consent:
+    put:
+      summary: Give or withdraw consent to show set authors the user's name and photo
+      description: >-
+        Without consent the leaderboard and the mistakes of a set show the
+        member to its author as an anonymous participant.
+      operationId: PutProfileConsent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentRequest'
+      responses:
+        '200':
+          description: Saved profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /profile/avatar:
+    put:
+      summary: Replace the user's photo
+      description: >-
+        The image is re-encoded as JPEG, which drops its metadata. Set authors
+        see it only when the user agreed to show them their name.
+      operationId: PutProfileAvatar
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AvatarRequest'
+      responses:
+        '200':
+          description: Saved profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      summary: Remove the user's photo
+      operationId: DeleteProfileAvatar
+      responses:
+        '200':
+          description: Saved profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /avatars/{avatarId}:
+    get:
+      summary: A user's photo
+      description: >-
+        Needs no authorization, since an image tag sends none: the random ID
+        reaches only those the photo is shown to, and a new photo gets a new ID.
+      operationId: GetAvatar
+      parameters:
+        - name: avatarId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: JPEG image
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
   /health:
     get:
       summary: Health check endpoint
@@ -907,7 +1004,7 @@ components:
   schemas:
     ProfileResponse:
       type: object
-      required: [user, profileComplete]
+      required: [user, profileComplete, dataConsent]
       properties:
         user:
           $ref: '#/components/schemas/User'
@@ -916,6 +1013,23 @@ components:
           enum: [max, telegram]
         profileComplete:
           type: boolean
+        dataConsent:
+          type: boolean
+          description: The user lets set authors see their name and photo
+    ConsentRequest:
+      type: object
+      required: [given]
+      properties:
+        given:
+          type: boolean
+    AvatarRequest:
+      type: object
+      required: [image]
+      properties:
+        image:
+          description: JPEG or PNG of at most 300 KB and 1024 px a side
+          type: string
+          format: byte
     ProfileRequest:
       type: object
       required: [firstName, lastName]
@@ -1352,6 +1466,14 @@ components:
           type: string
         username:
           type: string
+        avatarUrl:
+          type: string
+          description: The user's photo, when they have one and the viewer may see it
+        anonymous:
+          type: boolean
+          description: >-
+            The member has not let the set author see their name; firstName is
+            then empty, and lastName and username are left out.
 
     CardSet:
       type: object

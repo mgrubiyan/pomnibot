@@ -22,6 +22,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/profile/consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Give or withdraw consent to show set authors the user's name and photo
+         * @description Without consent the leaderboard and the mistakes of a set show the member to its author as an anonymous participant.
+         */
+        put: operations["PutProfileConsent"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/profile/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace the user's photo
+         * @description The image is re-encoded as JPEG, which drops its metadata. Set authors see it only when the user agreed to show them their name.
+         */
+        put: operations["PutProfileAvatar"];
+        post?: never;
+        /** Remove the user's photo */
+        delete: operations["DeleteProfileAvatar"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/avatars/{avatarId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A user's photo
+         * @description Needs no authorization, since an image tag sends none: the random ID reaches only those the photo is shown to, and a new photo gets a new ID.
+         */
+        get: operations["GetAvatar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -435,6 +496,18 @@ export interface components {
             /** @enum {string} */
             platform?: "max" | "telegram";
             profileComplete: boolean;
+            /** @description The user lets set authors see their name and photo */
+            dataConsent: boolean;
+        };
+        ConsentRequest: {
+            given: boolean;
+        };
+        AvatarRequest: {
+            /**
+             * Format: byte
+             * @description JPEG or PNG of at most 300 KB and 1024 px a side
+             */
+            image: string;
         };
         ProfileRequest: {
             firstName: string;
@@ -618,6 +691,10 @@ export interface components {
             firstName: string;
             lastName?: string;
             username?: string;
+            /** @description The user's photo, when they have one and the viewer may see it */
+            avatarUrl?: string;
+            /** @description The member has not let the set author see their name; firstName is then empty, and lastName and username are left out. */
+            anonymous?: boolean;
         };
         CardSet: {
             /** Format: uuid */
@@ -834,6 +911,106 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    PutProfileConsent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsentRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileResponse"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    PutProfileAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AvatarRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    DeleteProfileAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileResponse"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    GetAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                avatarId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description JPEG image */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };
     };

@@ -34,10 +34,14 @@ func (s *setServiceImpl) GetSetMistakes(ctx context.Context, userID uuid.UUID, s
 	}
 
 	students := make([]contracts.StudentMistakes, len(members))
+	// By the member's own ID, and by the one the author sees, which differs
+	// for a member who keeps their name from the author.
 	order := make(map[uuid.UUID]int, len(members))
+	shown := make(map[uuid.UUID]int, len(members))
 	for i, m := range members {
-		students[i] = contracts.StudentMistakes{User: buildUserContract(m.ID, m.FirstName, m.LastName, m.Username)}
+		students[i] = contracts.StudentMistakes{User: memberContract(userID, m.ID, m.FirstName, m.LastName, m.Username, m.AvatarID, m.DataConsent)}
 		order[m.ID.Bytes] = i
+		shown[students[i].User.ID] = i
 	}
 
 	byFact := make(map[uuid.UUID][]contracts.StudentFactMistakes, len(facts))
@@ -50,7 +54,7 @@ func (s *setServiceImpl) GetSetMistakes(ctx context.Context, userID uuid.UUID, s
 		students[i].Answers += int(c.Answers)
 		students[i].Mistakes += int(c.Mistakes)
 		byFact[c.FactID.Bytes] = append(byFact[c.FactID.Bytes], contracts.StudentFactMistakes{
-			UserId:   c.UserID.Bytes,
+			UserId:   students[i].User.ID,
 			Answers:  int(c.Answers),
 			Mistakes: int(c.Mistakes),
 		})
@@ -60,7 +64,7 @@ func (s *setServiceImpl) GetSetMistakes(ctx context.Context, userID uuid.UUID, s
 	for i, f := range facts {
 		entries := byFact[f.ID.Bytes]
 		slices.SortFunc(entries, func(a, b contracts.StudentFactMistakes) int {
-			return cmp.Compare(order[a.UserId], order[b.UserId])
+			return cmp.Compare(shown[a.UserId], shown[b.UserId])
 		})
 		fact := contracts.FactMistakes{
 			FactId:           f.ID.Bytes,

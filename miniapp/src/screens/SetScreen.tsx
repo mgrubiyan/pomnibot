@@ -30,6 +30,10 @@ async function loadFeed(setId?: string): Promise<FeedCard[]> {
 export interface SetScreenProps {
     setId: string;
     currentUser?: User | null;
+    /** The user has not let set authors see their name. */
+    hidden?: boolean;
+    /** Where the user lets authors see them. */
+    onOpenProfile?: () => void;
     onBack: () => void;
     onStart: (setId: string, setTitle?: string, early?: boolean) => void;
     onRemove: (setId: string) => void;
@@ -47,6 +51,8 @@ export interface SetScreenProps {
 export function SetScreen({
     setId,
     currentUser,
+    hidden = false,
+    onOpenProfile,
     onBack,
     onStart,
     onRemove,
@@ -204,6 +210,18 @@ export function SetScreen({
                         </Typography.Text>
                     </Flex>
                 </Flex>
+
+                {shared && hidden && onOpenProfile ? (
+                    <CellList mode="island" filled className={s.factsList}>
+                        <CellSimple
+                            as="button"
+                            showChevron
+                            onClick={onOpenProfile}
+                            title="Автор не видит вашего имени"
+                            subtitle="Разрешить можно в профиле"
+                        />
+                    </CellList>
+                ) : null}
 
                 <CellList mode="island" filled className={s.factsList}>
                     {showIssues ? (

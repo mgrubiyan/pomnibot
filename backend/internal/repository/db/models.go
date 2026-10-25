@@ -108,6 +108,12 @@ type Answer struct {
 	AttemptID pgtype.UUID `json:"attempt_id"`
 }
 
+type Avatar struct {
+	ID     pgtype.UUID `json:"id"`
+	UserID pgtype.UUID `json:"user_id"`
+	Image  []byte      `json:"image"`
+}
+
 type Card struct {
 	Kind           CardKind           `json:"kind"`
 	Question       string             `json:"question"`
@@ -196,6 +202,8 @@ type User struct {
 	PendingLastName string             `json:"pending_last_name"`
 	TgBotStarted    bool               `json:"tg_bot_started"`
 	ID              pgtype.UUID        `json:"id"`
+	DataConsentAt   pgtype.Timestamptz `json:"data_consent_at"`
+	AvatarID        pgtype.UUID        `json:"avatar_id"`
 }
 
 type UserFactProgress struct {

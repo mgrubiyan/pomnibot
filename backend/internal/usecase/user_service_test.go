@@ -23,6 +23,11 @@ type mockUserQuerier struct {
 	upsertMAXUserFunc        func(ctx context.Context, arg db.UpsertMAXUserParams) (db.User, error)
 	ensureUserFunc           func(ctx context.Context, id pgtype.UUID) (db.User, error)
 	getUsersWithDueFactsFunc func(ctx context.Context, arg db.GetUsersWithDueFactsParams) ([]pgtype.UUID, error)
+	setDataConsentFunc       func(ctx context.Context, arg db.SetDataConsentParams) (db.User, error)
+}
+
+func (m *mockUserQuerier) SetDataConsent(ctx context.Context, arg db.SetDataConsentParams) (db.User, error) {
+	return m.setDataConsentFunc(ctx, arg)
 }
 
 func (m *mockUserQuerier) UpsertMAXUser(ctx context.Context, arg db.UpsertMAXUserParams) (db.User, error) {
@@ -268,4 +273,36 @@ func TestUserService_GetUsersWithDueFacts(t *testing.T) {
 			t.Errorf("expected nil users on error, got %v", users)
 		}
 	})
+}
+
+func TestUserService_SetDataConsent(t *testing.T) {
+	var got db.SetDataConsentParams
+	mock := &mockUserQuerier{setDataConsentFunc: func(_ context.Context, arg db.SetDataConsentParams) (db.User, error) {
+		got = arg
+		row := db.User{ID: arg.ID, FirstName: "Ann"}
+		if arg.Given {
+			row.DataConsentAt = pgtype.Timestamptz{Time: time.Now(), Valid: true}
+		}
+		return row, nil
+	}}
+	svc := usecase.NewUserService(mock)
+
+	account, err := svc.SetDataConsent(context.Background(), testUserUUID1, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != (pgtype.UUID{Bytes: testUserUUID1, Valid: true}) || !got.Given {
+		t.Fatalf("query params = %+v", got)
+	}
+	if !account.DataConsent || account.User.ID != testUserUUID1 {
+		t.Fatalf("account after consent = %+v", account)
+	}
+
+	account, err = svc.SetDataConsent(context.Background(), testUserUUID1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Given || account.DataConsent {
+		t.Fatalf("withdrawn consent kept: params %+v, account %+v", got, account)
+	}
 }
