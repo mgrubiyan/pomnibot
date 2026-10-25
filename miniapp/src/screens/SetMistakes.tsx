@@ -22,6 +22,11 @@ export interface SetMistakesProps {
     onBack: () => void;
 }
 
+const SPINNER_DELAY_MS = 200;
+
+/** Rows without mistakes step back, so the eye lands on the ones with them. */
+const quiet = { title: s.quiet };
+
 const factsLabel = (count: number) => `${count} ${plural(count, ['факт', 'факта', 'фактов'])}`;
 const studentsLabel = (count: number) =>
     `${count} ${plural(count, ['участник', 'участника', 'участников'])}`;
@@ -33,6 +38,8 @@ export function SetMistakes({ setId, setTitle, onBack }: SetMistakesProps) {
     const [data, setData] = useState<Mistakes | null>(null);
     const [focus, setFocus] = useState<Focus | null>(null);
     const [attempt, setAttempt] = useState(0);
+    // A quick answer would only flash the spinner, so it waits a moment.
+    const [slow, setSlow] = useState(false);
     // The overview unmounts while a member or a fact is open; coming back
     // puts the list where it was.
     const bodyRef = useRef<HTMLDivElement>(null);
@@ -85,10 +92,27 @@ export function SetMistakes({ setId, setTitle, onBack }: SetMistakesProps) {
         };
     }, [attempt, setId]);
 
+    useEffect(() => {
+        if (status !== 'loading') {
+            return;
+        }
+        const timer = setTimeout(() => setSlow(true), SPINNER_DELAY_MS);
+        return () => clearTimeout(timer);
+    }, [status]);
+
     const retry = () => {
+        setSlow(false);
         setStatus('loading');
         setAttempt((current) => current + 1);
     };
+
+    if (status === 'loading' && !slow) {
+        return (
+            <Screen>
+                <ScreenHeader title="Ошибки участников" subtitle={setTitle} onBack={onBack} />
+            </Screen>
+        );
+    }
 
     if (status === 'loading') {
         return (
@@ -166,6 +190,7 @@ export function SetMistakes({ setId, setTitle, onBack }: SetMistakesProps) {
                             <CellSimple
                                 key={entry.fact.factId}
                                 separator={index > 0}
+                                innerClassNames={entry.mistakes === 0 ? quiet : undefined}
                                 title={<span className={s.wrap}>{entry.fact.factName}</span>}
                                 subtitle={mistakesLabel(entry.mistakes, entry.answers)}
                             />
@@ -193,6 +218,7 @@ export function SetMistakes({ setId, setTitle, onBack }: SetMistakesProps) {
                             <CellSimple
                                 key={entry.user.id}
                                 separator={index > 0}
+                                innerClassNames={entry.mistakes === 0 ? quiet : undefined}
                                 title={<span className={s.wrap}>{formatAuthorName(entry.user)}</span>}
                                 subtitle={mistakesLabel(entry.mistakes, entry.answers)}
                             />
@@ -236,6 +262,7 @@ export function SetMistakes({ setId, setTitle, onBack }: SetMistakesProps) {
                                     <CellSimple
                                         key={item.factId}
                                         separator={index > 0}
+                                        innerClassNames={item.studentsMistaken === 0 ? quiet : undefined}
                                         as={item.studentsAnswered > 0 ? 'button' : undefined}
                                         showChevron={item.studentsAnswered > 0}
                                         onClick={
@@ -258,6 +285,7 @@ export function SetMistakes({ setId, setTitle, onBack }: SetMistakesProps) {
                                 <CellSimple
                                     key={item.user.id}
                                     separator={index > 0}
+                                    innerClassNames={item.mistakes === 0 ? quiet : undefined}
                                     as={item.answers > 0 ? 'button' : undefined}
                                     showChevron={item.answers > 0}
                                     onClick={

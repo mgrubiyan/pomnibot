@@ -27,3 +27,8 @@
     text-align: center;
     text-wrap: balance;
 }
+
+/* A row without mistakes: nothing to look at there. */
+.quiet {
+    color: var(--text-secondary);
+}

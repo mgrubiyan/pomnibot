@@ -212,7 +212,7 @@ export function SetScreen({
                             showChevron
                             onClick={() => onOpenIssues?.(set.id)}
                             title={`Жалобы · ${issueCards}`}
-                            subtitle="Ошибки, которые нашли в карточках"
+                            subtitle="Неточности, которые нашли в карточках"
                         />
                     ) : null}
                     {showWarnings ? (
@@ -225,24 +225,24 @@ export function SetScreen({
                             subtitle="Нюансы распознавания и структуры"
                         />
                     ) : null}
-                    {showLeaderboard ? (
-                        <CellSimple
-                            as="button"
-                            showChevron
-                            separator={showIssues || showWarnings}
-                            onClick={() => onOpenLeaderboard?.(set.id, set.title)}
-                            title="Таблица лидеров"
-                            subtitle="Рейтинг участников"
-                        />
-                    ) : null}
                     {showMistakes ? (
                         <CellSimple
                             as="button"
                             showChevron
-                            separator={showIssues || showWarnings || showLeaderboard}
+                            separator={showIssues || showWarnings}
                             onClick={() => onOpenMistakes?.(set.id, set.title)}
                             title="Ошибки участников"
                             subtitle="На каких фактах ошибаются"
+                        />
+                    ) : null}
+                    {showLeaderboard ? (
+                        <CellSimple
+                            as="button"
+                            showChevron
+                            separator={showIssues || showWarnings || showMistakes}
+                            onClick={() => onOpenLeaderboard?.(set.id, set.title)}
+                            title="Таблица лидеров"
+                            subtitle="Рейтинг участников"
                         />
                     ) : null}
                     {isOwner ? (
