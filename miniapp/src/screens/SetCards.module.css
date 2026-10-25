@@ -27,10 +27,15 @@
     min-width: 0;
 }
 
+/* A long title wraps up to three lines instead of stretching the card
+   past the screen; the rename dialog shows it whole. */
 .setTitleText {
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .addFactContainer {
@@ -53,6 +58,7 @@
     flex: 1;
     min-width: 0;
     text-wrap: pretty;
+    overflow-wrap: anywhere;
     font-size: 15px;
 }
 
