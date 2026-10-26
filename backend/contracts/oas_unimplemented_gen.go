@@ -118,6 +118,15 @@ func (UnimplementedHandler) GetAvatar(ctx context.Context, params GetAvatarParam
 	return r, ht.ErrNotImplemented
 }
 
+// GetCardImage implements GetCardImage operation.
+//
+// Get an image with set access authorization.
+//
+// GET /images/{assetId}
+func (UnimplementedHandler) GetCardImage(ctx context.Context, params GetCardImageParams) (r GetCardImageRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // GetCardsBySetID implements GetCardsBySetID operation.
 //
 // Only the author can get cards of a set; other users receive 403 Forbidden.
@@ -180,6 +189,15 @@ func (UnimplementedHandler) GetProfile(ctx context.Context) (r GetProfileRes, _ 
 //
 // GET /sets/{setId}
 func (UnimplementedHandler) GetSet(ctx context.Context, params GetSetParams) (r GetSetRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// GetSetImages implements GetSetImages operation.
+//
+// Get extracted PDF image catalog.
+//
+// GET /sets/{setId}/images
+func (UnimplementedHandler) GetSetImages(ctx context.Context, params GetSetImagesParams) (r GetSetImagesRes, _ error) {
 	return r, ht.ErrNotImplemented
 }
 

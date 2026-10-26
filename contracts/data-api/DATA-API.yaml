@@ -274,7 +274,36 @@ checks:
         - factName
         - kind
         - question
+        - questionImages
         properties:
+          questionImages:
+            type: array
+            items:
+              type: object
+              required:
+              - assetId
+              - url
+              - alt
+              - width
+              - height
+              - sourcePage
+              - sourceName
+              properties:
+                assetId:
+                  type: string
+                  format: uuid
+                url:
+                  type: string
+                alt:
+                  type: string
+                width:
+                  type: integer
+                height:
+                  type: integer
+                sourcePage:
+                  type: integer
+                sourceName:
+                  type: string
           id:
             type: string
             format: uuid
@@ -887,11 +916,13 @@ checks:
     - 200
     contentType: application/json
     requiredFields:
+    - explanationImages
     - factId
     - factName
     - id
     - kind
     - question
+    - questionImages
     - setId
     bodySchema:
       type: object
@@ -909,7 +940,65 @@ checks:
       - factName
       - kind
       - question
+      - questionImages
+      - explanationImages
       properties:
+        questionImages:
+          type: array
+          items:
+            type: object
+            required:
+            - assetId
+            - url
+            - alt
+            - width
+            - height
+            - sourcePage
+            - sourceName
+            properties:
+              assetId:
+                type: string
+                format: uuid
+              url:
+                type: string
+              alt:
+                type: string
+              width:
+                type: integer
+              height:
+                type: integer
+              sourcePage:
+                type: integer
+              sourceName:
+                type: string
+        explanationImages:
+          type: array
+          items:
+            type: object
+            required:
+            - assetId
+            - url
+            - alt
+            - width
+            - height
+            - sourcePage
+            - sourceName
+            properties:
+              assetId:
+                type: string
+                format: uuid
+              url:
+                type: string
+              alt:
+                type: string
+              width:
+                type: integer
+              height:
+                type: integer
+              sourcePage:
+                type: integer
+              sourceName:
+                type: string
         id:
           type: string
           format: uuid
@@ -1071,7 +1160,36 @@ checks:
           - answer
           - explanation
           - sourceQuote
+          - explanationImages
           properties:
+            explanationImages:
+              type: array
+              items:
+                type: object
+                required:
+                - assetId
+                - url
+                - alt
+                - width
+                - height
+                - sourcePage
+                - sourceName
+                properties:
+                  assetId:
+                    type: string
+                    format: uuid
+                  url:
+                    type: string
+                  alt:
+                    type: string
+                  width:
+                    type: integer
+                  height:
+                    type: integer
+                  sourcePage:
+                    type: integer
+                  sourceName:
+                    type: string
             answer:
               description: ' choice - GFM + math string[] (all correct option texts);
                 legacy string/integer supported input/flip - GFM + math string ($...$
@@ -1168,6 +1286,7 @@ checks:
     requiredFields:
     - answer
     - explanation
+    - explanationImages
     - sourceQuote
     bodySchema:
       type: object
@@ -1176,7 +1295,36 @@ checks:
       - answer
       - explanation
       - sourceQuote
+      - explanationImages
       properties:
+        explanationImages:
+          type: array
+          items:
+            type: object
+            required:
+            - assetId
+            - url
+            - alt
+            - width
+            - height
+            - sourcePage
+            - sourceName
+            properties:
+              assetId:
+                type: string
+                format: uuid
+              url:
+                type: string
+              alt:
+                type: string
+              width:
+                type: integer
+              height:
+                type: integer
+              sourcePage:
+                type: integer
+              sourceName:
+                type: string
         answer:
           description: ' choice - GFM + math string[] (all correct option texts);
             legacy string/integer supported input/flip - GFM + math string ($...$
@@ -1260,11 +1408,13 @@ checks:
     - 201
     contentType: application/json
     requiredFields:
+    - explanationImages
     - factId
     - factName
     - id
     - kind
     - question
+    - questionImages
     - setId
     bodySchema:
       type: object
@@ -1282,7 +1432,65 @@ checks:
       - factName
       - kind
       - question
+      - questionImages
+      - explanationImages
       properties:
+        questionImages:
+          type: array
+          items:
+            type: object
+            required:
+            - assetId
+            - url
+            - alt
+            - width
+            - height
+            - sourcePage
+            - sourceName
+            properties:
+              assetId:
+                type: string
+                format: uuid
+              url:
+                type: string
+              alt:
+                type: string
+              width:
+                type: integer
+              height:
+                type: integer
+              sourcePage:
+                type: integer
+              sourceName:
+                type: string
+        explanationImages:
+          type: array
+          items:
+            type: object
+            required:
+            - assetId
+            - url
+            - alt
+            - width
+            - height
+            - sourcePage
+            - sourceName
+            properties:
+              assetId:
+                type: string
+                format: uuid
+              url:
+                type: string
+              alt:
+                type: string
+              width:
+                type: integer
+              height:
+                type: integer
+              sourcePage:
+                type: integer
+              sourceName:
+                type: string
         id:
           type: string
           format: uuid
@@ -1414,6 +1622,20 @@ checks:
     - 204
   timeoutMs: 5000
   repeatable: false
+- id: GetCardImage
+  name: Get an image with set access authorization
+  method: GET
+  path: /images/{assetId}
+  role: user
+  request:
+    path:
+      assetId: sample-id
+  expected:
+    statusCodes:
+    - 200
+    contentType: image/png
+  timeoutMs: 5000
+  repeatable: true
 - id: GetSet
   name: Get a card set
   method: GET
@@ -1544,7 +1766,65 @@ checks:
         - factName
         - kind
         - question
+        - questionImages
+        - explanationImages
         properties:
+          questionImages:
+            type: array
+            items:
+              type: object
+              required:
+              - assetId
+              - url
+              - alt
+              - width
+              - height
+              - sourcePage
+              - sourceName
+              properties:
+                assetId:
+                  type: string
+                  format: uuid
+                url:
+                  type: string
+                alt:
+                  type: string
+                width:
+                  type: integer
+                height:
+                  type: integer
+                sourcePage:
+                  type: integer
+                sourceName:
+                  type: string
+          explanationImages:
+            type: array
+            items:
+              type: object
+              required:
+              - assetId
+              - url
+              - alt
+              - width
+              - height
+              - sourcePage
+              - sourceName
+              properties:
+                assetId:
+                  type: string
+                  format: uuid
+                url:
+                  type: string
+                alt:
+                  type: string
+                width:
+                  type: integer
+                height:
+                  type: integer
+                sourcePage:
+                  type: integer
+                sourceName:
+                  type: string
           id:
             type: string
             format: uuid
@@ -1676,11 +1956,13 @@ checks:
     - 201
     contentType: application/json
     requiredFields:
+    - explanationImages
     - factId
     - factName
     - id
     - kind
     - question
+    - questionImages
     - setId
     bodySchema:
       type: object
@@ -1698,7 +1980,65 @@ checks:
       - factName
       - kind
       - question
+      - questionImages
+      - explanationImages
       properties:
+        questionImages:
+          type: array
+          items:
+            type: object
+            required:
+            - assetId
+            - url
+            - alt
+            - width
+            - height
+            - sourcePage
+            - sourceName
+            properties:
+              assetId:
+                type: string
+                format: uuid
+              url:
+                type: string
+              alt:
+                type: string
+              width:
+                type: integer
+              height:
+                type: integer
+              sourcePage:
+                type: integer
+              sourceName:
+                type: string
+        explanationImages:
+          type: array
+          items:
+            type: object
+            required:
+            - assetId
+            - url
+            - alt
+            - width
+            - height
+            - sourcePage
+            - sourceName
+            properties:
+              assetId:
+                type: string
+                format: uuid
+              url:
+                type: string
+              alt:
+                type: string
+              width:
+                type: integer
+              height:
+                type: integer
+              sourcePage:
+                type: integer
+              sourceName:
+                type: string
         id:
           type: string
           format: uuid
@@ -1881,6 +2221,48 @@ checks:
           type: string
   timeoutMs: 5000
   repeatable: false
+- id: GetSetImages
+  name: Get extracted PDF image catalog
+  method: GET
+  path: /sets/{setId}/images
+  role: user
+  request:
+    path:
+      setId: ${setId}
+  expected:
+    statusCodes:
+    - 200
+    contentType: application/json
+    bodySchema:
+      type: array
+      items:
+        type: object
+        required:
+        - assetId
+        - url
+        - alt
+        - width
+        - height
+        - sourcePage
+        - sourceName
+        properties:
+          assetId:
+            type: string
+            format: uuid
+          url:
+            type: string
+          alt:
+            type: string
+          width:
+            type: integer
+          height:
+            type: integer
+          sourcePage:
+            type: integer
+          sourceName:
+            type: string
+  timeoutMs: 5000
+  repeatable: true
 - id: GetSetIssues
   name: Open complaints about the cards of the author's set
   method: GET

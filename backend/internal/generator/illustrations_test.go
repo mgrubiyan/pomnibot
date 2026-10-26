@@ -225,6 +225,9 @@ func TestIllustrationTimeoutKeepsCards(t *testing.T) {
 func TestIllustrationsUseTheGenerationBackendForPDF(t *testing.T) {
 	calls := 0
 	router := providerFunc(func(_ context.Context, req providers.Request) (providers.Response, error) {
+		if req.System == imageDiscoveryPrompt {
+			return providers.Response{Content: []byte(`{"figures":[]}`)}, nil
+		}
 		calls++
 		if calls == 1 {
 			b, _ := marshalModelFixture(learningFact("Fact"))

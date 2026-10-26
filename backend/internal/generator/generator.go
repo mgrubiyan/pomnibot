@@ -17,7 +17,7 @@ import (
 )
 
 // PipelineVersion identifies source input, prompt and code validation semantics.
-const PipelineVersion = "direct-generation-v13"
+const PipelineVersion = "direct-generation-v14-pdf-images"
 
 // Generator is safe for concurrent use. The provider owns transport retries.
 type Generator struct {
@@ -93,10 +93,14 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (out Result, err
 		detail.cause = providers.ErrCapability
 		return out, detail
 	}
+	out.Images = []material.ImageAsset{}
 	out.Stats.Stages = map[string]StageStats{}
 	out.Stats.CallsByModel = map[string]int{}
 	out.Artifact = &Artifact{Version: PipelineVersion, Stages: map[string]json.RawMessage{}, Requests: map[string]providers.Request{}, Responses: map[string]string{}}
-	r, e := g.completeStage(ctx, doc, source, "generation", map[string]any{"task": prompts.GenerateGoals, "title": doc.Title}, pages, &out)
+	if e := g.preparePDFImages(ctx, doc, &out); e != nil {
+		return out, e
+	}
+	r, e := g.completeStage(ctx, doc, source, "generation", map[string]any{"task": prompts.GenerateGoals, "title": doc.Title, "images": out.Images, "imageRules": imageGenerationRules}, pages, &out)
 	if e != nil {
 		return out, e
 	}
@@ -108,6 +112,7 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (out Result, err
 	}
 	out.Facts = r.Facts
 	out.Artifact.Facts = r.Facts
+	out.Stats.ImagesUsed = usedImageCount(r.Facts)
 	out.Stats.Cards = CardCount(r.Facts)
 	for _, fact := range r.Facts {
 		for _, card := range fact.Cards {
@@ -146,6 +151,11 @@ func cloneFacts(facts []Fact) []Fact {
 		out[i].cardPaths = slices.Clone(out[i].cardPaths)
 		out[i].Cards = slices.Clone(out[i].Cards)
 		for j, c := range out[i].Cards {
+			base := c.Base()
+			base.QuestionImageIDs = slices.Clone(base.QuestionImageIDs)
+			base.ExplanationImageIDs = slices.Clone(base.ExplanationImageIDs)
+			c = withCardBase(c, base)
+			out[i].Cards[j] = c
 			switch v := c.(type) {
 			case ChoiceCard:
 				v.RightAnswers = slices.Clone(v.RightAnswers)
@@ -165,13 +175,13 @@ func cloneFacts(facts []Fact) []Fact {
 
 func (g *Generator) completeStage(ctx context.Context, doc Document, source, stage string, input any, pages int, out *Result) (reply AIResponse, callErr error) {
 	payload, _ := json.Marshal(input)
-	req := providers.Request{Source: source, NoFallback: true, System: prompts.GeneratorSystem, User: string(payload), PDFs: doc.PDFs, Schema: stageSchema(), ReasoningEffort: g.opts.ReasoningEffort, MaxTokens: g.opts.MaxTokens, NoCache: true}
+	req := providers.Request{Images: assetImages(out.Images), Source: source, NoFallback: true, System: prompts.GeneratorSystem, User: string(payload), PDFs: doc.PDFs, Schema: stageSchema(), ReasoningEffort: g.opts.ReasoningEffort, MaxTokens: g.opts.MaxTokens, NoCache: true}
 	callErr = g.runStage(ctx, stage, req, out, func(resp providers.Response, _ *StageStats) error {
 		if e := decodeResponse(resp, &reply); e != nil {
 			return e
 		}
-		out.Coverage.Issues = slices.Clone(reply.Issues)
-		validFacts, droppedInvalid, droppedDup, issues, e := validateAndSanitizeFacts(reply.Facts, pages)
+		out.Coverage.Issues = append(out.Coverage.Issues, reply.Issues...)
+		validFacts, droppedInvalid, droppedDup, issues, e := validateAndSanitizeFacts(reply.Facts, pages, out.Images)
 		if e != nil {
 			return e
 		}

@@ -70,6 +70,15 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID uuid.UUID, title
 		return nil, 0, fmt.Errorf("enroll user in set: %w", err)
 	}
 
+	for _, a := range genResult.Report.Images {
+		id, err := uuid.Parse(a.ID)
+		if err != nil {
+			return nil, 0, err
+		}
+		if err := q.CreateSetImage(ctx, db.CreateSetImageParams{ID: pgtype.UUID{Bytes: id, Valid: true}, SetID: newSet.ID, Data: a.Data, Alt: a.Alt, Width: int32(a.Width), Height: int32(a.Height), SourceName: a.SourceName, SourcePage: int32(a.SourcePage), SourceFile: int32(a.SourceFile), Region: a.Region[:], Hash: a.Hash}); err != nil {
+			return nil, 0, fmt.Errorf("save PDF image: %w", err)
+		}
+	}
 	factsInserted := 0
 	cardsInserted := 0
 
@@ -141,6 +150,17 @@ func SaveGeneratedSet(ctx context.Context, q db.Querier, userID uuid.UUID, title
 		if err != nil {
 			slog.WarnContext(ctx, "skipping card creation error", "question", c.Question, "error", err)
 			continue
+		}
+		question, err := parseImageIDs(c.QuestionImageIDs)
+		if err != nil {
+			return nil, 0, err
+		}
+		explanation, err := parseImageIDs(c.ExplanationImageIDs)
+		if err != nil {
+			return nil, 0, err
+		}
+		if err := ReplaceCardImages(ctx, q, createdCard.ID, newSet.ID, question, explanation); err != nil {
+			return nil, 0, fmt.Errorf("save card images: %w", err)
 		}
 		cardsInserted++
 
@@ -216,4 +236,19 @@ func generateUniqueShareCode(ctx context.Context, q db.Querier) (string, error) 
 		}
 	}
 	return "", errors.New("failed to generate unique share code after multiple attempts")
+}
+
+func parseImageIDs(ids []string) ([]uuid.UUID, error) {
+	if ids == nil {
+		return nil, nil
+	}
+	out := make([]uuid.UUID, 0, len(ids))
+	for _, id := range ids {
+		v, err := uuid.Parse(id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, nil
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mgrubiyan/pomnibot/backend/internal/prompts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
@@ -17,13 +18,20 @@ func pdfDocument() Document {
 func directReply() string { return `{"issues":[],"facts":[` + testFact + `]}` }
 func TestDirectGenerationPublishesOnceAfterValidation(t *testing.T) {
 	for _, doc := range []Document{pdfDocument(), {Text: "Индекс ускоряет поиск"}} {
+		expectedCalls := 2
+		if len(doc.PDFs) > 0 {
+			expectedCalls++
+		}
 		calls, published := 0, 0
 		p := providerFunc(func(_ context.Context, req providers.Request) (providers.Response, error) {
 			calls++
 			if published != 0 || len(req.Schema) == 0 || req.ReasoningEffort == "" || !req.NoFallback {
 				t.Fatal("missing request controls or early publication")
 			}
-			if calls == 2 {
+			if req.System == imageDiscoveryPrompt {
+				return providers.Response{Content: []byte(`{"figures":[]}`), Usage: providers.Usage{CostUSD: .01, PromptTokens: 20, CompletionTokens: 10}}, nil
+			}
+			if req.System == prompts.GeneratorIllustrations {
 				return providers.Response{Content: []byte(`{"illustrations":[]}`), Usage: providers.Usage{CostUSD: .01, PromptTokens: 20, CompletionTokens: 10}}, nil
 			}
 			if len(doc.PDFs) > 0 && len(req.PDFs) != 1 {
@@ -40,7 +48,7 @@ func TestDirectGenerationPublishesOnceAfterValidation(t *testing.T) {
 				t.Fatal("partial batch")
 			}
 		}}).Generate(context.Background(), doc)
-		if err != nil || calls != 2 || published != 1 || len(r.Stats.Stages) != 2 || r.Stats.CostUSD != .02 || r.Stats.PromptTokens != 40 || r.Stats.CompletionTokens != 20 {
+		if err != nil || calls != expectedCalls || published != 1 || len(r.Stats.Stages) != expectedCalls || r.Stats.CostUSD != float64(expectedCalls)*.01 || r.Stats.PromptTokens != expectedCalls*20 || r.Stats.CompletionTokens != expectedCalls*10 {
 			t.Fatalf("%+v %v calls=%d published=%d", r, err, calls, published)
 		}
 		if r.Artifact.Facts[0].Name != r.Facts[0].Name || CardCount(r.Facts) != 2 || r.Artifact.Request == nil || r.Artifact.Response != directReply() {
@@ -89,7 +97,10 @@ func TestDirectGenerationRejectsInvalidResponse(t *testing.T) {
 		t.Run(defect, func(t *testing.T) {
 			b := mutate(directReply())
 			calls := 0
-			p := providerFunc(func(context.Context, providers.Request) (providers.Response, error) {
+			p := providerFunc(func(_ context.Context, req providers.Request) (providers.Response, error) {
+				if req.System == imageDiscoveryPrompt {
+					return providers.Response{Content: []byte(`{"figures":[]}`)}, nil
+				}
 				calls++
 				return providers.Response{Content: []byte(b), Truncated: defect == "truncated flag"}, nil
 			})
@@ -101,14 +112,20 @@ func TestDirectGenerationRejectsInvalidResponse(t *testing.T) {
 	}
 }
 func TestDirectGenerationKeepsIssuesAndFailureMetrics(t *testing.T) {
-	p := providerFunc(func(context.Context, providers.Request) (providers.Response, error) {
+	p := providerFunc(func(_ context.Context, req providers.Request) (providers.Response, error) {
+		if req.System == imageDiscoveryPrompt {
+			return providers.Response{Content: []byte(`{"figures":[]}`)}, nil
+		}
 		return providers.Response{Content: []byte(strings.Replace(directReply(), `"issues":[]`, `"issues":["Page 1 contains an unreadable fragment"]`, 1))}, nil
 	})
 	r, err := NewGenerator(p, Options{}).Generate(context.Background(), pdfDocument())
 	if err != nil || CardCount(r.Facts) != 2 || len(r.Coverage.Issues) != 1 {
 		t.Fatalf("%+v %v", r, err)
 	}
-	p = providerFunc(func(context.Context, providers.Request) (providers.Response, error) {
+	p = providerFunc(func(_ context.Context, req providers.Request) (providers.Response, error) {
+		if req.System == imageDiscoveryPrompt {
+			return providers.Response{Content: []byte(`{"figures":[]}`)}, nil
+		}
 		return providers.Response{Usage: providers.Usage{CostUSD: .02}}, errors.New("failed")
 	})
 	r, err = NewGenerator(p, Options{}).Generate(context.Background(), pdfDocument())
@@ -125,7 +142,10 @@ func TestDirectGenerationSharesExistingBudget(t *testing.T) {
 		}
 		done(providers.Usage{CostUSD: .03}, true) // prior reading or failed attempt
 		calls := 0
-		p := providerFunc(func(ctx context.Context, _ providers.Request) (providers.Response, error) {
+		p := providerFunc(func(ctx context.Context, req providers.Request) (providers.Response, error) {
+			if req.System == imageDiscoveryPrompt {
+				return providers.Response{Content: []byte(`{"figures":[]}`)}, nil
+			}
 			bound := .02
 			if !remaining {
 				bound = .03
@@ -166,7 +186,7 @@ func TestInvalidLastFactRejectsWholeResponse(t *testing.T) {
 
 func TestInvalidLastRecallReportsOriginalPath(t *testing.T) {
 	raw := `{"issues":[],"facts":[` + testFact + `,` + strings.Replace(strings.Replace(testFact, `"name":"Удаление"`, `"name":"Другой факт"`, 1), `"answer":"Удалить запись индекса; записать блок; пометить данные."`, `"answer":" "`, 1) + `]}`
-	p := providerFunc(func(context.Context, providers.Request) (providers.Response, error) {
+	p := providerFunc(func(_ context.Context, _ providers.Request) (providers.Response, error) {
 		return providers.Response{Content: []byte(raw)}, nil
 	})
 	r, err := NewGenerator(p, Options{OnBatch: func(Batch) { t.Fatal("published partial set") }}).Generate(t.Context(), Document{Text: "source"})

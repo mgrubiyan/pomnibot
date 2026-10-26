@@ -4,6 +4,8 @@ import type { Answer, Card, CardAnswer, CardReveal, FeedCard } from '../types';
 import { api } from '../api';
 import { TableColumns, TablePool } from '../components/TableCard';
 import { StudyContent } from '../components/StudyContent';
+import { useStudyImagesReady } from '../utils/useStudyImages';
+import { StudyImages } from '../components/StudyImages';
 import { StudyIllustration } from '../components/StudyIllustration';
 import type { CardPatch } from '../utils/cards';
 import { layoutOf, rejoinedFeed, resumedCards, revealedCard, type FeedResume } from '../utils/feed';
@@ -259,6 +261,7 @@ export function Feed({
     const passedRef = useRef<FeedCard[]>([]);
 
     const card = cards[index];
+    const imagesReady = useStudyImagesReady(card?.questionImages);
     const options = useMemo(() => (card ? optionsOf(card) : []), [card]);
 
     // Reloading goes through an attempt counter: the button handler flips
@@ -430,7 +433,7 @@ export function Feed({
     /** Answers a choice, true-or-false or typed card; shown is what the reader picked. */
     const submit = useCallback(
         (answer: string, shown: string) => {
-            if (!card) {
+            if (!card || !imagesReady) {
                 return;
             }
             // The card stays face up while the answer is being checked:
@@ -441,7 +444,7 @@ export function Feed({
                 startFlip();
             });
         },
-        [card, ask, startFlip],
+        [card, ask, startFlip, imagesReady],
     );
 
     const layout = card?.table ? layoutOf(card.table, reveal?.answer, placements[card.id]) : undefined;
@@ -471,7 +474,7 @@ export function Feed({
     // A flip card asks the backend for its answer; the reader grades
     // themselves once they have seen it.
     const openFlip = () => {
-        if (!card || opening) {
+        if (!card || opening || !imagesReady) {
             return;
         }
         const cardId = card.id;
@@ -525,7 +528,7 @@ export function Feed({
     };
 
     const checkTable = () => {
-        if (!card || !layout) {
+        if (!card || !layout || !imagesReady) {
             return;
         }
         const placed = layout.items.map((item, itemIndex) => ({ text: item.text, column: placement[itemIndex] ?? '' }));
@@ -657,10 +660,10 @@ export function Feed({
     const showRightAnswer = !hasGiven || verdict === 'wrong';
     // The buttons are off while the card is turning or leaving, and while
     // the backend grades the answer.
-    const busy = flipping || leaving || check !== null;
+    const busy = flipping || leaving || check !== null || !imagesReady;
     // A flip card has nothing to pick from, so the side itself opens
     // the answer — the button below stays for keyboard and screen readers.
-    const tapToReveal = card.kind === 'flip' && !showAnswer && !opening;
+    const tapToReveal = card.kind === 'flip' && !showAnswer && !opening && imagesReady;
 
     const openReport = async () => {
         if (!reveal) {
@@ -739,6 +742,7 @@ export function Feed({
                             </Typography.Text>
                         </Flex>
 
+                        <StudyImages images={card.questionImages} />
                         <StudyIllustration svg={card.questionSvg} alt="Иллюстрация к вопросу" />
 
                         {check?.typed ? (
@@ -801,6 +805,7 @@ export function Feed({
                         <Typography.Text variant="body-strong" color="secondary" asChild>
                             <StudyContent text={card.question} />
                         </Typography.Text>
+                        <StudyImages images={card.questionImages} />
                         <StudyIllustration svg={card.questionSvg} alt="Иллюстрация к вопросу" />
 
                         {layout && showAnswer ? (
@@ -856,6 +861,7 @@ export function Feed({
                             </Typography.Text>
                         ) : null}
 
+                        <StudyImages images={reveal?.explanationImages} />
                         <StudyIllustration svg={reveal?.explanationSvg} alt="Иллюстрация к объяснению" />
 
                         {/* A card written by hand may have no quote to show. */}
@@ -952,7 +958,7 @@ export function Feed({
                         size="medium"
                         variant="secondary"
                         stretched
-                        disabled={check !== null || placedCount(placement) < layout.items.length}
+                        disabled={!imagesReady || check !== null || placedCount(placement) < layout.items.length}
                         onClick={checkTable}
                     >
                         {check ? 'Проверяю ответ' : 'Проверить'}
@@ -967,7 +973,7 @@ export function Feed({
                                     key={option.value}
                                     type="button"
                                     className={s.option}
-                                    disabled={check !== null}
+                                    disabled={!imagesReady || check !== null}
                                     aria-pressed={card.kind === 'choice' ? selectedOptions.includes(option.value) : undefined}
                                     data-sent={check !== null && sentOption === option.value ? '' : undefined}
                                     onClick={() => {
@@ -989,7 +995,7 @@ export function Feed({
                     ) : null}
 
                     {card.kind === 'choice' ? (
-                        <Button size="medium" variant="secondary" stretched disabled={check !== null || selectedOptions.length === 0}
+                        <Button size="medium" variant="secondary" stretched disabled={!imagesReady || check !== null || selectedOptions.length === 0}
                             onClick={() => submit(JSON.stringify(selectedOptions), selectedOptions.join('\n\n'))}>
                             {check ? 'Проверяю ответ' : 'Проверить'}
                         </Button>
@@ -1014,7 +1020,7 @@ export function Feed({
                                 size="medium"
                                 variant="secondary"
                                 stretched
-                                disabled={draft.trim().length === 0}
+                                disabled={!imagesReady || draft.trim().length === 0}
                                 onClick={() => submit(draft, draft)}
                             >
                                 Ответить
@@ -1033,7 +1039,7 @@ export function Feed({
                             size="medium"
                             variant="secondary"
                             stretched
-                            disabled={opening}
+                            disabled={!imagesReady || opening}
                             onClick={openFlip}
                         >
                             {opening ? 'Открываю ответ' : 'Показать ответ'}

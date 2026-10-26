@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
 )
@@ -112,6 +113,9 @@ func (s *setServiceImpl) CreateSet(ctx context.Context, userID uuid.UUID, req *c
 	}
 	var cardReq *contracts.CreateCardRequest
 	if req.Card.IsSet() {
+		if len(req.Card.Value.QuestionImageIds) > 0 || len(req.Card.Value.ExplanationImageIds) > 0 {
+			return nil, fmt.Errorf("%w: new set has no images", ErrValidation)
+		}
 		cardReq = &req.Card.Value
 		if err := validateCreateCard(cardReq); err != nil {
 			return nil, err
@@ -141,10 +145,17 @@ func (s *cardServiceImpl) CreateCard(ctx context.Context, userID uuid.UUID, setI
 	if errors.Is(err, repository.ErrManualSetNotFound) {
 		return nil, ErrNotFound
 	}
+	if errors.Is(err, repository.ErrInvalidImage) {
+		return nil, fmt.Errorf("%w: invalid image attachment", ErrValidation)
+	}
 	if err != nil {
 		return nil, err
 	}
-	return &contracts.Card{ID: id, SetId: setID, Kind: req.Kind, Question: req.Question, Answer: contracts.NewOptCardAnswer(req.Answer), Options: req.Options, Table: req.Table, Explanation: contracts.NewOptString(req.Explanation.Value)}, nil
+	card := &contracts.Card{ID: id, SetId: setID, Kind: req.Kind, Question: req.Question, Answer: contracts.NewOptCardAnswer(req.Answer), Options: req.Options, Table: req.Table, Explanation: contracts.NewOptString(req.Explanation.Value)}
+	if err := setResponseImages(ctx, s.querier, pgtype.UUID{Bytes: id, Valid: true}, card); err != nil {
+		return nil, err
+	}
+	return card, nil
 }
 
 // WithManualCards configures transactional manual card persistence.

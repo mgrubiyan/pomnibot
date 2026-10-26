@@ -139,5 +139,8 @@ func insertManualCard(ctx context.Context, q db.Querier, setID pgtype.UUID, req 
 			}
 		}
 	}
+	if err := ReplaceCardImages(ctx, q, pgID, setID, req.QuestionImageIds, req.ExplanationImageIds); err != nil {
+		return uuid.Nil, err
+	}
 	return id, nil
 }

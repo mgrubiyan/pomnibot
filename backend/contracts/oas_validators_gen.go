@@ -115,6 +115,28 @@ func (s *Card) Validate() error {
 
 	var failures []validate.FieldError
 	if err := func() error {
+		if s.QuestionImages == nil {
+			return errors.New("nil is invalid value")
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "questionImages",
+			Error: err,
+		})
+	}
+	if err := func() error {
+		if s.ExplanationImages == nil {
+			return errors.New("nil is invalid value")
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "explanationImages",
+			Error: err,
+		})
+	}
+	if err := func() error {
 		if err := s.Kind.Validate(); err != nil {
 			return err
 		}
@@ -255,6 +277,17 @@ func (s *CardReveal) Validate() error {
 
 	var failures []validate.FieldError
 	if err := func() error {
+		if s.ExplanationImages == nil {
+			return errors.New("nil is invalid value")
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "explanationImages",
+			Error: err,
+		})
+	}
+	if err := func() error {
 		if err := s.Answer.Validate(); err != nil {
 			return err
 		}
@@ -319,6 +352,50 @@ func (s *CreateCardRequest) Validate() error {
 	}
 
 	var failures []validate.FieldError
+	if err := func() error {
+		if s.QuestionImageIds == nil {
+			return nil // optional
+		}
+		if err := (validate.Array{
+			MinLength:    0,
+			MinLengthSet: false,
+			MaxLength:    80,
+			MaxLengthSet: true,
+		}).ValidateLength(len(s.QuestionImageIds)); err != nil {
+			return errors.Wrap(err, "array")
+		}
+		if err := validate.UniqueItems(s.QuestionImageIds); err != nil {
+			return errors.Wrap(err, "array")
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "questionImageIds",
+			Error: err,
+		})
+	}
+	if err := func() error {
+		if s.ExplanationImageIds == nil {
+			return nil // optional
+		}
+		if err := (validate.Array{
+			MinLength:    0,
+			MinLengthSet: false,
+			MaxLength:    80,
+			MaxLengthSet: true,
+		}).ValidateLength(len(s.ExplanationImageIds)); err != nil {
+			return errors.Wrap(err, "array")
+		}
+		if err := validate.UniqueItems(s.ExplanationImageIds); err != nil {
+			return errors.Wrap(err, "array")
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "explanationImageIds",
+			Error: err,
+		})
+	}
 	if err := func() error {
 		if err := s.Kind.Validate(); err != nil {
 			return err
@@ -424,6 +501,17 @@ func (s *FeedCard) Validate() error {
 	}
 
 	var failures []validate.FieldError
+	if err := func() error {
+		if s.QuestionImages == nil {
+			return errors.New("nil is invalid value")
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "questionImages",
+			Error: err,
+		})
+	}
 	if err := func() error {
 		if err := s.Kind.Validate(); err != nil {
 			return err
@@ -572,6 +660,14 @@ func (s GetFeedQuestionsOKApplicationJSON) Validate() error {
 	}
 	if len(failures) > 0 {
 		return &validate.Error{Fields: failures}
+	}
+	return nil
+}
+
+func (s GetSetImagesOKApplicationJSON) Validate() error {
+	alias := ([]CardImage)(s)
+	if alias == nil {
+		return errors.New("nil is invalid value")
 	}
 	return nil
 }
@@ -1401,6 +1497,50 @@ func (s *UpdateCardRequest) Validate() error {
 	}
 
 	var failures []validate.FieldError
+	if err := func() error {
+		if s.QuestionImageIds == nil {
+			return nil // optional
+		}
+		if err := (validate.Array{
+			MinLength:    0,
+			MinLengthSet: false,
+			MaxLength:    80,
+			MaxLengthSet: true,
+		}).ValidateLength(len(s.QuestionImageIds)); err != nil {
+			return errors.Wrap(err, "array")
+		}
+		if err := validate.UniqueItems(s.QuestionImageIds); err != nil {
+			return errors.Wrap(err, "array")
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "questionImageIds",
+			Error: err,
+		})
+	}
+	if err := func() error {
+		if s.ExplanationImageIds == nil {
+			return nil // optional
+		}
+		if err := (validate.Array{
+			MinLength:    0,
+			MinLengthSet: false,
+			MaxLength:    80,
+			MaxLengthSet: true,
+		}).ValidateLength(len(s.ExplanationImageIds)); err != nil {
+			return errors.Wrap(err, "array")
+		}
+		if err := validate.UniqueItems(s.ExplanationImageIds); err != nil {
+			return errors.Wrap(err, "array")
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "explanationImageIds",
+			Error: err,
+		})
+	}
 	if err := func() error {
 		if value, ok := s.Kind.Get(); ok {
 			if err := func() error {

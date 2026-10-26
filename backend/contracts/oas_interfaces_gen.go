@@ -45,6 +45,10 @@ type GetAvatarRes interface {
 	getAvatarRes()
 }
 
+type GetCardImageRes interface {
+	getCardImageRes()
+}
+
 type GetCardsBySetIDRes interface {
 	getCardsBySetIDRes()
 }
@@ -67,6 +71,10 @@ type GetNotesJobRes interface {
 
 type GetProfileRes interface {
 	getProfileRes()
+}
+
+type GetSetImagesRes interface {
+	getSetImagesRes()
 }
 
 type GetSetIssuesRes interface {

@@ -25,15 +25,17 @@ func (r *recall) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	var wire struct {
-		Question    string `json:"question"`
-		Source      string `json:"source"`
-		SourceQuote string `json:"sourceQuote"`
-		Answer      string `json:"answer"`
+		QuestionImageIDs    []string `json:"questionImageIds"`
+		ExplanationImageIDs []string `json:"explanationImageIds"`
+		Question            string   `json:"question"`
+		Source              string   `json:"source"`
+		SourceQuote         string   `json:"sourceQuote"`
+		Answer              string   `json:"answer"`
 	}
 	if err := strictJSON(b, &wire); err != nil {
 		return err
 	}
-	*r = recall{CardBase: CardBase{Question: wire.Question, Source: wire.Source, SourceQuote: wire.SourceQuote}, Answer: wire.Answer}
+	*r = recall{CardBase: CardBase{QuestionImageIDs: wire.QuestionImageIDs, ExplanationImageIDs: wire.ExplanationImageIDs, Question: wire.Question, Source: wire.Source, SourceQuote: wire.SourceQuote}, Answer: wire.Answer}
 	return nil
 }
 

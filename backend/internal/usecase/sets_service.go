@@ -197,8 +197,9 @@ func (s *setServiceImpl) GetCardsBySetID(ctx context.Context, userID uuid.UUID, 
 		return nil, fmt.Errorf("get cards by set id: %w", err)
 	}
 
-	var choiceIDs, tableIDs []pgtype.UUID
+	var choiceIDs, tableIDs, imageIDs []pgtype.UUID
 	for _, row := range rows {
+		imageIDs = append(imageIDs, row.ID)
 		switch row.Kind {
 		case "choice":
 			choiceIDs = append(choiceIDs, row.ID)
@@ -206,7 +207,7 @@ func (s *setServiceImpl) GetCardsBySetID(ctx context.Context, userID uuid.UUID, 
 			tableIDs = append(tableIDs, row.ID)
 		}
 	}
-	details, err := loadCardDetails(ctx, s.querier, choiceIDs, tableIDs)
+	details, err := loadCardDetails(ctx, s.querier, choiceIDs, tableIDs, imageIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -371,7 +372,18 @@ func (s *setServiceImpl) SaveGeneratedSet(ctx context.Context, userID uuid.UUID,
 	if err != nil {
 		return nil, fmt.Errorf("prepare generated set: %w", err)
 	}
-	set, cardsCount, err := repository.SaveGeneratedSet(ctx, s.querier, userID, title, prepared)
+	var set *db.Set
+	var cardsCount int
+	save := func(q db.Querier) error {
+		var err error
+		set, cardsCount, err = repository.SaveGeneratedSet(ctx, q, userID, title, prepared)
+		return err
+	}
+	if tx, ok := s.manual.(Transactor); ok {
+		err = tx.InTx(ctx, save)
+	} else {
+		err = save(s.querier)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("save generated set for user: %w", err)
 	}

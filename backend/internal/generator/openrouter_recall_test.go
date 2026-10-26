@@ -26,6 +26,9 @@ func TestOpenRouterGenerationSendsRecallContractAndExpandsPairs(t *testing.T) {
 			raw := recallReply(`{"kind":"recall","question":"Other aspect?","answer":"B","source":"S","sourceQuote":""}`)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				call := calls.Add(1)
+				if pdf {
+					call--
+				}
 				var body struct {
 					Messages []struct {
 						Role    string          `json:"role"`
@@ -50,6 +53,11 @@ func TestOpenRouterGenerationSendsRecallContractAndExpandsPairs(t *testing.T) {
 				}
 				if body.ResponseFormat.Type != "json_schema" || !body.ResponseFormat.JSONSchema.Strict || !body.Provider.RequireParameters || body.Provider.AllowFallbacks == nil || *body.Provider.AllowFallbacks {
 					t.Error("missing strict schema or provider constraints")
+				}
+				if pdf && call == 0 {
+					w.Header().Set("Content-Type", "application/json")
+					_ = json.NewEncoder(w).Encode(map[string]any{"model": openrouter.DefaultModel, "choices": []any{map[string]any{"message": map[string]any{"content": `{"figures":[]}`}, "finish_reason": "stop"}}, "usage": map[string]any{"prompt_tokens": 1, "completion_tokens": 1, "cost": 0}})
+					return
 				}
 				if call == 2 {
 					if len(body.Messages) != 2 || !strings.Contains(string(body.ResponseFormat.JSONSchema.Schema), `"illustrations"`) {
@@ -128,12 +136,16 @@ func TestOpenRouterGenerationSendsRecallContractAndExpandsPairs(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if calls.Load() != 2 || published != 1 || result.Stats.Cards != 4 || result.Stats.CardsFromModel != 0 || result.Stats.CardsSynthesized != 4 || result.Facts[0].Cards[0].Base().QuestionSvg != testSVG || result.Stats.FailedCalls != 0 {
+			expectedCalls := int32(2)
+			if pdf {
+				expectedCalls++
+			}
+			if calls.Load() != expectedCalls || published != 1 || result.Stats.Cards != 4 || result.Stats.CardsFromModel != 0 || result.Stats.CardsSynthesized != 4 || result.Facts[0].Cards[0].Base().QuestionSvg != testSVG || result.Stats.FailedCalls != 0 {
 				t.Fatalf("calls=%d published=%d stats=%+v", calls.Load(), published, result.Stats)
 			}
 			for i := range 2 {
 				flip, input := result.Facts[0].Cards[i].(FlipCard), result.Facts[0].Cards[2+i].(InputCard)
-				if flip.CardBase != input.CardBase || flip.Answer != input.Answer {
+				if !reflect.DeepEqual(flip.CardBase, input.CardBase) || flip.Answer != input.Answer {
 					t.Fatal("expanded pair differs")
 				}
 			}

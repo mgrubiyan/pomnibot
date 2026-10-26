@@ -1,6 +1,7 @@
 import { Flex, Typography } from '@maxhub/max-ui';
 import type { Card, CardAnswer } from '../types';
 import { StudyContent } from './StudyContent';
+import { StudyImages } from './StudyImages';
 import { StudyIllustration } from './StudyIllustration';
 import s from './CardPreview.module.css';
 
@@ -38,6 +39,7 @@ export function CardPreview({ card }: { card: Partial<Card> }) {
             <Flex direction="column" align="stretch" gap={8}>
                 <Typography.Text variant="label" color="tertiary">Вопрос</Typography.Text>
                 <Typography.Text variant="body-strong" asChild><StudyContent text={card.question ?? ''} /></Typography.Text>
+                <StudyImages images={card.questionImages} />
                 <StudyIllustration svg={card.questionSvg} alt="Иллюстрация к вопросу" />
             </Flex>
             {card.kind === 'choice' && card.options?.length ? (
@@ -52,10 +54,11 @@ export function CardPreview({ card }: { card: Partial<Card> }) {
                 <Typography.Text variant="label" color="tertiary">Верный ответ</Typography.Text>
                 <Answer answer={card.kind === 'table' ? card.table : card.answer} options={card.options} />
             </Flex>
-            {card.explanation || card.explanationSvg ? (
+            {card.explanation || card.explanationSvg || card.explanationImages?.length ? (
                 <Flex direction="column" align="stretch" gap={8}>
                     <Typography.Text variant="label" color="tertiary">Объяснение</Typography.Text>
                     <StudyContent text={card.explanation ?? ''} />
+                    <StudyImages images={card.explanationImages} />
                     <StudyIllustration svg={card.explanationSvg} alt="Иллюстрация к объяснению" />
                 </Flex>
             ) : null}

@@ -11,6 +11,7 @@ import (
 // APIHandler implements contracts.Handler by delegating to domain-specific handlers.
 type APIHandler struct {
 	contracts.UnimplementedHandler
+	images     usecase.ImageService
 	users      usecase.UserService
 	sets       *SetsHandler
 	cards      *CardsHandler

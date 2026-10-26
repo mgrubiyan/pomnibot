@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/google/uuid"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -19,6 +20,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/generator"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest/yandex"
+	"github.com/mgrubiyan/pomnibot/backend/internal/material"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/aistudio"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
@@ -46,6 +48,7 @@ func run() error {
 		visionBy     = flag.String("vision-provider", "", "who reads pages: openrouter, gigachat or qwen; defaults to openrouter with -provider openrouter, otherwise gigachat")
 		ocrModel     = flag.String("ocr-model", os.Getenv("YC_OCR_MODEL"), "Yandex OCR model for every page (handwritten, page...); default: handwritten for photos, page for scans")
 		extractOnly  = flag.Bool("extract", false, "only extract the text of the notes and print it, no cards")
+		imagesDir    = flag.String("images-dir", "", "export PDF crops and catalog.json to this private directory")
 		asJSON       = flag.Bool("json", false, "print the result as JSON to stdout")
 		budgetUSD    = flag.Float64("budget-usd", .15, "document USD cap with conservative in-flight reservations; unknown-price fallback is blocked")
 		maxCalls     = flag.Int("max-calls", 96, "total provider attempts for reading and generation")
@@ -281,6 +284,11 @@ func run() error {
 		doc.PageStarts = append(doc.PageStarts, p.Start)
 	}
 	res, genErr := gen.Generate(ctx, doc)
+	if *imagesDir != "" && genErr == nil {
+		if err := exportImages(*imagesDir, res.Images); err != nil {
+			return err
+		}
+	}
 
 	if *asJSON {
 		enc := json.NewEncoder(os.Stdout)
@@ -444,6 +452,7 @@ func formatStats(s generator.Stats) string {
 	fmt.Fprintf(&w, "Неверная структура:    %d\n", s.DroppedInvalid)
 	fmt.Fprintf(&w, "Точные повторы:        %d\n", s.DroppedDuplicate)
 	fmt.Fprintf(&w, "Сверх лимита:          %d\n", s.DroppedByLimit)
+	fmt.Fprintf(&w, "Рисунки PDF:           найдено %d, извлечено %d, использовано %d; ошибок %d (%s)\n", s.ImagesFound, s.ImagesExtracted, s.ImagesUsed, s.ImageErrors, sec(s.ImageDuration))
 	fmt.Fprintf(&w, "Итого карточек:        %d\n", s.Cards)
 	fmt.Fprintf(&w, "Первая карточка через: %s\n", sec(s.FirstCardAfter))
 	fmt.Fprintf(&w, "Всего:                 %s\n", sec(s.Total))
@@ -475,4 +484,23 @@ func or(v, def string) string {
 		return def
 	}
 	return v
+}
+
+func exportImages(dir string, images []material.ImageAsset) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	for _, img := range images {
+		if _, err := uuid.Parse(img.ID); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(dir, img.ID+".png"), img.Data, 0o600); err != nil {
+			return err
+		}
+	}
+	data, err := json.MarshalIndent(images, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, "catalog.json"), data, 0o600)
 }

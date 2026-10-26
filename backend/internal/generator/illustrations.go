@@ -91,6 +91,12 @@ func (g *Generator) enrichIllustrations(ctx context.Context, facts []Fact, out *
 				c := facts[pos.fact].Cards[pos.card]
 				base := c.Base()
 				base.QuestionSvg, base.ExplanationSvg = question, explanation
+				if len(base.QuestionImageIDs) > 0 {
+					base.QuestionSvg = ""
+				}
+				if len(base.ExplanationImageIDs) > 0 {
+					base.ExplanationSvg = ""
+				}
 				facts[pos.fact].Cards[pos.card] = withCardBase(c, base)
 			}
 		}

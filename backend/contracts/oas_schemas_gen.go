@@ -328,11 +328,13 @@ func (s *AvatarRequest) SetImage(val []byte) {
 // text. factName is plain text; sourceQuote is verbatim and never reformatted.
 // Ref: #/components/schemas/Card
 type Card struct {
-	ID       uuid.UUID `json:"id"`
-	SetId    uuid.UUID `json:"setId"`
-	FactId   uuid.UUID `json:"factId"`
-	FactName string    `json:"factName"`
-	Kind     CardKind  `json:"kind"`
+	QuestionImages    []CardImage `json:"questionImages"`
+	ExplanationImages []CardImage `json:"explanationImages"`
+	ID                uuid.UUID   `json:"id"`
+	SetId             uuid.UUID   `json:"setId"`
+	FactId            uuid.UUID   `json:"factId"`
+	FactName          string      `json:"factName"`
+	Kind              CardKind    `json:"kind"`
 	// GFM + math; inline LaTeX $...$ and display LaTeX $$...$$.
 	Question string `json:"question"`
 	// Choice options as GFM + math.
@@ -353,6 +355,16 @@ type Card struct {
 	// Where the quote is from: «Лекция 3, стр. 2».
 	SourceRef OptString `json:"sourceRef"`
 	Step      OptInt    `json:"step"`
+}
+
+// GetQuestionImages returns the value of QuestionImages.
+func (s *Card) GetQuestionImages() []CardImage {
+	return s.QuestionImages
+}
+
+// GetExplanationImages returns the value of ExplanationImages.
+func (s *Card) GetExplanationImages() []CardImage {
+	return s.ExplanationImages
 }
 
 // GetID returns the value of ID.
@@ -428,6 +440,16 @@ func (s *Card) GetSourceRef() OptString {
 // GetStep returns the value of Step.
 func (s *Card) GetStep() OptInt {
 	return s.Step
+}
+
+// SetQuestionImages sets the value of QuestionImages.
+func (s *Card) SetQuestionImages(val []CardImage) {
+	s.QuestionImages = val
+}
+
+// SetExplanationImages sets the value of ExplanationImages.
+func (s *Card) SetExplanationImages(val []CardImage) {
+	s.ExplanationImages = val
 }
 
 // SetID sets the value of ID.
@@ -656,6 +678,87 @@ func NewTableLayoutCardAnswer(v TableLayout) CardAnswer {
 	return s
 }
 
+// Ref: #/components/schemas/CardImage
+type CardImage struct {
+	AssetId    uuid.UUID `json:"assetId"`
+	URL        string    `json:"url"`
+	Alt        string    `json:"alt"`
+	Width      int       `json:"width"`
+	Height     int       `json:"height"`
+	SourcePage int       `json:"sourcePage"`
+	SourceName string    `json:"sourceName"`
+}
+
+// GetAssetId returns the value of AssetId.
+func (s *CardImage) GetAssetId() uuid.UUID {
+	return s.AssetId
+}
+
+// GetURL returns the value of URL.
+func (s *CardImage) GetURL() string {
+	return s.URL
+}
+
+// GetAlt returns the value of Alt.
+func (s *CardImage) GetAlt() string {
+	return s.Alt
+}
+
+// GetWidth returns the value of Width.
+func (s *CardImage) GetWidth() int {
+	return s.Width
+}
+
+// GetHeight returns the value of Height.
+func (s *CardImage) GetHeight() int {
+	return s.Height
+}
+
+// GetSourcePage returns the value of SourcePage.
+func (s *CardImage) GetSourcePage() int {
+	return s.SourcePage
+}
+
+// GetSourceName returns the value of SourceName.
+func (s *CardImage) GetSourceName() string {
+	return s.SourceName
+}
+
+// SetAssetId sets the value of AssetId.
+func (s *CardImage) SetAssetId(val uuid.UUID) {
+	s.AssetId = val
+}
+
+// SetURL sets the value of URL.
+func (s *CardImage) SetURL(val string) {
+	s.URL = val
+}
+
+// SetAlt sets the value of Alt.
+func (s *CardImage) SetAlt(val string) {
+	s.Alt = val
+}
+
+// SetWidth sets the value of Width.
+func (s *CardImage) SetWidth(val int) {
+	s.Width = val
+}
+
+// SetHeight sets the value of Height.
+func (s *CardImage) SetHeight(val int) {
+	s.Height = val
+}
+
+// SetSourcePage sets the value of SourcePage.
+func (s *CardImage) SetSourcePage(val int) {
+	s.SourcePage = val
+}
+
+// SetSourceName sets the value of SourceName.
+func (s *CardImage) SetSourceName(val string) {
+	s.SourceName = val
+}
+
 // What is wrong with a card, in the reader's opinion.
 // Ref: #/components/schemas/CardIssueReason
 type CardIssueReason string
@@ -837,7 +940,8 @@ func (s *CardKind) UnmarshalText(data []byte) error {
 // What a feed card hides until it is answered.
 // Ref: #/components/schemas/CardReveal
 type CardReveal struct {
-	Answer CardAnswer `json:"answer"`
+	ExplanationImages []CardImage `json:"explanationImages"`
+	Answer            CardAnswer  `json:"answer"`
 	// Explanation as GFM + math, including Markdown tables and LaTeX formulas.
 	Explanation string `json:"explanation"`
 	// Optional raw static self-contained SVG for the explanation with viewBox, at most 128 KiB. Omitted
@@ -845,6 +949,11 @@ type CardReveal struct {
 	ExplanationSvg OptString `json:"explanationSvg"`
 	SourceQuote    string    `json:"sourceQuote"`
 	SourceRef      OptString `json:"sourceRef"`
+}
+
+// GetExplanationImages returns the value of ExplanationImages.
+func (s *CardReveal) GetExplanationImages() []CardImage {
+	return s.ExplanationImages
 }
 
 // GetAnswer returns the value of Answer.
@@ -870,6 +979,11 @@ func (s *CardReveal) GetSourceQuote() string {
 // GetSourceRef returns the value of SourceRef.
 func (s *CardReveal) GetSourceRef() OptString {
 	return s.SourceRef
+}
+
+// SetExplanationImages sets the value of ExplanationImages.
+func (s *CardReveal) SetExplanationImages(val []CardImage) {
+	s.ExplanationImages = val
 }
 
 // SetAnswer sets the value of Answer.
@@ -1061,13 +1175,27 @@ func (*CreateCardNotFound) createCardRes() {}
 
 // Ref: #/components/schemas/CreateCardRequest
 type CreateCardRequest struct {
-	Kind CardKind `json:"kind"`
+	// Ordered image IDs of this set; omitted preserves attachments on update, empty removes them.
+	QuestionImageIds []uuid.UUID `json:"questionImageIds"`
+	// Ordered image IDs of this set; omitted preserves attachments on update, empty removes them.
+	ExplanationImageIds []uuid.UUID `json:"explanationImageIds"`
+	Kind                CardKind    `json:"kind"`
 	// GFM + math; inline LaTeX $...$ and display LaTeX $$...$$.
 	Question    string         `json:"question"`
 	Answer      CardAnswer     `json:"answer"`
 	Options     []string       `json:"options"`
 	Table       OptTableLayout `json:"table"`
 	Explanation OptString      `json:"explanation"`
+}
+
+// GetQuestionImageIds returns the value of QuestionImageIds.
+func (s *CreateCardRequest) GetQuestionImageIds() []uuid.UUID {
+	return s.QuestionImageIds
+}
+
+// GetExplanationImageIds returns the value of ExplanationImageIds.
+func (s *CreateCardRequest) GetExplanationImageIds() []uuid.UUID {
+	return s.ExplanationImageIds
 }
 
 // GetKind returns the value of Kind.
@@ -1098,6 +1226,16 @@ func (s *CreateCardRequest) GetTable() OptTableLayout {
 // GetExplanation returns the value of Explanation.
 func (s *CreateCardRequest) GetExplanation() OptString {
 	return s.Explanation
+}
+
+// SetQuestionImageIds sets the value of QuestionImageIds.
+func (s *CreateCardRequest) SetQuestionImageIds(val []uuid.UUID) {
+	s.QuestionImageIds = val
+}
+
+// SetExplanationImageIds sets the value of ExplanationImageIds.
+func (s *CreateCardRequest) SetExplanationImageIds(val []uuid.UUID) {
+	s.ExplanationImageIds = val
 }
 
 // SetKind sets the value of Kind.
@@ -1414,11 +1552,12 @@ func (s *FactMistakes) SetStudents(val []StudentFactMistakes) {
 // A card as the feed asks it, with nothing that gives the answer away.
 // Ref: #/components/schemas/FeedCard
 type FeedCard struct {
-	ID       uuid.UUID `json:"id"`
-	SetId    uuid.UUID `json:"setId"`
-	FactId   uuid.UUID `json:"factId"`
-	FactName string    `json:"factName"`
-	Kind     CardKind  `json:"kind"`
+	QuestionImages []CardImage `json:"questionImages"`
+	ID             uuid.UUID   `json:"id"`
+	SetId          uuid.UUID   `json:"setId"`
+	FactId         uuid.UUID   `json:"factId"`
+	FactName       string      `json:"factName"`
+	Kind           CardKind    `json:"kind"`
 	// Optional raw static self-contained SVG for the question with viewBox, at most 128 KiB. Omitted when
 	// absent. Does not reveal the answer.
 	QuestionSvg OptString `json:"questionSvg"`
@@ -1427,6 +1566,11 @@ type FeedCard struct {
 	// Choice options as GFM + math.
 	Options []string     `json:"options"`
 	Table   OptFeedTable `json:"table"`
+}
+
+// GetQuestionImages returns the value of QuestionImages.
+func (s *FeedCard) GetQuestionImages() []CardImage {
+	return s.QuestionImages
 }
 
 // GetID returns the value of ID.
@@ -1472,6 +1616,11 @@ func (s *FeedCard) GetOptions() []string {
 // GetTable returns the value of Table.
 func (s *FeedCard) GetTable() OptFeedTable {
 	return s.Table
+}
+
+// SetQuestionImages sets the value of QuestionImages.
+func (s *FeedCard) SetQuestionImages(val []CardImage) {
+	s.QuestionImages = val
 }
 
 // SetID sets the value of ID.
@@ -1608,6 +1757,56 @@ func (s *GetAvatarOKHeaders) SetResponse(val GetAvatarOK) {
 
 func (*GetAvatarOKHeaders) getAvatarRes() {}
 
+type GetCardImageInternalServerError ErrorResponse
+
+func (*GetCardImageInternalServerError) getCardImageRes() {}
+
+type GetCardImageNotFound ErrorResponse
+
+func (*GetCardImageNotFound) getCardImageRes() {}
+
+type GetCardImageOK struct {
+	Data io.Reader
+}
+
+// Read reads data from the Data reader.
+//
+// Kept to satisfy the io.Reader interface.
+func (s GetCardImageOK) Read(p []byte) (n int, err error) {
+	if s.Data == nil {
+		return 0, io.EOF
+	}
+	return s.Data.Read(p)
+}
+
+// GetCardImageOKHeaders wraps GetCardImageOK with response headers.
+type GetCardImageOKHeaders struct {
+	CacheControl OptString
+	Response     GetCardImageOK
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *GetCardImageOKHeaders) GetCacheControl() OptString {
+	return s.CacheControl
+}
+
+// GetResponse returns the value of Response.
+func (s *GetCardImageOKHeaders) GetResponse() GetCardImageOK {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *GetCardImageOKHeaders) SetCacheControl(val OptString) {
+	s.CacheControl = val
+}
+
+// SetResponse sets the value of Response.
+func (s *GetCardImageOKHeaders) SetResponse(val GetCardImageOK) {
+	s.Response = val
+}
+
+func (*GetCardImageOKHeaders) getCardImageRes() {}
+
 type GetCardsBySetIDForbidden ErrorResponse
 
 func (*GetCardsBySetIDForbidden) getCardsBySetIDRes() {}
@@ -1671,6 +1870,18 @@ func (*GetNotesJobServiceUnavailable) getNotesJobRes() {}
 type GetSetForbidden ErrorResponse
 
 func (*GetSetForbidden) getSetRes() {}
+
+type GetSetImagesInternalServerError ErrorResponse
+
+func (*GetSetImagesInternalServerError) getSetImagesRes() {}
+
+type GetSetImagesNotFound ErrorResponse
+
+func (*GetSetImagesNotFound) getSetImagesRes() {}
+
+type GetSetImagesOKApplicationJSON []CardImage
+
+func (*GetSetImagesOKApplicationJSON) getSetImagesRes() {}
 
 type GetSetInternalServerError ErrorResponse
 
@@ -3587,7 +3798,11 @@ func (*UpdateCardNotFound) updateCardRes() {}
 // Editing card content clears both generated SVG illustrations. SVG editing is not supported.
 // Ref: #/components/schemas/UpdateCardRequest
 type UpdateCardRequest struct {
-	Kind OptCardKind `json:"kind"`
+	// Ordered image IDs of this set; omitted preserves attachments on update, empty removes them.
+	QuestionImageIds []uuid.UUID `json:"questionImageIds"`
+	// Ordered image IDs of this set; omitted preserves attachments on update, empty removes them.
+	ExplanationImageIds []uuid.UUID `json:"explanationImageIds"`
+	Kind                OptCardKind `json:"kind"`
 	// GFM + math; inline LaTeX $...$ and display LaTeX $$...$$.
 	Question OptString `json:"question"`
 	// Choice options as GFM + math.
@@ -3601,6 +3816,16 @@ type UpdateCardRequest struct {
 	SourceQuote OptString `json:"sourceQuote"`
 	// Where the quote is from: «Лекция 3, стр. 2».
 	SourceRef OptString `json:"sourceRef"`
+}
+
+// GetQuestionImageIds returns the value of QuestionImageIds.
+func (s *UpdateCardRequest) GetQuestionImageIds() []uuid.UUID {
+	return s.QuestionImageIds
+}
+
+// GetExplanationImageIds returns the value of ExplanationImageIds.
+func (s *UpdateCardRequest) GetExplanationImageIds() []uuid.UUID {
+	return s.ExplanationImageIds
 }
 
 // GetKind returns the value of Kind.
@@ -3641,6 +3866,16 @@ func (s *UpdateCardRequest) GetSourceQuote() OptString {
 // GetSourceRef returns the value of SourceRef.
 func (s *UpdateCardRequest) GetSourceRef() OptString {
 	return s.SourceRef
+}
+
+// SetQuestionImageIds sets the value of QuestionImageIds.
+func (s *UpdateCardRequest) SetQuestionImageIds(val []uuid.UUID) {
+	s.QuestionImageIds = val
+}
+
+// SetExplanationImageIds sets the value of ExplanationImageIds.
+func (s *UpdateCardRequest) SetExplanationImageIds(val []uuid.UUID) {
+	s.ExplanationImageIds = val
 }
 
 // SetKind sets the value of Kind.

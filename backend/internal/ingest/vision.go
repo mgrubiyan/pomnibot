@@ -417,6 +417,19 @@ func abs(n int) int {
 	return n
 }
 
+// RenderPDFPage renders a zero-based PDF page with Poppler and existing size limits.
+func RenderPDFPage(ctx context.Context, pdf []byte, page int) ([]byte, error) {
+	data, err := renderPDFPage(ctx, pdf, page)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if err != nil {
+		return nil, err
+	}
+	fitted, _, _, err := fitImage(data, serviceLimits)
+	return fitted, err
+}
+
 // renderPDFPage renders one page of a PDF to a color JPEG with pdftoppm,
 // from poppler-utils like pdftotext.
 func renderPDFPage(ctx context.Context, pdf []byte, page int) ([]byte, error) {

@@ -449,6 +449,61 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /sets/{setId}/images:
+    get:
+      tags: [Sets]
+      summary: Get extracted PDF image catalog
+      operationId: GetSetImages
+      parameters:
+        - name: setId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Image catalog, including unused figures
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CardImage'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /images/{assetId}:
+    get:
+      tags: [Cards]
+      summary: Get an image with set access authorization
+      operationId: GetCardImage
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Cropped PDF figure
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
   /sets/{setId}/cards:
     post:
       tags: [Cards]
@@ -1267,6 +1322,26 @@ components:
         - type: boolean                            # kind boolean
         - $ref: '#/components/schemas/TableLayout' # kind table
 
+    CardImage:
+      type: object
+      required: [assetId, url, alt, width, height, sourcePage, sourceName]
+      properties:
+        assetId:
+          type: string
+          format: uuid
+        url:
+          type: string
+        alt:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+        sourcePage:
+          type: integer
+        sourceName:
+          type: string
+
     Card:
       type: object
       description: >-
@@ -1284,7 +1359,17 @@ components:
         - factName
         - kind
         - question
+        - questionImages
+        - explanationImages
       properties:
+        questionImages:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardImage'
+        explanationImages:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardImage'
         id:
           type: string
           format: uuid
@@ -1389,7 +1474,12 @@ components:
         - factName
         - kind
         - question
+        - questionImages
       properties:
+        questionImages:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardImage'
         id:
           type: string
           format: uuid
@@ -1440,7 +1530,12 @@ components:
         - answer
         - explanation
         - sourceQuote
+        - explanationImages
       properties:
+        explanationImages:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardImage'
         answer:
           $ref: '#/components/schemas/CardAnswer'
         explanation:
@@ -1467,6 +1562,22 @@ components:
       type: object
       required: [kind, question, answer]
       properties:
+        questionImageIds:
+          type: array
+          maxItems: 80
+          uniqueItems: true
+          description: Ordered image IDs of this set; omitted preserves attachments on update, empty removes them.
+          items:
+            type: string
+            format: uuid
+        explanationImageIds:
+          type: array
+          maxItems: 80
+          uniqueItems: true
+          description: Ordered image IDs of this set; omitted preserves attachments on update, empty removes them.
+          items:
+            type: string
+            format: uuid
         kind:
           $ref: '#/components/schemas/CardKind'
         question:
@@ -1487,6 +1598,22 @@ components:
       type: object
       description: Editing card content clears both generated SVG illustrations. SVG editing is not supported.
       properties:
+        questionImageIds:
+          type: array
+          maxItems: 80
+          uniqueItems: true
+          description: Ordered image IDs of this set; omitted preserves attachments on update, empty removes them.
+          items:
+            type: string
+            format: uuid
+        explanationImageIds:
+          type: array
+          maxItems: 80
+          uniqueItems: true
+          description: Ordered image IDs of this set; omitted preserves attachments on update, empty removes them.
+          items:
+            type: string
+            format: uuid
         kind:
           $ref: '#/components/schemas/CardKind'
         question:

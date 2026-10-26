@@ -886,6 +886,22 @@ func (s *Card) Encode(e *jx.Encoder) {
 // encodeFields encodes fields.
 func (s *Card) encodeFields(e *jx.Encoder) {
 	{
+		e.FieldStart("questionImages")
+		e.ArrStart()
+		for _, elem := range s.QuestionImages {
+			elem.Encode(e)
+		}
+		e.ArrEnd()
+	}
+	{
+		e.FieldStart("explanationImages")
+		e.ArrStart()
+		for _, elem := range s.ExplanationImages {
+			elem.Encode(e)
+		}
+		e.ArrEnd()
+	}
+	{
 		e.FieldStart("id")
 		json.EncodeUUID(e, s.ID)
 	}
@@ -969,22 +985,24 @@ func (s *Card) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfCard = [15]string{
-	0:  "id",
-	1:  "setId",
-	2:  "factId",
-	3:  "factName",
-	4:  "kind",
-	5:  "question",
-	6:  "options",
-	7:  "table",
-	8:  "answer",
-	9:  "explanation",
-	10: "questionSvg",
-	11: "explanationSvg",
-	12: "sourceQuote",
-	13: "sourceRef",
-	14: "step",
+var jsonFieldsNameOfCard = [17]string{
+	0:  "questionImages",
+	1:  "explanationImages",
+	2:  "id",
+	3:  "setId",
+	4:  "factId",
+	5:  "factName",
+	6:  "kind",
+	7:  "question",
+	8:  "options",
+	9:  "table",
+	10: "answer",
+	11: "explanation",
+	12: "questionSvg",
+	13: "explanationSvg",
+	14: "sourceQuote",
+	15: "sourceRef",
+	16: "step",
 }
 
 // Decode decodes Card from json.
@@ -992,12 +1010,48 @@ func (s *Card) Decode(d *jx.Decoder) error {
 	if s == nil {
 		return errors.New("invalid: unable to decode Card to nil")
 	}
-	var requiredBitSet [2]uint8
+	var requiredBitSet [3]uint8
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
-		case "id":
+		case "questionImages":
 			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				s.QuestionImages = make([]CardImage, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem CardImage
+					if err := elem.Decode(d); err != nil {
+						return err
+					}
+					s.QuestionImages = append(s.QuestionImages, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"questionImages\"")
+			}
+		case "explanationImages":
+			requiredBitSet[0] |= 1 << 1
+			if err := func() error {
+				s.ExplanationImages = make([]CardImage, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem CardImage
+					if err := elem.Decode(d); err != nil {
+						return err
+					}
+					s.ExplanationImages = append(s.ExplanationImages, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"explanationImages\"")
+			}
+		case "id":
+			requiredBitSet[0] |= 1 << 2
 			if err := func() error {
 				v, err := json.DecodeUUID(d)
 				s.ID = v
@@ -1009,7 +1063,7 @@ func (s *Card) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"id\"")
 			}
 		case "setId":
-			requiredBitSet[0] |= 1 << 1
+			requiredBitSet[0] |= 1 << 3
 			if err := func() error {
 				v, err := json.DecodeUUID(d)
 				s.SetId = v
@@ -1021,7 +1075,7 @@ func (s *Card) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"setId\"")
 			}
 		case "factId":
-			requiredBitSet[0] |= 1 << 2
+			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
 				v, err := json.DecodeUUID(d)
 				s.FactId = v
@@ -1033,7 +1087,7 @@ func (s *Card) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"factId\"")
 			}
 		case "factName":
-			requiredBitSet[0] |= 1 << 3
+			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
 				v, err := d.Str()
 				s.FactName = string(v)
@@ -1045,7 +1099,7 @@ func (s *Card) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"factName\"")
 			}
 		case "kind":
-			requiredBitSet[0] |= 1 << 4
+			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
 				if err := s.Kind.Decode(d); err != nil {
 					return err
@@ -1055,7 +1109,7 @@ func (s *Card) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"kind\"")
 			}
 		case "question":
-			requiredBitSet[0] |= 1 << 5
+			requiredBitSet[0] |= 1 << 7
 			if err := func() error {
 				v, err := d.Str()
 				s.Question = string(v)
@@ -1174,8 +1228,9 @@ func (s *Card) Decode(d *jx.Decoder) error {
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
-	for i, mask := range [2]uint8{
-		0b00111111,
+	for i, mask := range [3]uint8{
+		0b11111111,
+		0b00000000,
 		0b00000000,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
@@ -1305,6 +1360,204 @@ func (s CardAnswer) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *CardAnswer) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode implements json.Marshaler.
+func (s *CardImage) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s *CardImage) encodeFields(e *jx.Encoder) {
+	{
+		e.FieldStart("assetId")
+		json.EncodeUUID(e, s.AssetId)
+	}
+	{
+		e.FieldStart("url")
+		e.Str(s.URL)
+	}
+	{
+		e.FieldStart("alt")
+		e.Str(s.Alt)
+	}
+	{
+		e.FieldStart("width")
+		e.Int(s.Width)
+	}
+	{
+		e.FieldStart("height")
+		e.Int(s.Height)
+	}
+	{
+		e.FieldStart("sourcePage")
+		e.Int(s.SourcePage)
+	}
+	{
+		e.FieldStart("sourceName")
+		e.Str(s.SourceName)
+	}
+}
+
+var jsonFieldsNameOfCardImage = [7]string{
+	0: "assetId",
+	1: "url",
+	2: "alt",
+	3: "width",
+	4: "height",
+	5: "sourcePage",
+	6: "sourceName",
+}
+
+// Decode decodes CardImage from json.
+func (s *CardImage) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode CardImage to nil")
+	}
+	var requiredBitSet [1]uint8
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "assetId":
+			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				v, err := json.DecodeUUID(d)
+				s.AssetId = v
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"assetId\"")
+			}
+		case "url":
+			requiredBitSet[0] |= 1 << 1
+			if err := func() error {
+				v, err := d.Str()
+				s.URL = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"url\"")
+			}
+		case "alt":
+			requiredBitSet[0] |= 1 << 2
+			if err := func() error {
+				v, err := d.Str()
+				s.Alt = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"alt\"")
+			}
+		case "width":
+			requiredBitSet[0] |= 1 << 3
+			if err := func() error {
+				v, err := d.Int()
+				s.Width = int(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"width\"")
+			}
+		case "height":
+			requiredBitSet[0] |= 1 << 4
+			if err := func() error {
+				v, err := d.Int()
+				s.Height = int(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"height\"")
+			}
+		case "sourcePage":
+			requiredBitSet[0] |= 1 << 5
+			if err := func() error {
+				v, err := d.Int()
+				s.SourcePage = int(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"sourcePage\"")
+			}
+		case "sourceName":
+			requiredBitSet[0] |= 1 << 6
+			if err := func() error {
+				v, err := d.Str()
+				s.SourceName = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"sourceName\"")
+			}
+		default:
+			return d.Skip()
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode CardImage")
+	}
+	// Validate required fields.
+	var failures []validate.FieldError
+	for i, mask := range [1]uint8{
+		0b01111111,
+	} {
+		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
+			// Mask only required fields and check equality to mask using XOR.
+			//
+			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
+			// Bits of fields which would be set are actually bits of missed fields.
+			missed := bits.OnesCount8(result)
+			for bitN := 0; bitN < missed; bitN++ {
+				bitIdx := bits.TrailingZeros8(result)
+				fieldIdx := i*8 + bitIdx
+				var name string
+				if fieldIdx < len(jsonFieldsNameOfCardImage) {
+					name = jsonFieldsNameOfCardImage[fieldIdx]
+				} else {
+					name = strconv.Itoa(fieldIdx)
+				}
+				failures = append(failures, validate.FieldError{
+					Name:  name,
+					Error: validate.ErrFieldRequired,
+				})
+				// Reset bit.
+				result &^= 1 << bitIdx
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *CardImage) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *CardImage) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -1453,6 +1706,14 @@ func (s *CardReveal) Encode(e *jx.Encoder) {
 // encodeFields encodes fields.
 func (s *CardReveal) encodeFields(e *jx.Encoder) {
 	{
+		e.FieldStart("explanationImages")
+		e.ArrStart()
+		for _, elem := range s.ExplanationImages {
+			elem.Encode(e)
+		}
+		e.ArrEnd()
+	}
+	{
 		e.FieldStart("answer")
 		s.Answer.Encode(e)
 	}
@@ -1478,12 +1739,13 @@ func (s *CardReveal) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfCardReveal = [5]string{
-	0: "answer",
-	1: "explanation",
-	2: "explanationSvg",
-	3: "sourceQuote",
-	4: "sourceRef",
+var jsonFieldsNameOfCardReveal = [6]string{
+	0: "explanationImages",
+	1: "answer",
+	2: "explanation",
+	3: "explanationSvg",
+	4: "sourceQuote",
+	5: "sourceRef",
 }
 
 // Decode decodes CardReveal from json.
@@ -1495,8 +1757,26 @@ func (s *CardReveal) Decode(d *jx.Decoder) error {
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
-		case "answer":
+		case "explanationImages":
 			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				s.ExplanationImages = make([]CardImage, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem CardImage
+					if err := elem.Decode(d); err != nil {
+						return err
+					}
+					s.ExplanationImages = append(s.ExplanationImages, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"explanationImages\"")
+			}
+		case "answer":
+			requiredBitSet[0] |= 1 << 1
 			if err := func() error {
 				if err := s.Answer.Decode(d); err != nil {
 					return err
@@ -1506,7 +1786,7 @@ func (s *CardReveal) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"answer\"")
 			}
 		case "explanation":
-			requiredBitSet[0] |= 1 << 1
+			requiredBitSet[0] |= 1 << 2
 			if err := func() error {
 				v, err := d.Str()
 				s.Explanation = string(v)
@@ -1528,7 +1808,7 @@ func (s *CardReveal) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"explanationSvg\"")
 			}
 		case "sourceQuote":
-			requiredBitSet[0] |= 1 << 3
+			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
 				v, err := d.Str()
 				s.SourceQuote = string(v)
@@ -1559,7 +1839,7 @@ func (s *CardReveal) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b00001011,
+		0b00010111,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -2259,6 +2539,26 @@ func (s *CreateCardRequest) Encode(e *jx.Encoder) {
 // encodeFields encodes fields.
 func (s *CreateCardRequest) encodeFields(e *jx.Encoder) {
 	{
+		if s.QuestionImageIds != nil {
+			e.FieldStart("questionImageIds")
+			e.ArrStart()
+			for _, elem := range s.QuestionImageIds {
+				json.EncodeUUID(e, elem)
+			}
+			e.ArrEnd()
+		}
+	}
+	{
+		if s.ExplanationImageIds != nil {
+			e.FieldStart("explanationImageIds")
+			e.ArrStart()
+			for _, elem := range s.ExplanationImageIds {
+				json.EncodeUUID(e, elem)
+			}
+			e.ArrEnd()
+		}
+	}
+	{
 		e.FieldStart("kind")
 		s.Kind.Encode(e)
 	}
@@ -2294,13 +2594,15 @@ func (s *CreateCardRequest) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfCreateCardRequest = [6]string{
-	0: "kind",
-	1: "question",
-	2: "answer",
-	3: "options",
-	4: "table",
-	5: "explanation",
+var jsonFieldsNameOfCreateCardRequest = [8]string{
+	0: "questionImageIds",
+	1: "explanationImageIds",
+	2: "kind",
+	3: "question",
+	4: "answer",
+	5: "options",
+	6: "table",
+	7: "explanation",
 }
 
 // Decode decodes CreateCardRequest from json.
@@ -2312,8 +2614,46 @@ func (s *CreateCardRequest) Decode(d *jx.Decoder) error {
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
+		case "questionImageIds":
+			if err := func() error {
+				s.QuestionImageIds = make([]uuid.UUID, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem uuid.UUID
+					v, err := json.DecodeUUID(d)
+					elem = v
+					if err != nil {
+						return err
+					}
+					s.QuestionImageIds = append(s.QuestionImageIds, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"questionImageIds\"")
+			}
+		case "explanationImageIds":
+			if err := func() error {
+				s.ExplanationImageIds = make([]uuid.UUID, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem uuid.UUID
+					v, err := json.DecodeUUID(d)
+					elem = v
+					if err != nil {
+						return err
+					}
+					s.ExplanationImageIds = append(s.ExplanationImageIds, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"explanationImageIds\"")
+			}
 		case "kind":
-			requiredBitSet[0] |= 1 << 0
+			requiredBitSet[0] |= 1 << 2
 			if err := func() error {
 				if err := s.Kind.Decode(d); err != nil {
 					return err
@@ -2323,7 +2663,7 @@ func (s *CreateCardRequest) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"kind\"")
 			}
 		case "question":
-			requiredBitSet[0] |= 1 << 1
+			requiredBitSet[0] |= 1 << 3
 			if err := func() error {
 				v, err := d.Str()
 				s.Question = string(v)
@@ -2335,7 +2675,7 @@ func (s *CreateCardRequest) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"question\"")
 			}
 		case "answer":
-			requiredBitSet[0] |= 1 << 2
+			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
 				if err := s.Answer.Decode(d); err != nil {
 					return err
@@ -2393,7 +2733,7 @@ func (s *CreateCardRequest) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b00000111,
+		0b00011100,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -3793,6 +4133,14 @@ func (s *FeedCard) Encode(e *jx.Encoder) {
 // encodeFields encodes fields.
 func (s *FeedCard) encodeFields(e *jx.Encoder) {
 	{
+		e.FieldStart("questionImages")
+		e.ArrStart()
+		for _, elem := range s.QuestionImages {
+			elem.Encode(e)
+		}
+		e.ArrEnd()
+	}
+	{
 		e.FieldStart("id")
 		json.EncodeUUID(e, s.ID)
 	}
@@ -3840,16 +4188,17 @@ func (s *FeedCard) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfFeedCard = [9]string{
-	0: "id",
-	1: "setId",
-	2: "factId",
-	3: "factName",
-	4: "kind",
-	5: "questionSvg",
-	6: "question",
-	7: "options",
-	8: "table",
+var jsonFieldsNameOfFeedCard = [10]string{
+	0: "questionImages",
+	1: "id",
+	2: "setId",
+	3: "factId",
+	4: "factName",
+	5: "kind",
+	6: "questionSvg",
+	7: "question",
+	8: "options",
+	9: "table",
 }
 
 // Decode decodes FeedCard from json.
@@ -3861,8 +4210,26 @@ func (s *FeedCard) Decode(d *jx.Decoder) error {
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
-		case "id":
+		case "questionImages":
 			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				s.QuestionImages = make([]CardImage, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem CardImage
+					if err := elem.Decode(d); err != nil {
+						return err
+					}
+					s.QuestionImages = append(s.QuestionImages, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"questionImages\"")
+			}
+		case "id":
+			requiredBitSet[0] |= 1 << 1
 			if err := func() error {
 				v, err := json.DecodeUUID(d)
 				s.ID = v
@@ -3874,7 +4241,7 @@ func (s *FeedCard) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"id\"")
 			}
 		case "setId":
-			requiredBitSet[0] |= 1 << 1
+			requiredBitSet[0] |= 1 << 2
 			if err := func() error {
 				v, err := json.DecodeUUID(d)
 				s.SetId = v
@@ -3886,7 +4253,7 @@ func (s *FeedCard) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"setId\"")
 			}
 		case "factId":
-			requiredBitSet[0] |= 1 << 2
+			requiredBitSet[0] |= 1 << 3
 			if err := func() error {
 				v, err := json.DecodeUUID(d)
 				s.FactId = v
@@ -3898,7 +4265,7 @@ func (s *FeedCard) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"factId\"")
 			}
 		case "factName":
-			requiredBitSet[0] |= 1 << 3
+			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
 				v, err := d.Str()
 				s.FactName = string(v)
@@ -3910,7 +4277,7 @@ func (s *FeedCard) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"factName\"")
 			}
 		case "kind":
-			requiredBitSet[0] |= 1 << 4
+			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
 				if err := s.Kind.Decode(d); err != nil {
 					return err
@@ -3930,7 +4297,7 @@ func (s *FeedCard) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"questionSvg\"")
 			}
 		case "question":
-			requiredBitSet[0] |= 1 << 6
+			requiredBitSet[0] |= 1 << 7
 			if err := func() error {
 				v, err := d.Str()
 				s.Question = string(v)
@@ -3980,7 +4347,7 @@ func (s *FeedCard) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [2]uint8{
-		0b01011111,
+		0b10111111,
 		0b00000000,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
@@ -4362,6 +4729,82 @@ func (s *GetAvatarNotFound) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *GetAvatarNotFound) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes GetCardImageInternalServerError as json.
+func (s *GetCardImageInternalServerError) Encode(e *jx.Encoder) {
+	unwrapped := (*ErrorResponse)(s)
+
+	unwrapped.Encode(e)
+}
+
+// Decode decodes GetCardImageInternalServerError from json.
+func (s *GetCardImageInternalServerError) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode GetCardImageInternalServerError to nil")
+	}
+	var unwrapped ErrorResponse
+	if err := func() error {
+		if err := unwrapped.Decode(d); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		return errors.Wrap(err, "alias")
+	}
+	*s = GetCardImageInternalServerError(unwrapped)
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *GetCardImageInternalServerError) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *GetCardImageInternalServerError) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes GetCardImageNotFound as json.
+func (s *GetCardImageNotFound) Encode(e *jx.Encoder) {
+	unwrapped := (*ErrorResponse)(s)
+
+	unwrapped.Encode(e)
+}
+
+// Decode decodes GetCardImageNotFound from json.
+func (s *GetCardImageNotFound) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode GetCardImageNotFound to nil")
+	}
+	var unwrapped ErrorResponse
+	if err := func() error {
+		if err := unwrapped.Decode(d); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		return errors.Wrap(err, "alias")
+	}
+	*s = GetCardImageNotFound(unwrapped)
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *GetCardImageNotFound) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *GetCardImageNotFound) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -5006,6 +5449,132 @@ func (s *GetSetForbidden) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *GetSetForbidden) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes GetSetImagesInternalServerError as json.
+func (s *GetSetImagesInternalServerError) Encode(e *jx.Encoder) {
+	unwrapped := (*ErrorResponse)(s)
+
+	unwrapped.Encode(e)
+}
+
+// Decode decodes GetSetImagesInternalServerError from json.
+func (s *GetSetImagesInternalServerError) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode GetSetImagesInternalServerError to nil")
+	}
+	var unwrapped ErrorResponse
+	if err := func() error {
+		if err := unwrapped.Decode(d); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		return errors.Wrap(err, "alias")
+	}
+	*s = GetSetImagesInternalServerError(unwrapped)
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *GetSetImagesInternalServerError) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *GetSetImagesInternalServerError) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes GetSetImagesNotFound as json.
+func (s *GetSetImagesNotFound) Encode(e *jx.Encoder) {
+	unwrapped := (*ErrorResponse)(s)
+
+	unwrapped.Encode(e)
+}
+
+// Decode decodes GetSetImagesNotFound from json.
+func (s *GetSetImagesNotFound) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode GetSetImagesNotFound to nil")
+	}
+	var unwrapped ErrorResponse
+	if err := func() error {
+		if err := unwrapped.Decode(d); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		return errors.Wrap(err, "alias")
+	}
+	*s = GetSetImagesNotFound(unwrapped)
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *GetSetImagesNotFound) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *GetSetImagesNotFound) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes GetSetImagesOKApplicationJSON as json.
+func (s GetSetImagesOKApplicationJSON) Encode(e *jx.Encoder) {
+	unwrapped := []CardImage(s)
+
+	e.ArrStart()
+	for _, elem := range unwrapped {
+		elem.Encode(e)
+	}
+	e.ArrEnd()
+}
+
+// Decode decodes GetSetImagesOKApplicationJSON from json.
+func (s *GetSetImagesOKApplicationJSON) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode GetSetImagesOKApplicationJSON to nil")
+	}
+	var unwrapped []CardImage
+	if err := func() error {
+		unwrapped = make([]CardImage, 0)
+		if err := d.Arr(func(d *jx.Decoder) error {
+			var elem CardImage
+			if err := elem.Decode(d); err != nil {
+				return err
+			}
+			unwrapped = append(unwrapped, elem)
+			return nil
+		}); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		return errors.Wrap(err, "alias")
+	}
+	*s = GetSetImagesOKApplicationJSON(unwrapped)
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s GetSetImagesOKApplicationJSON) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *GetSetImagesOKApplicationJSON) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -10549,6 +11118,26 @@ func (s *UpdateCardRequest) Encode(e *jx.Encoder) {
 // encodeFields encodes fields.
 func (s *UpdateCardRequest) encodeFields(e *jx.Encoder) {
 	{
+		if s.QuestionImageIds != nil {
+			e.FieldStart("questionImageIds")
+			e.ArrStart()
+			for _, elem := range s.QuestionImageIds {
+				json.EncodeUUID(e, elem)
+			}
+			e.ArrEnd()
+		}
+	}
+	{
+		if s.ExplanationImageIds != nil {
+			e.FieldStart("explanationImageIds")
+			e.ArrStart()
+			for _, elem := range s.ExplanationImageIds {
+				json.EncodeUUID(e, elem)
+			}
+			e.ArrEnd()
+		}
+	}
+	{
 		if s.Kind.Set {
 			e.FieldStart("kind")
 			s.Kind.Encode(e)
@@ -10602,15 +11191,17 @@ func (s *UpdateCardRequest) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfUpdateCardRequest = [8]string{
-	0: "kind",
-	1: "question",
-	2: "options",
-	3: "table",
-	4: "answer",
-	5: "explanation",
-	6: "sourceQuote",
-	7: "sourceRef",
+var jsonFieldsNameOfUpdateCardRequest = [10]string{
+	0: "questionImageIds",
+	1: "explanationImageIds",
+	2: "kind",
+	3: "question",
+	4: "options",
+	5: "table",
+	6: "answer",
+	7: "explanation",
+	8: "sourceQuote",
+	9: "sourceRef",
 }
 
 // Decode decodes UpdateCardRequest from json.
@@ -10621,6 +11212,44 @@ func (s *UpdateCardRequest) Decode(d *jx.Decoder) error {
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
+		case "questionImageIds":
+			if err := func() error {
+				s.QuestionImageIds = make([]uuid.UUID, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem uuid.UUID
+					v, err := json.DecodeUUID(d)
+					elem = v
+					if err != nil {
+						return err
+					}
+					s.QuestionImageIds = append(s.QuestionImageIds, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"questionImageIds\"")
+			}
+		case "explanationImageIds":
+			if err := func() error {
+				s.ExplanationImageIds = make([]uuid.UUID, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem uuid.UUID
+					v, err := json.DecodeUUID(d)
+					elem = v
+					if err != nil {
+						return err
+					}
+					s.ExplanationImageIds = append(s.ExplanationImageIds, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"explanationImageIds\"")
+			}
 		case "kind":
 			if err := func() error {
 				s.Kind.Reset()

@@ -125,3 +125,13 @@ describe('revealedCard', () => {
         expect(whole.table).toEqual(layout);
     });
 });
+
+it('updates PDF attachments when resuming an edited feed and keeps reveal images', () => {
+    const image = { assetId: 'a', url: '/api/images/a', alt: 'Figure', width: 100, height: 50, sourcePage: 2, sourceName: 'book.pdf' };
+    const original = card('1', { questionImages: [image] });
+    expect(patchFeedCard(original, { question: 'Updated' }).questionImages).toEqual([image]);
+    expect(patchFeedCard(original, { questionImages: [] }).questionImages).toEqual([]);
+    const full = revealedCard(original, { answer: 'A', explanation: 'E', sourceQuote: '', explanationImages: [image] });
+    expect(full.questionImages).toEqual([image]);
+    expect(full.explanationImages).toEqual([image]);
+});

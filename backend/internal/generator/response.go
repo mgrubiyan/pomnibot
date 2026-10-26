@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/mgrubiyan/pomnibot/backend/internal/material"
 	"slices"
 	"strings"
 )
@@ -33,11 +34,13 @@ type Card interface {
 
 // CardBase holds the question and source specific to one card.
 type CardBase struct {
-	QuestionSvg    string `json:"questionSvg,omitempty"`
-	ExplanationSvg string `json:"explanationSvg,omitempty"`
-	Question       string `json:"question"`
-	Source         string `json:"source"`
-	SourceQuote    string `json:"sourceQuote"`
+	QuestionImageIDs    []string `json:"questionImageIds,omitempty"`
+	ExplanationImageIDs []string `json:"explanationImageIds,omitempty"`
+	QuestionSvg         string   `json:"questionSvg,omitempty"`
+	ExplanationSvg      string   `json:"explanationSvg,omitempty"`
+	Question            string   `json:"question"`
+	Source              string   `json:"source"`
+	SourceQuote         string   `json:"sourceQuote"`
 }
 
 // FlipCard presents an answer for self assessment.
@@ -211,7 +214,7 @@ func decodeCard(raw json.RawMessage) (Card, error) {
 
 func knownCardField(key string) bool {
 	switch key {
-	case "questionSvg", "explanationSvg", "question", "source", "sourceQuote", "answer", "rightAnswers", "wrongAnswers", "columns":
+	case "questionImageIds", "explanationImageIds", "questionSvg", "explanationSvg", "question", "source", "sourceQuote", "answer", "rightAnswers", "wrongAnswers", "columns":
 		return true
 	default:
 		return false
@@ -375,7 +378,7 @@ func cardSignature(c Card) string {
 		return ""
 	}
 	base := c.Base()
-	q := normalized(base.Question)
+	q := normalized(base.Question) + fmt.Sprintf("|images:%q:%q", base.QuestionImageIDs, base.ExplanationImageIDs)
 	switch v := c.(type) {
 	case FlipCard:
 		return fmt.Sprintf("flip:%s:%s", q, normalized(v.Answer))
@@ -412,7 +415,7 @@ func cardSignature(c Card) string {
 	}
 }
 
-func validateAndSanitizeFacts(facts []Fact, pages int) ([]Fact, int, int, []string, error) {
+func validateAndSanitizeFacts(facts []Fact, pages int, catalog ...[]material.ImageAsset) ([]Fact, int, int, []string, error) {
 	if len(facts) == 0 {
 		return nil, 0, 0, nil, problem("validation", "facts", "facts are empty")
 	}
@@ -511,7 +514,11 @@ func validateAndSanitizeFacts(facts []Fact, pages int) ([]Fact, int, int, []stri
 			}
 
 			c = sanitizeCard(c)
-			if err := validateCard(c); err != nil {
+			err := validateCard(c)
+			if err == nil && len(catalog) > 0 {
+				err = validateImageBindings([]Fact{{Cards: []Card{c}}}, catalog[0])
+			}
+			if err != nil {
 				diagErr := atPath(cardPath, err)
 				if isRecall {
 					return nil, droppedInvalid, droppedDuplicate, issues, diagErr

@@ -100,6 +100,12 @@ type Invoker interface {
 	//
 	// GET /avatars/{avatarId}
 	GetAvatar(ctx context.Context, params GetAvatarParams) (GetAvatarRes, error)
+	// GetCardImage invokes GetCardImage operation.
+	//
+	// Get an image with set access authorization.
+	//
+	// GET /images/{assetId}
+	GetCardImage(ctx context.Context, params GetCardImageParams) (GetCardImageRes, error)
 	// GetCardsBySetID invokes GetCardsBySetID operation.
 	//
 	// Only the author can get cards of a set; other users receive 403 Forbidden.
@@ -144,6 +150,12 @@ type Invoker interface {
 	//
 	// GET /sets/{setId}
 	GetSet(ctx context.Context, params GetSetParams) (GetSetRes, error)
+	// GetSetImages invokes GetSetImages operation.
+	//
+	// Get extracted PDF image catalog.
+	//
+	// GET /sets/{setId}/images
+	GetSetImages(ctx context.Context, params GetSetImagesParams) (GetSetImagesRes, error)
 	// GetSetIssues invokes GetSetIssues operation.
 	//
 	// Grouped by card and reason. A complaint is open until the card is edited after it or the author
@@ -1355,6 +1367,104 @@ func (c *Client) sendGetAvatar(ctx context.Context, params GetAvatarParams) (res
 	return result, nil
 }
 
+// GetCardImage invokes GetCardImage operation.
+//
+// Get an image with set access authorization.
+//
+// GET /images/{assetId}
+func (c *Client) GetCardImage(ctx context.Context, params GetCardImageParams) (GetCardImageRes, error) {
+	res, err := c.sendGetCardImage(ctx, params)
+	return res, err
+}
+
+func (c *Client) sendGetCardImage(ctx context.Context, params GetCardImageParams) (res GetCardImageRes, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("GetCardImage"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/images/{assetId}"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, GetCardImageOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [2]string
+	pathParts[0] = "/images/"
+	{
+		// Encode "assetId" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "assetId",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.UUIDToString(params.AssetId))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer func() {
+		// Drain the body to EOF before closing, so the underlying
+		// connection can be reused by the Transport regardless of the
+		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
+		_, _ = io.Copy(io.Discard, body)
+		_ = body.Close()
+	}()
+
+	stage = "DecodeResponse"
+	result, err := decodeGetCardImageResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
 // GetCardsBySetID invokes GetCardsBySetID operation.
 //
 // Only the author can get cards of a set; other users receive 403 Forbidden.
@@ -2004,6 +2114,105 @@ func (c *Client) sendGetSet(ctx context.Context, params GetSetParams) (res GetSe
 
 	stage = "DecodeResponse"
 	result, err := decodeGetSetResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// GetSetImages invokes GetSetImages operation.
+//
+// Get extracted PDF image catalog.
+//
+// GET /sets/{setId}/images
+func (c *Client) GetSetImages(ctx context.Context, params GetSetImagesParams) (GetSetImagesRes, error) {
+	res, err := c.sendGetSetImages(ctx, params)
+	return res, err
+}
+
+func (c *Client) sendGetSetImages(ctx context.Context, params GetSetImagesParams) (res GetSetImagesRes, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("GetSetImages"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/sets/{setId}/images"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, GetSetImagesOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [3]string
+	pathParts[0] = "/sets/"
+	{
+		// Encode "setId" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "setId",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.UUIDToString(params.SetId))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	pathParts[2] = "/images"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer func() {
+		// Drain the body to EOF before closing, so the underlying
+		// connection can be reused by the Transport regardless of the
+		// response status code. See https://github.com/ogen-go/ogen/issues/1670.
+		_, _ = io.Copy(io.Discard, body)
+		_ = body.Close()
+	}()
+
+	stage = "DecodeResponse"
+	result, err := decodeGetSetImagesResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}

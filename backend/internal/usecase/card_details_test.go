@@ -56,6 +56,19 @@ func (q *detailBatchQuerier) GetCardTableItemsBatch(_ context.Context, ids []pgt
 	return rows, nil
 }
 
+func (q *detailBatchQuerier) GetCardImages(context.Context, pgtype.UUID) ([]db.GetCardImagesRow, error) {
+	q.singles++
+	return nil, nil
+}
+func (q *detailBatchQuerier) GetCardImagesBatch(_ context.Context, ids []pgtype.UUID) ([]db.GetCardImagesBatchRow, error) {
+	q.batches++
+	rows := []db.GetCardImagesBatchRow{}
+	for _, id := range ids {
+		rows = append(rows, db.GetCardImagesBatchRow{CardID: id, ID: id, Side: "question", Width: 100, Height: 50, SourcePage: 1})
+	}
+	return rows, nil
+}
+
 func TestCardListsBatchDetails(t *testing.T) {
 	for _, feed := range []bool{false, true} {
 		t.Run(fmt.Sprintf("feed=%v", feed), func(t *testing.T) {
@@ -94,6 +107,9 @@ func TestCardListsBatchDetails(t *testing.T) {
 				}
 				count = len(cards)
 				for i, c := range cards {
+					if len(c.QuestionImages) != 1 {
+						t.Fatal("lost image details")
+					}
 					if i%2 == 0 && (len(c.Options) != 3 || !slices.Contains(c.Options, "Answer")) {
 						t.Fatalf("lost choice details: %+v", c)
 					}
@@ -108,6 +124,9 @@ func TestCardListsBatchDetails(t *testing.T) {
 				}
 				count = len(cards)
 				for i, c := range cards {
+					if len(c.QuestionImages) != 1 {
+						t.Fatal("lost image details")
+					}
 					if i%2 == 0 && (len(c.Options) != 3 || c.Options[0] != "Answer" || c.Answer.Value.Type != contracts.StringArrayCardAnswer || len(c.Answer.Value.StringArray) != 2) {
 						t.Fatalf("lost choice details: %+v", c)
 					}
@@ -116,8 +135,8 @@ func TestCardListsBatchDetails(t *testing.T) {
 					}
 				}
 			}
-			if count != 20 || q.singles != 0 || q.batches != 3 {
-				t.Fatalf("cards=%d per-card queries=%d batch queries=%d; expected 20/0/3", count, q.singles, q.batches)
+			if count != 20 || q.singles != 0 || q.batches != 4 {
+				t.Fatalf("cards=%d per-card queries=%d batch queries=%d; expected 20/0/4", count, q.singles, q.batches)
 			}
 		})
 	}

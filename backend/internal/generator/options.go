@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -38,6 +39,7 @@ type Artifact struct {
 
 // Result includes cards, available source coverage and processing metrics.
 type Result struct {
+	Images []material.ImageAsset    `json:"images,omitempty"`
 	Budget providers.BudgetSnapshot `json:"budget"`
 
 	Artifact *Artifact `json:"artifact,omitempty"`
@@ -57,6 +59,11 @@ type Coverage struct {
 
 // Stats describes one Generate run.
 type Stats struct {
+	ImagesFound          int                   `json:"imagesFound"`
+	ImagesExtracted      int                   `json:"imagesExtracted"`
+	ImagesUsed           int                   `json:"imagesUsed"`
+	ImageErrors          int                   `json:"imageErrors"`
+	ImageDuration        time.Duration         `json:"imageDuration"`
 	DroppedIllustrations int                   `json:"droppedIllustrations,omitempty"`
 	Stages               map[string]StageStats `json:"stages,omitempty"`
 	CachedTokens         int                   `json:"cachedTokens"`
@@ -94,6 +101,7 @@ const DefaultCallTimeout = 15 * time.Minute
 
 // Options controls generation and its shared document budget.
 type Options struct {
+	RenderPage      func(context.Context, []byte, int) ([]byte, error)
 	ReasoningEffort string
 	MaxTokens       int
 	Budget          providers.BudgetLimits

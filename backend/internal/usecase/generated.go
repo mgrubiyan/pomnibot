@@ -32,7 +32,7 @@ func prepareGeneratedSet(title string, result generator.Result, warnings []strin
 				return repository.GeneratedSet{}, fmt.Errorf("nil generated card")
 			}
 			base := raw.Base()
-			c := cards.Card{FactID: id.String(), Question: base.Question, Explanation: base.Source, SourceQuote: base.SourceQuote, SourceRef: ref, QuestionSvg: base.QuestionSvg, ExplanationSvg: base.ExplanationSvg}
+			c := cards.Card{QuestionImageIDs: slices.Clone(base.QuestionImageIDs), ExplanationImageIDs: slices.Clone(base.ExplanationImageIDs), FactID: id.String(), Question: base.Question, Explanation: base.Source, SourceQuote: base.SourceQuote, SourceRef: ref, QuestionSvg: base.QuestionSvg, ExplanationSvg: base.ExplanationSvg}
 			switch v := raw.(type) {
 			case generator.FlipCard:
 				c.Kind = cards.KindFlip

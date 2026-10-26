@@ -80,6 +80,12 @@ type Handler interface {
 	//
 	// GET /avatars/{avatarId}
 	GetAvatar(ctx context.Context, params GetAvatarParams) (GetAvatarRes, error)
+	// GetCardImage implements GetCardImage operation.
+	//
+	// Get an image with set access authorization.
+	//
+	// GET /images/{assetId}
+	GetCardImage(ctx context.Context, params GetCardImageParams) (GetCardImageRes, error)
 	// GetCardsBySetID implements GetCardsBySetID operation.
 	//
 	// Only the author can get cards of a set; other users receive 403 Forbidden.
@@ -124,6 +130,12 @@ type Handler interface {
 	//
 	// GET /sets/{setId}
 	GetSet(ctx context.Context, params GetSetParams) (GetSetRes, error)
+	// GetSetImages implements GetSetImages operation.
+	//
+	// Get extracted PDF image catalog.
+	//
+	// GET /sets/{setId}/images
+	GetSetImages(ctx context.Context, params GetSetImagesParams) (GetSetImagesRes, error)
 	// GetSetIssues implements GetSetIssues operation.
 	//
 	// Grouped by card and reason. A complaint is open until the card is edited after it or the author
