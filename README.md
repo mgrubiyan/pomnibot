@@ -4,7 +4,6 @@
 
 [![CI](https://github.com/mgrubiyan/pomnibot/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/mgrubiyan/pomnibot/actions/workflows/ci-cd.yml)
 [![Веб-приложение](https://img.shields.io/badge/%D0%92%D0%B5%D0%B1--%D0%BF%D1%80%D0%B8%D0%BB%D0%BE%D0%B6%D0%B5%D0%BD%D0%B8%D0%B5-2563eb)](https://pomnibot.pslu.ru)
-[![Telegram](https://img.shields.io/badge/Telegram-26A5E4?logo=telegram&logoColor=white)](https://t.me/t583_pomni_bot)
 [![MAX](https://img.shields.io/badge/MAX-6C3BF5)](https://max.ru/t583_hakaton_max_bot)
 
 ## Генерация и распознавание
