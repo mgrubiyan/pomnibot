@@ -25,8 +25,18 @@ func NewRouter(handler contracts.Handler, staticFS fs.FS, maxToken, telegramToke
 		return nil, err
 	}
 
-	authMiddleware := AuthMiddleware(maxToken, telegramToken, userService, photos)
-	return LoggingMiddleware(authMiddleware(limitUploads(apiServer))), nil
+	auth := authenticator{maxToken: maxToken, telegramToken: telegramToken, users: userService, photos: photos}
+	api := auth.middleware(limitUploads(apiServer))
+	// The WebSocket signs in with its first message.
+	apiHandler, _ := handler.(*APIHandler)
+	stream := speechStream(apiHandler, auth)
+	return LoggingMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == speechStreamPath {
+			stream.ServeHTTP(w, r)
+			return
+		}
+		api.ServeHTTP(w, r)
+	})), nil
 }
 
 // maxAvatarRequest fits the largest photo the API takes, in base64 and JSON.

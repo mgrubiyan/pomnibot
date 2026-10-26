@@ -25,6 +25,9 @@ import (
 // DefaultBaseURL is SpeechKit's public endpoint.
 const DefaultBaseURL = "https://stt.api.cloud.yandex.net"
 
+// DefaultGRPCAddr is SpeechKit v3, which streams recognition as it goes.
+const DefaultGRPCAddr = "stt.api.cloud.yandex.net:443"
+
 // SampleRate is the rate of the PCM the client sends.
 const SampleRate = 16000
 
@@ -46,6 +49,7 @@ type Config struct {
 	APIKey     string
 	FolderID   string
 	BaseURL    string       // empty: DefaultBaseURL
+	GRPCAddr   string       // empty: DefaultGRPCAddr
 	HTTPClient *http.Client // nil: a client with the system roots plus the Russian Trusted Root CA
 }
 
@@ -56,16 +60,21 @@ type Client struct {
 	backoff time.Duration
 }
 
-// ConfigFromEnv reads the key and folder that Vision OCR uses; the endpoint
-// may be overridden with YC_STT_BASE_URL. Without a key recognition is off.
+// ConfigFromEnv reads the key and folder that Vision OCR uses; the endpoints
+// may be overridden with YC_STT_BASE_URL and YC_STT_GRPC_ADDR. Without a key
+// recognition is off.
 func ConfigFromEnv() (Config, bool) {
 	cfg := Config{
 		APIKey:   strings.TrimSpace(os.Getenv("YC_API_KEY")),
 		FolderID: strings.TrimSpace(os.Getenv("YC_FOLDER_ID")),
 		BaseURL:  strings.TrimSpace(os.Getenv("YC_STT_BASE_URL")),
+		GRPCAddr: strings.TrimSpace(os.Getenv("YC_STT_GRPC_ADDR")),
 	}
 	if cfg.BaseURL == "" {
 		cfg.BaseURL = DefaultBaseURL
+	}
+	if cfg.GRPCAddr == "" {
+		cfg.GRPCAddr = DefaultGRPCAddr
 	}
 	return cfg, cfg.APIKey != ""
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { MAX_SPEECH_BYTES, SPEECH_RATE, micProblemOf, openMicrophone, toPCM16, voiceInputAvailable, type SpeechSDK } from './speech';
+import { MAX_SPEECH_BYTES, PCMEncoder, SPEECH_RATE, micProblemOf, openMicrophone, toPCM16, voiceInputAvailable, type SpeechSDK } from './speech';
 
 const samples = (bytes: Uint8Array) => {
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -29,6 +29,52 @@ describe('toPCM16', () => {
     it('stops at 30 seconds, as much as the server takes', () => {
         const pcm = toPCM16([new Float32Array(SPEECH_RATE * 31)], SPEECH_RATE);
         expect(pcm.length).toBe(MAX_SPEECH_BYTES);
+    });
+});
+
+/** The whole-recording encoder the mini app had before it streamed. */
+function referencePCM(input: Float32Array, rate: number): number[] {
+    const ratio = rate / SPEECH_RATE;
+    const length = Math.min(Math.floor(input.length / ratio), MAX_SPEECH_BYTES / 2);
+    return Array.from({ length }, (_, i) => {
+        let value: number;
+        if (ratio <= 1) {
+            value = input[Math.floor(i * ratio)];
+        } else {
+            const from = Math.floor(i * ratio);
+            const to = Math.max(from + 1, Math.min(input.length, Math.floor((i + 1) * ratio)));
+            let sum = 0;
+            for (let j = from; j < to; j++) sum += input[j];
+            value = sum / (to - from);
+        }
+        const clipped = Math.max(-1, Math.min(1, value));
+        return Math.round(clipped < 0 ? clipped * 0x8000 : clipped * 0x7fff);
+    });
+}
+
+describe('PCMEncoder', () => {
+    // Pieces sent while the reader speaks are what the whole recording
+    // would be: the fallback upload and the stream hear the same.
+    for (const rate of [48000, 44100, 22050, 16000, 8000]) {
+        it(`gives the same PCM in pieces of any length at ${rate} Hz`, () => {
+            let seed = rate;
+            const random = () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
+            const input = Float32Array.from({ length: rate }, () => random() * 2.2 - 1.1);
+            const encoder = new PCMEncoder(rate);
+            const out: number[] = [];
+            for (let at = 0; at < input.length;) {
+                const size = Math.floor(random() * 5000);
+                out.push(...samples(encoder.push(input.subarray(at, at + size))));
+                at += size;
+            }
+            expect(out).toEqual(referencePCM(input, rate));
+        });
+    }
+
+    it('gives nothing past 30 seconds', () => {
+        const encoder = new PCMEncoder(SPEECH_RATE);
+        expect(encoder.push(new Float32Array(SPEECH_RATE * 30)).length).toBe(MAX_SPEECH_BYTES);
+        expect(encoder.push(new Float32Array(SPEECH_RATE)).length).toBe(0);
     });
 });
 

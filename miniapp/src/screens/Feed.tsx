@@ -249,7 +249,7 @@ export function Feed({
     // misheard term would be graded as theirs.
     const [voiceAvailable] = useState(voiceInputAvailable);
     const voice = useVoiceAnswer(useCallback((text: string) => {
-        setDraft((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text));
+        setDraft((current) => withSpoken(current, text));
     }, []));
     const { cancel: cancelVoice } = voice;
     // Opening the microphone may wait on a permission prompt: the field
@@ -257,7 +257,15 @@ export function Feed({
     const voiceBusy = voice.state === 'recording' || voice.state === 'recognizing';
     // The field's placeholder tells how the recording goes; over typed text
     // the line under the field does.
-    const voiceLine = voice.problem || (voice.state !== 'idle' && draft ? voicePlaceholder(voice.state, voice.seconds) : '');
+    // What is heard shows in the field as it is said, after the typed text.
+    const shown = voiceBusy && voice.live ? withSpoken(draft, voice.live) : draft;
+    const voiceLine = voice.problem || (voice.state !== 'idle' && shown ? voicePlaceholder(voice.state, voice.seconds) : '');
+    // The field is one line: its end, where the words come, stays in view.
+    const answerRef = useRef<HTMLInputElement>(null);
+    useEffect(() => {
+        const field = answerRef.current;
+        if (field && voice.live) field.scrollLeft = field.scrollWidth;
+    }, [voice.live]);
     // The layout is keyed by card id instead of being reset by an effect:
     // that way it appears on its own and needs no setState in an effect.
     const [placements, setPlacements] = useState<Record<string, Placement>>({});
@@ -1028,10 +1036,12 @@ export function Feed({
                     {card.kind === 'input' && !check ? (
                         <>
                             <Input
+                                ref={answerRef}
                                 size="large"
-                                value={draft}
+                                value={shown}
                                 placeholder={voicePlaceholder(voice.state, voice.seconds)}
                                 readOnly={voiceBusy}
+                                withClearButton={!voiceBusy}
                                 enterKeyHint="send"
                                 autoCorrect="off"
                                 aria-describedby={voiceLine ? 'voice-line' : undefined}
@@ -1103,6 +1113,10 @@ const MIC_LABEL: Record<VoiceState, string> = {
     recording: 'Остановить запись',
     recognizing: 'Распознаю ответ',
 };
+
+function withSpoken(typed: string, spoken: string): string {
+    return typed.trim() ? `${typed.trimEnd()} ${spoken}` : spoken;
+}
 
 /** The field tells what the microphone is doing while it is busy. */
 function voicePlaceholder(state: VoiceState, seconds: number): string {

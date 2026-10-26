@@ -136,41 +136,80 @@ export function micProblemText(problem: MicProblem, inMax = Boolean(maxApp(brows
 }
 
 /**
- * Mono samples at any rate → 16-bit little-endian PCM at 16 kHz, at most
- * 30 seconds. Going down, each output sample is the mean of the input ones
- * it covers, which keeps the high hiss out of speech; going up, the nearest
- * earlier sample.
+ * Mono samples at any rate → 16-bit little-endian PCM at 16 kHz, as they
+ * are recorded, at most 30 seconds. Going down, each output sample is the
+ * mean of the input ones it covers, which keeps the high hiss out of
+ * speech; going up, the nearest earlier sample. An output sample is given
+ * once all its input has come, so the pieces add up to toPCM16 of it all.
  */
-export function toPCM16(chunks: readonly Float32Array[], rate: number): Uint8Array {
-    const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-    const input = new Float32Array(total);
-    let offset = 0;
-    for (const chunk of chunks) {
-        input.set(chunk, offset);
-        offset += chunk.length;
+export class PCMEncoder {
+    private readonly ratio: number;
+    /** The input not yet used up; its first sample has index base. */
+    private pending = new Float32Array(0);
+    private base = 0;
+    private received = 0;
+    private next = 0;
+
+    constructor(rate: number) {
+        this.ratio = rate / SPEECH_RATE;
     }
 
-    const ratio = rate / SPEECH_RATE;
-    const length = Math.min(Math.floor(total / ratio), MAX_SPEECH_BYTES / 2);
-    const out = new DataView(new ArrayBuffer(length * 2));
-    for (let i = 0; i < length; i++) {
-        let value: number;
-        if (ratio <= 1) {
-            value = input[Math.floor(i * ratio)];
-        } else {
-            const from = Math.floor(i * ratio);
-            const to = Math.max(from + 1, Math.min(total, Math.floor((i + 1) * ratio)));
-            let sum = 0;
-            for (let j = from; j < to; j++) sum += input[j];
-            value = sum / (to - from);
+    /** The PCM the new samples complete; empty past 30 seconds. */
+    push(samples: Float32Array): Uint8Array {
+        if (this.next >= MAX_SPEECH_BYTES / 2) return new Uint8Array(0);
+        const joined = new Float32Array(this.pending.length + samples.length);
+        joined.set(this.pending);
+        joined.set(samples, this.pending.length);
+        this.pending = joined;
+        this.received += samples.length;
+
+        const { ratio } = this;
+        const stop = Math.min(Math.floor(this.received / ratio), MAX_SPEECH_BYTES / 2);
+        const out = new DataView(new ArrayBuffer(Math.max(0, stop - this.next) * 2));
+        for (let i = this.next; i < stop; i++) {
+            let value: number;
+            if (ratio <= 1) {
+                value = this.sample(Math.floor(i * ratio));
+            } else {
+                const from = Math.floor(i * ratio);
+                const to = Math.max(from + 1, Math.min(this.received, Math.floor((i + 1) * ratio)));
+                let sum = 0;
+                for (let j = from; j < to; j++) sum += this.sample(j);
+                value = sum / (to - from);
+            }
+            const clipped = Math.max(-1, Math.min(1, value));
+            out.setInt16((i - this.next) * 2, Math.round(clipped < 0 ? clipped * 0x8000 : clipped * 0x7fff), true);
         }
-        const clipped = Math.max(-1, Math.min(1, value));
-        out.setInt16(i * 2, Math.round(clipped < 0 ? clipped * 0x8000 : clipped * 0x7fff), true);
+        this.next = Math.max(this.next, stop);
+        // The next output sample starts here; what lies before is done.
+        const keep = Math.min(Math.floor(this.next * ratio), this.received);
+        this.pending = this.pending.slice(keep - this.base);
+        this.base = keep;
+        return new Uint8Array(out.buffer);
     }
-    return new Uint8Array(out.buffer);
+
+    private sample(index: number): number {
+        return this.pending[index - this.base];
+    }
 }
 
-/** A recording in progress. */
+/** The PCM of a whole recording: see PCMEncoder. */
+export function toPCM16(chunks: readonly Float32Array[], rate: number): Uint8Array {
+    const encoder = new PCMEncoder(rate);
+    return joinBytes(chunks.map((chunk) => encoder.push(chunk)));
+}
+
+export function joinBytes(pieces: readonly Uint8Array[]): Uint8Array {
+    const out = new Uint8Array(pieces.reduce((sum, piece) => sum + piece.length, 0));
+    let offset = 0;
+    for (const piece of pieces) {
+        out.set(piece, offset);
+        offset += piece.length;
+    }
+    return out;
+}
+
+/** A recording in progress; onPCM of record gets it as it is heard. */
 export interface Recording {
     /** Stops and gives the PCM; the microphone is released. */
     stop: () => Uint8Array;
@@ -192,8 +231,9 @@ export function createAudioContext(sdk: SpeechSDK = browser()): AudioContext {
  * but it is in every webview, while an AudioWorklet needs a module the
  * page's policy may not load.
  */
-export function record(context: AudioContext, stream: MediaStream): Recording {
-    const chunks: Float32Array[] = [];
+export function record(context: AudioContext, stream: MediaStream, onPCM?: (pcm: Uint8Array) => void): Recording {
+    const encoder = new PCMEncoder(context.sampleRate);
+    const pieces: Uint8Array[] = [];
     const source = context.createMediaStreamSource(stream);
     const processor = context.createScriptProcessor(4096, 1, 1);
     // The processor runs only while connected to the output; silent, so the
@@ -201,7 +241,10 @@ export function record(context: AudioContext, stream: MediaStream): Recording {
     const mute = context.createGain();
     mute.gain.value = 0;
     processor.onaudioprocess = (event) => {
-        chunks.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+        const pcm = encoder.push(event.inputBuffer.getChannelData(0));
+        if (pcm.length === 0) return;
+        pieces.push(pcm);
+        onPCM?.(pcm);
     };
     source.connect(processor);
     processor.connect(mute);
@@ -222,7 +265,7 @@ export function record(context: AudioContext, stream: MediaStream): Recording {
     return {
         stop: () => {
             release();
-            return toPCM16(chunks, context.sampleRate);
+            return joinBytes(pieces);
         },
         cancel: release,
     };

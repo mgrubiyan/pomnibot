@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { MAX_SPEECH_SECONDS, SPEECH_RATE, createAudioContext, micProblemOf, micProblemText, openMicrophone, record, type Recording } from './speech';
+import { openLiveSpeech, type LiveSpeech } from './speechStream';
 
 /**
  * idle → starting (asking for the microphone) → recording → recognizing →
@@ -14,21 +15,31 @@ const MIN_SPEECH_BYTES = Math.round(0.3 * SPEECH_RATE) * 2;
 /** The server gives recognition 10 seconds; a dropped connection gives up here. */
 const SPEECH_TIMEOUT_MS = 20_000;
 
+/**
+ * The live stream fixes the last phrase in about a second after the end;
+ * past this the recording is sent whole instead.
+ */
+const LIVE_FINISH_MS = 3_000;
+
 export const NOTHING_HEARD = 'Ничего не слышно. Попробуйте ещё раз ближе к микрофону.';
 
 /**
  * Records a spoken answer and hands its text to onText; the reader checks
  * it and sends it like a typed one. A new card, or leaving, cancels it.
+ * While the reader speaks, live is the text heard so far; when the live
+ * stream fails, the whole recording is recognized at the end.
  */
 export function useVoiceAnswer(onText: (text: string) => void) {
     const [state, setState] = useState<VoiceState>('idle');
     const [seconds, setSeconds] = useState(0);
     const [problem, setProblem] = useState('');
+    const [live, setLive] = useState('');
 
     // Every run gets a number: a microphone or recognition that answers
     // after a cancel is dropped.
     const runRef = useRef(0);
     const recordingRef = useRef<Recording | null>(null);
+    const liveRef = useRef<LiveSpeech | null>(null);
     const timerRef = useRef<number | undefined>(undefined);
     const onTextRef = useRef(onText);
     useEffect(() => {
@@ -45,9 +56,12 @@ export function useVoiceAnswer(onText: (text: string) => void) {
         stopTimer();
         recordingRef.current?.cancel();
         recordingRef.current = null;
+        liveRef.current?.close();
+        liveRef.current = null;
         setState('idle');
         setSeconds(0);
         setProblem('');
+        setLive('');
     }, []);
 
     useEffect(() => cancel, [cancel]);
@@ -56,48 +70,34 @@ export function useVoiceAnswer(onText: (text: string) => void) {
         const recording = recordingRef.current;
         if (!recording) return;
         recordingRef.current = null;
+        const liveSpeech = liveRef.current;
+        liveRef.current = null;
         stopTimer();
         const run = runRef.current;
         const pcm = recording.stop();
         setSeconds(0);
         if (pcm.length < MIN_SPEECH_BYTES) {
+            liveSpeech?.close();
             setState('idle');
+            setLive('');
             setProblem(NOTHING_HEARD);
             return;
         }
         setState('recognizing');
-        let text = '';
-        let failure = '';
-        const abort = new AbortController();
-        const timeout = window.setTimeout(() => abort.abort(), SPEECH_TIMEOUT_MS);
+        let result: Recognized;
         try {
-            const { data, response } = await api.POST('/speech', {
-                signal: abort.signal,
-                // The schema types binary parts as strings.
-                body: { audio: new Blob([pcm as BlobPart], { type: 'application/octet-stream' }) as unknown as string },
-                bodySerializer: (body) => {
-                    const form = new FormData();
-                    form.append('audio', body.audio as unknown as Blob, 'answer.pcm');
-                    return form;
-                },
-            });
-            if (response.ok && data) {
-                text = data.text.trim();
-                if (!text) failure = NOTHING_HEARD;
-            } else if (response.status === 403 || response.status === 503) {
-                failure = 'Голосовой ответ здесь недоступен. Введите ответ текстом.';
-            } else {
-                failure = 'Не получилось распознать. Попробуйте ещё раз или введите ответ.';
-            }
+            if (!liveSpeech) throw new Error('no live stream');
+            const text = (await liveSpeech.finish(LIVE_FINISH_MS)).trim();
+            result = text ? { text, failure: '' } : { text: '', failure: NOTHING_HEARD };
         } catch {
-            failure = 'Нет связи. Попробуйте ещё раз или введите ответ.';
-        } finally {
-            window.clearTimeout(timeout);
+            if (run !== runRef.current) return;
+            result = await recognizeWhole(pcm);
         }
         if (run !== runRef.current) return;
         setState('idle');
-        setProblem(failure);
-        if (text) onTextRef.current(text);
+        setLive('');
+        setProblem(result.failure);
+        if (result.text) onTextRef.current(result.text);
     }, []);
 
     const start = useCallback(async () => {
@@ -128,7 +128,13 @@ export function useVoiceAnswer(onText: (text: string) => void) {
             void context.close().catch(() => {});
             return;
         }
-        recordingRef.current = record(context, stream);
+        // The stream opens with the microphone, not before: a permission
+        // prompt left waiting would keep a paid session open.
+        const liveSpeech = openLiveSpeech((text) => {
+            if (run === runRef.current) setLive(text);
+        });
+        liveRef.current = liveSpeech;
+        recordingRef.current = record(context, stream, liveSpeech.send);
         const startedAt = Date.now();
         setSeconds(0);
         setState('recording');
@@ -148,5 +154,41 @@ export function useVoiceAnswer(onText: (text: string) => void) {
         else if (state === 'recording') void finish();
     }, [state, start, finish, cancel]);
 
-    return { state, seconds, problem, toggle, cancel };
+    return { state, seconds, problem, live, toggle, cancel };
+}
+
+interface Recognized {
+    text: string;
+    /** The line under the field when there is no text. */
+    failure: string;
+}
+
+/** Recognizes a whole recording at once, when the live stream could not. */
+async function recognizeWhole(pcm: Uint8Array): Promise<Recognized> {
+    const abort = new AbortController();
+    const timeout = window.setTimeout(() => abort.abort(), SPEECH_TIMEOUT_MS);
+    try {
+        const { data, response } = await api.POST('/speech', {
+            signal: abort.signal,
+            // The schema types binary parts as strings.
+            body: { audio: new Blob([pcm as BlobPart], { type: 'application/octet-stream' }) as unknown as string },
+            bodySerializer: (body) => {
+                const form = new FormData();
+                form.append('audio', body.audio as unknown as Blob, 'answer.pcm');
+                return form;
+            },
+        });
+        if (response.ok && data) {
+            const text = data.text.trim();
+            return text ? { text, failure: '' } : { text: '', failure: NOTHING_HEARD };
+        }
+        if (response.status === 403 || response.status === 503) {
+            return { text: '', failure: 'Голосовой ответ здесь недоступен. Введите ответ текстом.' };
+        }
+        return { text: '', failure: 'Не получилось распознать. Попробуйте ещё раз или введите ответ.' };
+    } catch {
+        return { text: '', failure: 'Нет связи. Попробуйте ещё раз или введите ответ.' };
+    } finally {
+        window.clearTimeout(timeout);
+    }
 }

@@ -81,6 +81,12 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 			return fmt.Errorf("initialize speech recognition: %w", err)
 		}
 		api = api.WithSpeech(stt)
+		streamer, err := speechkit.NewStreamer(*cfg.Speech)
+		if err != nil {
+			return fmt.Errorf("initialize live speech recognition: %w", err)
+		}
+		defer func() { _ = streamer.Close() }()
+		api = api.WithSpeechStream(httptransport.SpeechKitStreamer(streamer))
 	}
 
 	// Stop background integrations on both startup failure and normal shutdown.
