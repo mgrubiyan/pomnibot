@@ -119,11 +119,27 @@ jobs:
 
       - name: Lint Go backend
         working-directory: backend
-        run: golangci-lint run ./...
+        run: golangci-lint run --build-tags integration ./...
 
       - name: Test Go backend
         working-directory: backend
-        run: go test -v ./...
+        run: go test -race ./...
+
+      - name: Test PostgreSQL integration
+        working-directory: backend
+        run: go test -race -tags integration -count=1 ./internal/repository
+
+      - name: Smoke test load harness
+        run: task perf:smoke -- -out ../artifacts/perf/smoke.json
+
+      - name: Upload load harness report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-smoke
+          path: artifacts/perf/smoke.json
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

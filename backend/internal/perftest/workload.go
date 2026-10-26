@@ -1,6 +1,4 @@
-//go:build perf
-
-package main
+package perftest
 
 import (
 	"bytes"
@@ -20,6 +18,8 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 )
 
@@ -28,10 +28,10 @@ const telegramToken = "perf-telegram-token"
 
 type actor struct {
 	auth      string
-	id        int64
+	id        uuid.UUID
+	answerMu  sync.Mutex
 	index     int
 	submitted atomic.Int64
-	batches   atomic.Int64
 }
 type workload struct {
 	server *httptest.Server
@@ -110,7 +110,7 @@ func (w *workload) entry(ctx context.Context, r *recorder, a *actor) error {
 	if a.index%2 == 1 {
 		expected = "telegram"
 	}
-	if profile.User.ID == 0 || string(profile.Platform.Value) != expected {
+	if profile.User.ID == uuid.Nil || string(profile.Platform.Value) != expected {
 		return fmt.Errorf("identity fell back to shared user: %+v", profile)
 	}
 	a.id = profile.User.ID
@@ -122,8 +122,8 @@ func (w *workload) entry(ctx context.Context, r *recorder, a *actor) error {
 	return w.request(ctx, r, a, "join", "POST", "/sets/join", map[string]string{"code": "700001"}, nil)
 }
 func (w *workload) burst(ctx context.Context, r *recorder, a *actor) error {
-	// Home.tsx: today+feed. SetScreen.tsx: set+cards+feed.
-	paths := []struct{ name, path string }{{"home", "/"}, {"feed", "/feed"}, {"set", "/sets/" + setID(1)}, {"cards", "/sets/" + setID(1) + "/cards"}, {"feed", "/feed"}}
+	// Readers load home, set and question-only feeds; full cards are author-only.
+	paths := []struct{ name, path string }{{"home", "/"}, {"feed", "/feed"}, {"set", "/sets/" + setID(1)}, {"review_feed", "/feed?setId=" + setID(1) + "&early=true"}, {"feed", "/feed"}}
 	errs := make(chan error, len(paths))
 	var wg sync.WaitGroup
 	for _, p := range paths {
@@ -138,29 +138,61 @@ func (w *workload) burst(ctx context.Context, r *recorder, a *actor) error {
 	}
 	return nil
 }
-func (w *workload) check(ctx context.Context, r *recorder, a *actor, answer int) error {
-	var v contracts.CheckAnswerResponse
-	err := w.request(ctx, r, a, "check", "POST", "/cards/"+cardID(answer%50+1, 4)+"/check", map[string]string{"answer": "Answer"}, &v)
-	if err == nil && (!v.IsCorrect || v.Method != contracts.CheckAnswerResponseMethodLocal) {
-		err = fmt.Errorf("unexpected local verdict: %+v", v)
-		if r != nil {
-			r.add("check_verdict", 0, err)
+
+// answer reads the current question before grading it, just like the mini-app.
+// Serialize one actor's submissions so concurrent scheduled actions do not submit
+// different attempt IDs for the same question observed before a progress update.
+func (w *workload) answer(ctx context.Context, r *recorder, a *actor) error {
+	a.answerMu.Lock()
+	defer a.answerMu.Unlock()
+	var feed []contracts.FeedCard
+	if err := w.request(ctx, r, a, "review_feed", "GET", "/feed?setId="+setID(1)+"&early=true", nil, &feed); err != nil {
+		return err
+	}
+	if len(feed) == 0 {
+		return fmt.Errorf("review feed is empty")
+	}
+	card := feed[0]
+	answer, err := fixtureAnswer(card.Kind)
+	if err != nil {
+		return err
+	}
+	if card.Kind == contracts.CardKindFlip {
+		if err = w.request(ctx, r, a, "reveal", "POST", "/cards/"+card.ID.String()+"/reveal", nil, nil); err != nil {
+			return err
 		}
 	}
-	return err
-}
-func (w *workload) submit(ctx context.Context, r *recorder, a *actor, first, count int) error {
-	results := make([]map[string]any, 0, count)
-	for i := 0; i < count; i++ {
-		results = append(results, map[string]any{"cardId": cardID((first+i)%50+1, (first+i)%5), "correct": true, "answeredAt": time.Now().UTC()})
+	var verdict contracts.AnswerQuestionResponse
+	err = w.request(ctx, r, a, "answer", "POST", "/cards/"+card.ID.String()+"/answer", contracts.AnswerQuestionRequest{AttemptId: uuid.New(), Answer: answer}, &verdict)
+	if err != nil {
+		return err
 	}
-	err := w.request(ctx, r, a, "results", "POST", "/results", results, nil)
-	if err == nil {
-		a.submitted.Add(int64(count))
-		a.batches.Add(1)
+	if !verdict.IsCorrect || verdict.Method != contracts.AnswerQuestionResponseMethodLocal {
+		err = fmt.Errorf("unexpected local verdict: %+v", verdict)
+		if r != nil {
+			r.add("answer_verdict", 0, err)
+		}
+		return err
 	}
-	return err
+	a.submitted.Add(1)
+	return nil
 }
+
+func fixtureAnswer(kind contracts.CardKind) (string, error) {
+	switch kind {
+	case contracts.CardKindFlip, contracts.CardKindBoolean:
+		return "true", nil
+	case contracts.CardKindChoice:
+		return `["Answer"]`, nil
+	case contracts.CardKindTable:
+		return `[{"text":"Item","column":"A"}]`, nil
+	case contracts.CardKindInput:
+		return "Answer", nil
+	default:
+		return "", fmt.Errorf("unsupported fixture kind %q", kind)
+	}
+}
+
 func (w *workload) leaderboard(ctx context.Context, r *recorder) error {
 	return w.request(ctx, r, w.owner, "leaderboard", "GET", "/sets/"+setID(1)+"/leaderboard", nil, nil)
 }
@@ -171,34 +203,23 @@ func (w *workload) study(ctx context.Context, r *recorder, d, think time.Duratio
 	end := time.Now().Add(d)
 	for _, a := range w.actors {
 		wg.Go(func() {
-			answer, pending := 0, 0
+			answers := 0
 			ok := true
 			for time.Now().Add(think).Before(end) {
-				time.Sleep(think)
-				// Typed cards use the check endpoint; other kinds are graded in the browser.
-				if answer%5 == 4 {
-					if err := w.check(ctx, r, a, answer); err != nil {
-						ok = false
-						break
-					}
+				if !waitUntil(ctx, time.Now().Add(think)) {
+					ok = false
+					break
 				}
-				answer++
-				pending++
-				if pending == 5 {
-					if err := w.submit(ctx, r, a, answer-pending, pending); err != nil {
-						ok = false
-						break
-					}
-					pending = 0
+				if err := w.answer(ctx, r, a); err != nil {
+					ok = false
+					break
+				}
+				answers++
+				if answers%5 == 0 {
 					if err := w.burst(ctx, r, a); err != nil {
 						ok = false
 						break
 					}
-				}
-			}
-			if pending > 0 {
-				if err := w.submit(ctx, r, a, answer-pending, pending); err != nil {
-					ok = false
 				}
 			}
 			if ok {
@@ -208,7 +229,9 @@ func (w *workload) study(ctx context.Context, r *recorder, d, think time.Duratio
 	}
 	wg.Go(func() {
 		for time.Now().Add(15 * time.Second).Before(end) {
-			time.Sleep(15 * time.Second)
+			if !waitUntil(ctx, time.Now().Add(15*time.Second)) {
+				return
+			}
 			_ = w.leaderboard(ctx, r)
 		}
 	})
@@ -225,7 +248,9 @@ func (w *workload) rate(ctx context.Context, r *recorder, d time.Duration, rate 
 	total := int(d.Seconds() * float64(rate))
 	for i := 0; i < total; i++ {
 		due := start.Add(time.Duration(float64(i) * float64(time.Second) / float64(rate)))
-		time.Sleep(time.Until(due))
+		if !waitUntil(ctx, due) {
+			break
+		}
 		if time.Since(due) > deadline {
 			missed.Add(1)
 			continue
@@ -238,7 +263,6 @@ func (w *workload) rate(ctx context.Context, r *recorder, d time.Duration, rate 
 		}
 		a := w.actors[i%len(w.actors)]
 		op := i % 10
-		seq := i
 		wg.Go(func() {
 			defer func() { <-slots }()
 			if time.Since(due) > deadline {
@@ -252,13 +276,13 @@ func (w *workload) rate(ctx context.Context, r *recorder, d time.Duration, rate 
 			case 1, 2:
 				err = w.request(ctx, r, a, "feed", "GET", "/feed", nil, nil)
 			case 3:
-				err = w.request(ctx, r, a, "cards", "GET", "/sets/"+setID(1)+"/cards", nil, nil)
+				err = w.request(ctx, r, w.owner, "author_cards", "GET", "/sets/"+setID(1)+"/cards", nil, nil)
 			case 4:
 				err = w.request(ctx, r, a, "set", "GET", "/sets/"+setID(1), nil, nil)
 			case 5, 6:
-				err = w.check(ctx, r, a, seq)
+				err = w.request(ctx, r, a, "review_feed", "GET", "/feed?setId="+setID(1)+"&early=true", nil, nil)
 			case 7, 8:
-				err = w.submit(ctx, r, a, seq, 5)
+				err = w.answer(ctx, r, a)
 			case 9:
 				err = w.leaderboard(ctx, r)
 			}
@@ -273,3 +297,14 @@ func (w *workload) rate(ctx context.Context, r *recorder, d time.Duration, rate 
 
 // A real static FS is required by the production router; API traffic never uses it.
 var staticFS = fstest.MapFS{"index.html": {Data: []byte("perf")}}
+
+func waitUntil(ctx context.Context, due time.Time) bool {
+	timer := time.NewTimer(time.Until(due))
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}

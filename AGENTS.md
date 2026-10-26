@@ -12,7 +12,12 @@
 - `task dev` — run frontend development server
 - `task build` — build frontend
 - `task lint` — run all linters (`miniapp` and `backend`)
-- `task test` — run backend unit tests
+- `task test` — run backend and frontend unit tests without Docker
+- `task test:integration` — run PostgreSQL integration tests (Docker required)
+- `task test:race` — run backend unit tests with the race detector
+- `task bench` — run Go microbenchmarks
+- `task perf:smoke` — validate the load harness against disposable PostgreSQL
+- `task perf` — run load scenarios; JSON is saved only with `-out`
 
 ## Code & Quality Standards
 
@@ -21,7 +26,7 @@
 - Maintain existing architecture:
   - `miniapp/`: React 19 + TypeScript + Vite frontend powered by Bun and `@maxhub/max-ui`.
   - `backend/`: TDD first
-  - `backend/`: Go 1.25 HTTP server serving embedded SPA assets and handling the MAX Bot API service.
+  - `backend/`: Go 1.26 HTTP server serving embedded SPA assets and handling the MAX Bot API service.
   - `backend/`: Use default slog logger
   - Deployments: Docker Compose with Traefik reverse proxy and Let's Encrypt TLS.
 

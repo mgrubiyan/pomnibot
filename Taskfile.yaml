@@ -83,15 +83,37 @@ tasks:
       - task: backend:lint
 
   perf:
-    desc: 'Measure API capacity using disposable PostgreSQL 17 (Docker required)'
+    desc: 'Нагрузочный прогон API с временным PostgreSQL 18 (Docker)'
     dir: backend
     cmds:
-      - go run -tags perf ./cmd/perf {{.CLI_ARGS}}
+      - go run ./cmd/perf {{.CLI_ARGS}}
+
+  perf:smoke:
+    desc: 'Короткая проверка нагрузочного стенда (Docker)'
+    dir: backend
+    cmds:
+      - go run ./cmd/perf -smoke -stage 2s -think 100ms -warmup 0 {{.CLI_ARGS}}
 
   test:
-    desc: 'Запуск тестов бэкенда'
+    desc: 'Unit-тесты бэкенда и фронтенда без Docker'
     cmds:
       - task: backend:test
+      - task: miniapp:test
+
+  test:integration:
+    desc: 'Интеграционные тесты PostgreSQL (Docker)'
+    cmds:
+      - task: backend:test:integration
+
+  test:race:
+    desc: 'Тесты бэкенда с race detector'
+    cmds:
+      - task: backend:test:race
+
+  bench:
+    desc: 'Микробенчмарки бэкенда'
+    cmds:
+      - task: backend:bench
 
   cardsgen:
     desc: 'Карточки по всему документу: task cardsgen -- notes.txt'
