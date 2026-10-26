@@ -206,6 +206,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sets/{setId}/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get extracted PDF image catalog */
+        get: operations["GetSetImages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/{assetId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get an image with set access authorization */
+        get: operations["GetCardImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sets/{setId}/cards": {
         parameters: {
             query?: never;
@@ -608,8 +642,20 @@ export interface components {
         CardKind: "choice" | "flip" | "input" | "boolean" | "table";
         /** @description choice - GFM + math string[] (all correct option texts); legacy string/integer supported input/flip - GFM + math string ($...$ inline LaTeX, $$...$$ display LaTeX) boolean - boolean table - #/components/schemas/TableLayout */
         CardAnswer: string[] | number | string | boolean | components["schemas"]["TableLayout"];
+        CardImage: {
+            /** Format: uuid */
+            assetId: string;
+            url: string;
+            alt: string;
+            width: number;
+            height: number;
+            sourcePage: number;
+            sourceName: string;
+        };
         /** @description answer, explanation, explanationSvg and sourceQuote are absent in a set member's list of the set's cards. New generated cards use GFM + math in question, string answers, explanation, choice options and sorting content. Inline LaTeX uses $...$ and display LaTeX uses $$...$$; backslashes are escaped in JSON. Content is stored as source text, without HTML conversion. Existing cards retain their text. factName is plain text; sourceQuote is verbatim and never reformatted. */
         Card: {
+            questionImages: components["schemas"]["CardImage"][];
+            explanationImages: components["schemas"]["CardImage"][];
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -657,6 +703,7 @@ export interface components {
         };
         /** @description A card as the feed asks it, with nothing that gives the answer away. */
         FeedCard: {
+            questionImages: components["schemas"]["CardImage"][];
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -680,6 +727,7 @@ export interface components {
         };
         /** @description What a feed card hides until it is answered. */
         CardReveal: {
+            explanationImages: components["schemas"]["CardImage"][];
             answer: components["schemas"]["CardAnswer"];
             /** @description Explanation as GFM + math, including Markdown tables and LaTeX formulas. */
             explanation: string;
@@ -693,6 +741,10 @@ export interface components {
             card?: components["schemas"]["CreateCardRequest"];
         };
         CreateCardRequest: {
+            /** @description Ordered image IDs of this set; omitted preserves attachments on update, empty removes them. */
+            questionImageIds?: string[];
+            /** @description Ordered image IDs of this set; omitted preserves attachments on update, empty removes them. */
+            explanationImageIds?: string[];
             kind: components["schemas"]["CardKind"];
             /** @description GFM + math; inline LaTeX $...$ and display LaTeX $$...$$. */
             question: string;
@@ -703,6 +755,10 @@ export interface components {
         };
         /** @description Editing card content clears both generated SVG illustrations. SVG editing is not supported. */
         UpdateCardRequest: {
+            /** @description Ordered image IDs of this set; omitted preserves attachments on update, empty removes them. */
+            questionImageIds?: string[];
+            /** @description Ordered image IDs of this set; omitted preserves attachments on update, empty removes them. */
+            explanationImageIds?: string[];
             kind?: components["schemas"]["CardKind"];
             /** @description GFM + math; inline LaTeX $...$ and display LaTeX $$...$$. */
             question?: string;
@@ -1418,6 +1474,55 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    GetSetImages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                setId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Image catalog, including unused figures */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CardImage"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    GetCardImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cropped PDF figure */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };

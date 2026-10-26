@@ -17,9 +17,9 @@ import (
 )
 
 // PipelineVersion identifies source input, prompt and code validation semantics.
-const PipelineVersion = "direct-generation-v13"
+const PipelineVersion = "direct-generation-v15-two-stage-illustrations"
 
-// Generator is safe for concurrent use. The provider owns transport retries.
+// Generator is safe for concurrent use. Each stage permits one transport attempt.
 type Generator struct {
 	provider providers.Provider
 	opts     Options
@@ -46,6 +46,7 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (out Result, err
 	if providers.BudgetFrom(ctx) == nil {
 		ctx = providers.WithBudget(ctx, providers.NewBudget(g.opts.Budget))
 	}
+	ctx = providers.WithAttemptLimit(ctx, 2)
 	defer func() { out.Budget = providers.BudgetFrom(ctx).Snapshot() }()
 	started := time.Now()
 	defer func() {
@@ -93,14 +94,15 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (out Result, err
 		detail.cause = providers.ErrCapability
 		return out, detail
 	}
+	out.Images = []material.ImageAsset{}
 	out.Stats.Stages = map[string]StageStats{}
 	out.Stats.CallsByModel = map[string]int{}
 	out.Artifact = &Artifact{Version: PipelineVersion, Stages: map[string]json.RawMessage{}, Requests: map[string]providers.Request{}, Responses: map[string]string{}}
-	r, e := g.completeStage(ctx, doc, source, "generation", map[string]any{"task": prompts.GenerateGoals, "title": doc.Title}, pages, &out)
+	r, e := g.completeStage(ctx, doc, source, "generation", map[string]any{"task": prompts.GenerateGoals, "title": doc.Title, "imageRules": imageGenerationRules}, pages, &out)
 	if e != nil {
 		return out, e
 	}
-	if e = g.enrichIllustrations(ctx, r.Facts, &out); e != nil {
+	if e = g.prepareIllustrations(ctx, doc, &r, &out); e != nil {
 		return out, e
 	}
 	if e = ctx.Err(); e != nil {
@@ -108,6 +110,7 @@ func (g *Generator) Generate(ctx context.Context, doc Document) (out Result, err
 	}
 	out.Facts = r.Facts
 	out.Artifact.Facts = r.Facts
+	out.Stats.ImagesUsed = usedImageCount(r.Facts)
 	out.Stats.Cards = CardCount(r.Facts)
 	for _, fact := range r.Facts {
 		for _, card := range fact.Cards {
@@ -146,6 +149,11 @@ func cloneFacts(facts []Fact) []Fact {
 		out[i].cardPaths = slices.Clone(out[i].cardPaths)
 		out[i].Cards = slices.Clone(out[i].Cards)
 		for j, c := range out[i].Cards {
+			base := c.Base()
+			base.QuestionImageIDs = slices.Clone(base.QuestionImageIDs)
+			base.ExplanationImageIDs = slices.Clone(base.ExplanationImageIDs)
+			c = withCardBase(c, base)
+			out[i].Cards[j] = c
 			switch v := c.(type) {
 			case ChoiceCard:
 				v.RightAnswers = slices.Clone(v.RightAnswers)
@@ -165,18 +173,32 @@ func cloneFacts(facts []Fact) []Fact {
 
 func (g *Generator) completeStage(ctx context.Context, doc Document, source, stage string, input any, pages int, out *Result) (reply AIResponse, callErr error) {
 	payload, _ := json.Marshal(input)
-	req := providers.Request{Source: source, NoFallback: true, System: prompts.GeneratorSystem, User: string(payload), PDFs: doc.PDFs, Schema: stageSchema(), ReasoningEffort: g.opts.ReasoningEffort, MaxTokens: g.opts.MaxTokens, NoCache: true}
+	req := providers.Request{Source: source, NoFallback: true, NoRetry: true, System: prompts.GeneratorSystem, User: string(payload), PDFs: doc.PDFs, Schema: stageSchema(), ReasoningEffort: g.opts.ReasoningEffort, MaxTokens: g.opts.MaxTokens, NoCache: true}
 	callErr = g.runStage(ctx, stage, req, out, func(resp providers.Response, _ *StageStats) error {
 		if e := decodeResponse(resp, &reply); e != nil {
 			return e
 		}
-		out.Coverage.Issues = slices.Clone(reply.Issues)
+		out.Coverage.Issues = append(out.Coverage.Issues, reply.Issues...)
+		catalog, e := draftFigureCatalog(reply.Figures)
+		if e != nil {
+			return e
+		}
 		validFacts, droppedInvalid, droppedDup, issues, e := validateAndSanitizeFacts(reply.Facts, pages)
 		if e != nil {
 			return e
 		}
 		out.Stats.DroppedInvalid += droppedInvalid
 		out.Stats.DroppedDuplicate += droppedDup
+		// Validate draft references separately from structural/text validation.
+		// An invalid visual recall must not discard unrelated valid text facts.
+		known := make(map[string]string, len(catalog))
+		for _, asset := range catalog {
+			known[asset.ID] = asset.ID
+		}
+		validFacts, e = resolveFigureBindings(validFacts, known, out, false)
+		if e != nil {
+			return e
+		}
 		reply.Facts = validFacts
 		out.Coverage.Issues = append(out.Coverage.Issues, issues...)
 		for _, issue := range issues {
@@ -196,6 +218,7 @@ func (g *Generator) runStage(ctx context.Context, stage string, req providers.Re
 	before := providers.BudgetFrom(ctx).Snapshot()
 	callCtx, cancel := context.WithTimeout(ctx, g.opts.CallTimeout)
 	defer cancel()
+	callCtx = providers.WithAttemptLimit(callCtx, 1)
 	out.Artifact.Requests[stage] = req
 	if stage == "generation" {
 		out.Artifact.Request = &req

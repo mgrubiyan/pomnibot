@@ -52,9 +52,9 @@ func TestPromptsAndSchemaUseNestedFacts(t *testing.T) {
 		}
 		return props
 	}
-	props := object(root, "facts", "issues")
+	props := object(root, "facts", "issues", "figures")
 	fact := object(props["facts"].(map[string]any)["items"].(map[string]any), "name", "pages", "recall", "extraCards")
-	object(fact["recall"].(map[string]any), "question", "answer", "source", "sourceQuote")
+	object(fact["recall"].(map[string]any), "question", "answer", "source", "sourceQuote", "questionImageIds", "explanationImageIds", "needsSvg")
 	variants := fact["extraCards"].(map[string]any)["items"].(map[string]any)["anyOf"].([]any)
 	if len(variants) != 3 {
 		t.Fatal("missing card formats")
@@ -64,7 +64,7 @@ func TestPromptsAndSchemaUseNestedFacts(t *testing.T) {
 		if kind != []string{"boolean", "choice", "table"}[i] {
 			t.Fatalf("unexpected kind %v", kind)
 		}
-		fields := []string{"kind", "question", "source", "sourceQuote"}
+		fields := []string{"kind", "question", "source", "sourceQuote", "questionImageIds", "explanationImageIds", "needsSvg"}
 		switch i {
 		case 1:
 			fields = append(fields, "rightAnswers", "wrongAnswers")

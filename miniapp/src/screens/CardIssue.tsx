@@ -4,6 +4,7 @@ import type { Card, CardIssueReason } from '../types';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StudyContent } from '../components/StudyContent';
+import { StudyImages } from '../components/StudyImages';
 import { StudyIllustration } from '../components/StudyIllustration';
 import { AutoTextarea } from '../components/AutoTextarea';
 import { ISSUE_COMMENT_MAX_LENGTH, ISSUE_REASONS, answerPreview, type CardIssueReport } from '../utils/issues';
@@ -54,10 +55,13 @@ export function CardIssue({ card, setTitle, isOwner = false, onBack, onEdit, onR
                     <Typography.Text variant="body-strong" asChild>
                         <StudyContent className={s.previewText} text={card.question} />
                     </Typography.Text>
+                    <StudyImages images={card.questionImages} />
                     <StudyIllustration svg={card.questionSvg} alt="Иллюстрация к вопросу" />
                     <Typography.Text variant="description" color="secondary" asChild>
                         <StudyContent className={s.previewText} text={`Ответ: ${answerPreview(card)}`} />
                     </Typography.Text>
+                    {card.explanationImages?.length ? <Typography.Text variant="label" color="tertiary">Изображения объяснения</Typography.Text> : null}
+                    <StudyImages images={card.explanationImages} />
                 </Flex>
 
                 <fieldset className={s.reasons}>

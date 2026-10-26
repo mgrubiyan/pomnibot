@@ -178,7 +178,7 @@ function App() {
         feedEarly?: boolean,
     ) => {
         try {
-            const { error } = await api.PUT('/cards/{cardId}', {
+            const { error, data } = await api.PUT('/cards/{cardId}', {
                 params: { path: { cardId } },
                 body: {
                     kind: patch.kind,
@@ -189,9 +189,12 @@ function App() {
                     explanation: patch.explanation,
                     sourceQuote: patch.sourceQuote,
                     sourceRef: patch.sourceRef,
+                    questionImageIds: patch.questionImageIds,
+                    explanationImageIds: patch.explanationImageIds,
                 },
             });
-            if (error) throw new Error('Failed to update card');
+            if (error || !data) throw new Error('Failed to update card');
+            patch = { ...patch, questionImages: data.questionImages, explanationImages: data.explanationImages };
         } catch (err) {
             console.error('Failed to update card:', err);
             throw err;

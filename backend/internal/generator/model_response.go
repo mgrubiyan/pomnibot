@@ -25,15 +25,18 @@ func (r *recall) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	var wire struct {
-		Question    string `json:"question"`
-		Source      string `json:"source"`
-		SourceQuote string `json:"sourceQuote"`
-		Answer      string `json:"answer"`
+		QuestionImageIDs    []string `json:"questionImageIds"`
+		ExplanationImageIDs []string `json:"explanationImageIds"`
+		NeedsSVG            bool     `json:"needsSvg"`
+		Question            string   `json:"question"`
+		Source              string   `json:"source"`
+		SourceQuote         string   `json:"sourceQuote"`
+		Answer              string   `json:"answer"`
 	}
 	if err := strictJSON(b, &wire); err != nil {
 		return err
 	}
-	*r = recall{CardBase: CardBase{Question: wire.Question, Source: wire.Source, SourceQuote: wire.SourceQuote}, Answer: wire.Answer}
+	*r = recall{CardBase: CardBase{needsSVG: wire.NeedsSVG, QuestionImageIDs: wire.QuestionImageIDs, ExplanationImageIDs: wire.ExplanationImageIDs, Question: wire.Question, Source: wire.Source, SourceQuote: wire.SourceQuote}, Answer: wire.Answer}
 	return nil
 }
 
@@ -74,7 +77,20 @@ func (e *modelExtra) UnmarshalJSON(b []byte) error {
 			return problem("invalid_structure", "<unknown>", "unknown field")
 		}
 	}
-	c, err := decodeCard(b)
+	var needsSVG bool
+	if raw, ok := fields["needsSvg"]; ok {
+		if err := json.Unmarshal(raw, &needsSVG); err != nil {
+			return err
+		}
+		delete(fields, "needsSvg")
+	}
+	content, _ := json.Marshal(fields)
+	c, err := decodeCard(content)
+	if err == nil {
+		base := c.Base()
+		base.needsSVG = needsSVG
+		c = withCardBase(c, base)
+	}
 	e.card = c
 	return err
 }

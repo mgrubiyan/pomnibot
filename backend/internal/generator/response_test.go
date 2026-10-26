@@ -8,7 +8,7 @@ import (
 
 func TestStoredFactDecodesAllKindsAndPreservesWithinKindOrder(t *testing.T) {
 	var r Result
-	err := json.Unmarshal([]byte(`{"issues":[],"facts":[{"name":"Fact","pages":[1],"cards":[{"kind":"input","source":"source","sourceQuote":"","question":"hard","answer":"A"},{"kind":"choice","source":"source","sourceQuote":"","question":"choose","rightAnswers":["A","B"],"wrongAnswers":["C"]},{"kind":"flip","source":"source","sourceQuote":"","question":"easy","answer":"A"},{"kind":"boolean","source":"source","sourceQuote":"","question":"true?","answer":false},{"kind":"table","source":"source","sourceQuote":"","question":"sort","columns":[{"name":"category","rows":["row"]}]},{"kind":"flip","source":"source","sourceQuote":"","question":"harder","answer":"B"}]}]}`), &r)
+	err := json.Unmarshal([]byte(`{"figures":[],"issues":[],"facts":[{"name":"Fact","pages":[1],"cards":[{"kind":"input","source":"source","sourceQuote":"","question":"hard","answer":"A"},{"kind":"choice","source":"source","sourceQuote":"","question":"choose","rightAnswers":["A","B"],"wrongAnswers":["C"]},{"kind":"flip","source":"source","sourceQuote":"","question":"easy","answer":"A"},{"kind":"boolean","source":"source","sourceQuote":"","question":"true?","answer":false},{"kind":"table","source":"source","sourceQuote":"","question":"sort","columns":[{"name":"category","rows":["row"]}]},{"kind":"flip","source":"source","sourceQuote":"","question":"harder","answer":"B"}]}]}`), &r)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestStoredFactsRoundTripRetainsAllCardSourcesAndKinds(t *testing.T) {
 
 func TestAIResponseDecodesMarkdownTablesInQuestionAndExtraCards(t *testing.T) {
 	markdownTableQuestion := "Дана таблица Persons:\n\n| LastName | FirstName | Year |\n| --- | --- | --- |\n| Hansen | Ola | 1951 |\n| Svendson | Tove | 1978 |\n\nКакие строки вернет запрос `WHERE Year > 1965`?"
-	payload := `{"issues":[],"facts":[{"name":"Фильтрация по году","pages":[12],"recall":{"question":` +
+	payload := `{"figures":[],"issues":[],"facts":[{"name":"Фильтрация по году","pages":[12],"recall":{"question":` +
 		jsonString(markdownTableQuestion) + `,"answer":"Строку с Tove Svendson (1978).","source":"WHERE Year > 1965 отбирает записи с годом строго больше 1965.","sourceQuote":""},"extraCards":[{"kind":"choice","question":"Какая запись условия верна для числового столбца Year?","rightAnswers":["WHERE Year > 1965"],"wrongAnswers":["WHERE Year > '1965'"],"source":"Числовые константы пишутся без апострофов.","sourceQuote":""},{"kind":"table","question":"Распределите литералы по типам:","columns":[{"name":"Числовые","rows":["1965","1978"]},{"name":"Строковые","rows":["'Tove'","'Sandnes'"]}],"source":"Числа без кавычек, строки в апострофах.","sourceQuote":""}]}]}`
 
 	var r AIResponse

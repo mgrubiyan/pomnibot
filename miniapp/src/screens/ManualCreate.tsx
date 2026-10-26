@@ -66,6 +66,8 @@ export default function ManualCreate({
             explanation: patch.explanation,
             options: patch.options,
             table: patch.table,
+            questionImageIds: patch.questionImageIds,
+            explanationImageIds: patch.explanationImageIds,
         };
 
         if (factId) {
@@ -152,6 +154,7 @@ export default function ManualCreate({
                 <div hidden={step !== 'card'}>
                     <CardForm
                         key={version}
+                        card={{ setId }}
                         setTitle={title}
                         creationKind={kind}
                         onKindChange={setKind}

@@ -23,6 +23,7 @@ type Request struct {
 	Backend         string // optional backend pinned by an earlier stage of the same task
 	Source          string
 	NoFallback      bool
+	NoRetry         bool // one transport attempt, including schema negotiation
 	PDFs            []PDF
 	ReasoningEffort string
 	MaxTokens       int

@@ -1,0 +1,11 @@
+.images { display: flex; flex-direction: column; gap: 16px; width: 100%; min-width: 0; }
+.figure { margin: 0; width: 100%; }
+.figure figcaption { font-size: 12px; opacity: .65; margin-top: 6px; overflow-wrap: anywhere; }
+.open { display: block; padding: 0; border: 0; background: transparent; width: 100%; cursor: zoom-in; }
+.open img { display: block; width: 100%; height: auto; object-fit: contain; border-radius: 8px; }
+.dialog { width: min(96vw, 1200px); max-width: 96vw; max-height: 94dvh; background: var(--background-card); color: var(--text-primary); padding: 12px; border: 0; border-radius: 12px; }
+.dialog::backdrop { background: #000b; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.toolbar label { display: flex; gap: 8px; align-items: center; }
+.zoomScroll { overflow: auto; max-height: 72dvh; touch-action: pan-x pan-y pinch-zoom; }
+.zoomScroll img { display: block; height: auto; }

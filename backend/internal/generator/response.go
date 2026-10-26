@@ -4,14 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/mgrubiyan/pomnibot/backend/internal/material"
 	"slices"
 	"strings"
 )
 
 // AIResponse decodes the private model contract into expanded facts for validation.
 type AIResponse struct {
-	Facts  []Fact   `json:"facts"`
-	Issues []string `json:"issues"`
+	Figures []figureCandidate `json:"figures"`
+	Facts   []Fact            `json:"facts"`
+	Issues  []string          `json:"issues"`
 }
 
 // Fact groups cards in ascending difficulty, preserving model order within a kind.
@@ -33,11 +35,14 @@ type Card interface {
 
 // CardBase holds the question and source specific to one card.
 type CardBase struct {
-	QuestionSvg    string `json:"questionSvg,omitempty"`
-	ExplanationSvg string `json:"explanationSvg,omitempty"`
-	Question       string `json:"question"`
-	Source         string `json:"source"`
-	SourceQuote    string `json:"sourceQuote"`
+	needsSVG            bool
+	QuestionImageIDs    []string `json:"questionImageIds,omitempty"`
+	ExplanationImageIDs []string `json:"explanationImageIds,omitempty"`
+	QuestionSvg         string   `json:"questionSvg,omitempty"`
+	ExplanationSvg      string   `json:"explanationSvg,omitempty"`
+	Question            string   `json:"question"`
+	Source              string   `json:"source"`
+	SourceQuote         string   `json:"sourceQuote"`
 }
 
 // FlipCard presents an answer for self assessment.
@@ -211,7 +216,7 @@ func decodeCard(raw json.RawMessage) (Card, error) {
 
 func knownCardField(key string) bool {
 	switch key {
-	case "questionSvg", "explanationSvg", "question", "source", "sourceQuote", "answer", "rightAnswers", "wrongAnswers", "columns":
+	case "questionImageIds", "explanationImageIds", "questionSvg", "explanationSvg", "question", "source", "sourceQuote", "answer", "rightAnswers", "wrongAnswers", "columns":
 		return true
 	default:
 		return false
@@ -258,17 +263,18 @@ func (f Fact) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON rejects missing, null and legacy response fields.
 func (r *AIResponse) UnmarshalJSON(b []byte) error {
-	if err := requiredFields(b, "facts", "issues"); err != nil {
+	if err := requiredFields(b, "facts", "issues", "figures"); err != nil {
 		return err
 	}
 	var wire struct {
-		Facts  responseFacts `json:"facts"`
-		Issues []string      `json:"issues"`
+		Figures []figureCandidate `json:"figures"`
+		Facts   responseFacts     `json:"facts"`
+		Issues  []string          `json:"issues"`
 	}
 	if err := strictJSON(b, &wire); err != nil {
 		return err
 	}
-	*r = AIResponse{Issues: wire.Issues, Facts: wire.Facts}
+	*r = AIResponse{Issues: wire.Issues, Facts: wire.Facts, Figures: wire.Figures}
 	return nil
 }
 
@@ -375,7 +381,7 @@ func cardSignature(c Card) string {
 		return ""
 	}
 	base := c.Base()
-	q := normalized(base.Question)
+	q := normalized(base.Question) + fmt.Sprintf("|images:%q:%q", base.QuestionImageIDs, base.ExplanationImageIDs)
 	switch v := c.(type) {
 	case FlipCard:
 		return fmt.Sprintf("flip:%s:%s", q, normalized(v.Answer))
@@ -412,7 +418,7 @@ func cardSignature(c Card) string {
 	}
 }
 
-func validateAndSanitizeFacts(facts []Fact, pages int) ([]Fact, int, int, []string, error) {
+func validateAndSanitizeFacts(facts []Fact, pages int, catalog ...[]material.ImageAsset) ([]Fact, int, int, []string, error) {
 	if len(facts) == 0 {
 		return nil, 0, 0, nil, problem("validation", "facts", "facts are empty")
 	}
@@ -511,7 +517,11 @@ func validateAndSanitizeFacts(facts []Fact, pages int) ([]Fact, int, int, []stri
 			}
 
 			c = sanitizeCard(c)
-			if err := validateCard(c); err != nil {
+			err := validateCard(c)
+			if err == nil && len(catalog) > 0 {
+				err = validateImageBindings([]Fact{{Cards: []Card{c}}}, catalog[0])
+			}
+			if err != nil {
 				diagErr := atPath(cardPath, err)
 				if isRecall {
 					return nil, droppedInvalid, droppedDuplicate, issues, diagErr

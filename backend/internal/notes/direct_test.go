@@ -51,9 +51,9 @@ func TestMakeWithDirectGeneratorPreservesProgressAndSavePayload(t *testing.T) {
 					return providers.Response{}, errors.New("unavailable")
 				}
 				if req.Source == "" {
-					return providers.Response{Usage: usage, Content: []byte(`{"illustrations":[]}`)}, nil
+					return providers.Response{Usage: usage, Content: []byte(`{"regions":[],"illustrations":[]}`)}, nil
 				}
-				content := `{"issues":[],"facts":[{"name":"Назначение","pages":[1],"recall":{"question":"Для чего нужен индекс?","answer":"Для ускорения поиска по ключу.","source":"` + text + `","sourceQuote":"` + quote + `"},"extraCards":[]}]}`
+				content := `{"figures":[],"issues":[],"facts":[{"name":"Назначение","pages":[1],"recall":{"needsSvg":true,"question":"Для чего нужен индекс?","answer":"Для ускорения поиска по ключу.","source":"` + text + `","sourceQuote":"` + quote + `"},"extraCards":[]}]}`
 				return providers.Response{Usage: usage, Content: []byte(content)}, nil
 			})
 			saver := &captureDirectSaver{}

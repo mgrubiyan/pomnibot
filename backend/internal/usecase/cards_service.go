@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/models/cards"
+	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 )
 
@@ -64,6 +65,19 @@ func NewCardService(querier db.Querier, userService UserService, opts ...CardSer
 }
 
 func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID uuid.UUID, cardID uuid.UUID, req *contracts.UpdateCardRequest) (*contracts.Card, error) {
+	if s.tx != nil {
+		var result *contracts.Card
+		err := s.tx.InTx(ctx, func(q db.Querier) error {
+			cp := *s
+			cp.tx = nil
+			cp.querier = q
+			var err error
+			result, err = cp.UpdateCard(ctx, userID, cardID, req)
+			return err
+		})
+		return result, err
+	}
+
 	if req == nil {
 		return nil, fmt.Errorf("%w: request body is required", ErrValidation)
 	}
@@ -165,6 +179,12 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID uuid.UUID, card
 		}
 	}
 
+	if err := repository.ReplaceCardImages(ctx, s.querier, pgCardID, existing.SetID, req.QuestionImageIds, req.ExplanationImageIds); err != nil {
+		if errors.Is(err, repository.ErrInvalidImage) {
+			return nil, fmt.Errorf("%w: invalid image attachment", ErrValidation)
+		}
+		return nil, err
+	}
 	updated, err := s.querier.UpdateCard(ctx, arg)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -256,6 +276,9 @@ func (s *cardServiceImpl) UpdateCard(ctx context.Context, userID uuid.UUID, card
 		res.Answer.SetTo(contracts.NewStringCardAnswer(updated.AnswerText.String))
 	}
 
+	if err := setResponseImages(ctx, s.querier, pgCardID, res); err != nil {
+		return nil, err
+	}
 	return res, nil
 }
 
@@ -385,6 +408,19 @@ func (s *cardServiceImpl) ResolveCardIssues(ctx context.Context, userID uuid.UUI
 }
 
 func (s *cardServiceImpl) CreateCardInFact(ctx context.Context, userID, factID uuid.UUID, req *contracts.CreateCardRequest) (*contracts.Card, error) {
+	if s.tx != nil {
+		var result *contracts.Card
+		err := s.tx.InTx(ctx, func(q db.Querier) error {
+			cp := *s
+			cp.tx = nil
+			cp.querier = q
+			var err error
+			result, err = cp.CreateCardInFact(ctx, userID, factID, req)
+			return err
+		})
+		return result, err
+	}
+
 	if err := validateCreateCard(req); err != nil {
 		return nil, err
 	}
@@ -490,6 +526,22 @@ func (s *cardServiceImpl) CreateCardInFact(ctx context.Context, userID, factID u
 		Options:     req.Options,
 		Table:       req.Table,
 		Explanation: contracts.NewOptString(created.Explanation),
+	}
+	if req.QuestionImageIds != nil || req.ExplanationImageIds != nil {
+		row, err := s.querier.GetCardByIDForAuthor(ctx, db.GetCardByIDForAuthorParams{ID: pgCardUUID, AuthorID: pgUserID})
+		if err != nil {
+			return nil, err
+		}
+		if err := repository.ReplaceCardImages(ctx, s.querier, pgCardUUID, row.SetID, req.QuestionImageIds, req.ExplanationImageIds); err != nil {
+			if errors.Is(err, repository.ErrInvalidImage) {
+				return nil, fmt.Errorf("%w: invalid image attachment", ErrValidation)
+			}
+			return nil, err
+		}
+		res.SetId = uuid.UUID(row.SetID.Bytes)
+	}
+	if err := setResponseImages(ctx, s.querier, pgCardUUID, res); err != nil {
+		return nil, err
 	}
 	res.Step.SetTo(int(nextStep))
 	return res, nil

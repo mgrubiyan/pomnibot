@@ -45,7 +45,7 @@ func TestQuotesArePreservedWithoutTextMatching(t *testing.T) {
 	}
 }
 func TestMalformedResponseRetainedWithoutPublishing(t *testing.T) {
-	raw := `{"facts":[`
+	raw := `{"figures":[],"facts":[`
 	p := providerFunc(func(context.Context, providers.Request) (providers.Response, error) {
 		return providers.Response{Content: []byte(raw), Truncated: true}, nil
 	})

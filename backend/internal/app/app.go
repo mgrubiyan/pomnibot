@@ -70,7 +70,7 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 	facts := usecase.NewFactService(queries)
 	api := httptransport.NewAPIHandler(sets, cards, home, users).
 		WithAdmin(usecase.NewAdminService(queries, users, cfg.Admins)).
-		WithFacts(facts)
+		WithFacts(facts).WithImages(usecase.NewImageService(queries))
 	if cfg.Environment == config.Local {
 		api = api.WithBrowserProfile()
 	}

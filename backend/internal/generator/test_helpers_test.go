@@ -15,7 +15,7 @@ func (p providerFunc) Complete(ctx context.Context, r providers.Request) (provid
 func stageFixture(facts ...Fact) providers.Provider {
 	return providerFunc(func(_ context.Context, req providers.Request) (providers.Response, error) {
 		if req.System == prompts.GeneratorIllustrations {
-			return providers.Response{Content: []byte(`{"illustrations":[]}`), Model: "fixture"}, nil
+			return providers.Response{Content: []byte(`{"regions":[],"illustrations":[]}`), Model: "fixture"}, nil
 		}
 		b, e := marshalModelFixture(facts...)
 		return providers.Response{Content: b, Model: "fixture"}, e
@@ -39,6 +39,7 @@ func marshalModelFixture(facts ...Fact) ([]byte, error) {
 			b, _ := json.Marshal(c)
 			var fields map[string]any
 			_ = json.Unmarshal(b, &fields)
+			fields["needsSvg"] = true
 			if _, ok := c.(FlipCard); ok && primary == nil {
 				primary = fields
 				continue
@@ -49,5 +50,5 @@ func marshalModelFixture(facts ...Fact) ([]byte, error) {
 		}
 		wire = append(wire, map[string]any{"name": f.Name, "pages": f.Pages, "recall": primary, "extraCards": extras})
 	}
-	return json.Marshal(map[string]any{"facts": wire, "issues": []string{}})
+	return json.Marshal(map[string]any{"facts": wire, "issues": []string{}, "figures": []any{}})
 }

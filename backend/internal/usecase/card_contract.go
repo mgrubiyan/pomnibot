@@ -40,12 +40,19 @@ func setCardOf(r db.GetCardsBySetIDRow) storedCard {
 // cardDetails are the options of a choice card and the layout of a table
 // card; empty for the other kinds.
 type cardDetails struct {
-	options []db.CardOption
-	table   contracts.TableLayout
+	questionImages    []contracts.CardImage
+	explanationImages []contracts.CardImage
+	options           []db.CardOption
+	table             contracts.TableLayout
 }
 
 func loadDetails(ctx context.Context, q db.Querier, c storedCard) (cardDetails, error) {
 	var d cardDetails
+	var err error
+	d.questionImages, d.explanationImages, err = loadImages(ctx, q, c.ID)
+	if err != nil {
+		return d, err
+	}
 	switch contracts.CardKind(c.Kind) {
 	case contracts.CardKindChoice:
 		opts, err := q.GetCardOptions(ctx, c.ID)
@@ -110,8 +117,9 @@ func uuidOf(id pgtype.UUID) (uuid.UUID, error) {
 // revealOf is what a card hides from the feed until it is answered.
 func revealOf(c storedCard, d cardDetails) contracts.CardReveal {
 	r := contracts.CardReveal{
-		Explanation: c.Explanation,
-		SourceQuote: c.SourceQuote,
+		ExplanationImages: d.explanationImages,
+		Explanation:       c.Explanation,
+		SourceQuote:       c.SourceQuote,
 	}
 	if c.SourceRef.Valid && c.SourceRef.String != "" {
 		r.SourceRef.SetTo(c.SourceRef.String)
@@ -147,6 +155,8 @@ func fullCard(c storedCard, d cardDetails) (contracts.Card, error) {
 	card.SourceQuote.SetTo(reveal.SourceQuote)
 	card.SourceRef = reveal.SourceRef
 	card.ExplanationSvg = reveal.ExplanationSvg
+	card.QuestionImages = d.questionImages
+	card.ExplanationImages = d.explanationImages
 	switch contracts.CardKind(c.Kind) {
 	case contracts.CardKindChoice:
 		card.Options = d.optionTexts()
@@ -184,7 +194,7 @@ func feedCardOf(c storedCard, d cardDetails) (contracts.FeedCard, error) {
 	if err != nil {
 		return contracts.FeedCard{}, err
 	}
-	card := contracts.FeedCard{
+	card := contracts.FeedCard{QuestionImages: d.questionImages,
 		ID:       ids.card,
 		SetId:    ids.set,
 		FactId:   ids.fact,

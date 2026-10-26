@@ -18,10 +18,11 @@ type loadedCardDetails struct {
 	options map[pgtype.UUID][]db.CardOption
 	columns map[pgtype.UUID][]db.CardTableColumn
 	items   map[pgtype.UUID][]db.CardTableItem
+	images  map[pgtype.UUID][]db.GetCardImagesRow
 }
 
-func loadCardDetails(ctx context.Context, q db.Querier, choiceIDs, tableIDs []pgtype.UUID) (db.Querier, error) {
-	loaded := &loadedCardDetails{Querier: q, options: map[pgtype.UUID][]db.CardOption{}, columns: map[pgtype.UUID][]db.CardTableColumn{}, items: map[pgtype.UUID][]db.CardTableItem{}}
+func loadCardDetails(ctx context.Context, q db.Querier, choiceIDs, tableIDs, imageIDs []pgtype.UUID) (db.Querier, error) {
+	loaded := &loadedCardDetails{Querier: q, options: map[pgtype.UUID][]db.CardOption{}, columns: map[pgtype.UUID][]db.CardTableColumn{}, items: map[pgtype.UUID][]db.CardTableItem{}, images: map[pgtype.UUID][]db.GetCardImagesRow{}}
 	if len(choiceIDs) > 0 {
 		rows, err := q.GetCardOptionsBatch(ctx, choiceIDs)
 		if err != nil {
@@ -45,6 +46,15 @@ func loadCardDetails(ctx context.Context, q db.Querier, choiceIDs, tableIDs []pg
 		}
 		for _, row := range items {
 			loaded.items[row.CardID] = append(loaded.items[row.CardID], row)
+		}
+	}
+	if len(imageIDs) > 0 {
+		rows, err := q.GetCardImagesBatch(ctx, imageIDs)
+		if err != nil {
+			return nil, fmt.Errorf("get card images batch: %w", err)
+		}
+		for _, r := range rows {
+			loaded.images[r.CardID] = append(loaded.images[r.CardID], db.GetCardImagesRow{ID: r.ID, SetID: r.SetID, Alt: r.Alt, Width: r.Width, Height: r.Height, SourceName: r.SourceName, SourcePage: r.SourcePage, Side: r.Side, Position: r.Position})
 		}
 	}
 	return loaded, nil
@@ -80,4 +90,8 @@ func setCardIllustrations(card *contracts.Card, question, explanation pgtype.Tex
 	if explanation.Valid && explanation.String != "" {
 		card.ExplanationSvg.SetTo(explanation.String)
 	}
+}
+
+func (d *loadedCardDetails) GetCardImages(_ context.Context, id pgtype.UUID) ([]db.GetCardImagesRow, error) {
+	return d.images[id], nil
 }

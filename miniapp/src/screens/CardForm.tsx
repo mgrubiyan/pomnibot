@@ -5,6 +5,8 @@ import { AutoTextarea } from '../components/AutoTextarea';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { ConfirmDiscardDialog } from '../components/ConfirmDiscardDialog';
+import { CardImageEditor } from '../components/CardImageEditor';
+import { imageIDs } from '../utils/imageCache';
 import { CardPreview } from '../components/CardPreview';
 import { CARD_KINDS } from '../utils/kinds';
 import { IconCross, IconDoc, IconPlus, IconTrash } from '../components/Icons';
@@ -29,6 +31,8 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
     const [editKind, setEditKind] = useState<CardKind>(card.kind ?? 'flip');
     const kind = creationKind ?? editKind;
     const setKind = onKindChange ?? setEditKind;
+    const [questionImages, setQuestionImages] = useState(card.questionImages ?? []);
+    const [explanationImages, setExplanationImages] = useState(card.explanationImages ?? []);
     const [saving, setSaving] = useState(false);
     const savingRef = useRef(false);
     const [error, setError] = useState('');
@@ -179,11 +183,12 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
 
     const canSave = saveHint === null;
 
-    const snapshot = JSON.stringify([kind, question, explanation, options, correctOptionIndices, booleanAnswer, textAnswer, tableColumns, tableItems]);
+    const snapshot = JSON.stringify([kind, question, explanation, options, correctOptionIndices, booleanAnswer, textAnswer, tableColumns, tableItems, imageIDs(questionImages), imageIDs(explanationImages)]);
     const [initialSnapshot] = useState(snapshot);
     const dirty = snapshot !== initialSnapshot;
     const previewTable = { columns: tableColumns, items: tableItems };
     const previewCard: Partial<Card> = {
+        questionImages, explanationImages,
         kind,
         question,
         explanation,
@@ -207,6 +212,7 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
         }
 
         const patch: CardPatch = {
+            ...(card.setId ? { questionImageIds: imageIDs(questionImages), explanationImageIds: imageIDs(explanationImages) } : {}),
             kind,
             question,
             explanation,
@@ -499,6 +505,7 @@ export function CardForm({ card = {}, creationKind, onKindChange, onDone, onDirt
                         />
                     </Flex>
 
+                    {card.setId && <CardImageEditor setId={card.setId} question={questionImages} explanation={explanationImages} onQuestion={setQuestionImages} onExplanation={setExplanationImages} />}
                     {/* Read-only Source quote from notes */}
                     {card.sourceQuote ? (<>
                         <div className={s.divider} />

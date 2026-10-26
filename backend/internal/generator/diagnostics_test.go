@@ -50,8 +50,8 @@ func TestResponseFailureDiagnostics(t *testing.T) {
 		{name: "JSON", content: `{"` + privateDiagnosticText + `":!}`, category: "invalid_json", reason: "invalid JSON"},
 		{name: "trailing JSON", content: directReply() + `{}`, category: "invalid_json", reason: "invalid JSON"},
 		{name: "root type", content: `[]`, category: "invalid_structure", reason: "expected object"},
-		{name: "missing", content: `{"issues":[]}`, category: "missing_field", path: "facts", reason: "required field is missing"},
-		{name: "null", content: `{"issues":[],"facts":null}`, category: "null_field", path: "facts", reason: "required field is null"},
+		{name: "missing", content: `{"figures":[],"issues":[]}`, category: "missing_field", path: "facts", reason: "required field is missing"},
+		{name: "null", content: `{"figures":[],"issues":[],"facts":null}`, category: "null_field", path: "facts", reason: "required field is null"},
 		{name: "unknown", content: strings.Replace(directReply(), `"issues":[]`, `"issues":[],"`+privateDiagnosticText+`":1`, 1), category: "invalid_structure", path: "<unknown>", reason: "unknown field"},
 		{name: "fact type", content: strings.Replace(directReply(), `"pages":[1]`, `"pages":"`+privateDiagnosticText+`"`, 1), category: "invalid_structure", path: "facts[0].pages", reason: "expected array"},
 		{name: "fact unknown", content: strings.Replace(directReply(), `"pages":[1]`, `"pages":[1],"`+privateDiagnosticText+`":1`, 1), category: "invalid_structure", path: "facts[0].<unknown>", reason: "unknown field"},
@@ -59,7 +59,7 @@ func TestResponseFailureDiagnostics(t *testing.T) {
 		{name: "recall null", content: strings.Replace(directReply(), `"answer":"Удалить запись индекса; записать блок; пометить данные."`, `"answer":null`, 1), category: "null_field", path: "facts[0].recall.answer", reason: "required field is null"},
 		{name: "recall type", content: strings.Replace(directReply(), `"answer":"Удалить запись индекса; записать блок; пометить данные."`, `"answer":42`, 1), category: "invalid_structure", path: "facts[0].recall.answer", reason: "expected string"},
 		{name: "extra kind", content: strings.Replace(directReply(), `"extraCards":[]`, `"extraCards":[{"kind":"`+privateDiagnosticText+`"}]`, 1), category: "invalid_structure", path: "facts[0].extraCards[0].kind", reason: "unknown card kind"},
-		{name: "empty facts", content: `{"issues":[],"facts":[]}`, category: "validation", path: "facts", reason: "facts are empty"},
+		{name: "empty facts", content: `{"figures":[],"issues":[],"facts":[]}`, category: "validation", path: "facts", reason: "facts are empty"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := providerFunc(func(context.Context, providers.Request) (providers.Response, error) {
@@ -361,7 +361,7 @@ func TestDiagnosticOptionalUsageAndSuccessfulAccounting(t *testing.T) {
 	for _, invalid := range []bool{false, true} {
 		p := providerFunc(func(_ context.Context, req providers.Request) (providers.Response, error) {
 			if req.Source == "" {
-				return providers.Response{Content: []byte(`{"illustrations":[]}`), Cached: true}, nil
+				return providers.Response{Content: []byte(`{"regions":[],"illustrations":[]}`), Cached: true}, nil
 			}
 			content := directReply()
 			if invalid {
@@ -395,8 +395,8 @@ func TestResponseDiagnosticsPreserveDuplicateFieldDecoding(t *testing.T) {
 		name, content, path string
 		valid               bool
 	}{
-		{"valid duplicate facts", `{"issues":[],"facts":[` + testFact + `],"facts":[` + testFact + `]}`, "", true},
-		{"invalid earlier facts", `{"issues":[],"facts":[` + invalidFact + `],"facts":[` + testFact + `]}`, "facts[0].extraCards[0].kind", false},
+		{"valid duplicate facts", `{"figures":[],"issues":[],"facts":[` + testFact + `],"facts":[` + testFact + `]}`, "", true},
+		{"invalid earlier facts", `{"figures":[],"issues":[],"facts":[` + invalidFact + `],"facts":[` + testFact + `]}`, "facts[0].extraCards[0].kind", false},
 		{"invalid earlier name", strings.Replace(directReply(), `"name":"Удаление"`, `"name":42,"name":"Удаление"`, 1), "facts[0].name", false},
 		{"invalid earlier issues", strings.Replace(directReply(), `"issues":[]`, `"issues":42,"issues":[]`, 1), "issues", false},
 		{"null issues alias", strings.Replace(directReply(), `"issues":[]`, `"issues":[],"ISSUES":null`, 1), "issues", false},

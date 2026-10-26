@@ -32,6 +32,9 @@ func factSchema() map[string]any {
 	variant := func(kind string, fields map[string]any) any {
 		fields["kind"] = map[string]any{"type": "string", "const": kind}
 		fields["question"] = s
+		fields["needsSvg"] = map[string]any{"type": "boolean", "description": "Request a useful instructional SVG for this card in the optional second stage."}
+		fields["questionImageIds"] = schemaArray(map[string]any{"type": "string"})
+		fields["explanationImageIds"] = schemaArray(map[string]any{"type": "string"})
 		fields["source"] = map[string]any{"type": "string", "description": "Nonempty GFM + math explanation supporting this card, including LaTeX formulas and conditions."}
 		fields["sourceQuote"] = map[string]any{"type": "string", "description": "Verbatim quote for this card from the supplied text or readable original PDF on the fact pages; empty string if unavailable or not confidently readable."}
 		return schemaObject(fields)
@@ -55,5 +58,5 @@ func factSchema() map[string]any {
 func stageSchema() json.RawMessage {
 	facts := schemaArray(factSchema())
 	facts["minItems"] = 1
-	return schemaBytes(schemaObject(map[string]any{"issues": schemaArray(map[string]any{"type": "string"}), "facts": facts}))
+	return schemaBytes(schemaObject(map[string]any{"issues": schemaArray(map[string]any{"type": "string"}), "facts": facts, "figures": schemaArray(schemaObject(map[string]any{"id": map[string]any{"type": "string"}, "file": map[string]any{"type": "integer"}, "page": map[string]any{"type": "integer"}, "description": map[string]any{"type": "string"}}))}))
 }

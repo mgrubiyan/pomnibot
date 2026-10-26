@@ -520,3 +520,11 @@ func (m *mockQuerier) GetAnswerByAttempt(ctx context.Context, arg db.GetAnswerBy
 	}
 	return false, pgx.ErrNoRows
 }
+
+func (m *mockQuerier) GetCardImages(context.Context, pgtype.UUID) ([]db.GetCardImagesRow, error) {
+	return nil, nil
+}
+
+func (m *mockQuerier) GetCardImagesBatch(context.Context, []pgtype.UUID) ([]db.GetCardImagesBatchRow, error) {
+	return nil, nil
+}

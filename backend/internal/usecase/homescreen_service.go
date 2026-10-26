@@ -131,8 +131,9 @@ func (s *homescreenServiceImpl) GetFeedQuestions(ctx context.Context, userID uui
 		}
 	}
 
-	var choiceIDs, tableIDs []pgtype.UUID
+	var choiceIDs, tableIDs, imageIDs []pgtype.UUID
 	for _, row := range rows {
+		imageIDs = append(imageIDs, row.ID)
 		switch row.Kind {
 		case "choice":
 			choiceIDs = append(choiceIDs, row.ID)
@@ -140,7 +141,7 @@ func (s *homescreenServiceImpl) GetFeedQuestions(ctx context.Context, userID uui
 			tableIDs = append(tableIDs, row.ID)
 		}
 	}
-	details, err := loadCardDetails(ctx, s.querier, choiceIDs, tableIDs)
+	details, err := loadCardDetails(ctx, s.querier, choiceIDs, tableIDs, imageIDs)
 	if err != nil {
 		return nil, err
 	}

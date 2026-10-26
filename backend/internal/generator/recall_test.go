@@ -3,16 +3,17 @@ package generator
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
-const recallJSON = `{"question":"Что такое x²?\nПример 🧠","answer":"  x × x\nα  ","source":" Формула\nα ≠ β ","sourceQuote":"«α»\n\t"}`
+const recallJSON = `{"needsSvg":true,"question":"Что такое x²?\nПример 🧠","answer":"  x × x\nα  ","source":" Формула\nα ≠ β ","sourceQuote":"«α»\n\t"}`
 
 func recallReply(extras string) string {
-	return `{"issues":[],"facts":[{"name":"F","pages":[1],"recall":` + recallJSON + `,"extraCards":[` + extras + `]}]}`
+	return `{"figures":[],"issues":[],"facts":[{"name":"F","pages":[1],"recall":` + recallJSON + `,"extraCards":[` + extras + `]}]}`
 }
 
 func TestRecallExpansionAndAccounting(t *testing.T) {
@@ -37,7 +38,7 @@ func TestRecallExpansionAndAccounting(t *testing.T) {
 		for i := 0; i < pairs; i++ {
 			flip := r.Facts[0].Cards[i].(FlipCard)
 			input := r.Facts[0].Cards[pairs+i].(InputCard)
-			if flip.CardBase != input.CardBase || flip.Answer != input.Answer {
+			if !reflect.DeepEqual(flip.CardBase, input.CardBase) || flip.Answer != input.Answer {
 				t.Fatal("pair differs")
 			}
 		}
@@ -84,7 +85,7 @@ func TestMixedRecallExtrasPreserveContentOrderAndCounts(t *testing.T) {
 	}
 	for i, want := range []string{"Что такое x²?\nПример 🧠", "Second?", "Third?"} {
 		flip, input := cs[i].(FlipCard), cs[6+i].(InputCard)
-		if flip.Question != want || flip.CardBase != input.CardBase || flip.Answer != input.Answer {
+		if flip.Question != want || !reflect.DeepEqual(flip.CardBase, input.CardBase) || flip.Answer != input.Answer {
 			t.Fatalf("pair %d differs", i)
 		}
 	}
@@ -149,7 +150,7 @@ func TestRecallContractRejectsMalformedFieldsAtomically(t *testing.T) {
 func TestRecallContractRejectsLegacyKindsUnknownFieldsAndDuplicates(t *testing.T) {
 	extra := `{"kind":"recall","question":"Other?","answer":"A","source":"S","sourceQuote":""}`
 	for name, raw := range map[string]string{
-		"legacy cards":         `{"issues":[],"facts":[{"name":"F","pages":[1],"cards":[{"kind":"flip","question":"Q","answer":"A","source":"S","sourceQuote":""},{"kind":"input","question":"Q","answer":"A","source":"S","sourceQuote":""}]}]}`,
+		"legacy cards":         `{"figures":[],"issues":[],"facts":[{"name":"F","pages":[1],"cards":[{"kind":"flip","question":"Q","answer":"A","source":"S","sourceQuote":""},{"kind":"input","question":"Q","answer":"A","source":"S","sourceQuote":""}]}]}`,
 		"extra flip":           recallReply(strings.Replace(extra, `"recall"`, `"flip"`, 1)),
 		"extra input":          recallReply(strings.Replace(extra, `"recall"`, `"input"`, 1)),
 		"unknown recall field": strings.Replace(recallReply(""), `"recall":{`, `"recall":{"other":1,`, 1),

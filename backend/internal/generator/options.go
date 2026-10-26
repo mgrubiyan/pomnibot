@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -38,6 +39,7 @@ type Artifact struct {
 
 // Result includes cards, available source coverage and processing metrics.
 type Result struct {
+	Images []material.ImageAsset    `json:"images,omitempty"`
 	Budget providers.BudgetSnapshot `json:"budget"`
 
 	Artifact *Artifact `json:"artifact,omitempty"`
@@ -57,6 +59,11 @@ type Coverage struct {
 
 // Stats describes one Generate run.
 type Stats struct {
+	ImagesFound          int                   `json:"imagesFound"`
+	ImagesExtracted      int                   `json:"imagesExtracted"`
+	ImagesUsed           int                   `json:"imagesUsed"`
+	ImageErrors          int                   `json:"imageErrors"`
+	ImageDuration        time.Duration         `json:"imageDuration"`
 	DroppedIllustrations int                   `json:"droppedIllustrations,omitempty"`
 	Stages               map[string]StageStats `json:"stages,omitempty"`
 	CachedTokens         int                   `json:"cachedTokens"`
@@ -89,21 +96,38 @@ type Stats struct {
 	Total          time.Duration `json:"total"`
 }
 
-// DefaultCallTimeout bounds one generation stage, including transport retries.
+// DefaultCallTimeout bounds one generation stage.
 const DefaultCallTimeout = 15 * time.Minute
 
 // Options controls generation and its shared document budget.
 type Options struct {
-	ReasoningEffort string
-	MaxTokens       int
-	Budget          providers.BudgetLimits
-	SourceBudget    int // complete source bytes; zero defaults to 80000
-	MaxFactsPerDoc  int // zero means unlimited
-	CallTimeout     time.Duration
-	OnBatch         func(Batch)
+	MaxPDFFigures       int // zero defaults to 12
+	MaxPDFPages         int // zero defaults to 6
+	PreviewMaxDimension int // zero defaults to 1536 pixels
+	PreviewMaxBytes     int // zero defaults to 8 MiB total
+	RenderPage          func(context.Context, []byte, int) ([]byte, error)
+	ReasoningEffort     string
+	MaxTokens           int
+	Budget              providers.BudgetLimits
+	SourceBudget        int // complete source bytes; zero defaults to 80000
+	MaxFactsPerDoc      int // zero means unlimited
+	CallTimeout         time.Duration
+	OnBatch             func(Batch)
 }
 
 func (o Options) withDefaults() Options {
+	if o.MaxPDFFigures <= 0 {
+		o.MaxPDFFigures = 12
+	}
+	if o.MaxPDFPages <= 0 {
+		o.MaxPDFPages = 6
+	}
+	if o.PreviewMaxDimension <= 0 {
+		o.PreviewMaxDimension = 1536
+	}
+	if o.PreviewMaxBytes <= 0 {
+		o.PreviewMaxBytes = 8 * 1024 * 1024
+	}
 	if o.MaxTokens == 0 {
 		o.MaxTokens = 128000
 	}

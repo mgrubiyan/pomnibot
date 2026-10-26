@@ -20,6 +20,7 @@ import {
 import { groupCardsByFacts } from '../utils/factGroups';
 import { getFactCardIds, reorderCardsInFact } from '../utils/cardsOrder';
 import { StudyContent } from '../components/StudyContent';
+import { StudyImages } from '../components/StudyImages';
 import { StudyIllustration } from '../components/StudyIllustration';
 import { classifyError } from '../utils/errors';
 import { kindLabel } from '../utils/kinds';
@@ -573,6 +574,7 @@ export function SetCards({
                                                         ) : undefined
                                                     }
                                                 />
+                                                <StudyImages images={card.questionImages} />
                                             </div>
                                         );
                                     })}

@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	AttachCardImage(ctx context.Context, arg AttachCardImageParams) (int64, error)
 	// Dismisses the open complaints of a card; false when the user is not the
 	// author of its set or the card is gone. Complaints an edit already answered
 	// stay as they are, so the admin still sees them fixed.
@@ -28,8 +29,10 @@ type Querier interface {
 	CreateCardTableItem(ctx context.Context, arg CreateCardTableItemParams) (CardTableItem, error)
 	CreateFact(ctx context.Context, arg CreateFactParams) (Fact, error)
 	CreateSet(ctx context.Context, arg CreateSetParams) (Set, error)
+	CreateSetImage(ctx context.Context, arg CreateSetImageParams) error
 	DeleteAvatar(ctx context.Context, id pgtype.UUID) (User, error)
 	DeleteCard(ctx context.Context, arg DeleteCardParams) (int64, error)
+	DeleteCardImages(ctx context.Context, arg DeleteCardImagesParams) error
 	DeleteCardOptions(ctx context.Context, cardID pgtype.UUID) error
 	DeleteCardTableColumns(ctx context.Context, cardID pgtype.UUID) error
 	DeleteCardTableItems(ctx context.Context, cardID pgtype.UUID) error
@@ -43,6 +46,8 @@ type Querier interface {
 	GetAvatarImage(ctx context.Context, id pgtype.UUID) ([]byte, error)
 	GetCardByID(ctx context.Context, arg GetCardByIDParams) (GetCardByIDRow, error)
 	GetCardByIDForAuthor(ctx context.Context, arg GetCardByIDForAuthorParams) (GetCardByIDForAuthorRow, error)
+	GetCardImages(ctx context.Context, cardID pgtype.UUID) ([]GetCardImagesRow, error)
+	GetCardImagesBatch(ctx context.Context, cardIds []pgtype.UUID) ([]GetCardImagesBatchRow, error)
 	GetCardOptions(ctx context.Context, cardID pgtype.UUID) ([]CardOption, error)
 	GetCardOptionsBatch(ctx context.Context, cardIds []pgtype.UUID) ([]CardOption, error)
 	GetCardTableColumns(ctx context.Context, cardID pgtype.UUID) ([]CardTableColumn, error)
@@ -53,6 +58,7 @@ type Querier interface {
 	GetCardsBySetID(ctx context.Context, arg GetCardsBySetIDParams) ([]GetCardsBySetIDRow, error)
 	GetFactsBySetID(ctx context.Context, setID pgtype.UUID) ([]GetFactsBySetIDRow, error)
 	GetFeedCardsForUser(ctx context.Context, userID pgtype.UUID) ([]GetFeedCardsForUserRow, error)
+	GetImageForUser(ctx context.Context, arg GetImageForUserParams) ([]byte, error)
 	// The verdict recorded last for the user's answer to the card, if it was
 	// recorded after since_id: ids are UUIDv7 and grow with the time of the
 	// answer, so the bound reads only the user's latest answers by their index.
@@ -68,6 +74,7 @@ type Querier interface {
 	// answers instead of reading the whole table.
 	GetSetFactAnswers(ctx context.Context, setID pgtype.UUID) ([]GetSetFactAnswersRow, error)
 	GetSetFeedCardsForUser(ctx context.Context, arg GetSetFeedCardsForUserParams) ([]GetSetFeedCardsForUserRow, error)
+	GetSetImages(ctx context.Context, setID pgtype.UUID) ([]GetSetImagesRow, error)
 	// Open complaints of the author's set: made after the card's last edit and
 	// not dismissed. Complaints about deleted cards are not listed.
 	GetSetIssues(ctx context.Context, arg GetSetIssuesParams) ([]GetSetIssuesRow, error)

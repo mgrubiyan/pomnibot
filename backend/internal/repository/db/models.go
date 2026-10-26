@@ -129,6 +129,13 @@ type Card struct {
 	ExplanationSvg pgtype.Text        `json:"explanation_svg"`
 }
 
+type CardImage struct {
+	CardID   pgtype.UUID `json:"card_id"`
+	AssetID  pgtype.UUID `json:"asset_id"`
+	Side     string      `json:"side"`
+	Position int32       `json:"position"`
+}
+
 type CardIssue struct {
 	ID          pgtype.UUID        `json:"id"`
 	CardID      pgtype.UUID        `json:"card_id"`
@@ -181,6 +188,20 @@ type Set struct {
 	ID        pgtype.UUID        `json:"id"`
 	AuthorID  pgtype.UUID        `json:"author_id"`
 	Warnings  []string           `json:"warnings"`
+}
+
+type SetImage struct {
+	ID         pgtype.UUID `json:"id"`
+	SetID      pgtype.UUID `json:"set_id"`
+	Data       []byte      `json:"data"`
+	Alt        string      `json:"alt"`
+	Width      int32       `json:"width"`
+	Height     int32       `json:"height"`
+	SourceName string      `json:"source_name"`
+	SourcePage int32       `json:"source_page"`
+	SourceFile int32       `json:"source_file"`
+	Region     []float64   `json:"region"`
+	Hash       string      `json:"hash"`
 }
 
 type SetProcessingReport struct {
