@@ -1,10 +1,9 @@
 /* Set code entry screen. There is no mockup — the composition follows
-   the other screens: header, content in the middle, button at the bottom. */
+   the other screens: header, the code field, button at the bottom. */
 
 .body {
     flex: 1;
     min-height: 0;
-    justify-content: center;
     /* The opened consent may not fit a short phone. */
     overflow-y: auto;
 }

@@ -82,7 +82,6 @@ export interface HomeProps {
     onTodayLoaded?: (today: TodayData) => void;
     /** Every complaint across all sets; the row is there for admins only. */
     onOpenAdminIssues?: () => void;
-    /** The avatar in the corner opens the profile once it has loaded. */
     /** The user's own photo in the corner; not for the shared unsigned account. */
     showAvatar?: boolean;
 }

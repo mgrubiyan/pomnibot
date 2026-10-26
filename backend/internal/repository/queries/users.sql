@@ -85,7 +85,7 @@ WITH added AS (
     ON CONFLICT (user_id) DO UPDATE SET id = EXCLUDED.id, image = EXCLUDED.image
     RETURNING id
 )
-UPDATE users SET avatar_id = (SELECT id FROM added)
+UPDATE users SET avatar_id = (SELECT id FROM added), avatar_source = NULL
 WHERE users.id = sqlc.arg(id)
 RETURNING *;
 
@@ -93,7 +93,7 @@ RETURNING *;
 WITH removed AS (
     DELETE FROM avatars WHERE user_id = sqlc.arg(id)
 )
-UPDATE users SET avatar_id = NULL
+UPDATE users SET avatar_id = NULL, avatar_source = NULL
 WHERE users.id = sqlc.arg(id)
 RETURNING *;
 

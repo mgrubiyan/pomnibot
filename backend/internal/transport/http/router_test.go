@@ -22,7 +22,7 @@ func TestHealthEndpoint(t *testing.T) {
 		"index.html": &fstest.MapFile{Data: []byte("<!DOCTYPE html><html><body>Test</body></html>")},
 	}
 
-	router, err := NewRouter(NewAPIHandler(nil, nil, nil, nil), mockFS, "", "", nil)
+	router, err := NewRouter(NewAPIHandler(nil, nil, nil, nil), mockFS, "", "", nil, nil)
 	if err != nil {
 		t.Fatalf("failed to setup router: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestStaticAndReactRouter(t *testing.T) {
 		},
 	}
 
-	router, err := NewRouter(NewAPIHandler(nil, nil, nil, nil), mockFS, "", "", nil)
+	router, err := NewRouter(NewAPIHandler(nil, nil, nil, nil), mockFS, "", "", nil, nil)
 	if err != nil {
 		t.Fatalf("failed to setup router: %v", err)
 	}
@@ -217,7 +217,7 @@ func TestRouter_AuthMiddlewareIntegration(t *testing.T) {
 				}, nil
 			},
 		}
-		router, err := NewRouter(h, fstest.MapFS{}, testBotToken, "", mockUserSvc)
+		router, err := NewRouter(h, fstest.MapFS{}, testBotToken, "", mockUserSvc, nil)
 		if err != nil {
 			t.Fatalf("failed to create router: %v", err)
 		}
@@ -247,7 +247,7 @@ func TestRouter_AuthMiddlewareIntegration(t *testing.T) {
 
 	t.Run("falls back to 0 when authorization is absent", func(t *testing.T) {
 		h := &authTestHandler{}
-		router, err := NewRouter(h, fstest.MapFS{}, testBotToken, "", nil)
+		router, err := NewRouter(h, fstest.MapFS{}, testBotToken, "", nil, nil)
 		if err != nil {
 			t.Fatalf("failed to create router: %v", err)
 		}
@@ -411,7 +411,7 @@ func TestRouter_E2E_Integration(t *testing.T) {
 		},
 	}
 	handler := NewAPIHandler(mockSet, mockCard, mockHome, nil)
-	router, err := NewRouter(handler, mockFS, testBotToken, "", mockUserSvc)
+	router, err := NewRouter(handler, mockFS, testBotToken, "", mockUserSvc, nil)
 	if err != nil {
 		t.Fatalf("failed to create router: %v", err)
 	}

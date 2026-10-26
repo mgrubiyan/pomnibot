@@ -417,11 +417,11 @@ func mapSetRowToContract(id pgtype.UUID, title string, author contracts.User, sh
 // joining the set by its code is the member's consent to that. The one
 // exception is the shared account every unsigned request gets (uuid.Nil):
 // it is anyone at all, so it sees only members who agreed on the old consent
-// screen. An anonymous member gets a new random ID on every call: their own
-// ID would let the viewer find their name wherever else it shows, such as on
-// a set they wrote.
+// screen, and itself. A member hidden from it gets a new random ID on every
+// call: their own ID would let it find their name wherever else it shows,
+// such as on a set they wrote.
 func memberContract(viewer uuid.UUID, id pgtype.UUID, firstName string, lastName, username pgtype.Text, avatar pgtype.UUID, consent bool) contracts.User {
-	if viewer != uuid.Nil || consent || (id.Valid && id.Bytes == viewer) {
+	if viewer != uuid.Nil || consent || (id.Valid && id.Bytes == uuid.Nil) {
 		u := buildUserContract(id, firstName, lastName, username)
 		setAvatar(&u, avatar)
 		return u

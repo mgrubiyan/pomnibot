@@ -46,6 +46,12 @@ func photoServer(t *testing.T, fetches *int) *httptest.Server {
 		switch r.URL.Path {
 		case "/photo.jpg":
 			_, _ = w.Write([]byte("photo bytes"))
+		case "/flaky":
+			if *fetches == 1 {
+				http.Error(w, "busy", http.StatusServiceUnavailable)
+				return
+			}
+			_, _ = w.Write([]byte("photo bytes"))
 		case "/away":
 			http.Redirect(w, r, "http://example.com/photo.jpg", http.StatusFound)
 		default:
@@ -99,6 +105,29 @@ func TestPhotoImporter(t *testing.T) {
 		photos.Wait()
 		if len(users.imported) != 0 || fetches != 1 {
 			t.Fatalf("fetches %d, imported %v", fetches, users.imported)
+		}
+	})
+
+	t.Run("tries a photo that failed for a passing reason again a minute later", func(t *testing.T) {
+		fetches := 0
+		server := photoServer(t, &fetches)
+		users := &recordingImporter{}
+		photos := NewPhotoImporter(users, server.Client())
+		now := time.Now()
+		photos.now = func() time.Time { return now }
+		sync := func() {
+			photos.Sync(context.Background(), account, server.URL+"/flaky")
+			photos.Wait()
+		}
+		sync()
+		sync()
+		if fetches != 1 || len(users.imported) != 0 {
+			t.Fatalf("right after a failure: fetches %d, imported %v", fetches, users.imported)
+		}
+		now = now.Add(photoRetryAfter + time.Second)
+		sync()
+		if fetches != 2 || len(users.imported) != 1 {
+			t.Fatalf("a minute later: fetches %d, imported %v", fetches, users.imported)
 		}
 	})
 

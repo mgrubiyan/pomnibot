@@ -106,9 +106,13 @@ func TestImportedAvatarsPostgres(t *testing.T) {
 	if err != nil || !imported.AvatarID.Valid || imported.AvatarSource != source {
 		t.Fatalf("imported: %+v %v", imported, err)
 	}
-	uploaded, err := q.SaveAvatar(ctx, db.SaveAvatarParams{ID: bob, Image: []byte("bob")})
-	if err != nil {
+	// Bob's messenger photo is replaced by one he uploads: that one is his own.
+	if _, err := q.SaveImportedAvatar(ctx, db.SaveImportedAvatarParams{ID: bob, Image: []byte("bob tg"), Source: source}); err != nil {
 		t.Fatal(err)
+	}
+	uploaded, err := q.SaveAvatar(ctx, db.SaveAvatarParams{ID: bob, Image: []byte("bob")})
+	if err != nil || uploaded.AvatarSource.Valid {
+		t.Fatalf("uploaded photo still counts as the messenger's: %+v %v", uploaded, err)
 	}
 	for _, id := range []pgtype.UUID{ann, bob} {
 		if err := q.ForgetImportedAvatar(ctx, id); err != nil {

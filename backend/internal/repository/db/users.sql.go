@@ -15,7 +15,7 @@ const deleteAvatar = `-- name: DeleteAvatar :one
 WITH removed AS (
     DELETE FROM avatars WHERE user_id = $1
 )
-UPDATE users SET avatar_id = NULL
+UPDATE users SET avatar_id = NULL, avatar_source = NULL
 WHERE users.id = $1
 RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id, data_consent_answered_at, avatar_source
 `
@@ -176,7 +176,7 @@ WITH added AS (
     ON CONFLICT (user_id) DO UPDATE SET id = EXCLUDED.id, image = EXCLUDED.image
     RETURNING id
 )
-UPDATE users SET avatar_id = (SELECT id FROM added)
+UPDATE users SET avatar_id = (SELECT id FROM added), avatar_source = NULL
 WHERE users.id = $1
 RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id, data_consent_answered_at, avatar_source
 `

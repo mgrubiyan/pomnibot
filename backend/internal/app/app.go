@@ -111,7 +111,9 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 		api = api.WithNotes(ctx, maker)
 		bots = append(bots, api.WaitNotes)
 	}
-	router, err := httptransport.NewRouter(api, assets, cfg.MaxBotToken, cfg.TelegramBotToken, users)
+	photos := httptransport.NewPhotoImporter(users.(usecase.AvatarImporter), nil)
+	bots = append(bots, photos.Wait)
+	router, err := httptransport.NewRouter(api, assets, cfg.MaxBotToken, cfg.TelegramBotToken, users, photos)
 	if err != nil {
 		return fmt.Errorf("initialize router: %w", err)
 	}
