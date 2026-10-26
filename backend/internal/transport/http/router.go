@@ -24,7 +24,11 @@ func NewRouter(handler contracts.Handler, staticFS fs.FS, maxToken, telegramToke
 		return nil, err
 	}
 
-	authMiddleware := AuthMiddleware(maxToken, telegramToken, userService)
+	var photos *PhotoImporter
+	if importer, ok := userService.(usecase.AvatarImporter); ok {
+		photos = NewPhotoImporter(importer, nil)
+	}
+	authMiddleware := AuthMiddleware(maxToken, telegramToken, userService, photos)
 	return LoggingMiddleware(authMiddleware(limitUploads(apiServer))), nil
 }
 

@@ -87,6 +87,15 @@ type Account struct {
 	// DataConsentAnswered: the user has said yes or no to it once, so the
 	// mini-app no longer asks.
 	DataConsentAnswered bool
+	// AvatarSource is the messenger photo address the avatar was taken
+	// from; empty for an uploaded photo and for none.
+	AvatarSource string
+}
+
+// AvatarImporter keeps the user's photo in step with their messenger profile.
+type AvatarImporter interface {
+	ImportAvatar(ctx context.Context, id uuid.UUID, source string, data []byte) (Account, error)
+	ForgetImportedAvatar(ctx context.Context, id uuid.UUID) error
 }
 
 // UserService defines user domain operations.

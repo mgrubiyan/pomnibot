@@ -25,7 +25,8 @@ func accountFromContext(ctx context.Context) (usecase.Account, bool) {
 // account. Credentials that do not hold or have expired are refused with
 // sign_in_expired: passing them on as the test account would record the
 // reader's answers there and show them other people's sets.
-func AuthMiddleware(maxToken, telegramToken string, users usecase.UserService) func(http.Handler) http.Handler {
+// The messenger photo of a signed user is taken in the background by photos.
+func AuthMiddleware(maxToken, telegramToken string, users usecase.UserService, photos *PhotoImporter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			fallback := WithUserName(WithUserID(r.Context(), uuid.Nil), "Browser Test User")
@@ -66,6 +67,7 @@ func AuthMiddleware(maxToken, telegramToken string, users usecase.UserService) f
 				writeAuthError(w, 500, "failed to resolve user", "")
 				return
 			}
+			photos.Sync(r.Context(), account, strings.TrimSpace(user.PhotoURL))
 			if account.TgID != 0 && !account.ProfileComplete && (r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/")) && r.URL.Path != "/api/profile" && r.URL.Path != "/api/health" {
 				writeAuthError(w, http.StatusForbidden, "Заполните фамилию и имя", "profile_required")
 				return

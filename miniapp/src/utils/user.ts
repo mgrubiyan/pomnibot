@@ -3,9 +3,6 @@ import type { User } from '../types';
 /** How a member who has not let the author see them is called. */
 export const ANONYMOUS_MEMBER = 'Участник без имени';
 
-/** Outside MAX and Telegram the server does not know who is asking. */
-export const PROFILE_SIGNED_OUT = 'Профиль можно изменить только в приложении в MAX или Telegram.';
-
 export function formatAuthorName(user: User): string {
     if (user.anonymous) {
         return ANONYMOUS_MEMBER;

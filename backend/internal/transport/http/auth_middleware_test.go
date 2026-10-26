@@ -158,7 +158,7 @@ func TestAuthMiddleware(t *testing.T) {
 			}
 			request.Header.Set("X-Init-Data", "ignored")
 			response := httptest.NewRecorder()
-			AuthMiddleware("secret", "secret", users)(next).ServeHTTP(response, request)
+			AuthMiddleware("secret", "secret", users, nil)(next).ServeHTTP(response, request)
 			if response.Code != tc.status {
 				t.Fatalf("%d: %s", response.Code, response.Body.String())
 			}

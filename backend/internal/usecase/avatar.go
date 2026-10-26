@@ -9,12 +9,15 @@ import (
 	"image/draw"
 	"image/jpeg"
 	_ "image/png" // users may send PNG
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
+	xdraw "golang.org/x/image/draw"
+	_ "golang.org/x/image/webp" // MAX may serve its photos as WebP
 )
 
 const (
@@ -57,6 +60,61 @@ func CleanAvatar(data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("encode photo: %w", err)
 	}
 	return out.Bytes(), nil
+}
+
+const (
+	// A messenger photo is cut square to this side, the size the mini-app
+	// itself used for an uploaded one.
+	importedAvatarSide = 512
+	// Checked from the header before decoding: a photo URL is the
+	// messenger's, but the file behind it is still a stranger's.
+	maxImportedAvatarPixels = 25_000_000
+)
+
+// ImportAvatar takes the photo from the user's messenger profile: cut to a
+// centred square, scaled down and saved as JPEG. source is the address it
+// came from, so the next sign-in with the same one does not fetch it again.
+func (s *userServiceImpl) ImportAvatar(ctx context.Context, id uuid.UUID, source string, data []byte) (Account, error) {
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || (format != "jpeg" && format != "png" && format != "webp") {
+		return Account{}, fmt.Errorf("%w: messenger photo is not JPEG, PNG or WebP", ErrValidation)
+	}
+	if cfg.Width < 1 || cfg.Height < 1 || cfg.Width*cfg.Height > maxImportedAvatarPixels {
+		return Account{}, fmt.Errorf("%w: messenger photo is %dx%d", ErrValidation, cfg.Width, cfg.Height)
+	}
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return Account{}, fmt.Errorf("%w: messenger photo is damaged", ErrValidation)
+	}
+	b := img.Bounds()
+	side := min(b.Dx(), b.Dy())
+	crop := image.Rect(0, 0, side, side).Add(image.Pt(b.Min.X+(b.Dx()-side)/2, b.Min.Y+(b.Dy()-side)/2))
+	out := min(side, importedAvatarSide)
+	square := image.NewRGBA(image.Rect(0, 0, out, out))
+	// JPEG has no transparency: what was see-through becomes white.
+	draw.Draw(square, square.Bounds(), image.White, image.Point{}, draw.Src)
+	xdraw.CatmullRom.Scale(square, square.Bounds(), img, crop, xdraw.Over, nil)
+	var photo bytes.Buffer
+	if err := jpeg.Encode(&photo, square, &jpeg.Options{Quality: 85}); err != nil {
+		return Account{}, fmt.Errorf("encode messenger photo: %w", err)
+	}
+	row, err := s.querier.SaveImportedAvatar(ctx, db.SaveImportedAvatarParams{
+		ID: pgtype.UUID{Bytes: id, Valid: true}, Image: photo.Bytes(),
+		Source: pgtype.Text{String: strings.TrimSpace(source), Valid: true},
+	})
+	if err != nil {
+		return Account{}, fmt.Errorf("save messenger photo: %w", err)
+	}
+	return accountFromUser(row), nil
+}
+
+// ForgetImportedAvatar removes the photo taken from the messenger once the
+// profile there has none; a photo the user uploaded stays.
+func (s *userServiceImpl) ForgetImportedAvatar(ctx context.Context, id uuid.UUID) error {
+	if err := s.querier.ForgetImportedAvatar(ctx, pgtype.UUID{Bytes: id, Valid: true}); err != nil {
+		return fmt.Errorf("forget messenger photo: %w", err)
+	}
+	return nil
 }
 
 // AvatarURL is where the photo is served; empty without one.

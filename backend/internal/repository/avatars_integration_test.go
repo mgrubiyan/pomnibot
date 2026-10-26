@@ -87,3 +87,41 @@ func TestAvatarsPostgres(t *testing.T) {
 		t.Fatalf("deleted photo still served: %v", err)
 	}
 }
+
+// A messenger photo remembers where it came from; once the messenger has
+// none it goes, while a photo the user uploaded stays.
+func TestImportedAvatarsPostgres(t *testing.T) {
+	pool := manualTestPool(t)
+	ctx := context.Background()
+	q := db.New(pool)
+	ann := pgtype.UUID{Bytes: uuid.MustParse("00000000-0000-0000-0000-0000000000a2"), Valid: true}
+	bob := pgtype.UUID{Bytes: uuid.MustParse("00000000-0000-0000-0000-0000000000b2"), Valid: true}
+	for _, id := range []pgtype.UUID{ann, bob} {
+		if _, err := q.EnsureUser(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	source := pgtype.Text{String: "https://i.max.ru/ann.jpg", Valid: true}
+	imported, err := q.SaveImportedAvatar(ctx, db.SaveImportedAvatarParams{ID: ann, Image: []byte("ann"), Source: source})
+	if err != nil || !imported.AvatarID.Valid || imported.AvatarSource != source {
+		t.Fatalf("imported: %+v %v", imported, err)
+	}
+	uploaded, err := q.SaveAvatar(ctx, db.SaveAvatarParams{ID: bob, Image: []byte("bob")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []pgtype.UUID{ann, bob} {
+		if err := q.ForgetImportedAvatar(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if user, err := q.GetUserByID(ctx, ann); err != nil || user.AvatarID.Valid || user.AvatarSource.Valid {
+		t.Fatalf("messenger photo kept: %+v %v", user, err)
+	}
+	if _, err := q.GetAvatarImage(ctx, imported.AvatarID); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("messenger photo still served: %v", err)
+	}
+	if user, err := q.GetUserByID(ctx, bob); err != nil || user.AvatarID != uploaded.AvatarID {
+		t.Fatalf("uploaded photo lost: %+v %v", user, err)
+	}
+}

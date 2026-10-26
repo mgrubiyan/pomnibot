@@ -37,6 +37,8 @@ type Querier interface {
 	DeleteSet(ctx context.Context, arg DeleteSetParams) (int64, error)
 	EnsureUser(ctx context.Context, id pgtype.UUID) (User, error)
 	FactExists(ctx context.Context, id pgtype.UUID) (bool, error)
+	// The messenger profile has no photo any more; one the user uploaded stays.
+	ForgetImportedAvatar(ctx context.Context, id pgtype.UUID) error
 	GetAnswerByAttempt(ctx context.Context, arg GetAnswerByAttemptParams) (bool, error)
 	GetAvatarImage(ctx context.Context, id pgtype.UUID) ([]byte, error)
 	GetCardByID(ctx context.Context, arg GetCardByIDParams) (GetCardByIDRow, error)
@@ -99,6 +101,8 @@ type Querier interface {
 	RollbackFactStepOnCardIssue(ctx context.Context, arg RollbackFactStepOnCardIssueParams) error
 	// Replaces the user's photo with a new one under a new ID.
 	SaveAvatar(ctx context.Context, arg SaveAvatarParams) (User, error)
+	// Replaces the user's photo with the one from their messenger profile.
+	SaveImportedAvatar(ctx context.Context, arg SaveImportedAvatarParams) (User, error)
 	SaveProcessingReport(ctx context.Context, arg SaveProcessingReportParams) (int64, error)
 	SaveTelegramProfile(ctx context.Context, arg SaveTelegramProfileParams) (User, error)
 	// Giving consent again keeps the time it was first given, and any answer
