@@ -75,7 +75,7 @@ func TestIllustrationsAreBoundAfterValidationAndSharedByRecall(t *testing.T) {
 		if err := json.Unmarshal([]byte(req.User), &input); err != nil || len(input.Cards) != 2 {
 			t.Fatalf("must send each recall once: %s", req.User)
 		}
-		b, _ := json.Marshal(map[string]any{"illustrations": []any{
+		b, _ := json.Marshal(map[string]any{"regions": []any{}, "illustrations": []any{
 			map[string]any{"cardId": input.Cards[1].ID, "questionSvg": "", "explanationSvg": testSVG},
 			map[string]any{"cardId": input.Cards[0].ID, "questionSvg": testSVG, "explanationSvg": ""},
 		}})
@@ -110,12 +110,12 @@ func TestIllustrationFailuresKeepValidatedCards(t *testing.T) {
 		err           error
 		truncated     bool
 	}{
-		{name: "none", content: `{"illustrations":[]}`},
+		{name: "none", content: `{"regions":[],"illustrations":[]}`},
 		{name: "provider", err: errors.New("private provider failure")},
 		{name: "budget", err: providers.ErrBudget},
-		{name: "malformed", content: `{"illustrations":`},
+		{name: "malformed", content: `{"regions":[],"illustrations":`},
 		{name: "wrong root", content: `{"facts":[]}`},
-		{name: "truncated", content: `{"illustrations":[]}`, truncated: true},
+		{name: "truncated", content: `{"regions":[],"illustrations":[]}`, truncated: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			calls := 0
@@ -152,7 +152,7 @@ func TestIllustrationPartialResponse(t *testing.T) {
 			} `json:"cards"`
 		}
 		_ = json.Unmarshal([]byte(req.User), &input)
-		b, _ := json.Marshal(map[string]any{"illustrations": []any{
+		b, _ := json.Marshal(map[string]any{"regions": []any{}, "illustrations": []any{
 			map[string]any{"cardId": input.Cards[0].ID, "questionSvg": `<svg viewBox="0 0 1 1" onload="alert(1)"/>`, "explanationSvg": testSVG},
 			map[string]any{"cardId": input.Cards[1].ID, "questionSvg": testSVG, "explanationSvg": strings.Repeat("x", 128*1024+1)},
 			map[string]any{"cardId": input.Cards[2].ID, "questionSvg": 42, "explanationSvg": testSVG},
@@ -225,9 +225,6 @@ func TestIllustrationTimeoutKeepsCards(t *testing.T) {
 func TestIllustrationsUseTheGenerationBackendForPDF(t *testing.T) {
 	calls := 0
 	router := providerFunc(func(_ context.Context, req providers.Request) (providers.Response, error) {
-		if req.System == imageDiscoveryPrompt {
-			return providers.Response{Content: []byte(`{"figures":[]}`)}, nil
-		}
 		calls++
 		if calls == 1 {
 			b, _ := marshalModelFixture(learningFact("Fact"))
@@ -236,7 +233,7 @@ func TestIllustrationsUseTheGenerationBackendForPDF(t *testing.T) {
 		if req.Backend != "openrouter" || req.Source != "" || len(req.PDFs) != 0 {
 			t.Fatal("lost backend pin")
 		}
-		return providers.Response{Content: []byte(`{"illustrations":[]}`)}, nil
+		return providers.Response{Content: []byte(`{"regions":[],"illustrations":[]}`)}, nil
 	})
 	primary := providerFunc(func(context.Context, providers.Request) (providers.Response, error) {
 		t.Fatal("illustrations switched to another provider")
@@ -275,7 +272,7 @@ func TestIllustrationsBindAllCardKinds(t *testing.T) {
 			expected[entry.Card.Question] = svg
 			bindings = append(bindings, map[string]any{"cardId": entry.ID, "questionSvg": svg, "explanationSvg": svg})
 		}
-		b, _ := json.Marshal(map[string]any{"illustrations": bindings})
+		b, _ := json.Marshal(map[string]any{"regions": []any{}, "illustrations": bindings})
 		return providers.Response{Content: b}, nil
 	})
 	r, err := NewGenerator(p, Options{}).Generate(t.Context(), Document{Text: "source"})

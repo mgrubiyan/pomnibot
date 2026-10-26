@@ -10,29 +10,23 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
-const testFact = `{"name":"Удаление","pages":[1],"recall":{"question":"Как удалить запись?","answer":"Удалить запись индекса; записать блок; пометить данные.","source":"Удаление индекса","sourceQuote":""},"extraCards":[]}`
+const testFact = `{"name":"Удаление","pages":[1],"recall":{"needsSvg":true,"question":"Как удалить запись?","answer":"Удалить запись индекса; записать блок; пометить данные.","source":"Удаление индекса","sourceQuote":""},"extraCards":[]}`
 
 func pdfDocument() Document {
 	return Document{PDFs: []providers.PDF{{Name: "lecture.pdf", Data: []byte("%PDF-test"), Pages: 1}}}
 }
-func directReply() string { return `{"issues":[],"facts":[` + testFact + `]}` }
+func directReply() string { return `{"figures":[],"issues":[],"facts":[` + testFact + `]}` }
 func TestDirectGenerationPublishesOnceAfterValidation(t *testing.T) {
 	for _, doc := range []Document{pdfDocument(), {Text: "Индекс ускоряет поиск"}} {
 		expectedCalls := 2
-		if len(doc.PDFs) > 0 {
-			expectedCalls++
-		}
 		calls, published := 0, 0
 		p := providerFunc(func(_ context.Context, req providers.Request) (providers.Response, error) {
 			calls++
 			if published != 0 || len(req.Schema) == 0 || req.ReasoningEffort == "" || !req.NoFallback {
 				t.Fatal("missing request controls or early publication")
 			}
-			if req.System == imageDiscoveryPrompt {
-				return providers.Response{Content: []byte(`{"figures":[]}`), Usage: providers.Usage{CostUSD: .01, PromptTokens: 20, CompletionTokens: 10}}, nil
-			}
 			if req.System == prompts.GeneratorIllustrations {
-				return providers.Response{Content: []byte(`{"illustrations":[]}`), Usage: providers.Usage{CostUSD: .01, PromptTokens: 20, CompletionTokens: 10}}, nil
+				return providers.Response{Content: []byte(`{"regions":[],"illustrations":[]}`), Usage: providers.Usage{CostUSD: .01, PromptTokens: 20, CompletionTokens: 10}}, nil
 			}
 			if len(doc.PDFs) > 0 && len(req.PDFs) != 1 {
 				t.Fatal("missing original PDF")
@@ -61,10 +55,10 @@ func TestDirectGenerationRejectsInvalidResponse(t *testing.T) {
 		"truncated flag": func(s string) string { return s },
 		"broken JSON":    func(s string) string { return s[:len(s)-5] },
 		"missing facts":  func(s string) string { return strings.Replace(s, `"facts":`, `"other":`, 1) },
-		"empty facts":    func(string) string { return `{"issues":[],"facts":[]}` },
+		"empty facts":    func(string) string { return `{"figures":[],"issues":[],"facts":[]}` },
 		"missing issues": func(s string) string { return strings.Replace(s, `"issues":[],`, "", 1) },
 		"null issues":    func(s string) string { return strings.Replace(s, `"issues":[]`, `"issues":null`, 1) },
-		"duplicate fact": func(string) string { return `{"issues":[],"facts":[` + testFact + `,` + testFact + `]}` },
+		"duplicate fact": func(string) string { return `{"figures":[],"issues":[],"facts":[` + testFact + `,` + testFact + `]}` },
 		"missing name":   func(s string) string { return strings.Replace(s, `"name":"Удаление",`, "", 1) },
 		"missing pages":  func(s string) string { return strings.Replace(s, `"pages":[1],`, "", 1) },
 		"missing recall": func(s string) string { return strings.Replace(s, `"recall":`, `"other":`, 1) },
@@ -97,10 +91,7 @@ func TestDirectGenerationRejectsInvalidResponse(t *testing.T) {
 		t.Run(defect, func(t *testing.T) {
 			b := mutate(directReply())
 			calls := 0
-			p := providerFunc(func(_ context.Context, req providers.Request) (providers.Response, error) {
-				if req.System == imageDiscoveryPrompt {
-					return providers.Response{Content: []byte(`{"figures":[]}`)}, nil
-				}
+			p := providerFunc(func(_ context.Context, _ providers.Request) (providers.Response, error) {
 				calls++
 				return providers.Response{Content: []byte(b), Truncated: defect == "truncated flag"}, nil
 			})
@@ -113,8 +104,8 @@ func TestDirectGenerationRejectsInvalidResponse(t *testing.T) {
 }
 func TestDirectGenerationKeepsIssuesAndFailureMetrics(t *testing.T) {
 	p := providerFunc(func(_ context.Context, req providers.Request) (providers.Response, error) {
-		if req.System == imageDiscoveryPrompt {
-			return providers.Response{Content: []byte(`{"figures":[]}`)}, nil
+		if req.System == prompts.GeneratorIllustrations {
+			return providers.Response{Content: []byte(`{"regions":[],"illustrations":[]}`)}, nil
 		}
 		return providers.Response{Content: []byte(strings.Replace(directReply(), `"issues":[]`, `"issues":["Page 1 contains an unreadable fragment"]`, 1))}, nil
 	})
@@ -122,10 +113,7 @@ func TestDirectGenerationKeepsIssuesAndFailureMetrics(t *testing.T) {
 	if err != nil || CardCount(r.Facts) != 2 || len(r.Coverage.Issues) != 1 {
 		t.Fatalf("%+v %v", r, err)
 	}
-	p = providerFunc(func(_ context.Context, req providers.Request) (providers.Response, error) {
-		if req.System == imageDiscoveryPrompt {
-			return providers.Response{Content: []byte(`{"figures":[]}`)}, nil
-		}
+	p = providerFunc(func(_ context.Context, _ providers.Request) (providers.Response, error) {
 		return providers.Response{Usage: providers.Usage{CostUSD: .02}}, errors.New("failed")
 	})
 	r, err = NewGenerator(p, Options{}).Generate(context.Background(), pdfDocument())
@@ -142,10 +130,7 @@ func TestDirectGenerationSharesExistingBudget(t *testing.T) {
 		}
 		done(providers.Usage{CostUSD: .03}, true) // prior reading or failed attempt
 		calls := 0
-		p := providerFunc(func(ctx context.Context, req providers.Request) (providers.Response, error) {
-			if req.System == imageDiscoveryPrompt {
-				return providers.Response{Content: []byte(`{"figures":[]}`)}, nil
-			}
+		p := providerFunc(func(ctx context.Context, _ providers.Request) (providers.Response, error) {
 			bound := .02
 			if !remaining {
 				bound = .03
@@ -185,7 +170,7 @@ func TestInvalidLastFactRejectsWholeResponse(t *testing.T) {
 }
 
 func TestInvalidLastRecallReportsOriginalPath(t *testing.T) {
-	raw := `{"issues":[],"facts":[` + testFact + `,` + strings.Replace(strings.Replace(testFact, `"name":"Удаление"`, `"name":"Другой факт"`, 1), `"answer":"Удалить запись индекса; записать блок; пометить данные."`, `"answer":" "`, 1) + `]}`
+	raw := `{"figures":[],"issues":[],"facts":[` + testFact + `,` + strings.Replace(strings.Replace(testFact, `"name":"Удаление"`, `"name":"Другой факт"`, 1), `"answer":"Удалить запись индекса; записать блок; пометить данные."`, `"answer":" "`, 1) + `]}`
 	p := providerFunc(func(_ context.Context, _ providers.Request) (providers.Response, error) {
 		return providers.Response{Content: []byte(raw)}, nil
 	})

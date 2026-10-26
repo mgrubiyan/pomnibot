@@ -72,6 +72,10 @@ func ReserveCall(ctx context.Context, bound float64) (func(Usage, bool), error) 
 	if invalidAmount(bound) {
 		return nil, ErrBudget
 	}
+	limit, _ := ctx.Value(attemptLimitKey{}).(*attemptLimit)
+	if err := limit.take(); err != nil {
+		return nil, err
+	}
 	b := BudgetFrom(ctx)
 	if b == nil {
 		return func(Usage, bool) {}, nil

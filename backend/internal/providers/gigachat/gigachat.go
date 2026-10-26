@@ -369,6 +369,10 @@ func (c *Client) completeWith(ctx context.Context, model string, req providers.R
 			return resp, nil
 		}
 
+		if req.NoRetry {
+			return resp, err
+		}
+
 		if apiErr := chatError(err); strict && apiErr != nil &&
 			(apiErr.Status == http.StatusBadRequest || apiErr.Status == http.StatusUnprocessableEntity) {
 			slog.Warn("gigachat: structured output rejected, retrying with the schema in the prompt",

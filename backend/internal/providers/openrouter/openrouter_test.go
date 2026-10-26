@@ -438,3 +438,17 @@ func TestRetryWithoutUsageRetainsReservationAndMarksUnknownUsage(t *testing.T) {
 		t.Fatalf("%+v %v budget %+v", r, e, b.Snapshot())
 	}
 }
+
+func TestNoRetryMakesExactlyOneTransportAttempt(t *testing.T) {
+	for _, status := range []int{400, 429, 500} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			calls := 0
+			c := clientFor(t, func(w http.ResponseWriter, _ *http.Request) { calls++; w.WriteHeader(status) })
+			ctx := providers.WithBudget(t.Context(), providers.NewBudget(providers.BudgetLimits{Calls: 10}))
+			resp, err := c.Complete(ctx, providers.Request{User: "source", NoRetry: true, NoFallback: true})
+			if err == nil || calls != 1 || resp.Usage.Attempts != 1 || providers.BudgetFrom(ctx).Snapshot().Calls != 1 {
+				t.Fatalf("calls=%d response=%+v err=%v", calls, resp, err)
+			}
+		})
+	}
+}

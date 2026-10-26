@@ -11,8 +11,9 @@ import (
 
 // AIResponse decodes the private model contract into expanded facts for validation.
 type AIResponse struct {
-	Facts  []Fact   `json:"facts"`
-	Issues []string `json:"issues"`
+	Figures []figureCandidate `json:"figures"`
+	Facts   []Fact            `json:"facts"`
+	Issues  []string          `json:"issues"`
 }
 
 // Fact groups cards in ascending difficulty, preserving model order within a kind.
@@ -34,6 +35,7 @@ type Card interface {
 
 // CardBase holds the question and source specific to one card.
 type CardBase struct {
+	needsSVG            bool
 	QuestionImageIDs    []string `json:"questionImageIds,omitempty"`
 	ExplanationImageIDs []string `json:"explanationImageIds,omitempty"`
 	QuestionSvg         string   `json:"questionSvg,omitempty"`
@@ -261,17 +263,18 @@ func (f Fact) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON rejects missing, null and legacy response fields.
 func (r *AIResponse) UnmarshalJSON(b []byte) error {
-	if err := requiredFields(b, "facts", "issues"); err != nil {
+	if err := requiredFields(b, "facts", "issues", "figures"); err != nil {
 		return err
 	}
 	var wire struct {
-		Facts  responseFacts `json:"facts"`
-		Issues []string      `json:"issues"`
+		Figures []figureCandidate `json:"figures"`
+		Facts   responseFacts     `json:"facts"`
+		Issues  []string          `json:"issues"`
 	}
 	if err := strictJSON(b, &wire); err != nil {
 		return err
 	}
-	*r = AIResponse{Issues: wire.Issues, Facts: wire.Facts}
+	*r = AIResponse{Issues: wire.Issues, Facts: wire.Facts, Figures: wire.Figures}
 	return nil
 }
 

@@ -415,3 +415,16 @@ func TestConfigErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestNoRetryDisablesTransportAndSchemaRetries(t *testing.T) {
+	for _, status := range []int{400, 429, 500} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			api := &fakeAPI{reply: func(int, completionRequest) reply { return fail(status) }}
+			c := newTestClient(t, api)
+			_, err := c.Complete(t.Context(), providers.Request{User: "source", Schema: json.RawMessage(`{"type":"object"}`), NoRetry: true, NoFallback: true})
+			if err == nil || len(api.requests()) != 1 {
+				t.Fatalf("calls=%d err=%v", len(api.requests()), err)
+			}
+		})
+	}
+}

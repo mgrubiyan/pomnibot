@@ -10,10 +10,10 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
-const recallJSON = `{"question":"Что такое x²?\nПример 🧠","answer":"  x × x\nα  ","source":" Формула\nα ≠ β ","sourceQuote":"«α»\n\t"}`
+const recallJSON = `{"needsSvg":true,"question":"Что такое x²?\nПример 🧠","answer":"  x × x\nα  ","source":" Формула\nα ≠ β ","sourceQuote":"«α»\n\t"}`
 
 func recallReply(extras string) string {
-	return `{"issues":[],"facts":[{"name":"F","pages":[1],"recall":` + recallJSON + `,"extraCards":[` + extras + `]}]}`
+	return `{"figures":[],"issues":[],"facts":[{"name":"F","pages":[1],"recall":` + recallJSON + `,"extraCards":[` + extras + `]}]}`
 }
 
 func TestRecallExpansionAndAccounting(t *testing.T) {
@@ -150,7 +150,7 @@ func TestRecallContractRejectsMalformedFieldsAtomically(t *testing.T) {
 func TestRecallContractRejectsLegacyKindsUnknownFieldsAndDuplicates(t *testing.T) {
 	extra := `{"kind":"recall","question":"Other?","answer":"A","source":"S","sourceQuote":""}`
 	for name, raw := range map[string]string{
-		"legacy cards":         `{"issues":[],"facts":[{"name":"F","pages":[1],"cards":[{"kind":"flip","question":"Q","answer":"A","source":"S","sourceQuote":""},{"kind":"input","question":"Q","answer":"A","source":"S","sourceQuote":""}]}]}`,
+		"legacy cards":         `{"figures":[],"issues":[],"facts":[{"name":"F","pages":[1],"cards":[{"kind":"flip","question":"Q","answer":"A","source":"S","sourceQuote":""},{"kind":"input","question":"Q","answer":"A","source":"S","sourceQuote":""}]}]}`,
 		"extra flip":           recallReply(strings.Replace(extra, `"recall"`, `"flip"`, 1)),
 		"extra input":          recallReply(strings.Replace(extra, `"recall"`, `"input"`, 1)),
 		"unknown recall field": strings.Replace(recallReply(""), `"recall":{`, `"recall":{"other":1,`, 1),

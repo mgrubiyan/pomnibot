@@ -168,7 +168,7 @@ func (c *Client) Complete(ctx context.Context, req providers.Request) (providers
 		if ctx.Err() != nil {
 			return res, ctx.Err()
 		}
-		if !retryable(err) || attempt == maxAttempts-1 {
+		if req.NoRetry || !retryable(err) || attempt == maxAttempts-1 {
 			if unavailable(err) {
 				err = fmt.Errorf("%w: %w", err, providers.ErrUnavailable)
 			}

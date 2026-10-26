@@ -98,7 +98,7 @@ func safeDecodeProblem(err error) error {
 				continue
 			}
 			name := "<unknown>"
-			for _, known := range []string{"facts", "issues", "name", "pages", "cards", "recall", "extraCards", "kind", "question", "source", "sourceQuote", "answer", "rightAnswers", "wrongAnswers", "columns", "rows"} {
+			for _, known := range []string{"facts", "issues", "figures", "id", "file", "page", "description", "needsSvg", "questionImageIds", "explanationImageIds", "name", "pages", "cards", "recall", "extraCards", "kind", "question", "source", "sourceQuote", "answer", "rightAnswers", "wrongAnswers", "columns", "rows"} {
 				if strings.EqualFold(field, known) {
 					name = known
 					break

@@ -23,12 +23,9 @@ func TestOpenRouterGenerationSendsRecallContractAndExpandsPairs(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			var calls atomic.Int32
-			raw := recallReply(`{"kind":"recall","question":"Other aspect?","answer":"B","source":"S","sourceQuote":""}`)
+			raw := recallReply(`{"kind":"recall","needsSvg":true,"question":"Other aspect?","answer":"B","source":"S","sourceQuote":""}`)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				call := calls.Add(1)
-				if pdf {
-					call--
-				}
 				var body struct {
 					Messages []struct {
 						Role    string          `json:"role"`
@@ -54,11 +51,6 @@ func TestOpenRouterGenerationSendsRecallContractAndExpandsPairs(t *testing.T) {
 				if body.ResponseFormat.Type != "json_schema" || !body.ResponseFormat.JSONSchema.Strict || !body.Provider.RequireParameters || body.Provider.AllowFallbacks == nil || *body.Provider.AllowFallbacks {
 					t.Error("missing strict schema or provider constraints")
 				}
-				if pdf && call == 0 {
-					w.Header().Set("Content-Type", "application/json")
-					_ = json.NewEncoder(w).Encode(map[string]any{"model": openrouter.DefaultModel, "choices": []any{map[string]any{"message": map[string]any{"content": `{"figures":[]}`}, "finish_reason": "stop"}}, "usage": map[string]any{"prompt_tokens": 1, "completion_tokens": 1, "cost": 0}})
-					return
-				}
 				if call == 2 {
 					if len(body.Messages) != 2 || !strings.Contains(string(body.ResponseFormat.JSONSchema.Schema), `"illustrations"`) {
 						t.Error("illustration stage must omit the document and send its own schema")
@@ -78,7 +70,7 @@ func TestOpenRouterGenerationSendsRecallContractAndExpandsPairs(t *testing.T) {
 					if err := json.Unmarshal([]byte(payload), &input); err != nil || len(input.Cards) != 2 {
 						t.Error("lost recall bindings")
 					}
-					content, _ := json.Marshal(map[string]any{"illustrations": []any{map[string]any{"cardId": "f0-c0", "questionSvg": testSVG, "explanationSvg": ""}}})
+					content, _ := json.Marshal(map[string]any{"regions": []any{}, "illustrations": []any{map[string]any{"cardId": "f0-c0", "questionSvg": testSVG, "explanationSvg": ""}}})
 					w.Header().Set("Content-Type", "application/json")
 					_ = json.NewEncoder(w).Encode(map[string]any{"model": openrouter.DefaultModel, "choices": []any{map[string]any{"message": map[string]any{"content": string(content)}, "finish_reason": "stop"}}, "usage": map[string]any{"prompt_tokens": 1, "completion_tokens": 1, "cost": 0}})
 					return
@@ -137,9 +129,6 @@ func TestOpenRouterGenerationSendsRecallContractAndExpandsPairs(t *testing.T) {
 				t.Fatal(err)
 			}
 			expectedCalls := int32(2)
-			if pdf {
-				expectedCalls++
-			}
 			if calls.Load() != expectedCalls || published != 1 || result.Stats.Cards != 4 || result.Stats.CardsFromModel != 0 || result.Stats.CardsSynthesized != 4 || result.Facts[0].Cards[0].Base().QuestionSvg != testSVG || result.Stats.FailedCalls != 0 {
 				t.Fatalf("calls=%d published=%d stats=%+v", calls.Load(), published, result.Stats)
 			}

@@ -18,7 +18,7 @@ import (
 
 func TestMakeLogsSelfContainedSafeGenerationFailure(t *testing.T) {
 	const private = "PRIVATE_DOCUMENT_MODEL_TEXT"
-	content := `{"issues":[],"facts":[{"name":"` + private + `","pages":[1],"recall":{"question":"` + private + `","source":"` + private + `","sourceQuote":"` + private + `","answer":"` + private + `"},"extraCards":[]}]}`
+	content := `{"figures":[],"issues":[],"facts":[{"name":"` + private + `","pages":[1],"recall":{"needsSvg":true,"question":"` + private + `","source":"` + private + `","sourceQuote":"` + private + `","answer":"` + private + `"},"extraCards":[]}]}`
 	for _, tc := range []struct {
 		name, content, category, path, reason, userText string
 		cause                                           error
@@ -26,7 +26,7 @@ func TestMakeLogsSelfContainedSafeGenerationFailure(t *testing.T) {
 		{"missing recall", strings.Replace(content, `"recall":`, `"other":`, 1), "missing_field", "facts[0].recall", "required field is missing", TextTryLater, nil},
 		{"empty answer", strings.Replace(content, `"answer":"`+private+`"`, `"answer":" "`, 1), "validation", "facts[0].recall.answer", "answer is empty", TextTryLater, nil},
 		{"truncated", content, "truncated", "", "response was truncated", TextTryLater, nil},
-		{"unknown key", `{"issues":[],"facts":[],"` + private + `":1}`, "invalid_structure", "<unknown>", "unknown field", TextTryLater, nil},
+		{"unknown key", `{"figures":[],"issues":[],"facts":[],"` + private + `":1}`, "invalid_structure", "<unknown>", "unknown field", TextTryLater, nil},
 		{"broken JSON", `{"` + private + `":!}`, "invalid_json", "", "invalid JSON", TextTryLater, nil},
 		{"provider refusal", "", "refused", "", "provider refused generation", TextOtherText, providers.ErrRefused},
 		{"budget", "", "budget", "", "document provider budget exhausted", TextBudgetExceeded, providers.ErrBudget},

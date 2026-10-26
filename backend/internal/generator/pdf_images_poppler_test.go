@@ -2,7 +2,6 @@ package generator
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"image"
 	"image/color"
@@ -12,7 +11,6 @@ import (
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/material"
-	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
 )
 
 // Actual PDF rendering covers embedded photos/scans and vector paths/text together.
@@ -64,36 +62,6 @@ func TestPDFCropsWithPopplerAndRotatedPages(t *testing.T) {
 				t.Fatalf("lost photo/vector caption: colored=%d dark=%d", colored, dark)
 			}
 		})
-	}
-}
-
-func TestPDFImageSourcesAcrossFiles(t *testing.T) {
-	img := image.NewRGBA(image.Rect(0, 0, 60, 80))
-	var buf bytes.Buffer
-	_ = jpeg.Encode(&buf, img, nil)
-	var seenFiles [][]byte
-	p := providerFunc(func(_ context.Context, r providers.Request) (providers.Response, error) {
-		if r.System == imageDiscoveryPrompt {
-			return providers.Response{Content: []byte(`{"figures":[{"file":2,"page":1,"description":"scan"},{"file":1,"page":2,"description":"vector"}]}`)}, nil
-		}
-		if r.System == imageLocalizationPrompt {
-			index := 0
-			if len(seenFiles) == 2 {
-				index = 1
-			}
-			return providers.Response{Content: []byte(fmt.Sprintf(`{"regions":[{"index":%d,"bounds":[0,0,%g,1]}]}`, index, .5+float64(index)*.2))}, nil
-		}
-		return stageFixture(learningFact("text")).Complete(context.Background(), r)
-	})
-	result, err := NewGenerator(p, Options{RenderPage: func(_ context.Context, file []byte, page int) ([]byte, error) {
-		seenFiles = append(seenFiles, file)
-		if string(file) == "one" && page != 1 || string(file) == "two" && page != 0 {
-			t.Fatal("wrong local page")
-		}
-		return buf.Bytes(), nil
-	}}).Generate(t.Context(), Document{PDFs: []providers.PDF{{Name: "one.pdf", Data: []byte("one"), Pages: 2}, {Name: "two.pdf", Data: []byte("two"), Pages: 1}}})
-	if err != nil || len(result.Images) != 2 || result.Images[0].SourceName != "two.pdf" || result.Images[0].SourcePage != 1 || result.Images[1].SourceName != "one.pdf" || result.Images[1].SourcePage != 2 {
-		t.Fatalf("source mapping %+v %v", result.Images, err)
 	}
 }
 

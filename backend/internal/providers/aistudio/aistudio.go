@@ -199,6 +199,10 @@ func (c *Client) complete(ctx context.Context, req providers.Request) (providers
 			return resp, nil
 		}
 
+		if req.NoRetry {
+			return resp, err
+		}
+
 		var apiErr *APIError
 		if withSchema && errors.As(err, &apiErr) && apiErr.Status == http.StatusBadRequest {
 			slog.Warn("aistudio: structured output rejected, retrying with the schema in the prompt", "body", apiErr.Body)

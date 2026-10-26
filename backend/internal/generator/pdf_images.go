@@ -7,49 +7,65 @@ import (
 	"fmt"
 	"image"
 	"image/draw"
+	"image/jpeg"
 	"image/png"
 	"math"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/mgrubiyan/pomnibot/backend/internal/ingest"
 	"github.com/mgrubiyan/pomnibot/backend/internal/material"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers"
+	xdraw "golang.org/x/image/draw"
 )
 
-const imageDiscoveryPrompt = `Inspect the original PDFs for useful educational figures: photographs, diagrams, graphs, including figures within scanned pages. Return each figure's 1-based file index, page within that file and a neutral description. Exclude logos, decoration and recurring headers/footers. Do not transcribe the whole document. Return {"figures":[] } when none exist. At most 80 figures.`
-const imageLocalizationPrompt = `Locate each requested educational figure on the attached rendered page. Return its candidate index and normalized bounds [left,top,right,bottom], all between 0 and 1. Preserve the entire figure, vector elements, labels and caption needed for understanding. Exclude unrelated text. Use coordinates of the attached image, including its displayed rotation. Omit a candidate if no useful readable figure exists. Never invent one.`
-const imageGenerationRules = `The images array is a catalog in exactly the order of the attached crop images. Reference only catalog assetId values in questionImageIds and explanationImageIds, preserving display order. Use a figure when necessary to solve a concrete question or helpful to explain it; empty arrays are valid. Never put a figure, caption or alternative text revealing the answer on the question side: use it in the explanation instead. Keep textual correct answers and explanations. Never ask a question requiring a missing image. When the catalog is empty, all questions must be independently answerable from their text. Do not generate SVG for a side with PDF images.`
+// Smaller crops cannot reliably show educational detail at the local PDF render
+// resolution. In particular, image-key thumbnails are not usable replacements
+// for the full figures on an adjacent page.
+const minPDFFigureSide = 48
 
-const maxPDFFigures = 80
+const imageGenerationRules = `Select PDF figures for concrete cards while reading the original PDFs. Return figures: [{id, file, page, description}], where id is a unique temporary string, file is the 1-based PDF file index and page is 1-based within that file. Each description must identify one specific photo, diagram or graph, its position on a composite page and the labels needed for this card. Do not describe a whole collage when a card needs one component. Select the full-sized figure rather than a tiny image-key/legend thumbnail; use the original figure on the adjacent page when available. Reuse an id across cards when the same figure is useful. questionImageIds and explanationImageIds reference these temporary ids in display order. Select only figures used by cards; prefer at most 12 figures on 6 unique pages. Use original PDF figures for concrete visual tasks, not decoration. Never put a figure, caption or description revealing the answer on the question side; use the explanation side instead. Keep textual answers and explanations. With no suitable PDF figure, every question must be answerable from text. Set needsSvg=true only for cards that would benefit from an additional instructional SVG; no SVG is needed on a side with PDF figures. Do not return SVG in this first response. Return figures=[] when no PDF figures are selected.`
 
 type figureCandidate struct {
+	ID          string `json:"id"`
 	File        int    `json:"file"`
 	Page        int    `json:"page"`
 	Description string `json:"description"`
 }
 
+func (f *figureCandidate) UnmarshalJSON(data []byte) error {
+	if err := requiredFields(data, "id", "file", "page", "description"); err != nil {
+		return err
+	}
+	type wire figureCandidate
+	var v wire
+	if err := strictJSON(data, &v); err != nil {
+		return err
+	}
+	*f = figureCandidate(v)
+	return nil
+}
+
 type figureRegion struct {
-	Index  int       `json:"index"`
+	ID     string    `json:"id"`
 	Bounds []float64 `json:"bounds"`
 }
 
 func (r *figureRegion) UnmarshalJSON(data []byte) error {
-	if err := requiredFields(data, "index", "bounds"); err != nil {
+	if err := requiredFields(data, "id", "bounds"); err != nil {
 		return err
 	}
 	var wire struct {
-		Index  int               `json:"index"`
+		ID     string            `json:"id"`
 		Bounds []json.RawMessage `json:"bounds"`
 	}
 	if err := strictJSON(data, &wire); err != nil {
 		return err
 	}
-	if len(wire.Bounds) != 4 {
-		return fmt.Errorf("figure bounds must have four coordinates")
+	if strings.TrimSpace(wire.ID) == "" || len(wire.Bounds) != 4 {
+		return fmt.Errorf("figure requires id and four coordinates")
 	}
-	r.Index = wire.Index
+	r.ID = wire.ID
 	r.Bounds = make([]float64, 4)
 	for i, v := range wire.Bounds {
 		if bytes.Equal(bytes.TrimSpace(v), []byte("null")) {
@@ -62,134 +78,272 @@ func (r *figureRegion) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (g *Generator) preparePDFImages(ctx context.Context, doc Document, out *Result) error {
-	if len(doc.PDFs) == 0 {
-		return nil
+// The draft validates temporary references without publishing them as asset IDs.
+func draftFigureCatalog(figures []figureCandidate) ([]material.ImageAsset, error) {
+	catalog := make([]material.ImageAsset, 0, len(figures))
+	seen := map[string]bool{}
+	for _, f := range figures {
+		if strings.TrimSpace(f.ID) == "" || seen[f.ID] {
+			return nil, problem("validation", "figures", "empty or duplicate temporary figure id")
+		}
+		seen[f.ID] = true
+		catalog = append(catalog, material.ImageAsset{ID: f.ID})
 	}
-	began := time.Now()
-	defer func() { out.Stats.ImageDuration = time.Since(began) }()
-	images, err := g.extractPDFImages(ctx, doc, out)
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-	if err != nil {
-		out.Stats.ImageErrors++
-		out.Coverage.Issues = append(out.Coverage.Issues, "PDF figures unavailable; generated text-only cards: "+err.Error())
-		return nil
-	}
-	out.Images = images
-	out.Stats.ImagesExtracted = len(images)
-	return nil
+	return catalog, nil
 }
 
-func (g *Generator) extractPDFImages(ctx context.Context, doc Document, out *Result) ([]material.ImageAsset, error) {
-	s := map[string]any{"type": "string"}
-	n := map[string]any{"type": "integer"}
-	figures := schemaArray(schemaObject(map[string]any{"file": n, "page": n, "description": s}))
-	figures["maxItems"] = maxPDFFigures
-	req := providers.Request{System: imageDiscoveryPrompt, PDFs: doc.PDFs, Schema: schemaBytes(schemaObject(map[string]any{"figures": figures})), NoFallback: true, NoCache: true, ReasoningEffort: g.opts.ReasoningEffort, MaxTokens: g.opts.MaxTokens}
-	var candidates struct {
-		Figures []figureCandidate `json:"figures"`
+type pdfPageKey struct{ file, page int }
+type previewPage struct {
+	File       int `json:"file"`
+	Page       int `json:"page"`
+	ImageIndex int `json:"imageIndex"`
+}
+type figurePreparation struct {
+	Figures   []figureCandidate
+	Pages     []previewPage
+	Images    []providers.Image
+	Originals map[pdfPageKey][]byte
+}
+
+func (g *Generator) selectFigurePages(ctx context.Context, doc Document, r AIResponse, out *Result) figurePreparation {
+	prepared := figurePreparation{Figures: []figureCandidate{}, Pages: []previewPage{}, Images: []providers.Image{}, Originals: map[pdfPageKey][]byte{}}
+	candidates := map[string]figureCandidate{}
+	for _, f := range r.Figures {
+		candidates[f.ID] = f
 	}
-	if err := g.runStage(ctx, "image_discovery", req, out, func(r providers.Response, _ *StageStats) error {
-		if r.Truncated {
-			return fmt.Errorf("figure discovery truncated")
+	selected := []figureCandidate{}
+	seen := map[string]bool{}
+	pages := map[pdfPageKey]bool{}
+	// All question figures have priority over all explanation figures, then
+	// preserve card and attachment order. A reused figure consumes one slot.
+	for side := 0; side < 2; side++ {
+		for _, fact := range r.Facts {
+			for _, card := range fact.Cards {
+				ids := card.Base().QuestionImageIDs
+				if side == 1 {
+					ids = card.Base().ExplanationImageIDs
+				}
+				for _, id := range ids {
+					if seen[id] {
+						continue
+					}
+					seen[id] = true
+					f, ok := candidates[id]
+					if !ok {
+						out.imageIssue("unknown temporary figure reference")
+						continue
+					}
+					if f.File < 1 || f.File > len(doc.PDFs) || f.Page < 1 || f.Page > doc.PDFs[f.File-1].Pages || strings.TrimSpace(f.Description) == "" {
+						out.imageIssue("figure " + id + ": invalid PDF source or description")
+						continue
+					}
+					key := pdfPageKey{f.File, f.Page}
+					if len(selected) >= g.opts.MaxPDFFigures || !pages[key] && len(pages) >= g.opts.MaxPDFPages {
+						out.imageIssue("figure " + id + ": figure/page limit")
+						continue
+					}
+					pages[key] = true
+					selected = append(selected, f)
+				}
+			}
 		}
-		if err := requiredFields(r.Content, "figures"); err != nil {
-			return err
-		}
-		return strictJSON(r.Content, &candidates)
-	}); err != nil {
-		return nil, err
-	}
-	out.Stats.ImagesFound = len(candidates.Figures)
-	if len(candidates.Figures) > maxPDFFigures {
-		return nil, fmt.Errorf("too many PDF figures")
-	}
-	type pageKey struct{ file, page int }
-	groups := map[pageKey][]int{}
-	keys := []pageKey{}
-	for i, c := range candidates.Figures {
-		if c.File < 1 || c.File > len(doc.PDFs) || c.Page < 1 || c.Page > doc.PDFs[c.File-1].Pages || strings.TrimSpace(c.Description) == "" {
-			return nil, fmt.Errorf("invalid figure source")
-		}
-		k := pageKey{c.File, c.Page}
-		if _, ok := groups[k]; !ok {
-			keys = append(keys, k)
-		}
-		groups[k] = append(groups[k], i)
 	}
 	render := g.opts.RenderPage
 	if render == nil {
 		render = ingest.RenderPDFPage
 	}
-	assets := []material.ImageAsset{}
-	hashes := map[string]bool{}
-	for _, k := range keys {
-		if err := ctx.Err(); err != nil {
-			return nil, err
+	attempted := map[pdfPageKey]bool{}
+	total := 0
+	for _, f := range selected {
+		key := pdfPageKey{f.File, f.Page}
+		if !attempted[key] {
+			attempted[key] = true
+			if ctx.Err() != nil {
+				break
+			}
+			original, err := render(ctx, doc.PDFs[f.File-1].Data, f.Page-1)
+			var preview []byte
+			if err == nil {
+				preview, err = pdfPreview(original, g.opts.PreviewMaxDimension)
+			}
+			switch {
+			case err != nil:
+				out.imageIssue(fmt.Sprintf("PDF file %d page %d: render/preview failed: %v", f.File, f.Page, err))
+			case total+len(preview) > g.opts.PreviewMaxBytes:
+				out.imageIssue(fmt.Sprintf("PDF file %d page %d: preview byte limit", f.File, f.Page))
+			default:
+				total += len(preview)
+				prepared.Originals[key] = original
+				prepared.Pages = append(prepared.Pages, previewPage{f.File, f.Page, len(prepared.Images) + 1})
+				prepared.Images = append(prepared.Images, providers.Image{Data: preview, MimeType: "image/jpeg"})
+			}
 		}
-		page, err := render(ctx, doc.PDFs[k.file-1].Data, k.page-1)
-		if err != nil {
-			return nil, err
-		}
-		type entry struct {
-			Index       int    `json:"index"`
-			Description string `json:"description"`
-		}
-		entries := []entry{}
-		allowed := map[int]bool{}
-		for _, i := range groups[k] {
-			entries = append(entries, entry{i, candidates.Figures[i].Description})
-			allowed[i] = true
-		}
-		bounds := schemaArray(map[string]any{"type": "number"})
-		bounds["minItems"] = 4
-		bounds["maxItems"] = 4
-		req := providers.Request{System: imageLocalizationPrompt, User: string(schemaBytes(map[string]any{"figures": entries})), Images: []providers.Image{{Data: page, MimeType: "image/jpeg"}}, Schema: schemaBytes(schemaObject(map[string]any{"regions": schemaArray(schemaObject(map[string]any{"index": n, "bounds": bounds}))})), Backend: out.Stats.Stages["image_discovery"].Backend, NoFallback: true, NoCache: true, ReasoningEffort: g.opts.ReasoningEffort, MaxTokens: g.opts.MaxTokens}
-		var localized struct {
-			Regions []figureRegion `json:"regions"`
-		}
-
-		stage := fmt.Sprintf("image_localization_%d_%d", k.file, k.page)
-		if err := g.runStage(ctx, stage, req, out, func(r providers.Response, _ *StageStats) error {
-			if r.Truncated {
-				return fmt.Errorf("figure localization truncated")
-			}
-			if err := requiredFields(r.Content, "regions"); err != nil {
-				return err
-			}
-			return strictJSON(r.Content, &localized)
-		}); err != nil {
-			return nil, err
-		}
-		seen := map[int]bool{}
-		for _, r := range localized.Regions {
-			if !allowed[r.Index] || seen[r.Index] {
-				return nil, fmt.Errorf("invalid localized figure index")
-			}
-			seen[r.Index] = true
-			if len(r.Bounds) != 4 {
-				return nil, fmt.Errorf("figure bounds must have four coordinates")
-			}
-			region := material.Region(r.Bounds)
-			data, w, h, err := cropPDFImage(page, region)
-			if err != nil {
-				return nil, err
-			}
-			hash := material.Digest(data)
-			if hashes[hash] {
-				continue
-			}
-			hashes[hash] = true
-			id, err := uuid.NewV7()
-			if err != nil {
-				return nil, err
-			}
-			assets = append(assets, material.ImageAsset{ID: id.String(), Alt: candidates.Figures[r.Index].Description, SourceFile: k.file, SourceName: doc.PDFs[k.file-1].Name, SourcePage: k.page, Region: region, Width: w, Height: h, Hash: hash, Data: data})
+		if prepared.Originals[key] != nil {
+			prepared.Figures = append(prepared.Figures, f)
 		}
 	}
-	return assets, nil
+	return prepared
+}
+
+func pdfPreview(data []byte, maxDimension int) ([]byte, error) {
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Width < 1 || cfg.Height < 1 || int64(cfg.Width)*int64(cfg.Height) > ingest.MaxOCRPixels || len(data) > ingest.MaxOCRBytes {
+		return nil, fmt.Errorf("rendered page exceeds image limits")
+	}
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	if longest := max(cfg.Width, cfg.Height); longest > maxDimension {
+		width := max(1, cfg.Width*maxDimension/longest)
+		height := max(1, cfg.Height*maxDimension/longest)
+		resized := image.NewRGBA(image.Rect(0, 0, width, height))
+		xdraw.CatmullRom.Scale(resized, resized.Bounds(), img, img.Bounds(), draw.Src, nil)
+		img = resized
+	}
+	var b bytes.Buffer
+	if err := jpeg.Encode(&b, img, &jpeg.Options{Quality: 85}); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
+
+func (out *Result) imageIssue(reason string) {
+	out.Stats.ImageErrors++
+	out.Coverage.Issues = append(out.Coverage.Issues, reason)
+}
+
+func extractSelectedRegions(raws []json.RawMessage, prepared figurePreparation, doc Document, out *Result) map[string]string {
+	resolved := map[string]string{}
+	candidates := map[string]figureCandidate{}
+	seen := map[string]bool{}
+	hashes := map[string]string{}
+	for _, f := range prepared.Figures {
+		candidates[f.ID] = f
+	}
+	for _, raw := range raws {
+		var r figureRegion
+		if err := json.Unmarshal(raw, &r); err != nil {
+			out.imageIssue("invalid localized figure: " + err.Error())
+			continue
+		}
+		f, ok := candidates[r.ID]
+		if !ok || seen[r.ID] {
+			out.imageIssue("unknown or duplicate localized figure id")
+			continue
+		}
+		seen[r.ID] = true
+		region := material.Region(r.Bounds)
+		data, w, h, err := cropPDFImage(prepared.Originals[pdfPageKey{f.File, f.Page}], region)
+		if err != nil {
+			out.imageIssue("figure " + f.ID + ": " + err.Error())
+			continue
+		}
+		if min(w, h) < minPDFFigureSide {
+			out.imageIssue(fmt.Sprintf("figure %s: crop too small to read (%dx%d; minimum side %d)", f.ID, w, h, minPDFFigureSide))
+			continue
+		}
+		hash := material.Digest(data)
+		id := hashes[hash]
+		if id == "" {
+			assetID, err := uuid.NewV7()
+			if err != nil {
+				out.imageIssue("figure id allocation failed")
+				continue
+			}
+			id = assetID.String()
+			hashes[hash] = id
+			out.Images = append(out.Images, material.ImageAsset{ID: id, Alt: f.Description, SourceFile: f.File, SourceName: doc.PDFs[f.File-1].Name, SourcePage: f.Page, Region: region, Width: w, Height: h, Hash: hash, Data: data})
+		}
+		resolved[f.ID] = id
+	}
+	for _, f := range prepared.Figures {
+		if resolved[f.ID] == "" {
+			out.imageIssue("figure " + f.ID + ": no usable localized image")
+		}
+	}
+	out.Stats.ImagesExtracted = len(out.Images)
+	return resolved
+}
+
+// Resolve draft references or publish permanent IDs. Required question images
+// own their card; the mandatory recall owns its fact. Draft resolution preserves
+// SVG requests, while publication clears this private planning flag.
+func resolveFigureBindings(facts []Fact, resolved map[string]string, out *Result, publish bool) ([]Fact, error) {
+	published := []Fact{}
+	for i, f := range facts {
+		cards := []Card{}
+		paths := []string{}
+		indices := []int{}
+		dropFact := false
+		for j, c := range f.Cards {
+			base := c.Base()
+			if publish {
+				base.needsSVG = false
+			}
+			resolve := func(ids []string) ([]string, bool) {
+				if len(ids) == 0 {
+					return nil, false
+				}
+				result := make([]string, 0, len(ids))
+				seen := map[string]bool{}
+				missing := false
+				for _, temp := range ids {
+					id := resolved[temp]
+					if id == "" {
+						missing = true
+						continue
+					}
+					if !seen[id] {
+						result = append(result, id)
+						seen[id] = true
+					}
+				}
+				return result, missing
+			}
+			var questionMissing, explanationMissing bool
+			base.QuestionImageIDs, questionMissing = resolve(base.QuestionImageIDs)
+			base.ExplanationImageIDs, explanationMissing = resolve(base.ExplanationImageIDs)
+			if questionMissing {
+				out.imageIssue(fmt.Sprintf("facts[%d].%s: required question image unavailable; card excluded", i, f.cardPaths[j]))
+				out.Stats.DroppedInvalid++
+				if f.cardPaths[j] == "recall" {
+					dropFact = true
+				}
+				continue
+			}
+			if explanationMissing {
+				out.imageIssue(fmt.Sprintf("facts[%d].%s: explanation image unavailable; text retained", i, f.cardPaths[j]))
+			}
+			if len(base.QuestionImageIDs) > 0 {
+				base.QuestionSvg = ""
+			}
+			if len(base.ExplanationImageIDs) > 0 {
+				base.ExplanationSvg = ""
+			}
+			cards = append(cards, withCardBase(c, base))
+			paths = append(paths, f.cardPaths[j])
+			if len(f.cardIndices) > j {
+				indices = append(indices, f.cardIndices[j])
+			}
+		}
+		if dropFact {
+			continue
+		}
+		f.Cards = cards
+		f.cardPaths = paths
+		f.cardIndices = indices
+		if len(cards) > 0 {
+			published = append(published, f)
+		}
+	}
+	if len(published) == 0 {
+		return nil, problem("validation", "facts", "no usable cards after illustration preparation")
+	}
+	return published, nil
 }
 
 func cropPDFImage(data []byte, region material.Region) ([]byte, int, int, error) {
@@ -226,13 +380,6 @@ func cropPDFImage(data []byte, region material.Region) ([]byte, int, int, error)
 		return nil, 0, 0, fmt.Errorf("figure crop exceeds image limit")
 	}
 	return b.Bytes(), rect.Dx(), rect.Dy(), nil
-}
-func assetImages(assets []material.ImageAsset) []providers.Image {
-	images := make([]providers.Image, 0, len(assets))
-	for _, a := range assets {
-		images = append(images, providers.Image{Data: a.Data, MimeType: "image/png"})
-	}
-	return images
 }
 func validateImageBindings(facts []Fact, assets []material.ImageAsset) error {
 	known := map[string]bool{}

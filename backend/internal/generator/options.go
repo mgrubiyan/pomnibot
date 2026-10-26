@@ -96,22 +96,38 @@ type Stats struct {
 	Total          time.Duration `json:"total"`
 }
 
-// DefaultCallTimeout bounds one generation stage, including transport retries.
+// DefaultCallTimeout bounds one generation stage.
 const DefaultCallTimeout = 15 * time.Minute
 
 // Options controls generation and its shared document budget.
 type Options struct {
-	RenderPage      func(context.Context, []byte, int) ([]byte, error)
-	ReasoningEffort string
-	MaxTokens       int
-	Budget          providers.BudgetLimits
-	SourceBudget    int // complete source bytes; zero defaults to 80000
-	MaxFactsPerDoc  int // zero means unlimited
-	CallTimeout     time.Duration
-	OnBatch         func(Batch)
+	MaxPDFFigures       int // zero defaults to 12
+	MaxPDFPages         int // zero defaults to 6
+	PreviewMaxDimension int // zero defaults to 1536 pixels
+	PreviewMaxBytes     int // zero defaults to 8 MiB total
+	RenderPage          func(context.Context, []byte, int) ([]byte, error)
+	ReasoningEffort     string
+	MaxTokens           int
+	Budget              providers.BudgetLimits
+	SourceBudget        int // complete source bytes; zero defaults to 80000
+	MaxFactsPerDoc      int // zero means unlimited
+	CallTimeout         time.Duration
+	OnBatch             func(Batch)
 }
 
 func (o Options) withDefaults() Options {
+	if o.MaxPDFFigures <= 0 {
+		o.MaxPDFFigures = 12
+	}
+	if o.MaxPDFPages <= 0 {
+		o.MaxPDFPages = 6
+	}
+	if o.PreviewMaxDimension <= 0 {
+		o.PreviewMaxDimension = 1536
+	}
+	if o.PreviewMaxBytes <= 0 {
+		o.PreviewMaxBytes = 8 * 1024 * 1024
+	}
 	if o.MaxTokens == 0 {
 		o.MaxTokens = 128000
 	}

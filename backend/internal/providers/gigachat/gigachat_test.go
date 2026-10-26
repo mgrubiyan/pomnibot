@@ -878,3 +878,17 @@ func TestCompletePreservesAndCleansMultipleSourceImages(t *testing.T) {
 		t.Error("images not uploaded/cleaned")
 	}
 }
+
+func TestNoRetryDisablesTransportSchemaAndModelRetries(t *testing.T) {
+	for _, status := range []int{400, 422, 429, 500} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			api := &fakeAPI{chat: func(int, chatRequest) chatReply { return fail(status) }}
+			c := newTestClient(t, api)
+			_, err := c.Complete(t.Context(), providers.Request{User: "source", Schema: schema, NoRetry: true, NoFallback: true})
+			requests, _ := api.requests()
+			if err == nil || len(requests) != 1 {
+				t.Fatalf("calls=%d err=%v", len(requests), err)
+			}
+		})
+	}
+}
