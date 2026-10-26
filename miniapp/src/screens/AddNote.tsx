@@ -88,7 +88,12 @@ export function AddNote({ onBack, onDone, resume = false }: AddNoteProps) {
             На главную
         </Button>
     );
-    const spinner = <Spinner size={32} appearance="neutral-themed" />;
+    // As big as the icons of the other states, so the title stays put.
+    const spinner = (
+        <span className={s.spinner}>
+            <Spinner size={32} appearance="neutral-themed" />
+        </span>
+    );
 
     if (access === 'loading') {
         return <StatusScreen icon={spinner} title="Секунду" text="Готовим загрузку" />;
