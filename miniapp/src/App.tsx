@@ -530,8 +530,6 @@ function App() {
                 key={screen.setId}
                 setId={screen.setId}
                 currentUser={currentUser}
-                hidden={profile ? !profile.dataConsent : false}
-                onOpenProfile={() => go({ name: 'profile', returnTo: { name: 'set', setId: screen.setId } })}
                 onBack={goHome}
                 onStart={(setId, setTitle, early) => go({ name: 'feed', setId, setTitle, early })}
                 onRemove={removeSet}

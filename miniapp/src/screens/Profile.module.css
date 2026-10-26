@@ -56,17 +56,7 @@
     text-wrap: balance;
 }
 
-.list {
-    padding-left: 0;
-    padding-right: 0;
-}
-
 .note {
     padding: 0 16px;
     text-wrap: pretty;
-}
-
-.error {
-    padding: 0 16px;
-    color: var(--icon-negative);
 }

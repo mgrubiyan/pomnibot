@@ -1,26 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { Flex, Typography } from '@maxhub/max-ui';
 import { motionAllowed } from '../utils/motion';
-import { ANONYMOUS_MEMBER } from '../utils/user';
 import s from './ConsentText.module.css';
 
-/** The full consent; the first visit and the switch in the profile give or withdraw it. */
+/** The full consent; joining a set gives it, leaving the set withdraws it. */
 const CONSENT_TEXT = [
     'Я даю команде Помнибота согласие на обработку моих персональных данных: имени, фамилии, имени пользователя, фотографии профиля и результатов повторения — прогресса, ответов и ошибок в наборах карточек.',
     'Цель — показывать эти данные авторам наборов, в которых я участвую, в таблице лидеров и в списке ошибок участников, чтобы автор видел, кому и в чём нужна помощь.',
     'Команда Помнибота хранит эти данные и показывает их только авторам моих наборов. Другим людям и организациям они не передаются.',
-    `Согласие действует, пока я его не отзову. Отозвать его можно в любой момент переключателем в профиле — после этого авторы видят меня как «${ANONYMOUS_MEMBER}».`,
+    'Согласие даётся автору набора, к которому я присоединяюсь, и действует, пока я в этом наборе. Отозвать его можно в любой момент, выйдя из набора, — после этого автор больше не видит меня и мои результаты.',
 ];
 
 export interface ConsentTextProps {
-    /** Ties the text to the control that gives the consent. */
-    id?: string;
-    /** What giving the consent takes, e.g. «Включая переключатель». */
+    /** What giving the consent takes, e.g. «Нажимая «Добавить набор»». */
     lead: string;
 }
 
 /** One line on what the control means, and the full text under a tap. */
-export function ConsentText({ id, lead }: ConsentTextProps) {
+export function ConsentText({ lead }: ConsentTextProps) {
     const [open, setOpen] = useState(false);
     const rootRef = useRef<HTMLDivElement>(null);
 
@@ -34,7 +31,7 @@ export function ConsentText({ id, lead }: ConsentTextProps) {
     }, [open]);
 
     return (
-        <Flex ref={rootRef} direction="column" align="stretch" gap={8} id={id}>
+        <Flex ref={rootRef} direction="column" align="stretch" gap={8}>
             <Typography.Text variant="label" color="tertiary" className={s.lead}>
                 {lead}, вы соглашаетесь на обработку персональных данных.{' '}
                 <button type="button" className={s.more} aria-expanded={open} onClick={() => setOpen((current) => !current)}>

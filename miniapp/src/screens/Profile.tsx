@@ -1,13 +1,12 @@
-import { useId, useRef, useState, type ChangeEvent } from 'react';
-import { Button, CellHeader, CellList, CellSimple, Flex, Switch, Typography } from '@maxhub/max-ui';
+import { useRef, useState, type ChangeEvent } from 'react';
+import { Button, Flex, Typography } from '@maxhub/max-ui';
 import { api } from '../api';
 import type { Profile as ProfileData } from '../types';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { UserAvatar } from '../components/UserAvatar';
-import { ConsentText } from '../components/ConsentText';
 import { avatarFromFile } from '../utils/avatar';
-import { ANONYMOUS_MEMBER, PROFILE_SIGNED_OUT, formatAuthorName } from '../utils/user';
+import { PROFILE_SIGNED_OUT, formatAuthorName } from '../utils/user';
 import s from './Profile.module.css';
 
 export interface ProfileProps {
@@ -17,13 +16,6 @@ export interface ProfileProps {
 }
 
 export function Profile({ profile, onChange, onBack }: ProfileProps) {
-    const [saving, setSaving] = useState(false);
-    const [failed, setFailed] = useState<false | 'network' | 'signed-out'>(false);
-    const textId = useId();
-    // The switch moves on the tap; the answer of the server confirms it or
-    // takes it back.
-    const [pending, setPending] = useState<boolean | null>(null);
-    const consent = pending ?? profile.dataConsent;
     const fileRef = useRef<HTMLInputElement>(null);
     const [photoBusy, setPhotoBusy] = useState(false);
     const [photoError, setPhotoError] = useState('');
@@ -103,31 +95,6 @@ export function Profile({ profile, onChange, onBack }: ProfileProps) {
         }
     };
 
-    const toggle = async (given: boolean) => {
-        if (saving) {
-            return;
-        }
-        setSaving(true);
-        setFailed(false);
-        setPending(given);
-        try {
-            const { data, response } = await api.PUT('/profile/consent', { body: { given } });
-            if (response.status === 403) {
-                setFailed('signed-out');
-                return;
-            }
-            if (!response.ok || !data) {
-                throw new Error('consent request failed');
-            }
-            onChange(data);
-        } catch {
-            setFailed('network');
-        } finally {
-            setPending(null);
-            setSaving(false);
-        }
-    };
-
     return (
         <Screen>
             <ScreenHeader title="Профиль" onBack={onBack} />
@@ -170,35 +137,10 @@ export function Profile({ profile, onChange, onBack }: ProfileProps) {
                     ) : null}
                 </Flex>
 
-                <Flex direction="column" align="stretch" gap={8}>
-                    <CellHeader titleStyle="normal">Авторы наборов</CellHeader>
-                    <CellList mode="island" filled className={s.list}>
-                        <CellSimple
-                            as="label"
-                            title="Показывать моё имя"
-                            subtitle="В таблице лидеров и ошибках участников"
-                            after={
-                                <Switch
-                                    checked={consent}
-                                    aria-describedby={textId}
-                                    onChange={(event) => void toggle(event.target.checked)}
-                                />
-                            }
-                        />
-                    </CellList>
-                    <Typography.Text variant="description" color="secondary" className={s.note}>
-                        {consent
-                            ? 'Автор видит ваши имя, фото и ошибки — так он поймёт, кому и с чем помочь.'
-                            : `Сейчас авторы видят вас как «${ANONYMOUS_MEMBER}»: результаты без имени и фото.`}
-                    </Typography.Text>
-                    {failed ? (
-                        <Typography.Text variant="description" className={s.error} role="alert">
-                            {failed === 'signed-out' ? PROFILE_SIGNED_OUT : 'Не получилось сохранить. Проверьте соединение и попробуйте ещё раз.'}
-                        </Typography.Text>
-                    ) : null}
-                </Flex>
-
-                <ConsentText id={textId} lead="Включая переключатель" />
+                {/* Joining a set is the consent; the profile only says what it means. */}
+                <Typography.Text variant="description" color="secondary" className={s.note}>
+                    Авторы наборов, в которые вы вступили, видят ваши имя, фото и ответы — так они понимают, кому и с чем помочь. Чтобы автор перестал вас видеть, выйдите из его набора.
+                </Typography.Text>
             </Flex>
         </Screen>
     );

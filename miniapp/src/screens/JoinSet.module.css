@@ -5,6 +5,14 @@
     flex: 1;
     min-height: 0;
     justify-content: center;
+    /* The opened consent may not fit a short phone. */
+    overflow-y: auto;
+}
+
+/* Right above the button it is about. */
+.consent {
+    margin-top: auto;
+    padding-top: 12px;
 }
 
 .codeInput {
