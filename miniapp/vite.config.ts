@@ -29,6 +29,8 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: env.BACKEND_URL || `http://localhost:${env.PORT || '8080'}`,
           changeOrigin: true,
+          // Live speech recognition is a WebSocket.
+          ws: true,
         },
       },
     },

@@ -140,6 +140,27 @@ func encodePutProfileConsentRequest(
 	return nil
 }
 
+func encodeRecognizeSpeechRequest(
+	req *SpeechUploadMultipart,
+	r *http.Request,
+) error {
+	const contentType = "multipart/form-data"
+	request := req
+
+	q := uri.NewFormEncoder(map[string]string{})
+	body, boundary := ht.CreateMultipartBody(func(w *multipart.Writer) error {
+		if err := request.Audio.WriteMultipart("audio", w); err != nil {
+			return errors.Wrap(err, "write \"audio\"")
+		}
+		if err := q.WriteMultipart(w); err != nil {
+			return errors.Wrap(err, "write multipart")
+		}
+		return nil
+	})
+	ht.SetCloserBody(r, body, mime.FormatMediaType(contentType, map[string]string{"boundary": boundary}))
+	return nil
+}
+
 func encodeReorderCardsRequest(
 	req *ReorderCardsRequest,
 	r *http.Request,

@@ -248,3 +248,25 @@ func TestLoadLocalAdmin(t *testing.T) {
 		t.Fatalf("local user must be an admin: %+v, %v", cfg.Admins, err)
 	}
 }
+
+// Voice answers take the OCR's key, wherever it is set: locally too.
+func TestLoadSpeech(t *testing.T) {
+	setProdEnv(t)
+	t.Setenv("YC_STT_BASE_URL", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Speech == nil || cfg.Speech.APIKey != "test-key" || cfg.Speech.FolderID != "test-folder" {
+		t.Fatalf("Speech = %+v, want the OCR's key and folder", cfg.Speech)
+	}
+
+	t.Setenv("APP_ENV", "local")
+	if cfg, err := Load(); err != nil || cfg.Speech == nil {
+		t.Fatalf("local with a key: Speech = %+v, err %v", cfg.Speech, err)
+	}
+	t.Setenv("YC_API_KEY", "")
+	if cfg, err := Load(); err != nil || cfg.Speech != nil {
+		t.Fatalf("local without a key: Speech = %+v, err %v", cfg.Speech, err)
+	}
+}

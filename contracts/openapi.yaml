@@ -734,6 +734,48 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /speech:
+    post:
+      tags:
+        - Cards
+      summary: Turn a spoken answer into text
+      description: >-
+        Recognizes up to 30 seconds of Russian speech for the reader to check
+        and send as a typed answer; nothing is kept. Only for a signed in
+        account: every recording costs money.
+      operationId: RecognizeSpeech
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SpeechUpload'
+      responses:
+        '200':
+          description: The recognized text, empty when no words were heard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpeechText'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          description: The recording is longer than 30 seconds
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Speech recognition is off here
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
   /notes:
     post:
       tags:
@@ -1223,6 +1265,22 @@ components:
           items:
             type: string
             format: binary
+    SpeechUpload:
+      type: object
+      required: [audio]
+      properties:
+        audio:
+          description: >-
+            Mono 16-bit little-endian PCM at 16 kHz without a header, at most
+            30 seconds (960 000 bytes)
+          type: string
+          format: binary
+    SpeechText:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
     NotesJob:
       type: object
       required: [state]

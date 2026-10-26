@@ -3,6 +3,7 @@ package http
 
 import (
 	"context"
+	"time"
 
 	"github.com/mgrubiyan/pomnibot/backend/contracts"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
@@ -19,6 +20,11 @@ type APIHandler struct {
 	homescreen *HomescreenHandler
 	admin      usecase.AdminService
 	notes      *noteJobs
+	speech     SpeechRecognizer
+	// speechStream shows a spoken answer while it is spoken.
+	speechStream SpeechStreamer
+	// speechAuthTime shortens the wait for a stream's sign-in in tests.
+	speechAuthTime time.Duration
 	// browserProfile lets the browser test account change its profile.
 	browserProfile bool
 }

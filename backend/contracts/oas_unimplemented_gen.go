@@ -304,6 +304,16 @@ func (UnimplementedHandler) PutProfileConsent(ctx context.Context, req *ConsentR
 	return r, ht.ErrNotImplemented
 }
 
+// RecognizeSpeech implements RecognizeSpeech operation.
+//
+// Recognizes up to 30 seconds of Russian speech for the reader to check and send as a typed answer;
+// nothing is kept. Only for a signed in account: every recording costs money.
+//
+// POST /speech
+func (UnimplementedHandler) RecognizeSpeech(ctx context.Context, req *SpeechUploadMultipart) (r RecognizeSpeechRes, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // ReorderCards implements ReorderCards operation.
 //
 // Reorder cards in a fact.
