@@ -36,13 +36,9 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	var snapshot func(perftest.Report) error
+	report, err := perftest.Run(ctx, cfg, os.Stdout)
 	if *out != "" {
-		snapshot = func(r perftest.Report) error { return writeReport(*out, r) }
-	}
-	report, err := perftest.Run(ctx, cfg, os.Stdout, snapshot)
-	if snapshot != nil {
-		if writeErr := snapshot(report); writeErr != nil {
+		if writeErr := writeReport(*out, report); writeErr != nil {
 			fmt.Fprintln(os.Stderr, writeErr)
 			os.Exit(1)
 		}

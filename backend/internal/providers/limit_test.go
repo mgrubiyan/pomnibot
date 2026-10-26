@@ -46,9 +46,7 @@ func TestLimitKeepsRequestsWithinTheLimit(t *testing.T) {
 
 func TestLimitStopsWaitingWhenCallerGivesUp(t *testing.T) {
 	release := make(chan struct{})
-	started := make(chan struct{})
 	p := &fakeProvider{reply: func(context.Context, int) (Response, error) {
-		close(started)
 		<-release
 		return answer("GigaChat-3-Ultra")
 	}}
@@ -59,7 +57,9 @@ func TestLimitStopsWaitingWhenCallerGivesUp(t *testing.T) {
 		defer close(done)
 		_, _ = limited.Complete(context.Background(), testRequest())
 	}()
-	<-started
+	for p.callCount() == 0 {
+		time.Sleep(time.Millisecond)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()

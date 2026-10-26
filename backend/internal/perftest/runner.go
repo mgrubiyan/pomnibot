@@ -71,9 +71,13 @@ func (cfg Options) Validate() error {
 }
 
 // Run starts disposable PostgreSQL instances and returns a report even on failure.
-// Snapshot is optional and receives intermediate reports after every stage.
-func Run(ctx context.Context, cfg Options, output io.Writer, snapshot func(Report) error) (Report, error) {
-	r := Report{Started: time.Now().UTC(), Go: runtime.Version(), OS: runtime.GOOS + "/" + runtime.GOARCH, CPUs: runtime.NumCPU(), Parameters: cfg, Fixtures: map[string]int{"sets": 3, "facts": 150, "cards": 750, "background_users": 1000, "historical_answers": 100000, "existing_progress": 150150}}
+func Run(ctx context.Context, cfg Options, output io.Writer) (r Report, err error) {
+	defer func() {
+		if err != nil {
+			r.Error = err.Error()
+		}
+	}()
+	r = Report{Started: time.Now().UTC(), Go: runtime.Version(), OS: runtime.GOOS + "/" + runtime.GOARCH, CPUs: runtime.NumCPU(), Parameters: cfg, Fixtures: map[string]int{"sets": 3, "facts": 150, "cards": 750, "background_users": 1000, "historical_answers": 100000, "existing_progress": 150150}}
 	if err := cfg.Validate(); err != nil {
 		r.Error = err.Error()
 		return r, err
@@ -84,16 +88,6 @@ func Run(ctx context.Context, cfg Options, output io.Writer, snapshot func(Repor
 	r.CPU = info
 	r.Memory = memory
 	r.Revision = strings.TrimSpace(string(revision))
-	err := runStages(ctx, cfg, &r, output, snapshot, runStage)
-	if err != nil {
-		r.Error = err.Error()
-	}
-	return r, err
-}
-
-type stageRunner func(context.Context, Options, string, int, int, time.Duration) (StageResult, error)
-
-func runStages(ctx context.Context, cfg Options, r *Report, output io.Writer, snapshot func(Report) error, execute stageRunner) error {
 	type stage struct {
 		name        string
 		users, rate int
@@ -112,7 +106,7 @@ func runStages(ctx context.Context, cfg Options, r *Report, output io.Writer, sn
 		stages = []stage{{"study", 2, 0, cfg.Stage}}
 	}
 	failedGroup := ""
-	criteriaFailed := false
+	var criteriaErr error
 	for _, s := range stages {
 		if cfg.Only != "all" && cfg.Only != s.name {
 			continue
@@ -121,37 +115,40 @@ func runStages(ctx context.Context, cfg Options, r *Report, output io.Writer, sn
 			continue
 		}
 		if _, err := fmt.Fprintf(output, "Starting %s: users=%d rate=%d duration=%s\n", s.name, s.users, s.rate, s.duration); err != nil {
-			return err
+			return r, err
 		}
-		result, err := execute(ctx, cfg, s.name, s.users, s.rate, s.duration)
+		result, err := runStage(ctx, cfg, s.name, s.users, s.rate, s.duration)
 		r.Results = append(r.Results, result)
-		if snapshot != nil {
-			if snapshotErr := snapshot(*r); snapshotErr != nil {
-				return snapshotErr
-			}
-		}
 		if err != nil {
-			return err
+			return r, err
 		}
 		if _, err := fmt.Fprintf(output, "%s users=%d rate=%d passed=%v startup=%v steady=%v RPS=%.1f p95=%.1fms p99=%.1fms errors=%d missed=%d journeys=%d\n", s.name, s.users, s.rate, result.Passed, result.StartupPassed, result.SteadyPassed, result.Steady.Overall.RPS, result.Steady.Overall.P95, result.Steady.Overall.P99, result.Steady.Overall.Errors, result.Missed, result.Journeys); err != nil {
-			return err
+			return r, err
 		}
-		if result.Verification != "passed" {
-			return fmt.Errorf("%s verification failed: %s", s.name, result.Verification)
+		if failure := stageFailure(cfg, result); failure != nil {
+			if result.Verification != "passed" {
+				return r, failure
+			}
+			criteriaErr = failure
 		}
 		if !result.Passed {
 			failedGroup = s.name
-			if cfg.Mode == "check" || cfg.Smoke || (s.name == "study" && s.users == 50) {
-				criteriaFailed = true
-			}
 		}
 		// Always measure 100-user headroom, even when the 50-user target fails.
 		if s.name == "study" {
 			failedGroup = ""
 		}
 	}
-	if criteriaFailed {
-		return fmt.Errorf("performance criteria failed; see results")
+	return r, criteriaErr
+}
+
+func stageFailure(cfg Options, result StageResult) error {
+	if result.Verification != "passed" {
+		return fmt.Errorf("%s verification failed: %s", result.Name, result.Verification)
+	}
+	required := cfg.Mode == "check" || cfg.Smoke || (result.Name == "study" && result.Users == 50)
+	if required && !result.Passed {
+		return fmt.Errorf("%s users=%d rate=%d: performance criteria failed", result.Name, result.Users, result.Rate)
 	}
 	return nil
 }
