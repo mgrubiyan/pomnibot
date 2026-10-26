@@ -9,12 +9,27 @@ tasks:
   lint:
     desc: 'Проверка кода бэкенда (golangci-lint)'
     cmds:
-      - golangci-lint run ./...
+      - golangci-lint run --build-tags integration ./...
 
   test:
     desc: 'Запуск тестов бэкенда'
     cmds:
-      - go test -v ./...
+      - go test ./... {{.CLI_ARGS}}
+
+  test:integration:
+    desc: 'PostgreSQL integration tests (Docker required)'
+    cmds:
+      - go test -tags integration -count=1 ./internal/repository {{.CLI_ARGS}}
+
+  test:race:
+    desc: 'Run backend tests with the race detector'
+    cmds:
+      - go test -race ./... {{.CLI_ARGS}}
+
+  bench:
+    desc: 'Run backend microbenchmarks'
+    cmds:
+      - go test -run '^$' -bench . -benchmem ./... {{.CLI_ARGS}}
 
   build:
     desc: 'Сборка бинарника бэкенда'

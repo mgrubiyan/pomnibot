@@ -1,6 +1,4 @@
-//go:build perf
-
-package main
+package perftest
 
 import (
 	"context"
@@ -8,10 +6,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
+
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
@@ -22,7 +22,8 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
-type stageResult struct {
+// StageResult includes latency, correctness and database diagnostics for one load level.
+type StageResult struct {
 	Name                string                     `json:"name"`
 	Users               int                        `json:"users"`
 	Rate                int                        `json:"scheduled_rps"`
@@ -43,11 +44,11 @@ type stageResult struct {
 	Plans               map[string]json.RawMessage `json:"explain_analyze_buffers"`
 }
 
-func runStage(ctx context.Context, cfg options, name string, n, rate int, d time.Duration) (stageResult, error) {
-	result := stageResult{Name: name, Users: n, Rate: rate}
+func runStage(ctx context.Context, cfg Options, name string, n, rate int, d time.Duration) (StageResult, error) {
+	result := StageResult{Name: name, Users: n, Rate: rate}
 	setup, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	container, err := postgres.Run(setup, "postgres:17-alpine", postgres.WithDatabase("pomnibot_perf"), postgres.WithUsername("perf"), postgres.WithPassword("disposable"), postgres.BasicWaitStrategies(), testcontainers.WithCmd("postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "track_io_timing=on"))
+	container, err := postgres.Run(setup, "postgres:18-alpine", postgres.WithDatabase("pomnibot_perf"), postgres.WithUsername("perf"), postgres.WithPassword("disposable"), postgres.BasicWaitStrategies(), testcontainers.WithCmd("postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "track_io_timing=on"))
 	if err != nil {
 		return result, fmt.Errorf("disposable PostgreSQL required (no fallback): %w", err)
 	}
@@ -91,7 +92,8 @@ func runStage(ctx context.Context, cfg options, name string, n, rate int, d time
 	}
 	q := db.New(pool)
 	users := usecase.NewUserService(q)
-	handler := transport.NewAPIHandler(usecase.NewSetService(q, users), usecase.NewCardService(q, users), usecase.NewHomescreenService(q, users), users)
+	store := repository.NewManualStore(pool)
+	handler := transport.NewAPIHandler(usecase.NewSetService(q, users, store), usecase.NewCardService(q, users, usecase.WithTransactions(store), usecase.WithManualCards(store)), usecase.NewHomescreenService(q, users), users)
 	router, err := transport.NewRouter(handler, staticFS, maxToken, telegramToken, users, nil)
 	if err != nil {
 		return result, err
@@ -131,7 +133,7 @@ func runStage(ctx context.Context, cfg options, name string, n, rate int, d time
 	}
 	// Existing study progress on the other two sets, retaining a truly new shared-set join.
 	for _, a := range w.actors {
-		if a.id == 0 {
+		if a.id == uuid.Nil {
 			continue
 		}
 		if _, err = pool.Exec(ctx, `INSERT INTO user_sets(user_id,set_id) SELECT $1,id FROM sets WHERE id<>$2::uuid ON CONFLICT DO NOTHING`, a.id, setID(1)); err != nil {
@@ -197,7 +199,7 @@ func runStage(ctx context.Context, cfg options, name string, n, rate int, d time
 	}
 	result.Samples = append(result.Samples, last)
 	result.SteadyPassed = result.Steady.passes() && result.Missed == 0
-	if rate == 0 && result.Journeys != int64(n) {
+	if rate == 0 && (result.Journeys != int64(n) || !allActorsAnswered(w.actors)) {
 		result.SteadyPassed = false
 	}
 	if err = observer.QueryRow(ctx, `SELECT COALESCE(json_agg(s),'[]'::json) FROM (SELECT query,calls,total_exec_time,mean_exec_time,max_exec_time,rows,shared_blks_hit,shared_blks_read,shared_blk_read_time,shared_blk_write_time FROM pg_stat_statements WHERE dbid=(SELECT oid FROM pg_database WHERE datname=current_database()) ORDER BY total_exec_time DESC LIMIT 20) s`).Scan(&result.Queries); err != nil {
@@ -216,9 +218,9 @@ func runStage(ctx context.Context, cfg options, name string, n, rate int, d time
 	return result, err
 }
 
-func explain(ctx context.Context, pool *pgxpool.Pool, userID int64) (map[string]json.RawMessage, error) {
+func explain(ctx context.Context, pool *pgxpool.Pool, userID uuid.UUID) (map[string]json.RawMessage, error) {
 	// Read the actual repository SQL so the diagnostic plan stays aligned with production.
-	data, err := os.ReadFile("internal/repository/queries/sets.sql")
+	data, err := repository.QueriesFS.ReadFile("queries/sets.sql")
 	if err != nil {
 		return nil, err
 	}
@@ -243,4 +245,13 @@ func explain(ctx context.Context, pool *pgxpool.Pool, userID int64) (map[string]
 		plans[name] = plan
 	}
 	return plans, nil
+}
+
+func allActorsAnswered(actors []*actor) bool {
+	for _, a := range actors {
+		if a.submitted.Load() == 0 {
+			return false
+		}
+	}
+	return len(actors) > 0
 }

@@ -1,6 +1,4 @@
-//go:build perf
-
-package main
+package perftest
 
 import (
 	"fmt"

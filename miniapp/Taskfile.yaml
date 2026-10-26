@@ -16,6 +16,11 @@ tasks:
     cmds:
       - bun run lint
 
+  test:
+    desc: 'Unit-тесты фронтенда'
+    cmds:
+      - bun test
+
   preview:
     desc: 'Предпросмотр production-сборки Vite'
     cmds:

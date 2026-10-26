@@ -1,0 +1,61 @@
+name: API performance
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'check enforces all thresholds; explore finds saturation'
+        type: choice
+        options: [check, explore]
+        default: explore
+      scenario:
+        description: Scenario group
+        type: choice
+        options: [all, study, concurrency, rate]
+        default: all
+      stage:
+        description: Duration of each concurrency/rate stage
+        default: '30s'
+        required: true
+      study:
+        description: Duration of each study stage
+        default: '5m'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  perf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Run load scenarios
+        working-directory: backend
+        env:
+          PERF_MODE: ${{ inputs.mode }}
+          PERF_SCENARIO: ${{ inputs.scenario }}
+          PERF_STAGE: ${{ inputs.stage }}
+          PERF_STUDY: ${{ inputs.study }}
+        run: >-
+          go run ./cmd/perf
+          -mode "$PERF_MODE" -only "$PERF_SCENARIO"
+          -stage "$PERF_STAGE" -study "$PERF_STUDY"
+          -out ../artifacts/perf/results.json
+      - name: Save performance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-${{ github.run_id }}
+          path: artifacts/perf/*.json
+          if-no-files-found: ignore
+          retention-days: 14
