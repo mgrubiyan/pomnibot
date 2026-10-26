@@ -45,7 +45,7 @@
 
 .error {
     padding: 0 16px;
-    color: var(--icon-negative);
+    color: var(--text-negative);
 }
 
 /* The question is seen once: it rises in, the answers a beat later. */
