@@ -102,13 +102,13 @@ func TestSetMistakesPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Боб never agreed to show the author his name, so his ID is a stand-in.
+	// Боб never agreed on the old consent screen; joining the set is enough now.
 	if len(res.Students) != 2 {
 		t.Fatalf("students: %+v", res.Students)
 	}
 	shownBob := res.Students[0].User.ID
-	if shownBob == bob {
-		t.Errorf("anonymous student keeps his ID")
+	if shownBob != bob {
+		t.Errorf("student who joined gets a stand-in ID")
 	}
 	if res.Students[0].Answers != 5 || res.Students[0].Mistakes != 2 ||
 		res.Students[1].User.ID != carol || res.Students[1].Answers != 1 || res.Students[1].Mistakes != 1 {
@@ -117,8 +117,8 @@ func TestSetMistakesPostgres(t *testing.T) {
 	if last, ok := res.Students[1].User.LastName.Get(); !ok || last != "Иванова" {
 		t.Errorf("student name: %+v", res.Students[1].User)
 	}
-	if u := res.Students[0].User; !u.Anonymous.Value || u.FirstName != "" {
-		t.Errorf("student without consent: %+v", u)
+	if u := res.Students[0].User; u.Anonymous.Value || u.FirstName != "Боб" {
+		t.Errorf("student who joined is hidden: %+v", u)
 	}
 
 	want := []struct {

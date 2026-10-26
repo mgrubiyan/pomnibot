@@ -11,7 +11,7 @@ import WhyItWorks from './screens/WhyItWorks';
 import { api } from './api';
 import { config } from './config';
 import { useProfile } from './components/profileContext';
-import type { Card, Profile as ProfileData, TodayData, User } from './types';
+import type { Card, TodayData, User } from './types';
 import type { CardIssueReport } from './utils/issues';
 import type { CardPatch } from './utils/cards';
 import type { FeedResume } from './utils/feed';
@@ -24,7 +24,6 @@ const Feed = lazy(() => import('./screens/Feed'));
 const SetCards = lazy(() => import('./screens/SetCards'));
 const SetIssues = lazy(() => import('./screens/SetIssues'));
 const SetMistakes = lazy(() => import('./screens/SetMistakes'));
-const Profile = lazy(() => import('./screens/Profile'));
 
 /** No router yet: browser history is not used. */
 type Screen =
@@ -45,7 +44,6 @@ type Screen =
     | { name: 'leaderboard'; setId: string; setTitle?: string }
     | { name: 'set-mistakes'; setId: string; setTitle?: string }
     | { name: 'why' }
-    | { name: 'profile'; returnTo: Screen }
     | { name: 'add'; resume?: boolean }
     | { name: 'create-method' }
     | { name: 'manual'; setId?: string; setTitle?: string; factId?: string }
@@ -91,14 +89,10 @@ function App() {
         });
     }, []);
 
-    // Whether set authors may see the user decides the hint on others' sets.
     const profileState = useProfile();
-    // Without a signature the server keeps no profile of its own, except
-    // locally, where the browser account stands for the developer.
-    const profile = profileState && (profileState.profile.platform || config.environment === 'local')
-        ? profileState.profile
-        : null;
-    const setProfile = (next: ProfileData) => profileState?.setProfile(next);
+    // Without a signature the user is the shared account, with no photo of
+    // their own to show, except locally, where it stands for the developer.
+    const signedIn = Boolean(profileState && (profileState.profile.platform || config.environment === 'local'));
 
     const [removedSetIds, setRemovedSetIds] = useState<string[]>([]);
     const [removedCardIds, setRemovedCardIds] = useState<string[]>([]);
@@ -274,15 +268,11 @@ function App() {
             onJoinSet={() => go({ name: 'join' })}
             onOpenWhy={() => go({ name: 'why' })}
             onOpenAdminIssues={() => go({ name: 'admin-issues' })}
-            onOpenProfile={profile ? () => go({ name: 'profile', returnTo: { name: 'home' } }) : undefined}
+            showAvatar={signedIn}
             removedSetIds={removedSetIds}
             onTodayLoaded={handleTodayLoaded}
         />
     );
-
-    if (screen.name === 'profile' && profile) {
-        return <Profile profile={profile} onChange={setProfile} onBack={() => go(screen.returnTo)} />;
-    }
 
     if (screen.name === 'create-method') {
         return <CreateSet onFromNotes={() => go({ name: 'add' })} onManual={() => go({ name: 'manual' })} onBack={goHome} />;
@@ -530,8 +520,6 @@ function App() {
                 key={screen.setId}
                 setId={screen.setId}
                 currentUser={currentUser}
-                hidden={profile ? !profile.dataConsent : false}
-                onOpenProfile={() => go({ name: 'profile', returnTo: { name: 'set', setId: screen.setId } })}
                 onBack={goHome}
                 onStart={(setId, setTitle, early) => go({ name: 'feed', setId, setTitle, early })}
                 onRemove={removeSet}

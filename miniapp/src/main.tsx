@@ -4,7 +4,6 @@ import '@maxhub/max-ui/dist/styles.css';
 import './global.css';
 import App from './App';
 import { StatusScreen } from './components/StatusScreen';
-import { ConsentGate } from './components/ConsentGate';
 import { MaxUIRoot } from './components/MaxUIRoot';
 import { ProfileGate } from './components/ProfileGate';
 import { SignInGate } from './components/SignInGate';
@@ -26,11 +25,9 @@ createRoot(document.getElementById('root')!).render(
         <MaxUIRoot>
             <SignInGate>
                 <ProfileGate>
-                    <ConsentGate>
-                        <Suspense fallback={<StatusScreen icon={null} title="Открываем экран" text="Одну секунду…" />}>
-                            <App />
-                        </Suspense>
-                    </ConsentGate>
+                    <Suspense fallback={<StatusScreen icon={null} title="Открываем экран" text="Одну секунду…" />}>
+                        <App />
+                    </Suspense>
                 </ProfileGate>
             </SignInGate>
         </MaxUIRoot>

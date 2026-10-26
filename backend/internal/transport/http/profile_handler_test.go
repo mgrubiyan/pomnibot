@@ -63,7 +63,7 @@ func TestProfileHTTP(t *testing.T) {
 	raw := generateValidInitData(map[string]string{"auth_date": fmt.Sprint(time.Now().Unix()), "user": `{"id":42}`}, "secret")
 
 	handler := NewAPIHandler(nil, nil, nil, users)
-	router, err := NewRouter(handler, fstest.MapFS{}, "", "secret", users)
+	router, err := NewRouter(handler, fstest.MapFS{}, "", "secret", users, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestProfileHTTP(t *testing.T) {
 	}
 	users.account.TgID = 0
 	users.account.MaxID = 42
-	maxRouter, err := NewRouter(handler, fstest.MapFS{}, "secret", "", users)
+	maxRouter, err := NewRouter(handler, fstest.MapFS{}, "secret", "", users, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestProfileConsentHTTP(t *testing.T) {
 	raw := generateValidInitData(map[string]string{"auth_date": fmt.Sprint(time.Now().Unix()), "user": `{"id":42}`}, "secret")
 	request := func(handler *APIHandler, method, path, body, auth string) *httptest.ResponseRecorder {
 		t.Helper()
-		router, err := NewRouter(handler, fstest.MapFS{}, "secret", "", users)
+		router, err := NewRouter(handler, fstest.MapFS{}, "secret", "", users, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -233,7 +233,7 @@ func TestProfileAvatarHTTP(t *testing.T) {
 	member := uuid.MustParse("00000000-0000-0000-0000-000000000903")
 	users := &profileUsers{account: usecase.Account{User: contracts.User{ID: member, FirstName: "Ann"}, MaxID: 42, ProfileComplete: true}}
 	raw := generateValidInitData(map[string]string{"auth_date": fmt.Sprint(time.Now().Unix()), "user": `{"id":42}`}, "secret")
-	router, err := NewRouter(NewAPIHandler(nil, nil, nil, users), fstest.MapFS{}, "secret", "", users)
+	router, err := NewRouter(NewAPIHandler(nil, nil, nil, users), fstest.MapFS{}, "secret", "", users, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

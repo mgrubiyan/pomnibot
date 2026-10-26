@@ -33,6 +33,8 @@ type initDataUser struct {
 	Username  string `json:"username"`
 	Name      string `json:"name"`
 	IsBot     bool   `json:"is_bot"`
+	// PhotoURL is the profile photo; MAX and Telegram both send it.
+	PhotoURL string `json:"photo_url"`
 }
 
 func resolveUserName(u initDataUser) string {

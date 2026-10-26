@@ -85,7 +85,7 @@ WITH added AS (
     ON CONFLICT (user_id) DO UPDATE SET id = EXCLUDED.id, image = EXCLUDED.image
     RETURNING id
 )
-UPDATE users SET avatar_id = (SELECT id FROM added)
+UPDATE users SET avatar_id = (SELECT id FROM added), avatar_source = NULL
 WHERE users.id = sqlc.arg(id)
 RETURNING *;
 
@@ -93,9 +93,30 @@ RETURNING *;
 WITH removed AS (
     DELETE FROM avatars WHERE user_id = sqlc.arg(id)
 )
-UPDATE users SET avatar_id = NULL
+UPDATE users SET avatar_id = NULL, avatar_source = NULL
 WHERE users.id = sqlc.arg(id)
 RETURNING *;
+
+-- name: SaveImportedAvatar :one
+-- Replaces the user's photo with the one from their messenger profile.
+WITH added AS (
+    INSERT INTO avatars (id, user_id, image)
+    VALUES (gen_random_uuid(), sqlc.arg(id), sqlc.arg(image))
+    ON CONFLICT (user_id) DO UPDATE SET id = EXCLUDED.id, image = EXCLUDED.image
+    RETURNING id
+)
+UPDATE users SET avatar_id = (SELECT id FROM added), avatar_source = sqlc.arg(source)
+WHERE users.id = sqlc.arg(id)
+RETURNING *;
+
+-- name: ForgetImportedAvatar :exec
+-- The messenger profile has no photo any more; one the user uploaded stays.
+WITH removed AS (
+    DELETE FROM avatars a USING users u
+    WHERE a.user_id = sqlc.arg(id) AND u.id = a.user_id AND u.avatar_source IS NOT NULL
+)
+UPDATE users SET avatar_id = NULL, avatar_source = NULL
+WHERE users.id = sqlc.arg(id) AND avatar_source IS NOT NULL;
 
 -- name: GetAvatarImage :one
 SELECT image FROM avatars WHERE id = $1;

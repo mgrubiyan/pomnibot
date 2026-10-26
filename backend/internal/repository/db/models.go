@@ -206,6 +206,7 @@ type User struct {
 	DataConsentAt         pgtype.Timestamptz `json:"data_consent_at"`
 	AvatarID              pgtype.UUID        `json:"avatar_id"`
 	DataConsentAnsweredAt pgtype.Timestamptz `json:"data_consent_answered_at"`
+	AvatarSource          pgtype.Text        `json:"avatar_source"`
 }
 
 type UserFactProgress struct {

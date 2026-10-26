@@ -92,7 +92,7 @@ func runStage(ctx context.Context, cfg options, name string, n, rate int, d time
 	q := db.New(pool)
 	users := usecase.NewUserService(q)
 	handler := transport.NewAPIHandler(usecase.NewSetService(q, users), usecase.NewCardService(q, users), usecase.NewHomescreenService(q, users), users)
-	router, err := transport.NewRouter(handler, staticFS, maxToken, telegramToken, users)
+	router, err := transport.NewRouter(handler, staticFS, maxToken, telegramToken, users, nil)
 	if err != nil {
 		return result, err
 	}

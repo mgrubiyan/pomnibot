@@ -5,6 +5,7 @@ import { api } from '../api';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { IconCross } from '../components/Icons';
+import { ConsentText } from '../components/ConsentText';
 import { formatCode } from '../utils/code';
 import s from './JoinSet.module.css';
 
@@ -88,6 +89,14 @@ export function JoinSet({ onBack, onOpenSet }: JoinSetProps) {
                         </Typography.Text>
                     </Flex>
                 ) : null}
+
+                {/* Joining is the consent: there is no other place to give it. */}
+                <Flex direction="column" align="stretch" gap={4} className={s.consent}>
+                    <Typography.Text variant="label" color="secondary" className={s.hint}>
+                        Автор набора увидит ваши имя, фото и ответы — так он поймёт, кому и с чем помочь.
+                    </Typography.Text>
+                    <ConsentText lead="Нажимая «Добавить набор»" />
+                </Flex>
             </Flex>
 
             <Flex direction="column" align="stretch" gap={8}>

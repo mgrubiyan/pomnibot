@@ -12,7 +12,8 @@ import (
 )
 
 // NewRouter sets up the HTTP router combining OpenAPI handlers, SPA static file serving, and middlewares.
-func NewRouter(handler contracts.Handler, staticFS fs.FS, maxToken, telegramToken string, userService usecase.UserService) (http.Handler, error) {
+// photos takes signed users' messenger photos; nil leaves avatars alone.
+func NewRouter(handler contracts.Handler, staticFS fs.FS, maxToken, telegramToken string, userService usecase.UserService, photos *PhotoImporter) (http.Handler, error) {
 	staticHandler := NewSPAHandler(staticFS)
 
 	apiServer, err := contracts.NewServer(
@@ -24,7 +25,7 @@ func NewRouter(handler contracts.Handler, staticFS fs.FS, maxToken, telegramToke
 		return nil, err
 	}
 
-	authMiddleware := AuthMiddleware(maxToken, telegramToken, userService)
+	authMiddleware := AuthMiddleware(maxToken, telegramToken, userService, photos)
 	return LoggingMiddleware(authMiddleware(limitUploads(apiServer))), nil
 }
 

@@ -82,11 +82,11 @@ export interface HomeProps {
     onTodayLoaded?: (today: TodayData) => void;
     /** Every complaint across all sets; the row is there for admins only. */
     onOpenAdminIssues?: () => void;
-    /** The avatar in the corner opens the profile once it has loaded. */
-    onOpenProfile?: () => void;
+    /** The user's own photo in the corner; not for the shared unsigned account. */
+    showAvatar?: boolean;
 }
 
-export function Home({ onStart, onOpenSet, onAddNote, onOpenNotes, onJoinSet, onOpenWhy, removedSetIds, onTodayLoaded, onOpenAdminIssues, onOpenProfile }: HomeProps) {
+export function Home({ onStart, onOpenSet, onAddNote, onOpenNotes, onJoinSet, onOpenWhy, removedSetIds, onTodayLoaded, onOpenAdminIssues, showAvatar }: HomeProps) {
     const [status, setStatus] = useState<Status>('loading');
     const [today, setToday] = useState<TodayData | null>(null);
     const [feedCards, setFeedCards] = useState<FeedCard[]>([]);
@@ -233,10 +233,11 @@ export function Home({ onStart, onOpenSet, onAddNote, onOpenNotes, onJoinSet, on
                 <Typography.Text variant="description" color="secondary" asChild>
                     <h1 className={s.greeting}>Привет, {formatGreetingName(today.user)}</h1>
                 </Typography.Text>
-                {onOpenProfile ? (
-                    <button type="button" className={s.profileButton} onClick={onOpenProfile} aria-label="Профиль">
+                {/* MAX or Telegram gives the photo; there is nothing to change here. */}
+                {showAvatar ? (
+                    <span className={s.avatar}>
                         <UserAvatar user={today.user} size={36} />
-                    </button>
+                    </span>
                 ) : null}
             </Flex>
 

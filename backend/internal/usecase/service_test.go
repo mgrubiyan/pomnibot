@@ -171,12 +171,33 @@ func TestSetService_GetSetLeaderboard(t *testing.T) {
 		if u := res.Items[0].User; u.AvatarUrl.Set {
 			t.Errorf("author without a photo got one: %+v", u)
 		}
+		// Joining the set is the consent: the old answer to the consent screen no longer matters.
 		shy := res.Items[2]
-		if shy.User.ID == testUser3 || shy.User.ID == uuid.Nil || shy.Rank != 3 || shy.Percentile != 20 {
+		if shy.User.ID != testUser3 || shy.Rank != 3 || shy.Percentile != 20 {
 			t.Errorf("unexpected item 2: %+v", shy)
 		}
-		if u := shy.User; !u.Anonymous.Value || u.FirstName != "" || u.LastName.Set || u.Username.Set || u.AvatarUrl.Set {
-			t.Errorf("member without consent is shown: %+v", u)
+		if u := shy.User; u.Anonymous.Value || u.FirstName != "Carol" || u.LastName.Value != "Smith" || u.Username.Value != "carol" ||
+			u.AvatarUrl.Value != "/api/avatars/00000000-0000-0000-0000-00000000ca01" {
+			t.Errorf("member who joined is hidden: %+v", u)
+		}
+	})
+
+	t.Run("Shared unsigned account sees only members who consented", func(t *testing.T) {
+		shared := *mock
+		shared.isSetAuthorFunc = func(_ context.Context, arg db.IsSetAuthorParams) (bool, error) {
+			return arg.ID == pgUUID && arg.AuthorID.Bytes == uuid.Nil, nil
+		}
+		res, err := usecase.NewSetService(&shared, usecase.NewUserService(&shared)).GetSetLeaderboard(context.Background(), uuid.Nil, setUUID)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if u := res.Items[1].User; u.Anonymous.Value || u.FirstName != "Bob" {
+			t.Errorf("member who consented is hidden: %+v", u)
+		}
+		for _, i := range []int{0, 2} {
+			if u := res.Items[i].User; !u.Anonymous.Value || u.FirstName != "" || u.AvatarUrl.Set || u.ID == authorID || u.ID == testUser3 {
+				t.Errorf("item %d is shown to anyone without a signature: %+v", i, u)
+			}
 		}
 	})
 

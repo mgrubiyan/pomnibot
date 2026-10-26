@@ -90,7 +90,7 @@ type notesServer struct {
 
 func newNotesServer(t *testing.T, handler *APIHandler, users usecase.UserService) notesServer {
 	t.Helper()
-	router, err := NewRouter(handler, fstest.MapFS{}, "secret", "", users)
+	router, err := NewRouter(handler, fstest.MapFS{}, "secret", "", users, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
