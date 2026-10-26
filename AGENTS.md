@@ -1,5 +1,9 @@
 # Repository Guidelines for Agents
 
+## Documentation
+
+- Do not modify `README.md` unless the user explicitly requests changes to it.
+
 ## Commit Messages
 
 - All commit messages **MUST** follow the [Conventional Commits](https://www.conventionalcommits.org/) format in English.
