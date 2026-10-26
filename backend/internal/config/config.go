@@ -13,6 +13,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/aistudio"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/gigachat"
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/openrouter"
+	"github.com/mgrubiyan/pomnibot/backend/internal/speechkit"
 	maxtransport "github.com/mgrubiyan/pomnibot/backend/internal/transport/max"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
@@ -45,6 +46,9 @@ type Config struct {
 	AIStudio *aistudio.Config
 	LLM      LLMConfig
 	OCR      yandex.Config
+	// Speech is enabled when YC_API_KEY is set, locally too: voice answers
+	// take the OCR's key and folder.
+	Speech *speechkit.Config
 	// Admins see every complaint: ADMIN_MAX_IDS and ADMIN_TG_IDS, and
 	// locally the browser test user.
 	Admins usecase.Admins
@@ -102,6 +106,9 @@ func Load() (Config, error) {
 	cfg.Admins, err = adminsFromEnv(cfg.Environment == Local)
 	if err != nil {
 		return Config{}, err
+	}
+	if speech, ok := speechkit.ConfigFromEnv(); ok {
+		cfg.Speech = &speech
 	}
 	if cfg.Environment == Local {
 		return cfg, nil

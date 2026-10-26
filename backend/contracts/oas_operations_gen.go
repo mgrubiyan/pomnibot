@@ -37,6 +37,7 @@ const (
 	PutProfileOperation          OperationName = "PutProfile"
 	PutProfileAvatarOperation    OperationName = "PutProfileAvatar"
 	PutProfileConsentOperation   OperationName = "PutProfileConsent"
+	RecognizeSpeechOperation     OperationName = "RecognizeSpeech"
 	ReorderCardsOperation        OperationName = "ReorderCards"
 	ReportCardIssueOperation     OperationName = "ReportCardIssue"
 	ResolveCardIssuesOperation   OperationName = "ResolveCardIssues"

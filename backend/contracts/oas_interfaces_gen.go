@@ -125,6 +125,10 @@ type PutProfileRes interface {
 	putProfileRes()
 }
 
+type RecognizeSpeechRes interface {
+	recognizeSpeechRes()
+}
+
 type ReorderCardsRes interface {
 	reorderCardsRes()
 }

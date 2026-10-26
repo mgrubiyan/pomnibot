@@ -887,6 +887,29 @@ checks:
           example: 85
   timeoutMs: 5000
   repeatable: false
+- id: RecognizeSpeech
+  name: Turn a spoken answer into text
+  method: POST
+  path: /speech
+  role: user
+  request:
+    headers:
+      Content-Type: multipart/form-data
+  expected:
+    statusCodes:
+    - 200
+    contentType: application/json
+    requiredFields:
+    - text
+    bodySchema:
+      type: object
+      required:
+      - text
+      properties:
+        text:
+          type: string
+  timeoutMs: 5000
+  repeatable: false
 - id: GetAvatar
   name: A user's photo
   method: GET

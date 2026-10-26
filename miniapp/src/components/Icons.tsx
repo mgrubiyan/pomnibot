@@ -59,6 +59,21 @@ export const IconClock = (props: IconProps) => (
     </Icon>
 );
 
+/** Answer by voice. */
+export const IconMic = (props: IconProps) => (
+    <Icon {...props}>
+        <rect x="9" y="3" width="6" height="11" rx="3" />
+        <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+    </Icon>
+);
+
+/** Stop a recording. */
+export const IconStop = (props: IconProps) => (
+    <Icon {...props}>
+        <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none" />
+    </Icon>
+);
+
 /** The drag handle of a reorderable row: the «≡» the set editor's hint names. */
 export const IconGrip = (props: IconProps) => (
     <Icon {...props}>

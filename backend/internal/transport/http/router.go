@@ -39,6 +39,8 @@ func limitUploads(next http.Handler) http.Handler {
 		switch {
 		case r.URL.Path == "/api/profile/avatar":
 			r.Body = http.MaxBytesReader(w, r.Body, maxAvatarRequest)
+		case r.URL.Path == "/api/speech":
+			r.Body = http.MaxBytesReader(w, r.Body, maxSpeechRequest)
 		case r.URL.Path == "/api/notes" && r.Method == http.MethodPost:
 			if r.ContentLength > maxNotesRequest {
 				writeAuthError(w, http.StatusRequestEntityTooLarge, "files over 20 MB in all", "")

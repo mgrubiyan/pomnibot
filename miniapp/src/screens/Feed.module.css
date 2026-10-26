@@ -364,3 +364,15 @@
 .options > * {
     flex-shrink: 0;
 }
+
+/* The mic sits in the field's own padding: the slot keeps 16px from the
+   edge, which leaves a 32px button room inside the 52px field. */
+.mic {
+    margin-right: -6px;
+}
+
+.voiceLine {
+    padding: 0 4px;
+    text-wrap: pretty;
+    animation: fadeIn 200ms var(--ease-out);
+}

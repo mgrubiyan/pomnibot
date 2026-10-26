@@ -366,6 +366,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/speech": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn a spoken answer into text
+         * @description Recognizes up to 30 seconds of Russian speech for the reader to check and send as a typed answer; nothing is kept. Only for a signed in account: every recording costs money.
+         */
+        post: operations["RecognizeSpeech"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/notes": {
         parameters: {
             query?: never;
@@ -597,6 +617,16 @@ export interface components {
         NotesUpload: {
             /** @description Text, PDF, Word, PowerPoint or photos of the pages, at most 10 files and 20 MB in all */
             files: string[];
+        };
+        SpeechUpload: {
+            /**
+             * Format: binary
+             * @description Mono 16-bit little-endian PCM at 16 kHz without a header, at most 30 seconds (960 000 bytes)
+             */
+            audio: string;
+        };
+        SpeechText: {
+            text: string;
         };
         NotesJob: {
             /**
@@ -1736,6 +1766,51 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
+        };
+    };
+    RecognizeSpeech: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["SpeechUpload"];
+            };
+        };
+        responses: {
+            /** @description The recognized text, empty when no words were heard */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpeechText"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            /** @description The recording is longer than 30 seconds */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            500: components["responses"]["InternalServerError"];
+            /** @description Speech recognition is off here */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     GetNotesJob: {

@@ -19,6 +19,7 @@ type APIHandler struct {
 	homescreen *HomescreenHandler
 	admin      usecase.AdminService
 	notes      *noteJobs
+	speech     SpeechRecognizer
 	// browserProfile lets the browser test account change its profile.
 	browserProfile bool
 }

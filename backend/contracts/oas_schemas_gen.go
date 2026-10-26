@@ -3098,6 +3098,26 @@ func (*PutProfileInternalServerError) putProfileRes() {}
 
 type RecallProbability float64
 
+type RecognizeSpeechBadRequest ErrorResponse
+
+func (*RecognizeSpeechBadRequest) recognizeSpeechRes() {}
+
+type RecognizeSpeechForbidden ErrorResponse
+
+func (*RecognizeSpeechForbidden) recognizeSpeechRes() {}
+
+type RecognizeSpeechInternalServerError ErrorResponse
+
+func (*RecognizeSpeechInternalServerError) recognizeSpeechRes() {}
+
+type RecognizeSpeechRequestEntityTooLarge ErrorResponse
+
+func (*RecognizeSpeechRequestEntityTooLarge) recognizeSpeechRes() {}
+
+type RecognizeSpeechServiceUnavailable ErrorResponse
+
+func (*RecognizeSpeechServiceUnavailable) recognizeSpeechRes() {}
+
 type ReorderCardsBadRequest ErrorResponse
 
 func (*ReorderCardsBadRequest) reorderCardsRes() {}
@@ -3574,6 +3594,39 @@ func (SetRetentionHorizonDays) AllValues() []SetRetentionHorizonDays {
 	return []SetRetentionHorizonDays{
 		SetRetentionHorizonDays13,
 	}
+}
+
+// Ref: #/components/schemas/SpeechText
+type SpeechText struct {
+	Text string `json:"text"`
+}
+
+// GetText returns the value of Text.
+func (s *SpeechText) GetText() string {
+	return s.Text
+}
+
+// SetText sets the value of Text.
+func (s *SpeechText) SetText(val string) {
+	s.Text = val
+}
+
+func (*SpeechText) recognizeSpeechRes() {}
+
+// Ref: #/components/schemas/SpeechUpload
+type SpeechUploadMultipart struct {
+	// Mono 16-bit little-endian PCM at 16 kHz without a header, at most 30 seconds (960 000 bytes).
+	Audio ht.MultipartFile `json:"audio"`
+}
+
+// GetAudio returns the value of Audio.
+func (s *SpeechUploadMultipart) GetAudio() ht.MultipartFile {
+	return s.Audio
+}
+
+// SetAudio sets the value of Audio.
+func (s *SpeechUploadMultipart) SetAudio(val ht.MultipartFile) {
+	s.Audio = val
 }
 
 // Ref: #/components/schemas/StudentFactMistakes

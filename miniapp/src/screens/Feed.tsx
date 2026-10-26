@@ -22,13 +22,17 @@ import { Result } from './Result';
 import { cx } from '../utils/cx';
 import { kindTask } from '../utils/kinds';
 import { motionAllowed } from '../utils/motion';
+import { voiceInputAvailable } from '../utils/speech';
+import { useVoiceAnswer, type VoiceState } from '../utils/useVoiceAnswer';
 import {
     IconCheck,
     IconChevronLeft,
     IconCross,
     IconDoc,
     IconFlag,
+    IconMic,
     IconOffline,
+    IconStop,
 } from '../components/Icons';
 import s from './Feed.module.css';
 
@@ -241,6 +245,19 @@ export function Feed({
     const [checkRun, setCheckRun] = useState(0);
     const [revealed, setRevealed] = useState(false);
     const [draft, setDraft] = useState('');
+    // A spoken answer lands in the field for the reader to check: a
+    // misheard term would be graded as theirs.
+    const [voiceAvailable] = useState(voiceInputAvailable);
+    const voice = useVoiceAnswer(useCallback((text: string) => {
+        setDraft((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text));
+    }, []));
+    const { cancel: cancelVoice } = voice;
+    // Opening the microphone may wait on a permission prompt: the field
+    // stays free, and sending a typed answer drops the voice one.
+    const voiceBusy = voice.state === 'recording' || voice.state === 'recognizing';
+    // The field's placeholder tells how the recording goes; over typed text
+    // the line under the field does.
+    const voiceLine = voice.problem || (voice.state !== 'idle' && draft ? voicePlaceholder(voice.state, voice.seconds) : '');
     // The layout is keyed by card id instead of being reset by an effect:
     // that way it appears on its own and needs no setState in an effect.
     const [placements, setPlacements] = useState<Record<string, Placement>>({});
@@ -314,10 +331,11 @@ export function Feed({
         setVerdict(null);
         setRevealed(false);
         setDraft('');
+        cancelVoice();
         setSelectedOptions([]);
         setPicked(null);
         setFlipping(false);
-    }, []);
+    }, [cancelVoice]);
 
     const showNext = useCallback(() => {
         setIndex((current) => current + 1);
@@ -447,7 +465,13 @@ export function Feed({
         [card, ask, startFlip, imagesReady],
     );
 
-    const layout = card?.table ? layoutOf(card.table, reveal?.answer, placements[card.id]) : undefined;
+    /** Sends the typed answer, giving up on a microphone still opening. */
+    const sendTyped = () => {
+        cancelVoice();
+        submit(draft, draft);
+    };
+
+    const layout =card?.table ? layoutOf(card.table, reveal?.answer, placements[card.id]) : undefined;
     const placement: Placement =
         layout && card ? (placements[card.id] ?? emptyPlacement(layout)) : [];
     const pickedIndex = picked && card && picked.cardId === card.id ? picked.index : null;
@@ -1006,22 +1030,44 @@ export function Feed({
                             <Input
                                 size="large"
                                 value={draft}
-                                placeholder="Ваш ответ"
+                                placeholder={voicePlaceholder(voice.state, voice.seconds)}
+                                readOnly={voiceBusy}
                                 enterKeyHint="send"
                                 autoCorrect="off"
+                                aria-describedby={voiceLine ? 'voice-line' : undefined}
                                 onChange={(event) => setDraft(event.target.value)}
                                 onKeyDown={(event) => {
                                     // A held key repeats, and Enter also ends an IME composition.
                                     if (event.key !== 'Enter' || event.repeat || event.nativeEvent.isComposing) return;
-                                    if (draft.trim().length > 0) submit(draft, draft);
+                                    if (!voiceBusy && draft.trim().length > 0) sendTyped();
                                 }}
+                                iconAfter={voiceAvailable ? (
+                                    <IconButton
+                                        size="xsmall"
+                                        variant={voice.state === 'recording' ? 'primary' : 'ghost'}
+                                        className={s.mic}
+                                        aria-label={MIC_LABEL[voice.state]}
+                                        aria-pressed={voice.state === 'recording'}
+                                        loading={voice.state === 'recognizing'}
+                                        disabled={!imagesReady}
+                                        onClick={voice.toggle}
+                                    >
+                                        {voice.state === 'starting' ? <Spinner size={16} appearance="neutral-themed" />
+                                            : voice.state === 'recording' ? <IconStop size={16} /> : <IconMic size={20} />}
+                                    </IconButton>
+                                ) : undefined}
                             />
+                            {voiceLine ? (
+                                <Typography.Text id="voice-line" variant="description" color="secondary" className={s.voiceLine} role="status">
+                                    {voiceLine}
+                                </Typography.Text>
+                            ) : null}
                             <Button
                                 size="medium"
                                 variant="secondary"
                                 stretched
-                                disabled={!imagesReady || draft.trim().length === 0}
-                                onClick={() => submit(draft, draft)}
+                                disabled={!imagesReady || voiceBusy || draft.trim().length === 0}
+                                onClick={sendTyped}
                             >
                                 Ответить
                             </Button>
@@ -1049,6 +1095,27 @@ export function Feed({
             )}
         </Screen>
     );
+}
+
+const MIC_LABEL: Record<VoiceState, string> = {
+    idle: 'Ответить голосом',
+    starting: 'Не включать микрофон',
+    recording: 'Остановить запись',
+    recognizing: 'Распознаю ответ',
+};
+
+/** The field tells what the microphone is doing while it is busy. */
+function voicePlaceholder(state: VoiceState, seconds: number): string {
+    switch (state) {
+        case 'starting':
+            return 'Включаю микрофон';
+        case 'recording':
+            return `Говорите · 0:${String(seconds).padStart(2, '0')}`;
+        case 'recognizing':
+            return 'Распознаю';
+        default:
+            return 'Ваш ответ';
+    }
 }
 
 export default Feed;

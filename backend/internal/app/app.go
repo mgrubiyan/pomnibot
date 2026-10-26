@@ -24,6 +24,7 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/providers/openrouter"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository"
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
+	"github.com/mgrubiyan/pomnibot/backend/internal/speechkit"
 	httptransport "github.com/mgrubiyan/pomnibot/backend/internal/transport/http"
 	maxtransport "github.com/mgrubiyan/pomnibot/backend/internal/transport/max"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
@@ -73,6 +74,13 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 		WithFacts(facts).WithImages(usecase.NewImageService(queries))
 	if cfg.Environment == config.Local {
 		api = api.WithBrowserProfile()
+	}
+	if cfg.Speech != nil {
+		stt, err := speechkit.New(*cfg.Speech)
+		if err != nil {
+			return fmt.Errorf("initialize speech recognition: %w", err)
+		}
+		api = api.WithSpeech(stt)
 	}
 
 	// Stop background integrations on both startup failure and normal shutdown.

@@ -206,6 +206,13 @@ type Handler interface {
 	//
 	// PUT /profile/consent
 	PutProfileConsent(ctx context.Context, req *ConsentRequest) (PutProfileConsentRes, error)
+	// RecognizeSpeech implements RecognizeSpeech operation.
+	//
+	// Recognizes up to 30 seconds of Russian speech for the reader to check and send as a typed answer;
+	// nothing is kept. Only for a signed in account: every recording costs money.
+	//
+	// POST /speech
+	RecognizeSpeech(ctx context.Context, req *SpeechUploadMultipart) (RecognizeSpeechRes, error)
 	// ReorderCards implements ReorderCards operation.
 	//
 	// Reorder cards in a fact.
