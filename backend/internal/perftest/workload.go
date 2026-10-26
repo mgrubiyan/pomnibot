@@ -140,11 +140,7 @@ func (w *workload) burst(ctx context.Context, r *recorder, a *actor) error {
 }
 
 // answer reads the current question before grading it, just like the mini-app.
-// Serialize one actor's submissions so concurrent scheduled actions do not submit
-// different attempt IDs for the same question observed before a progress update.
 func (w *workload) answer(ctx context.Context, r *recorder, a *actor) error {
-	a.answerMu.Lock()
-	defer a.answerMu.Unlock()
 	var feed []contracts.FeedCard
 	if err := w.request(ctx, r, a, "review_feed", "GET", "/feed?setId="+setID(1)+"&early=true", nil, &feed); err != nil {
 		return err
@@ -282,6 +278,13 @@ func (w *workload) rate(ctx context.Context, r *recorder, d time.Duration, rate 
 			case 5, 6:
 				err = w.request(ctx, r, a, "review_feed", "GET", "/feed?setId="+setID(1)+"&early=true", nil, nil)
 			case 7, 8:
+				// A reader can submit one answer at a time. Drop overlapping
+				// actions immediately so waiting never escapes deadline metrics.
+				if !a.answerMu.TryLock() {
+					missed.Add(1)
+					return
+				}
+				defer a.answerMu.Unlock()
 				err = w.answer(ctx, r, a)
 			case 9:
 				err = w.leaderboard(ctx, r)

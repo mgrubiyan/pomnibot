@@ -15,8 +15,18 @@ import (
 )
 
 func TestAnswerJourney(t *testing.T) {
-	for _, kind := range []contracts.CardKind{contracts.CardKindFlip, contracts.CardKindBoolean, contracts.CardKindChoice, contracts.CardKindTable, contracts.CardKindInput} {
-		t.Run(string(kind), func(t *testing.T) {
+	for _, tc := range []struct {
+		kind   contracts.CardKind
+		answer string
+	}{
+		{contracts.CardKindFlip, "true"},
+		{contracts.CardKindBoolean, "true"},
+		{contracts.CardKindChoice, `["Answer"]`},
+		{contracts.CardKindTable, `[{"text":"Item","column":"A"}]`},
+		{contracts.CardKindInput, "Answer"},
+	} {
+		t.Run(string(tc.kind), func(t *testing.T) {
+			kind := tc.kind
 			id := uuid.New()
 			var paths []string
 			var submission contracts.AnswerQuestionRequest
@@ -96,4 +106,31 @@ func TestAnswerFailureDoesNotCountAsRecorded(t *testing.T) {
 			assert.False(t, recorder.summary(time.Second).passes())
 		})
 	}
+}
+
+// A busy reader must drop scheduled answers, rather than queue them outside the
+// deadline and latency measurements. Holding the lock makes overload deterministic.
+func TestRateDropsBusyReader(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{}`)) }))
+	defer server.Close()
+	a := identity(0)
+	a.answerMu.Lock()
+	w := workload{server: server, client: server.Client(), actors: []*actor{a}, owner: a}
+	type counts struct{ completed, missed int64 }
+	done := make(chan counts, 1)
+	go func() {
+		completed, missed := w.rate(t.Context(), newRecorder(), 100*time.Millisecond, 100, time.Second)
+		done <- counts{completed, missed}
+	}()
+	var got counts
+	select {
+	case got = <-done:
+		a.answerMu.Unlock()
+	case <-time.After(time.Second):
+		a.answerMu.Unlock()
+		<-done
+		t.Fatal("scheduled answers waited for the busy reader")
+	}
+	assert.GreaterOrEqual(t, got.missed, int64(2))
+	assert.EqualValues(t, 10, got.completed+got.missed)
 }
