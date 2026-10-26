@@ -251,15 +251,17 @@ export function Feed({
     const voice = useVoiceAnswer(useCallback((text: string) => {
         setDraft((current) => withSpoken(current, text));
     }, []));
-    const { cancel: cancelVoice } = voice;
+    const { cancel: cancelVoice, levelRef: voiceLevelRef } = voice;
     // Opening the microphone may wait on a permission prompt: the field
     // stays free, and sending a typed answer drops the voice one.
     const voiceBusy = voice.state === 'recording' || voice.state === 'recognizing';
+    // Recognition that ends at once is not shown, or the spinner would flicker.
+    const voiceShown: VoiceState = voice.state === 'recognizing' && !voice.waiting ? 'idle' : voice.state;
     // The field's placeholder tells how the recording goes; over typed text
     // the line under the field does.
     // What is heard shows in the field as it is said, after the typed text.
     const shown = voiceBusy && voice.live ? withSpoken(draft, voice.live) : draft;
-    const voiceLine = voice.problem || (voice.state !== 'idle' && shown ? voicePlaceholder(voice.state, voice.seconds) : '');
+    const voiceLine = voice.problem || (voiceShown !== 'idle' && shown ? voicePlaceholder(voiceShown, voice.seconds) : '');
     // The field is one line: its end, where the words come, stays in view.
     const answerRef = useRef<HTMLInputElement>(null);
     useEffect(() => {
@@ -1039,7 +1041,7 @@ export function Feed({
                                 ref={answerRef}
                                 size="large"
                                 value={shown}
-                                placeholder={voicePlaceholder(voice.state, voice.seconds)}
+                                placeholder={voicePlaceholder(voiceShown, voice.seconds)}
                                 readOnly={voiceBusy}
                                 withClearButton={!voiceBusy}
                                 enterKeyHint="send"
@@ -1052,19 +1054,28 @@ export function Feed({
                                     if (!voiceBusy && draft.trim().length > 0) sendTyped();
                                 }}
                                 iconAfter={voiceAvailable ? (
-                                    <IconButton
-                                        size="xsmall"
-                                        variant={voice.state === 'recording' ? 'primary' : 'ghost'}
-                                        className={s.mic}
-                                        aria-label={MIC_LABEL[voice.state]}
-                                        aria-pressed={voice.state === 'recording'}
-                                        loading={voice.state === 'recognizing'}
-                                        disabled={!imagesReady}
-                                        onClick={voice.toggle}
-                                    >
-                                        {voice.state === 'starting' ? <Spinner size={16} appearance="neutral-themed" />
-                                            : voice.state === 'recording' ? <IconStop size={16} /> : <IconMic size={20} />}
-                                    </IconButton>
+                                    <span className={s.mic}>
+                                        {voice.state === 'recording' ? (
+                                            <span ref={voiceLevelRef} className={s.micLevel} aria-hidden="true" />
+                                        ) : null}
+                                        <IconButton
+                                            size="xsmall"
+                                            variant={voiceShown === 'recording' ? 'primary' : 'ghost'}
+                                            className={s.micButton}
+                                            aria-label={MIC_LABEL[voiceShown]}
+                                            aria-pressed={voiceShown === 'recording'}
+                                            loading={voiceShown === 'recognizing'}
+                                            disabled={!imagesReady}
+                                            onClick={voice.toggle}
+                                        >
+                                            {/* A new icon comes in, except the
+                                                microphone of a card just shown. */}
+                                            <span key={voiceShown} className={voiceShown !== 'idle' || voice.tried ? s.micIcon : s.micIconStill}>
+                                                {voiceShown === 'starting' ? <Spinner size={16} appearance="neutral-themed" />
+                                                    : voiceShown === 'recording' ? <IconStop size={16} /> : <IconMic size={20} />}
+                                            </span>
+                                        </IconButton>
+                                    </span>
                                 ) : undefined}
                             />
                             {voiceLine ? (

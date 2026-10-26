@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { MAX_SPEECH_SECONDS, SPEECH_RATE, createAudioContext, micProblemOf, micProblemText, openMicrophone, record, type Recording } from './speech';
+import { motionAllowed } from './motion';
 import { openLiveSpeech, type LiveSpeech } from './speechStream';
 
 /**
@@ -21,6 +22,12 @@ const SPEECH_TIMEOUT_MS = 20_000;
  */
 const LIVE_FINISH_MS = 3_000;
 
+/**
+ * The live stream fixes the text in about 0.2 s: a spinner shown for that
+ * long would only flicker. Recognition shows as waiting after this.
+ */
+const WAITING_AFTER_MS = 300;
+
 export const NOTHING_HEARD = 'Ничего не слышно. Попробуйте ещё раз ближе к микрофону.';
 
 /**
@@ -28,12 +35,22 @@ export const NOTHING_HEARD = 'Ничего не слышно. Попробуйт
  * it and sends it like a typed one. A new card, or leaving, cancels it.
  * While the reader speaks, live is the text heard so far; when the live
  * stream fails, the whole recording is recognized at the end.
+ * levelRef attaches an element that follows the loudness of the voice, so the
+ * reader sees the microphone hears them before the first word comes;
+ * waiting tells recognition has taken long enough to show; tried, that the
+ * reader has used the microphone on this card.
  */
 export function useVoiceAnswer(onText: (text: string) => void) {
     const [state, setState] = useState<VoiceState>('idle');
     const [seconds, setSeconds] = useState(0);
     const [problem, setProblem] = useState('');
     const [live, setLive] = useState('');
+    const [waiting, setWaiting] = useState(false);
+    const [tried, setTried] = useState(false);
+    const ringRef = useRef<HTMLElement | null>(null);
+    const levelRef = useCallback((element: HTMLElement | null) => {
+        ringRef.current = element;
+    }, []);
 
     // Every run gets a number: a microphone or recognition that answers
     // after a cancel is dropped.
@@ -41,6 +58,7 @@ export function useVoiceAnswer(onText: (text: string) => void) {
     const recordingRef = useRef<Recording | null>(null);
     const liveRef = useRef<LiveSpeech | null>(null);
     const timerRef = useRef<number | undefined>(undefined);
+    const waitingRef = useRef<number | undefined>(undefined);
     const onTextRef = useRef(onText);
     useEffect(() => {
         onTextRef.current = onText;
@@ -50,6 +68,11 @@ export function useVoiceAnswer(onText: (text: string) => void) {
         window.clearInterval(timerRef.current);
         timerRef.current = undefined;
     };
+    const stopWaiting = () => {
+        window.clearTimeout(waitingRef.current);
+        waitingRef.current = undefined;
+        setWaiting(false);
+    };
 
     const cancel = useCallback(() => {
         runRef.current += 1;
@@ -58,10 +81,12 @@ export function useVoiceAnswer(onText: (text: string) => void) {
         recordingRef.current = null;
         liveRef.current?.close();
         liveRef.current = null;
+        stopWaiting();
         setState('idle');
         setSeconds(0);
         setProblem('');
         setLive('');
+        setTried(false);
     }, []);
 
     useEffect(() => cancel, [cancel]);
@@ -84,6 +109,7 @@ export function useVoiceAnswer(onText: (text: string) => void) {
             return;
         }
         setState('recognizing');
+        waitingRef.current = window.setTimeout(() => setWaiting(true), WAITING_AFTER_MS);
         let result: Recognized;
         try {
             if (!liveSpeech) throw new Error('no live stream');
@@ -94,6 +120,7 @@ export function useVoiceAnswer(onText: (text: string) => void) {
             result = await recognizeWhole(pcm);
         }
         if (run !== runRef.current) return;
+        stopWaiting();
         setState('idle');
         setLive('');
         setProblem(result.failure);
@@ -103,6 +130,7 @@ export function useVoiceAnswer(onText: (text: string) => void) {
     const start = useCallback(async () => {
         const run = ++runRef.current;
         setProblem('');
+        setTried(true);
         setState('starting');
         let context: AudioContext;
         try {
@@ -134,7 +162,19 @@ export function useVoiceAnswer(onText: (text: string) => void) {
             if (run === runRef.current) setLive(text);
         });
         liveRef.current = liveSpeech;
-        recordingRef.current = record(context, stream, liveSpeech.send);
+        // Rises at once and falls gently: a word lights the ring, a pause
+        // lets it settle. Set on the element itself, past React: it changes
+        // every tenth of a second.
+        const moves = motionAllowed();
+        let level = 0;
+        const showLoudness = (heard: number) => {
+            level = Math.max(heard, level * 0.75);
+            const ring = ringRef.current;
+            if (!ring) return;
+            if (moves) ring.style.transform = `scale(${1 + level * 0.35})`;
+            ring.style.opacity = String(level * 0.6);
+        };
+        recordingRef.current = record(context, stream, liveSpeech.send, showLoudness);
         const startedAt = Date.now();
         setSeconds(0);
         setState('recording');
@@ -154,7 +194,7 @@ export function useVoiceAnswer(onText: (text: string) => void) {
         else if (state === 'recording') void finish();
     }, [state, start, finish, cancel]);
 
-    return { state, seconds, problem, live, toggle, cancel };
+    return { state, seconds, problem, live, waiting, tried, levelRef, toggle, cancel };
 }
 
 interface Recognized {

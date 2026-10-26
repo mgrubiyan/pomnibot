@@ -209,6 +209,19 @@ export function joinBytes(pieces: readonly Uint8Array[]): Uint8Array {
     return out;
 }
 
+/**
+ * How loud a piece of the recording is, from 0 (silence, -50 dBFS and
+ * under) to 1 (a raised voice, -10 dBFS and over).
+ */
+export function loudness(samples: Float32Array): number {
+    if (samples.length === 0) return 0;
+    let sum = 0;
+    for (const sample of samples) sum += sample * sample;
+    const rms = Math.sqrt(sum / samples.length);
+    const db = 20 * Math.log10(Math.max(rms, 1e-9));
+    return Math.max(0, Math.min(1, (db + 50) / 40));
+}
+
 /** A recording in progress; onPCM of record gets it as it is heard. */
 export interface Recording {
     /** Stops and gives the PCM; the microphone is released. */
@@ -231,7 +244,12 @@ export function createAudioContext(sdk: SpeechSDK = browser()): AudioContext {
  * but it is in every webview, while an AudioWorklet needs a module the
  * page's policy may not load.
  */
-export function record(context: AudioContext, stream: MediaStream, onPCM?: (pcm: Uint8Array) => void): Recording {
+export function record(
+    context: AudioContext,
+    stream: MediaStream,
+    onPCM?: (pcm: Uint8Array) => void,
+    onLoudness?: (level: number) => void,
+): Recording {
     const encoder = new PCMEncoder(context.sampleRate);
     const pieces: Uint8Array[] = [];
     const source = context.createMediaStreamSource(stream);
@@ -241,7 +259,9 @@ export function record(context: AudioContext, stream: MediaStream, onPCM?: (pcm:
     const mute = context.createGain();
     mute.gain.value = 0;
     processor.onaudioprocess = (event) => {
-        const pcm = encoder.push(event.inputBuffer.getChannelData(0));
+        const samples = event.inputBuffer.getChannelData(0);
+        onLoudness?.(loudness(samples));
+        const pcm = encoder.push(samples);
         if (pcm.length === 0) return;
         pieces.push(pcm);
         onPCM?.(pcm);

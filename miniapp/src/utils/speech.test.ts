@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { MAX_SPEECH_BYTES, PCMEncoder, SPEECH_RATE, micProblemOf, openMicrophone, toPCM16, voiceInputAvailable, type SpeechSDK } from './speech';
+import { MAX_SPEECH_BYTES, PCMEncoder, loudness, SPEECH_RATE, micProblemOf, openMicrophone, toPCM16, voiceInputAvailable, type SpeechSDK } from './speech';
 
 const samples = (bytes: Uint8Array) => {
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -75,6 +75,22 @@ describe('PCMEncoder', () => {
         const encoder = new PCMEncoder(SPEECH_RATE);
         expect(encoder.push(new Float32Array(SPEECH_RATE * 30)).length).toBe(MAX_SPEECH_BYTES);
         expect(encoder.push(new Float32Array(SPEECH_RATE)).length).toBe(0);
+    });
+});
+
+describe('loudness', () => {
+    it('is 0 in silence and 1 for a loud voice', () => {
+        expect(loudness(new Float32Array(1024))).toBe(0);
+        expect(loudness(new Float32Array([]))).toBe(0);
+        expect(loudness(new Float32Array(1024).fill(0.5))).toBe(1);
+    });
+
+    it('grows with the voice in between', () => {
+        const quiet = loudness(new Float32Array(1024).fill(0.01));
+        const speech = loudness(new Float32Array(1024).fill(0.05));
+        expect(quiet).toBeGreaterThan(0);
+        expect(speech).toBeGreaterThan(quiet);
+        expect(speech).toBeLessThan(1);
     });
 });
 
