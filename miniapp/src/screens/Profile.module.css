@@ -44,7 +44,7 @@
 }
 
 .photoError {
-    color: var(--icon-negative);
+    color: var(--text-negative);
     text-align: center;
     text-wrap: pretty;
 }
@@ -68,5 +68,5 @@
 
 .error {
     padding: 0 16px;
-    color: var(--icon-negative);
+    color: var(--text-negative);
 }

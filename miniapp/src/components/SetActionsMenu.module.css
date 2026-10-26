@@ -29,4 +29,4 @@
     cursor: pointer;
 }
 .menu button:focus-visible, .menu button:hover { background: var(--background-secondary); outline: 2px solid var(--button-primary); outline-offset: -2px; }
-.menu .destructive { color: var(--icon-negative); }
+.menu .destructive { color: var(--text-negative); }

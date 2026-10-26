@@ -152,3 +152,40 @@
     align-items: center;
     justify-content: center;
 }
+
+/* The notes' row opens to its height and fades in, so the sets under it
+   slide down instead of jumping. The negative margin takes back the
+   column's 20px gap while it opens. */
+.notesRow {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition:
+        grid-template-rows 240ms var(--ease-out),
+        margin-bottom 240ms var(--ease-out),
+        opacity 200ms var(--ease-out);
+
+    @starting-style {
+        grid-template-rows: 0fr;
+        margin-bottom: -20px;
+        opacity: 0;
+    }
+}
+
+/* Clips the row while it opens; 4px above and below keep the focus ring. */
+.notesRowInner {
+    min-height: 0;
+    overflow: hidden;
+    margin-block: -4px;
+    padding-block: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .notesRow {
+        transition: opacity 200ms var(--ease-out);
+
+        @starting-style {
+            grid-template-rows: 1fr;
+            margin-bottom: 0;
+        }
+    }
+}

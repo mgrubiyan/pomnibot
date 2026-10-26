@@ -2,8 +2,22 @@
     display: none;
 }
 
+.spinner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+}
+
+/* Fades in rather than pops as it pushes the buttons down. */
 .problem {
-    color: var(--icon-negative);
+    color: var(--text-negative);
     text-align: center;
     text-wrap: pretty;
+    transition: opacity 150ms var(--ease-out);
+
+    @starting-style {
+        opacity: 0;
+    }
 }

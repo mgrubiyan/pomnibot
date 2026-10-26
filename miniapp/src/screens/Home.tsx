@@ -242,19 +242,23 @@ export function Home({ onStart, onOpenSet, onAddNote, onOpenNotes, onJoinSet, on
 
             <Flex ref={bodyRef} direction="column" align="stretch" gap={20} className={cx(s.body, moreBelow && s.moreBelow)}>
                 {notesRow ? (
-                    <CellList mode="island" filled className={s.setsList}>
-                        <CellSimple
-                            as="button"
-                            showChevron
-                            onClick={onOpenNotes}
-                            before={notesRow.spinner
-                                ? <Spinner size={24} appearance="neutral-themed" />
-                                : <IconAlert size={24} tone="muted" />}
-                            innerClassNames={{ before: s.notesSpinner }}
-                            title={notesRow.title}
-                            subtitle={<span className={s.oneLine}>{notesRow.text}</span>}
-                        />
-                    </CellList>
+                    <div className={s.notesRow}>
+                        <div className={s.notesRowInner}>
+                            <CellList mode="island" filled className={s.setsList}>
+                                <CellSimple
+                                    as="button"
+                                    showChevron
+                                    onClick={onOpenNotes}
+                                    before={notesRow.spinner
+                                        ? <Spinner size={24} appearance="neutral-themed" />
+                                        : <IconAlert size={24} tone="negative" />}
+                                    innerClassNames={{ before: s.notesSpinner }}
+                                    title={notesRow.title}
+                                    subtitle={<span className={s.oneLine}>{notesRow.text}</span>}
+                                />
+                            </CellList>
+                        </div>
+                    </div>
                 ) : null}
                 {hasSets ? (
                     <>
