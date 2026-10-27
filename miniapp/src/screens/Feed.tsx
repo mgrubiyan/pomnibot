@@ -265,9 +265,9 @@ export function Feed({
     const answerHint = voiceAvailable ? 'Можно ответить текстом или голосом' : '';
     const answerNote = voiceNote || answerHint;
     // The recording panel takes room from the card: the field, where the
-    // words come, is brought into view inside it and followed as the words
-    // make it grow, until the reader scrolls the card themselves, say back
-    // up to the question.
+    // words come, is brought into view inside it and followed as the card
+    // shrinks and the words make the field grow, until the reader scrolls
+    // the card themselves, say back up to the question.
     const answerRef = useRef<HTMLTextAreaElement>(null);
     const followAnswerRef = useRef(false);
     const answerBox = () => answerRef.current?.closest<HTMLElement>(`.${s.answerBox}`);
@@ -277,14 +277,21 @@ export function Feed({
         if (!voiceOpen || !box) return;
         box.scrollIntoView({ block: 'nearest' });
         const side = box.closest(`.${s.face}`);
+        if (!side) return;
         const stop = () => {
             followAnswerRef.current = false;
         };
-        side?.addEventListener('wheel', stop, { passive: true });
-        side?.addEventListener('touchmove', stop, { passive: true });
+        side.addEventListener('wheel', stop, { passive: true });
+        side.addEventListener('touchmove', stop, { passive: true });
+        // The card shrinks as the panel slides out under it.
+        const resize = new ResizeObserver(() => {
+            if (followAnswerRef.current) box.scrollIntoView({ block: 'nearest' });
+        });
+        resize.observe(side);
         return () => {
-            side?.removeEventListener('wheel', stop);
-            side?.removeEventListener('touchmove', stop);
+            side.removeEventListener('wheel', stop);
+            side.removeEventListener('touchmove', stop);
+            resize.disconnect();
         };
     }, [voiceOpen]);
     useEffect(() => {
@@ -293,15 +300,20 @@ export function Feed({
     // The microphone that opened the panel is gone while it is open: focus
     // goes into the panel and comes back to the microphone, never to the page.
     // The panel closes before the text is fixed, while the microphone is
-    // still disabled: focus comes back once it is enabled.
+    // still disabled: focus comes back once it is enabled. Focus left in the
+    // closed panel counts as lost: it is inert, and the browser drops it.
     const micRef = useRef<HTMLButtonElement>(null);
     const cancelVoiceRef = useRef<HTMLButtonElement>(null);
+    const voiceSlotRef = useRef<HTMLDivElement>(null);
     const voiceWasOpenRef = useRef(false);
     const focusMicRef = useRef(false);
     useEffect(() => {
         const was = voiceWasOpenRef.current;
         voiceWasOpenRef.current = voiceOpen;
-        const lost = () => !document.activeElement || document.activeElement === document.body;
+        const lost = () =>
+            !document.activeElement
+            || document.activeElement === document.body
+            || Boolean(voiceSlotRef.current?.contains(document.activeElement));
         if (voiceOpen) {
             if (!was && lost()) cancelVoiceRef.current?.focus({ preventScroll: true });
             return;
@@ -1134,62 +1146,72 @@ export function Feed({
 
                     {card.kind === 'input' && !check ? (
                         <>
-                            {voiceOpen ? (
-                                <section className={s.voicePanel} aria-label="Запись ответа">
-                                    <div className={s.voiceHead}>
-                                        <span
-                                            className={cx(s.voiceDot, voice.state === 'recording' && s.voiceDotLive)}
-                                            aria-hidden="true"
-                                        />
-                                        <Typography.Text variant="label" className={s.voiceStatus} role="status">
-                                            {voice.state === 'recording' ? 'Идёт запись' : 'Включаю микрофон'}
-                                        </Typography.Text>
-                                        {voice.state === 'recording' ? (
-                                            <Typography.Text variant="label" className={s.voiceClock}>
-                                                {clock(voice.seconds)}
-                                            </Typography.Text>
-                                        ) : null}
-                                    </div>
-                                    <div ref={voiceWaveRef} className={s.wave} aria-hidden="true">
-                                        {Array.from({ length: WAVE_BARS }, (_, i) => (
-                                            <span key={i} className={s.waveBar} />
-                                        ))}
-                                    </div>
-                                    <div className={s.voiceActions}>
-                                        <button
-                                            ref={cancelVoiceRef}
-                                            type="button"
-                                            className={s.voiceAction}
-                                            onClick={cancelVoice}
-                                            // Focus comes here as the panel opens: an Enter
-                                            // held on the microphone must not cancel at once.
-                                            onKeyDown={(event) => {
-                                                if (event.key === 'Enter' && event.repeat) event.preventDefault();
-                                            }}
-                                        >
-                                            Отмена
-                                        </button>
-                                        {/* Shows the voice is heard; not a button. */}
-                                        <span className={s.voiceMic} aria-hidden="true">
-                                            <span ref={voiceLevelRef} className={s.micLevel} />
-                                            <span className={s.voiceMicCircle}>
+                            {/* The panel slides out from under the field and back:
+                                it stays in the page, closed and inert, so it can. */}
+                            {voiceAvailable ? (
+                                <div
+                                    ref={voiceSlotRef}
+                                    className={cx(s.voiceSlot, voiceOpen && s.voiceSlotOpen)}
+                                    inert={!voiceOpen}
+                                >
+                                    <div className={s.voiceSlotInner}>
+                                        <section className={s.voicePanel} aria-label="Запись ответа">
+                                            <div className={s.voiceHead}>
+                                                <span
+                                                    className={cx(s.voiceDot, voice.state === 'recording' && s.voiceDotLive)}
+                                                    aria-hidden="true"
+                                                />
+                                                <Typography.Text variant="label" className={s.voiceStatus} role="status">
+                                                    {voice.state === 'starting' ? 'Включаю микрофон' : 'Идёт запись'}
+                                                </Typography.Text>
                                                 {voice.state === 'recording' ? (
-                                                    <IconMic size={24} />
-                                                ) : (
-                                                    <Spinner size={20} appearance="contrast-static" />
-                                                )}
-                                            </span>
-                                        </span>
-                                        <button
-                                            type="button"
-                                            className={cx(s.voiceAction, s.voiceDone)}
-                                            disabled={voice.state !== 'recording'}
-                                            onClick={() => void voice.finish()}
-                                        >
-                                            Готово
-                                        </button>
+                                                    <Typography.Text variant="label" className={s.voiceClock}>
+                                                        {clock(voice.seconds)}
+                                                    </Typography.Text>
+                                                ) : null}
+                                            </div>
+                                            <div ref={voiceWaveRef} className={s.wave} aria-hidden="true">
+                                                {Array.from({ length: WAVE_BARS }, (_, i) => (
+                                                    <span key={i} className={s.waveBar} />
+                                                ))}
+                                            </div>
+                                            <div className={s.voiceActions}>
+                                                <button
+                                                    ref={cancelVoiceRef}
+                                                    type="button"
+                                                    className={s.voiceAction}
+                                                    onClick={cancelVoice}
+                                                    // Focus comes here as the panel opens: an Enter
+                                                    // held on the microphone must not cancel at once.
+                                                    onKeyDown={(event) => {
+                                                        if (event.key === 'Enter' && event.repeat) event.preventDefault();
+                                                    }}
+                                                >
+                                                    Отмена
+                                                </button>
+                                                {/* Shows the voice is heard; not a button. */}
+                                                <span className={s.voiceMic} aria-hidden="true">
+                                                    <span ref={voiceLevelRef} className={s.micLevel} />
+                                                    <span className={s.voiceMicCircle}>
+                                                        {voice.state === 'starting' ? (
+                                                            <Spinner size={20} appearance="contrast-static" />
+                                                        ) : (
+                                                            <IconMic size={24} />
+                                                        )}
+                                                    </span>
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    className={cx(s.voiceAction, s.voiceDone)}
+                                                    disabled={voice.state !== 'recording'}
+                                                    onClick={() => void voice.finish()}
+                                                >
+                                                    Готово
+                                                </button>
+                                            </div>
+                                        </section>
                                     </div>
-                                </section>
+                                </div>
                             ) : null}
                             <Button
                                 size="medium"
