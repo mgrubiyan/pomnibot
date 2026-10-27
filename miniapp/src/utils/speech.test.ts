@@ -110,6 +110,7 @@ describe('voiceInputAvailable', () => {
         expect(voiceInputAvailable({ navigator: media, ...audio, WebApp: { initData: 'x', platform: 'web', PermissionsManager: manager } })).toBe(true);
         // MAX gives no microphone on iOS yet, nor in an older client.
         expect(voiceInputAvailable({ navigator: media, ...audio, WebApp: { initData: 'x', platform: 'ios', PermissionsManager: manager } })).toBe(false);
+        expect(voiceInputAvailable({ navigator: media, ...audio, WebApp: { initData: 'x', platform: 'desktop', PermissionsManager: manager } })).toBe(false);
         expect(voiceInputAvailable({ navigator: media, ...audio, WebApp: { initData: 'x', platform: 'android' } })).toBe(false);
         // The MAX script outside MAX leaves the browser as it is.
         expect(voiceInputAvailable({ navigator: media, ...audio, WebApp: { initData: '' } })).toBe(true);
@@ -157,7 +158,15 @@ describe('openMicrophone', () => {
     });
 
     it('leaves the granted flags to the browser: MAX starts them false and may not send them', async () => {
-        for (const info of [undefined, {}, { mic: {} }, { mic: { appAccessGranted: true, systemAccessGranted: false } }, { mic: { appAccessGranted: false } }]) {
+        const web = [
+            undefined,
+            {},
+            { mic: {} },
+            { mic: { appAccessGranted: false } },
+            // The web client has no system level; MAX leaves its flags false.
+            { mic: { appAccessGranted: true, appAccessRequested: true, systemAccessGranted: false, systemAccessRequested: true } },
+        ];
+        for (const info of web) {
             const sdk: SpeechSDK = {
                 navigator: { mediaDevices: { getUserMedia: async () => stream } },
                 WebApp: {
@@ -168,6 +177,23 @@ describe('openMicrophone', () => {
             };
             expect(await openMicrophone(sdk)).toBe(stream);
         }
+    });
+
+    it('stops at a refusal MAX remembers from asking before', async () => {
+        const refused = (platform: string, mic: object) => {
+            let asked = false;
+            const sdk: SpeechSDK = {
+                navigator: { mediaDevices: { getUserMedia: async () => { asked = true; return stream; } } },
+                WebApp: { initData: 'x', platform, PermissionsManager: { isInited: true, init: async () => {}, requestAccess: async () => ({ mic }) } },
+            };
+            return { sdk, asked: () => asked };
+        };
+        const app = refused('web', { appAccessGranted: false, appAccessRequested: true });
+        await expect(openMicrophone(app.sdk)).rejects.toMatchObject({ problem: 'denied-max' });
+        expect(app.asked()).toBe(false);
+        const system = refused('android', { appAccessGranted: true, appAccessRequested: true, systemAccessGranted: false, systemAccessRequested: true });
+        await expect(openMicrophone(system.sdk)).rejects.toMatchObject({ problem: 'denied-system' });
+        expect(system.asked()).toBe(false);
     });
 
     it('stops at a refusal MAX throws', async () => {
@@ -195,8 +221,12 @@ describe('openMicrophone', () => {
 
 describe('micProblemText', () => {
     it('sends a refused reader where the refusal is', () => {
-        expect(micProblemText('denied-system', { navigator: media })).toContain('настройках браузера');
-        expect(micProblemText('denied-system', { navigator: media, WebApp: { initData: 'x', platform: 'web' } })).toContain('сайту MAX в настройках браузера');
-        expect(micProblemText('denied-system', { navigator: media, WebApp: { initData: 'x', platform: 'android' } })).toContain('настройках телефона');
+        expect(micProblemText('denied-system', { navigator: media })).toBe('Нет доступа к микрофону. Разрешите его в настройках браузера.');
+        expect(micProblemText('denied-system', { navigator: media, WebApp: { initData: 'x', platform: 'web' } })).toBe(
+            'Нет доступа к микрофону. Разрешите его сайту MAX в настройках браузера и нажмите ещё раз.',
+        );
+        expect(micProblemText('denied-system', { navigator: media, WebApp: { initData: 'x', platform: 'android' } })).toBe(
+            'Нет доступа к микрофону. Разрешите его MAX в настройках телефона.',
+        );
     });
 });

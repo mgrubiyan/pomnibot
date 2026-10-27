@@ -12,10 +12,16 @@ export const MAX_SPEECH_SECONDS = 30;
 /** As much as the server takes: 30 seconds of the PCM. */
 export const MAX_SPEECH_BYTES = MAX_SPEECH_SECONDS * SPEECH_RATE * 2;
 
-/** What MAX tells about a permission, as far as its docs show. */
+/**
+ * What MAX tells about a permission. Its script starts every flag false and
+ * lays over what the client sends, so a false grant means no only once MAX
+ * has asked that level.
+ */
 interface PermissionInfo {
     appAccessGranted?: boolean;
+    appAccessRequested?: boolean;
     systemAccessGranted?: boolean;
+    systemAccessRequested?: boolean;
 }
 
 /** window.WebApp.PermissionsManager: Android and the web client only. */
@@ -49,7 +55,7 @@ export function voiceInputAvailable(sdk: SpeechSDK = browser()): boolean {
         return false;
     }
     const max = maxApp(sdk);
-    if (max && (max.platform === 'ios' || !max.PermissionsManager)) {
+    if (max && ((max.platform !== 'android' && max.platform !== 'web') || !max.PermissionsManager)) {
         return false;
     }
     return true;
@@ -92,9 +98,9 @@ export function micProblemOf(error: unknown): MicProblem {
 /**
  * Opens the microphone: in MAX it first asks for the mini app's permission,
  * and never sends the reader to the settings, since declining that closes
- * the mini app. MAX tells a refusal by throwing; the flags it resolves with
- * start false and are not always sent (the web has no system ones), so
- * getUserMedia decides the rest. Throws a MicError.
+ * the mini app. MAX tells a fresh refusal by throwing, and an old one by
+ * the flags of a level it has asked; the web client has no system level.
+ * Past MAX, getUserMedia decides. Throws a MicError.
  */
 export async function openMicrophone(sdk: SpeechSDK = browser()): Promise<MediaStream> {
     try {
@@ -103,7 +109,13 @@ export async function openMicrophone(sdk: SpeechSDK = browser()): Promise<MediaS
             if (!permissions.isInited) {
                 await permissions.init();
             }
-            await permissions.requestAccess(['mic'], 'Чтобы отвечать голосом');
+            const mic = (await permissions.requestAccess(['mic'], 'Чтобы отвечать голосом'))?.mic;
+            if (mic?.appAccessRequested && !mic.appAccessGranted) {
+                throw new MicError('denied-max');
+            }
+            if (maxApp(sdk)?.platform !== 'web' && mic?.systemAccessRequested && !mic.systemAccessGranted) {
+                throw new MicError('denied-system');
+            }
         }
         const getUserMedia = sdk.navigator.mediaDevices?.getUserMedia;
         if (!getUserMedia) {
