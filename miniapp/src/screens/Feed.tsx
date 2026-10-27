@@ -22,8 +22,7 @@ import { Result } from './Result';
 import { cx } from '../utils/cx';
 import { kindTask } from '../utils/kinds';
 import { motionAllowed } from '../utils/motion';
-import { AutoTextarea } from '../components/AutoTextarea';
-import { flattenLines } from '../utils/flattenLines';
+import { OneLineTextarea } from '../components/OneLineTextarea';
 import { WAVE_BARS, voiceInputAvailable } from '../utils/speech';
 import { useVoiceAnswer } from '../utils/useVoiceAnswer';
 import {
@@ -261,15 +260,36 @@ export function Feed({
     const voiceOpen = voice.state === 'starting' || voice.state === 'recording';
     // What is heard shows in the field as it is said, after the typed text.
     const shown = voiceBusy && voice.live ? withSpoken(draft, voice.live) : draft;
-    const answerNote = voice.problem
-        || (voice.state === 'recognizing' && voice.waiting ? 'Распознаю ответ…' : '')
-        || (voiceAvailable ? 'Можно ответить текстом или голосом' : '');
+    const voiceNote = voice.problem
+        || (voice.state === 'recognizing' && voice.waiting ? 'Распознаю ответ…' : '');
+    const answerHint = voiceAvailable ? 'Можно ответить текстом или голосом' : '';
+    const answerNote = voiceNote || answerHint;
     // The recording panel takes room from the card: the field, where the
-    // words come, is kept in view inside it.
+    // words come, is brought into view inside it and followed as the words
+    // make it grow, until the reader scrolls the card themselves, say back
+    // up to the question.
     const answerRef = useRef<HTMLTextAreaElement>(null);
+    const followAnswerRef = useRef(false);
+    const answerBox = () => answerRef.current?.closest<HTMLElement>(`.${s.answerBox}`);
     useEffect(() => {
-        if (voiceOpen || voice.live) answerRef.current?.scrollIntoView({ block: 'nearest' });
-    }, [voiceOpen, voice.live]);
+        const box = answerBox();
+        followAnswerRef.current = voiceOpen;
+        if (!voiceOpen || !box) return;
+        box.scrollIntoView({ block: 'nearest' });
+        const side = box.closest(`.${s.face}`);
+        const stop = () => {
+            followAnswerRef.current = false;
+        };
+        side?.addEventListener('wheel', stop, { passive: true });
+        side?.addEventListener('touchmove', stop, { passive: true });
+        return () => {
+            side?.removeEventListener('wheel', stop);
+            side?.removeEventListener('touchmove', stop);
+        };
+    }, [voiceOpen]);
+    useEffect(() => {
+        if (voice.live && followAnswerRef.current) answerBox()?.scrollIntoView({ block: 'nearest' });
+    }, [voice.live]);
     // The microphone that opened the panel is gone while it is open: focus
     // goes into the panel and comes back to the microphone, never to the page.
     // The panel closes before the text is fixed, while the microphone is
@@ -806,73 +826,54 @@ export function Feed({
                         <StudyIllustration svg={card.questionSvg} alt="Иллюстрация к вопросу" />
 
                         {card.kind === 'input' && !check ? (
-                            <div className={cx(s.answerBox, voiceBusy && s.answerBoxBusy)}>
-                                <Typography.Text variant="description" color="secondary" asChild>
-                                    <label htmlFor={ANSWER_FIELD_ID}>Ваш ответ</label>
-                                </Typography.Text>
-                                <div className={s.answerRow}>
-                                    <AutoTextarea
-                                        id={ANSWER_FIELD_ID}
-                                        ref={answerRef}
-                                        rows={1}
-                                        className={s.answerField}
-                                        value={shown}
-                                        readOnly={voiceBusy}
-                                        enterKeyHint="send"
-                                        autoCorrect="off"
-                                        aria-describedby={answerNote ? ANSWER_NOTE_ID : undefined}
-                                        onChange={(event) => {
-                                            const field = event.target;
-                                            // Some phone keyboards send «Отправить» as a
-                                            // line break with no Enter keydown.
-                                            if ((event.nativeEvent as InputEvent).inputType === 'insertLineBreak') {
+                            <>
+                                <div className={cx(s.answerBox, voiceBusy && s.answerBoxBusy)}>
+                                    <Typography.Text variant="description" color="secondary" asChild>
+                                        <label htmlFor={ANSWER_FIELD_ID}>Ваш ответ</label>
+                                    </Typography.Text>
+                                    <div className={s.answerRow}>
+                                        <OneLineTextarea
+                                            id={ANSWER_FIELD_ID}
+                                            ref={answerRef}
+                                            rows={1}
+                                            className={s.answerField}
+                                            value={shown}
+                                            readOnly={voiceBusy}
+                                            enterKeyHint="send"
+                                            autoCorrect="off"
+                                            aria-describedby={answerNote ? ANSWER_NOTE_ID : undefined}
+                                            onValueChange={setDraft}
+                                            onSubmit={() => {
                                                 if (!voiceBusy && draft.trim().length > 0) sendTyped();
-                                                return;
-                                            }
-                                            if (!field.value.includes('\n')) {
-                                                setDraft(field.value);
-                                                return;
-                                            }
-                                            // An answer is one line; the caret stays where the paste ended.
-                                            const caret = flattenLines(field.value.slice(0, field.selectionStart)).length;
-                                            setDraft(flattenLines(field.value));
-                                            requestAnimationFrame(() => field.setSelectionRange(caret, caret));
-                                        }}
-                                        onKeyDown={(event) => {
-                                            // Enter that ends an IME composition is not a send,
-                                            // and a held key repeats.
-                                            if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
-                                            event.preventDefault();
-                                            if (!event.repeat && !voiceBusy && draft.trim().length > 0) sendTyped();
-                                        }}
-                                    />
-                                    {voiceAvailable && !voiceOpen ? (
-                                        <IconButton
-                                            ref={micRef}
-                                            size="xsmall"
-                                            variant="ghost"
-                                            className={s.answerMic}
-                                            aria-label="Ответить голосом"
-                                            disabled={!imagesReady || voiceBusy}
-                                            onClick={() => void voice.start()}
-                                        >
-                                            <IconMic size={20} />
-                                        </IconButton>
-                                    ) : null}
+                                            }}
+                                        />
+                                        {voiceAvailable && !voiceOpen ? (
+                                            <IconButton
+                                                ref={micRef}
+                                                size="xsmall"
+                                                variant="ghost"
+                                                className={s.answerMic}
+                                                aria-label="Ответить голосом"
+                                                disabled={!imagesReady || voiceBusy}
+                                                onClick={() => void voice.start()}
+                                            >
+                                                <IconMic size={20} />
+                                            </IconButton>
+                                        ) : null}
+                                    </div>
                                 </div>
-                            </div>
-                        ) : null}
-
-                        {card.kind === 'input' && !check && answerNote ? (
-                            <Typography.Text
-                                id={ANSWER_NOTE_ID}
-                                variant="description"
-                                color="secondary"
-                                role="status"
-                                className={s.answerNote}
-                            >
-                                {answerNote}
-                            </Typography.Text>
+                                <Typography.Text
+                                    id={ANSWER_NOTE_ID}
+                                    variant="description"
+                                    color="secondary"
+                                    className={s.answerNote}
+                                >
+                                    {/* Only what changes is announced; the hint
+                                        is read with the field it describes. */}
+                                    <span role="status">{voiceNote}</span>
+                                    {voiceNote ? null : answerHint}
+                                </Typography.Text>
+                            </>
                         ) : null}
 
                         {check?.typed ? (
@@ -1155,7 +1156,17 @@ export function Feed({
                                         ))}
                                     </div>
                                     <div className={s.voiceActions}>
-                                        <button ref={cancelVoiceRef} type="button" className={s.voiceAction} onClick={cancelVoice}>
+                                        <button
+                                            ref={cancelVoiceRef}
+                                            type="button"
+                                            className={s.voiceAction}
+                                            onClick={cancelVoice}
+                                            // Focus comes here as the panel opens: an Enter
+                                            // held on the microphone must not cancel at once.
+                                            onKeyDown={(event) => {
+                                                if (event.key === 'Enter' && event.repeat) event.preventDefault();
+                                            }}
+                                        >
                                             Отмена
                                         </button>
                                         {/* Shows the voice is heard; not a button. */}
