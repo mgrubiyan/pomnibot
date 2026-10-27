@@ -258,7 +258,8 @@ export function SetScreen({
                                 Все карточки повторены
                             </Typography.Text>
                         </Flex>
-                        {cards.length > 0 ? (
+                        {/* Not cards.length: members never load the cards. */}
+                        {totalCards > 0 ? (
                             <Button
                                 size="medium"
                                 variant="primary"
