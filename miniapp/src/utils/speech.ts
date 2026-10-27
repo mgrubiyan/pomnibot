@@ -235,6 +235,20 @@ export function loudness(samples: Float32Array): number {
     return Math.max(0, Math.min(1, (db + 50) / 40));
 }
 
+/** Bars of the waveform shown while the reader speaks. */
+export const WAVE_BARS = 25;
+
+/**
+ * The waveform after one more piece of the recording: the newest loudness
+ * comes in on the right and the oldest leaves on the left.
+ */
+export function shiftWave(wave: readonly number[], level: number): number[] {
+    return [...wave.slice(1), level];
+}
+
+/** A waveform of silence, for a recording that has not begun. */
+export const silentWave = (): number[] => new Array<number>(WAVE_BARS).fill(0);
+
 /** A recording in progress; onPCM of record gets it as it is heard. */
 export interface Recording {
     /** Stops and gives the PCM; the microphone is released. */

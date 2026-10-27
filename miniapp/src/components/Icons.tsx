@@ -67,13 +67,6 @@ export const IconMic = (props: IconProps) => (
     </Icon>
 );
 
-/** Stop a recording. */
-export const IconStop = (props: IconProps) => (
-    <Icon {...props}>
-        <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none" />
-    </Icon>
-);
-
 /** The drag handle of a reorderable row: the «≡» the set editor's hint names. */
 export const IconGrip = (props: IconProps) => (
     <Icon {...props}>

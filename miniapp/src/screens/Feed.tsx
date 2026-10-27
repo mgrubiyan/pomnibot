@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Flex, IconButton, Input, Spinner, Typography } from '@maxhub/max-ui';
+import { Button, Flex, IconButton, Spinner, Typography } from '@maxhub/max-ui';
 import type { Answer, Card, CardAnswer, CardReveal, FeedCard } from '../types';
 import { api } from '../api';
 import { TableColumns, TablePool } from '../components/TableCard';
@@ -22,8 +22,9 @@ import { Result } from './Result';
 import { cx } from '../utils/cx';
 import { kindTask } from '../utils/kinds';
 import { motionAllowed } from '../utils/motion';
-import { voiceInputAvailable } from '../utils/speech';
-import { useVoiceAnswer, type VoiceState } from '../utils/useVoiceAnswer';
+import { OneLineTextarea } from '../components/OneLineTextarea';
+import { WAVE_BARS, voiceInputAvailable } from '../utils/speech';
+import { useVoiceAnswer } from '../utils/useVoiceAnswer';
 import {
     IconCheck,
     IconChevronLeft,
@@ -32,7 +33,6 @@ import {
     IconFlag,
     IconMic,
     IconOffline,
-    IconStop,
 } from '../components/Icons';
 import s from './Feed.module.css';
 
@@ -251,23 +251,67 @@ export function Feed({
     const voice = useVoiceAnswer(useCallback((text: string) => {
         setDraft((current) => withSpoken(current, text));
     }, []));
-    const { cancel: cancelVoice, levelRef: voiceLevelRef } = voice;
+    const { cancel: cancelVoice, levelRef: voiceLevelRef, waveRef: voiceWaveRef } = voice;
     // Opening the microphone may wait on a permission prompt: the field
     // stays free, and sending a typed answer drops the voice one.
     const voiceBusy = voice.state === 'recording' || voice.state === 'recognizing';
-    // Recognition that ends at once is not shown, or the spinner would flicker.
-    const voiceShown: VoiceState = voice.state === 'recognizing' && !voice.waiting ? 'idle' : voice.state;
-    // The field's placeholder tells how the recording goes; over typed text
-    // the line under the field does.
+    // The panel is there while the microphone is: «Готово» closes it at once,
+    // and recognition that takes long shows under the field instead.
+    const voiceOpen = voice.state === 'starting' || voice.state === 'recording';
     // What is heard shows in the field as it is said, after the typed text.
     const shown = voiceBusy && voice.live ? withSpoken(draft, voice.live) : draft;
-    const voiceLine = voice.problem || (voiceShown !== 'idle' && shown ? voicePlaceholder(voiceShown, voice.seconds) : '');
-    // The field is one line: its end, where the words come, stays in view.
-    const answerRef = useRef<HTMLInputElement>(null);
+    const voiceNote = voice.problem
+        || (voice.state === 'recognizing' && voice.waiting ? 'Распознаю ответ…' : '');
+    const answerHint = voiceAvailable ? 'Можно ответить текстом или голосом' : '';
+    const answerNote = voiceNote || answerHint;
+    // The recording panel takes room from the card: the field, where the
+    // words come, is brought into view inside it and followed as the words
+    // make it grow, until the reader scrolls the card themselves, say back
+    // up to the question.
+    const answerRef = useRef<HTMLTextAreaElement>(null);
+    const followAnswerRef = useRef(false);
+    const answerBox = () => answerRef.current?.closest<HTMLElement>(`.${s.answerBox}`);
     useEffect(() => {
-        const field = answerRef.current;
-        if (field && voice.live) field.scrollLeft = field.scrollWidth;
+        const box = answerBox();
+        followAnswerRef.current = voiceOpen;
+        if (!voiceOpen || !box) return;
+        box.scrollIntoView({ block: 'nearest' });
+        const side = box.closest(`.${s.face}`);
+        const stop = () => {
+            followAnswerRef.current = false;
+        };
+        side?.addEventListener('wheel', stop, { passive: true });
+        side?.addEventListener('touchmove', stop, { passive: true });
+        return () => {
+            side?.removeEventListener('wheel', stop);
+            side?.removeEventListener('touchmove', stop);
+        };
+    }, [voiceOpen]);
+    useEffect(() => {
+        if (voice.live && followAnswerRef.current) answerBox()?.scrollIntoView({ block: 'nearest' });
     }, [voice.live]);
+    // The microphone that opened the panel is gone while it is open: focus
+    // goes into the panel and comes back to the microphone, never to the page.
+    // The panel closes before the text is fixed, while the microphone is
+    // still disabled: focus comes back once it is enabled.
+    const micRef = useRef<HTMLButtonElement>(null);
+    const cancelVoiceRef = useRef<HTMLButtonElement>(null);
+    const voiceWasOpenRef = useRef(false);
+    const focusMicRef = useRef(false);
+    useEffect(() => {
+        const was = voiceWasOpenRef.current;
+        voiceWasOpenRef.current = voiceOpen;
+        const lost = () => !document.activeElement || document.activeElement === document.body;
+        if (voiceOpen) {
+            if (!was && lost()) cancelVoiceRef.current?.focus({ preventScroll: true });
+            return;
+        }
+        if (was && lost()) focusMicRef.current = true;
+        if (!voiceBusy && focusMicRef.current) {
+            focusMicRef.current = false;
+            if (lost()) micRef.current?.focus({ preventScroll: true });
+        }
+    }, [voiceOpen, voiceBusy]);
     // The layout is keyed by card id instead of being reset by an effect:
     // that way it appears on its own and needs no setState in an effect.
     const [placements, setPlacements] = useState<Record<string, Placement>>({});
@@ -763,7 +807,9 @@ export function Feed({
                             s.face,
                             s.faceFront,
                             s.card,
-                            !check?.typed && s.cardCentered,
+                            // A typed answer is written in the card: the
+                            // question stays on top and the field under it.
+                            !check?.typed && card.kind !== 'input' && s.cardCentered,
                             tapToReveal && s.tappable,
                         )}
                     >
@@ -778,6 +824,57 @@ export function Feed({
 
                         <StudyImages images={card.questionImages} />
                         <StudyIllustration svg={card.questionSvg} alt="Иллюстрация к вопросу" />
+
+                        {card.kind === 'input' && !check ? (
+                            <>
+                                <div className={cx(s.answerBox, voiceBusy && s.answerBoxBusy)}>
+                                    <Typography.Text variant="description" color="secondary" asChild>
+                                        <label htmlFor={ANSWER_FIELD_ID}>Ваш ответ</label>
+                                    </Typography.Text>
+                                    <div className={s.answerRow}>
+                                        <OneLineTextarea
+                                            id={ANSWER_FIELD_ID}
+                                            ref={answerRef}
+                                            rows={1}
+                                            className={s.answerField}
+                                            value={shown}
+                                            readOnly={voiceBusy}
+                                            enterKeyHint="send"
+                                            autoCorrect="off"
+                                            aria-describedby={answerNote ? ANSWER_NOTE_ID : undefined}
+                                            onValueChange={setDraft}
+                                            onSubmit={() => {
+                                                if (!voiceBusy && draft.trim().length > 0) sendTyped();
+                                            }}
+                                        />
+                                        {voiceAvailable && !voiceOpen ? (
+                                            <IconButton
+                                                ref={micRef}
+                                                size="xsmall"
+                                                variant="ghost"
+                                                className={s.answerMic}
+                                                aria-label="Ответить голосом"
+                                                disabled={!imagesReady || voiceBusy}
+                                                onClick={() => void voice.start()}
+                                            >
+                                                <IconMic size={20} />
+                                            </IconButton>
+                                        ) : null}
+                                    </div>
+                                </div>
+                                <Typography.Text
+                                    id={ANSWER_NOTE_ID}
+                                    variant="description"
+                                    color="secondary"
+                                    className={s.answerNote}
+                                >
+                                    {/* Only what changes is announced; the hint
+                                        is read with the field it describes. */}
+                                    <span role="status">{voiceNote}</span>
+                                    {voiceNote ? null : answerHint}
+                                </Typography.Text>
+                            </>
+                        ) : null}
 
                         {check?.typed ? (
                             <AnswerCheck stage={check.stage} answer={check.typed} />
@@ -1037,51 +1134,62 @@ export function Feed({
 
                     {card.kind === 'input' && !check ? (
                         <>
-                            <Input
-                                ref={answerRef}
-                                size="large"
-                                value={shown}
-                                placeholder={voicePlaceholder(voiceShown, voice.seconds)}
-                                readOnly={voiceBusy}
-                                withClearButton={!voiceBusy}
-                                enterKeyHint="send"
-                                autoCorrect="off"
-                                aria-describedby={voiceLine ? 'voice-line' : undefined}
-                                onChange={(event) => setDraft(event.target.value)}
-                                onKeyDown={(event) => {
-                                    // A held key repeats, and Enter also ends an IME composition.
-                                    if (event.key !== 'Enter' || event.repeat || event.nativeEvent.isComposing) return;
-                                    if (!voiceBusy && draft.trim().length > 0) sendTyped();
-                                }}
-                                iconAfter={voiceAvailable ? (
-                                    <span className={s.mic}>
+                            {voiceOpen ? (
+                                <section className={s.voicePanel} aria-label="Запись ответа">
+                                    <div className={s.voiceHead}>
+                                        <span
+                                            className={cx(s.voiceDot, voice.state === 'recording' && s.voiceDotLive)}
+                                            aria-hidden="true"
+                                        />
+                                        <Typography.Text variant="label" className={s.voiceStatus} role="status">
+                                            {voice.state === 'recording' ? 'Идёт запись' : 'Включаю микрофон'}
+                                        </Typography.Text>
                                         {voice.state === 'recording' ? (
-                                            <span ref={voiceLevelRef} className={s.micLevel} aria-hidden="true" />
+                                            <Typography.Text variant="label" className={s.voiceClock}>
+                                                {clock(voice.seconds)}
+                                            </Typography.Text>
                                         ) : null}
-                                        <IconButton
-                                            size="xsmall"
-                                            variant={voiceShown === 'recording' ? 'primary' : 'ghost'}
-                                            className={s.micButton}
-                                            aria-label={MIC_LABEL[voiceShown]}
-                                            aria-pressed={voiceShown === 'recording'}
-                                            loading={voiceShown === 'recognizing'}
-                                            disabled={!imagesReady}
-                                            onClick={voice.toggle}
+                                    </div>
+                                    <div ref={voiceWaveRef} className={s.wave} aria-hidden="true">
+                                        {Array.from({ length: WAVE_BARS }, (_, i) => (
+                                            <span key={i} className={s.waveBar} />
+                                        ))}
+                                    </div>
+                                    <div className={s.voiceActions}>
+                                        <button
+                                            ref={cancelVoiceRef}
+                                            type="button"
+                                            className={s.voiceAction}
+                                            onClick={cancelVoice}
+                                            // Focus comes here as the panel opens: an Enter
+                                            // held on the microphone must not cancel at once.
+                                            onKeyDown={(event) => {
+                                                if (event.key === 'Enter' && event.repeat) event.preventDefault();
+                                            }}
                                         >
-                                            {/* A new icon comes in, except the
-                                                microphone of a card just shown. */}
-                                            <span key={voiceShown} className={voiceShown !== 'idle' || voice.tried ? s.micIcon : s.micIconStill}>
-                                                {voiceShown === 'starting' ? <Spinner size={16} appearance="neutral-themed" />
-                                                    : voiceShown === 'recording' ? <IconStop size={16} /> : <IconMic size={20} />}
+                                            Отмена
+                                        </button>
+                                        {/* Shows the voice is heard; not a button. */}
+                                        <span className={s.voiceMic} aria-hidden="true">
+                                            <span ref={voiceLevelRef} className={s.micLevel} />
+                                            <span className={s.voiceMicCircle}>
+                                                {voice.state === 'recording' ? (
+                                                    <IconMic size={24} />
+                                                ) : (
+                                                    <Spinner size={20} appearance="contrast-static" />
+                                                )}
                                             </span>
-                                        </IconButton>
-                                    </span>
-                                ) : undefined}
-                            />
-                            {voiceLine ? (
-                                <Typography.Text id="voice-line" variant="description" color="secondary" className={s.voiceLine} role="status">
-                                    {voiceLine}
-                                </Typography.Text>
+                                        </span>
+                                        <button
+                                            type="button"
+                                            className={cx(s.voiceAction, s.voiceDone)}
+                                            disabled={voice.state !== 'recording'}
+                                            onClick={() => void voice.finish()}
+                                        >
+                                            Готово
+                                        </button>
+                                    </div>
+                                </section>
                             ) : null}
                             <Button
                                 size="medium"
@@ -1090,7 +1198,7 @@ export function Feed({
                                 disabled={!imagesReady || voiceBusy || draft.trim().length === 0}
                                 onClick={sendTyped}
                             >
-                                Ответить
+                                Проверить
                             </Button>
                         </>
                     ) : null}
@@ -1118,29 +1226,17 @@ export function Feed({
     );
 }
 
-const MIC_LABEL: Record<VoiceState, string> = {
-    idle: 'Ответить голосом',
-    starting: 'Не включать микрофон',
-    recording: 'Остановить запись',
-    recognizing: 'Распознаю ответ',
-};
+const ANSWER_FIELD_ID = 'answer-field';
+const ANSWER_NOTE_ID = 'answer-note';
 
 function withSpoken(typed: string, spoken: string): string {
     return typed.trim() ? `${typed.trimEnd()} ${spoken}` : spoken;
 }
 
-/** The field tells what the microphone is doing while it is busy. */
-function voicePlaceholder(state: VoiceState, seconds: number): string {
-    switch (state) {
-        case 'starting':
-            return 'Включаю микрофон';
-        case 'recording':
-            return `Говорите · 0:${String(seconds).padStart(2, '0')}`;
-        case 'recognizing':
-            return 'Распознаю';
-        default:
-            return 'Ваш ответ';
-    }
+/** 8 seconds → «00:08». */
+function clock(seconds: number): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(Math.floor(seconds / 60))}:${pad(seconds % 60)}`;
 }
 
 export default Feed;

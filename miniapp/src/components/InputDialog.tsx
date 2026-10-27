@@ -1,9 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { Button, Flex, Typography } from '@maxhub/max-ui';
-import { AutoTextarea } from './AutoTextarea';
+import { OneLineTextarea } from './OneLineTextarea';
 import s from './Dialog.module.css';
-
-const flatten = (text: string) => text.replace(/\s*\n\s*/g, ' ');
 
 export interface InputDialogProps {
     title: string;
@@ -106,7 +104,7 @@ export function InputDialog({
                 </Flex>
                 {/* A name is one line, but a long one is read whole: the field
                     wraps and grows instead of scrolling sideways. */}
-                <AutoTextarea
+                <OneLineTextarea
                     ref={fieldRef}
                     rows={1}
                     // Enter saves, so the keyboard says so.
@@ -116,31 +114,8 @@ export function InputDialog({
                     value={value}
                     placeholder={placeholder}
                     maxLength={120}
-                    onChange={(e) => {
-                        const field = e.target;
-                        // Some phone keyboards send «Готово» as a line break
-                        // with no Enter keydown: it saves, like Enter.
-                        if ((e.nativeEvent as InputEvent).inputType === 'insertLineBreak') {
-                            handleConfirm();
-                            return;
-                        }
-                        if (!field.value.includes('\n')) {
-                            setValue(field.value);
-                            return;
-                        }
-                        // A pasted line break would end up in the name. The
-                        // caret stays where the paste ended, not at the end.
-                        const caret = flatten(field.value.slice(0, field.selectionStart)).length;
-                        setValue(flatten(field.value));
-                        requestAnimationFrame(() => field.setSelectionRange(caret, caret));
-                    }}
-                    onKeyDown={(e) => {
-                        // Enter that picks an IME candidate is not a save.
-                        if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                            e.preventDefault();
-                            handleConfirm();
-                        }
-                    }}
+                    onValueChange={setValue}
+                    onSubmit={handleConfirm}
                 />
                 <Flex direction="column" align="stretch" gap={8}>
                     <Button
