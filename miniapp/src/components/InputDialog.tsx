@@ -1,9 +1,8 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { Button, Flex, Typography } from '@maxhub/max-ui';
 import { AutoTextarea } from './AutoTextarea';
+import { flattenLines } from '../utils/flattenLines';
 import s from './Dialog.module.css';
-
-const flatten = (text: string) => text.replace(/\s*\n\s*/g, ' ');
 
 export interface InputDialogProps {
     title: string;
@@ -130,8 +129,8 @@ export function InputDialog({
                         }
                         // A pasted line break would end up in the name. The
                         // caret stays where the paste ended, not at the end.
-                        const caret = flatten(field.value.slice(0, field.selectionStart)).length;
-                        setValue(flatten(field.value));
+                        const caret = flattenLines(field.value.slice(0, field.selectionStart)).length;
+                        setValue(flattenLines(field.value));
                         requestAnimationFrame(() => field.setSelectionRange(caret, caret));
                     }}
                     onKeyDown={(e) => {

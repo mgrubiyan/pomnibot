@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import { MAX_SPEECH_SECONDS, SPEECH_RATE, createAudioContext, micProblemOf, micProblemText, openMicrophone, record, type Recording } from './speech';
+import {
+    MAX_SPEECH_SECONDS,
+    SPEECH_RATE,
+    createAudioContext,
+    micProblemOf,
+    micProblemText,
+    openMicrophone,
+    record,
+    shiftWave,
+    silentWave,
+    type Recording,
+} from './speech';
 import { motionAllowed } from './motion';
 import { openLiveSpeech, type LiveSpeech } from './speechStream';
 
@@ -35,10 +46,10 @@ export const NOTHING_HEARD = 'Ничего не слышно. Попробуйт
  * it and sends it like a typed one. A new card, or leaving, cancels it.
  * While the reader speaks, live is the text heard so far; when the live
  * stream fails, the whole recording is recognized at the end.
- * levelRef attaches an element that follows the loudness of the voice, so the
+ * levelRef attaches an element that follows the loudness of the voice and
+ * waveRef one whose children are the bars of its recent history, so the
  * reader sees the microphone hears them before the first word comes;
- * waiting tells recognition has taken long enough to show; tried, that the
- * reader has used the microphone on this card.
+ * waiting tells recognition has taken long enough to show.
  */
 export function useVoiceAnswer(onText: (text: string) => void) {
     const [state, setState] = useState<VoiceState>('idle');
@@ -46,10 +57,13 @@ export function useVoiceAnswer(onText: (text: string) => void) {
     const [problem, setProblem] = useState('');
     const [live, setLive] = useState('');
     const [waiting, setWaiting] = useState(false);
-    const [tried, setTried] = useState(false);
     const ringRef = useRef<HTMLElement | null>(null);
     const levelRef = useCallback((element: HTMLElement | null) => {
         ringRef.current = element;
+    }, []);
+    const barsRef = useRef<HTMLElement | null>(null);
+    const waveRef = useCallback((element: HTMLElement | null) => {
+        barsRef.current = element;
     }, []);
 
     // Every run gets a number: a microphone or recognition that answers
@@ -86,7 +100,6 @@ export function useVoiceAnswer(onText: (text: string) => void) {
         setSeconds(0);
         setProblem('');
         setLive('');
-        setTried(false);
     }, []);
 
     useEffect(() => cancel, [cancel]);
@@ -130,7 +143,6 @@ export function useVoiceAnswer(onText: (text: string) => void) {
     const start = useCallback(async () => {
         const run = ++runRef.current;
         setProblem('');
-        setTried(true);
         setState('starting');
         let context: AudioContext;
         try {
@@ -162,18 +174,34 @@ export function useVoiceAnswer(onText: (text: string) => void) {
             if (run === runRef.current) setLive(text);
         });
         liveRef.current = liveSpeech;
-        // Rises at once and falls gently: a word lights the ring, a pause
-        // lets it settle. Set on the element itself, past React: it changes
-        // every tenth of a second.
+        // The ring rises at once and falls gently: a word lights it, a pause
+        // lets it settle. The wave keeps each piece as it was heard. Both are
+        // set on the elements themselves, past React: they change every tenth
+        // of a second. With reduced motion only brightness changes.
         const moves = motionAllowed();
         let level = 0;
+        let wave = silentWave();
         const showLoudness = (heard: number) => {
             level = Math.max(heard, level * 0.75);
+            wave = shiftWave(wave, heard);
             const ring = ringRef.current;
-            if (!ring) return;
-            if (moves) ring.style.transform = `scale(${1 + level * 0.35})`;
-            ring.style.opacity = String(level * 0.6);
+            if (ring) {
+                if (moves) ring.style.transform = `scale(${1 + level * 0.35})`;
+                ring.style.opacity = String(level * 0.6);
+            }
+            const bars = barsRef.current;
+            if (!bars) return;
+            if (moves) {
+                wave.forEach((value, i) => {
+                    const bar = bars.children[i] as HTMLElement | undefined;
+                    if (bar) bar.style.transform = `scaleY(${0.15 + 0.85 * value})`;
+                });
+            } else {
+                bars.style.opacity = String(0.4 + 0.6 * level);
+            }
         };
+        // Flat from the start, whatever the last recording left.
+        showLoudness(0);
         recordingRef.current = record(context, stream, liveSpeech.send, showLoudness);
         const startedAt = Date.now();
         setSeconds(0);
@@ -186,15 +214,7 @@ export function useVoiceAnswer(onText: (text: string) => void) {
         }, 250);
     }, [finish]);
 
-    // While the microphone opens, a permission prompt may wait on the
-    // reader for long: a tap gives up on it, and typing still works.
-    const toggle = useCallback(() => {
-        if (state === 'idle') void start();
-        else if (state === 'starting') cancel();
-        else if (state === 'recording') void finish();
-    }, [state, start, finish, cancel]);
-
-    return { state, seconds, problem, live, waiting, tried, levelRef, toggle, cancel };
+    return { state, seconds, problem, live, waiting, levelRef, waveRef, start, finish, cancel };
 }
 
 interface Recognized {

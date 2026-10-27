@@ -33,7 +33,7 @@ const KINDS: Record<CardKind, KindText> = {
     input: {
         label: 'Свой ответ',
         hint: 'Ответ вписывают словом или числом',
-        task: 'Впишите ответ',
+        task: 'Ответьте своими словами',
     },
     table: {
         label: 'Таблица',

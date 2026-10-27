@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { MAX_SPEECH_BYTES, PCMEncoder, loudness, SPEECH_RATE, micProblemOf, openMicrophone, toPCM16, voiceInputAvailable, type SpeechSDK } from './speech';
+import { MAX_SPEECH_BYTES, PCMEncoder, WAVE_BARS, loudness, shiftWave, silentWave, SPEECH_RATE, micProblemOf, openMicrophone, toPCM16, voiceInputAvailable, type SpeechSDK } from './speech';
 
 const samples = (bytes: Uint8Array) => {
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -91,6 +91,22 @@ describe('loudness', () => {
         expect(quiet).toBeGreaterThan(0);
         expect(speech).toBeGreaterThan(quiet);
         expect(speech).toBeLessThan(1);
+    });
+});
+
+describe('shiftWave', () => {
+    it('starts flat and takes each loudness on the right', () => {
+        let wave = silentWave();
+        expect(wave).toEqual(new Array(WAVE_BARS).fill(0));
+        wave = shiftWave(wave, 0.5);
+        wave = shiftWave(wave, 1);
+        expect(wave.length).toBe(WAVE_BARS);
+        expect(wave.slice(-3)).toEqual([0, 0.5, 1]);
+    });
+
+    it('drops the oldest on the left', () => {
+        const wave = Array.from({ length: WAVE_BARS }, (_, i) => i);
+        expect(shiftWave(wave, 99)).toEqual([...wave.slice(1), 99]);
     });
 });
 
