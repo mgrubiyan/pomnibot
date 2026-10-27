@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { MAX_SPEECH_BYTES, PCMEncoder, loudness, SPEECH_RATE, micProblemOf, openMicrophone, toPCM16, voiceInputAvailable, type SpeechSDK } from './speech';
+import { MAX_SPEECH_BYTES, PCMEncoder, loudness, SPEECH_RATE, micProblemOf, micProblemText, openMicrophone, toPCM16, voiceInputAvailable, type SpeechSDK } from './speech';
 
 const samples = (bytes: Uint8Array) => {
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -110,6 +110,7 @@ describe('voiceInputAvailable', () => {
         expect(voiceInputAvailable({ navigator: media, ...audio, WebApp: { initData: 'x', platform: 'web', PermissionsManager: manager } })).toBe(true);
         // MAX gives no microphone on iOS yet, nor in an older client.
         expect(voiceInputAvailable({ navigator: media, ...audio, WebApp: { initData: 'x', platform: 'ios', PermissionsManager: manager } })).toBe(false);
+        expect(voiceInputAvailable({ navigator: media, ...audio, WebApp: { initData: 'x', platform: 'desktop', PermissionsManager: manager } })).toBe(false);
         expect(voiceInputAvailable({ navigator: media, ...audio, WebApp: { initData: 'x', platform: 'android' } })).toBe(false);
         // The MAX script outside MAX leaves the browser as it is.
         expect(voiceInputAvailable({ navigator: media, ...audio, WebApp: { initData: '' } })).toBe(true);
@@ -156,13 +157,56 @@ describe('openMicrophone', () => {
         expect(calls).toEqual(['init', 'requestAccess mic Чтобы отвечать голосом', 'getUserMedia {"audio":true}']);
     });
 
-    it('stops at a refusal MAX reports without throwing', async () => {
+    it('leaves the granted flags to the browser: MAX starts them false and may not send them', async () => {
+        const web = [
+            undefined,
+            {},
+            { mic: {} },
+            { mic: { appAccessGranted: false } },
+            // The web client has no system level; MAX leaves its flags false.
+            { mic: { appAccessGranted: true, appAccessRequested: true, systemAccessGranted: false, systemAccessRequested: true } },
+        ];
+        for (const info of web) {
+            const sdk: SpeechSDK = {
+                navigator: { mediaDevices: { getUserMedia: async () => stream } },
+                WebApp: {
+                    initData: 'x',
+                    platform: 'web',
+                    PermissionsManager: { isInited: true, init: async () => {}, requestAccess: async () => info },
+                },
+            };
+            expect(await openMicrophone(sdk)).toBe(stream);
+        }
+    });
+
+    it('stops at a refusal MAX remembers from asking before', async () => {
+        const refused = (platform: string, mic: object) => {
+            let asked = false;
+            const sdk: SpeechSDK = {
+                navigator: { mediaDevices: { getUserMedia: async () => { asked = true; return stream; } } },
+                WebApp: { initData: 'x', platform, PermissionsManager: { isInited: true, init: async () => {}, requestAccess: async () => ({ mic }) } },
+            };
+            return { sdk, asked: () => asked };
+        };
+        const app = refused('web', { appAccessGranted: false, appAccessRequested: true });
+        await expect(openMicrophone(app.sdk)).rejects.toMatchObject({ problem: 'denied-max' });
+        expect(app.asked()).toBe(false);
+        const system = refused('android', { appAccessGranted: true, appAccessRequested: true, systemAccessGranted: false, systemAccessRequested: true });
+        await expect(openMicrophone(system.sdk)).rejects.toMatchObject({ problem: 'denied-system' });
+        expect(system.asked()).toBe(false);
+    });
+
+    it('stops at a refusal MAX throws', async () => {
         let asked = false;
         const sdk: SpeechSDK = {
             navigator: { mediaDevices: { getUserMedia: async () => { asked = true; return stream; } } },
             WebApp: {
                 initData: 'x',
-                PermissionsManager: { isInited: true, init: async () => {}, requestAccess: async () => ({ mic: { appAccessGranted: false } }) },
+                PermissionsManager: {
+                    isInited: true,
+                    init: async () => {},
+                    requestAccess: async () => { throw { error: { code: 'client.permissions_request_access.mic_app_permission_denied' } }; },
+                },
             },
         };
         await expect(openMicrophone(sdk)).rejects.toMatchObject({ problem: 'denied-max' });
@@ -172,5 +216,17 @@ describe('openMicrophone', () => {
     it('turns a browser refusal into a problem', async () => {
         const sdk: SpeechSDK = { navigator: { mediaDevices: { getUserMedia: async () => { throw new DOMException('', 'NotAllowedError'); } } } };
         await expect(openMicrophone(sdk)).rejects.toMatchObject({ problem: 'denied-system' });
+    });
+});
+
+describe('micProblemText', () => {
+    it('sends a refused reader where the refusal is', () => {
+        expect(micProblemText('denied-system', { navigator: media })).toBe('Нет доступа к микрофону. Разрешите его в настройках браузера.');
+        expect(micProblemText('denied-system', { navigator: media, WebApp: { initData: 'x', platform: 'web' } })).toBe(
+            'Нет доступа к микрофону. Разрешите его сайту MAX в настройках браузера и нажмите ещё раз.',
+        );
+        expect(micProblemText('denied-system', { navigator: media, WebApp: { initData: 'x', platform: 'android' } })).toBe(
+            'Нет доступа к микрофону. Разрешите его MAX в настройках телефона.',
+        );
     });
 });
