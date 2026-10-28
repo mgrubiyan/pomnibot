@@ -83,7 +83,8 @@ func (s *userServiceImpl) EnsureUser(ctx context.Context, userID uuid.UUID) erro
 	return nil
 }
 
-// GetUsersWithDueFacts returns all user IDs who have cards due today or earlier in the given timezone.
+// GetUsersWithDueFacts returns the IDs of users with a MAX ID who have cards
+// due today or earlier in the given timezone: only they can be reminded.
 func (s *userServiceImpl) GetUsersWithDueFacts(ctx context.Context, now time.Time, tz string) ([]uuid.UUID, error) {
 	if strings.TrimSpace(tz) == "" {
 		tz = "Europe/Moscow"

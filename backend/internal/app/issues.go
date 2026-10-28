@@ -13,7 +13,7 @@ import (
 // its own, so the HTTP API has it before the bots start.
 func newIssueNotifier(cfg config.Config, users usecase.UserService) (*usecase.ChatIssueNotifier, error) {
 	if cfg.Environment != config.Prod {
-		return usecase.NewChatIssueNotifier(users), nil
+		return usecase.NewChatIssueNotifier(users, nil), nil
 	}
 	client, err := maxtransport.NewClient(cfg.MaxBotToken, cfg.MaxAPIURL, cfg.MaxInsecureSkipVerify)
 	if err != nil {
