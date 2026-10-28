@@ -14,7 +14,7 @@ import (
 
 func TestChatIssueNotifier(t *testing.T) {
 	authorID := uuid.New()
-	account := usecase.Account{User: contracts.User{ID: authorID}, MaxID: 5, TgID: 6}
+	account := usecase.Account{User: contracts.User{ID: authorID}, MaxID: 5}
 	accounts := accountsFunc(func(_ context.Context, id uuid.UUID) (usecase.Account, error) {
 		if id != authorID {
 			t.Errorf("account of %s", id)

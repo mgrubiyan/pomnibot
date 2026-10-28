@@ -24,7 +24,6 @@ import (
 )
 
 const maxToken = "perf-max-token"
-const telegramToken = "perf-telegram-token"
 
 type actor struct {
 	auth      string
@@ -41,23 +40,18 @@ type workload struct {
 }
 
 func identity(index int) *actor {
-	scheme, token := "max", maxToken
-	if index%2 == 1 {
-		scheme, token = "tma", telegramToken
-	}
-	external := 10000000 + index/2
+	external := 10000000 + index
 	if index < 0 {
 		external = ownerExternalID
-		scheme, token = "max", maxToken
 	}
 	user := fmt.Sprintf(`{"id":%d,"first_name":"Student","last_name":"Perf","username":"perf%d"}`, external, index)
 	values := url.Values{"auth_date": {strconv.FormatInt(time.Now().Unix(), 10)}, "user": {user}}
 	secret := hmac.New(sha256.New, []byte("WebAppData"))
-	secret.Write([]byte(token))
+	secret.Write([]byte(maxToken))
 	mac := hmac.New(sha256.New, secret.Sum(nil))
 	mac.Write([]byte("auth_date=" + values.Get("auth_date") + "\nuser=" + user))
 	values.Set("hash", hex.EncodeToString(mac.Sum(nil)))
-	return &actor{auth: scheme + " " + values.Encode(), index: index}
+	return &actor{auth: "max " + values.Encode(), index: index}
 }
 func (w *workload) request(ctx context.Context, r *recorder, a *actor, name, method, path string, body, out any) error {
 	start := time.Now()
@@ -106,19 +100,10 @@ func (w *workload) entry(ctx context.Context, r *recorder, a *actor) error {
 	if err := w.request(ctx, r, a, "profile", "GET", "/profile", nil, &profile); err != nil {
 		return err
 	}
-	expected := "max"
-	if a.index%2 == 1 {
-		expected = "telegram"
-	}
-	if profile.User.ID == uuid.Nil || string(profile.Platform.Value) != expected {
+	if profile.User.ID == uuid.Nil || profile.Platform.Value != contracts.ProfileResponsePlatformMax {
 		return fmt.Errorf("identity fell back to shared user: %+v", profile)
 	}
 	a.id = profile.User.ID
-	if !profile.ProfileComplete {
-		if err := w.request(ctx, r, a, "save_profile", "PUT", "/profile", map[string]string{"firstName": "Student", "lastName": "Perf"}, nil); err != nil {
-			return err
-		}
-	}
 	return w.request(ctx, r, a, "join", "POST", "/sets/join", map[string]string{"code": "700001"}, nil)
 }
 func (w *workload) burst(ctx context.Context, r *recorder, a *actor) error {

@@ -154,7 +154,7 @@ func TestAuthMiddlewareTakesThePhotoFromTheLaunchData(t *testing.T) {
 	fetches := 0
 	server := photoServer(t, &fetches)
 	users := &mockUserService{maxFunc: func(context.Context, usecase.MAXUserParams) (usecase.Account, error) {
-		return usecase.Account{User: contracts.User{ID: testAuthMaxID, FirstName: "Saved"}, MaxID: 42, ProfileComplete: true}, nil
+		return usecase.Account{User: contracts.User{ID: testAuthMaxID, FirstName: "Saved"}, MaxID: 42}, nil
 	}}
 	importer := &recordingImporter{}
 	photos := NewPhotoImporter(importer, server.Client())
@@ -165,7 +165,7 @@ func TestAuthMiddlewareTakesThePhotoFromTheLaunchData(t *testing.T) {
 	request := httptest.NewRequest("GET", "/api/sets", nil)
 	request.Header.Set("Authorization", "max "+raw)
 	response := httptest.NewRecorder()
-	AuthMiddleware("secret", "", users, photos)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})).ServeHTTP(response, request)
+	AuthMiddleware("secret", users, photos)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})).ServeHTTP(response, request)
 	photos.Wait()
 	if response.Code != 200 || len(importer.imported) != 1 || importer.imported[0] != server.URL+"/photo.jpg" {
 		t.Fatalf("%d, imported %v", response.Code, importer.imported)

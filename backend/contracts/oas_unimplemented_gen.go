@@ -275,15 +275,6 @@ func (UnimplementedHandler) JoinSetByShareCode(ctx context.Context, req *JoinSet
 	return r, ht.ErrNotImplemented
 }
 
-// PutProfile implements PutProfile operation.
-//
-// Complete or edit a verified Telegram profile and clear bot dialogue.
-//
-// PUT /profile
-func (UnimplementedHandler) PutProfile(ctx context.Context, req *ProfileRequest) (r PutProfileRes, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
 // PutProfileAvatar implements PutProfileAvatar operation.
 //
 // The image is re-encoded as JPEG, which drops its metadata. Set authors see it only when the user

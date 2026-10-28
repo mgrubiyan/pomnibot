@@ -16,7 +16,6 @@ export default defineConfig(({ mode }) => {
         name: 'max-sdk',
         transformIndexHtml: () => createAppConfig(environment).maxEnabled
           ? [
-            { tag: 'script', attrs: { src: 'https://telegram.org/js/telegram-web-app.js' }, injectTo: 'head' },
             { tag: 'script', attrs: { src: 'https://st.max.ru/js/max-web-app.js' }, injectTo: 'head' },
           ]
           : [],

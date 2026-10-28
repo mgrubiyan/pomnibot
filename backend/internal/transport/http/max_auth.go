@@ -33,7 +33,7 @@ type initDataUser struct {
 	Username  string `json:"username"`
 	Name      string `json:"name"`
 	IsBot     bool   `json:"is_bot"`
-	// PhotoURL is the profile photo; MAX and Telegram both send it.
+	// PhotoURL is the profile photo MAX sends.
 	PhotoURL string `json:"photo_url"`
 }
 

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -43,7 +44,7 @@ func TestPlatformUsersMigrationAndSharedLearning(t *testing.T) {
 		t.Fatalf("legacy ID changed: %d", maxAccount.MaxID)
 	}
 	var count int
-	if err = pool.QueryRow(ctx, "SELECT count(*) FROM users WHERE id = '00000000-0000-0000-0000-000000000000' AND (max_id IS NOT NULL OR tg_id IS NOT NULL)").Scan(&count); err != nil || count != 0 {
+	if err = pool.QueryRow(ctx, "SELECT count(*) FROM users WHERE id = '00000000-0000-0000-0000-000000000000' AND max_id IS NOT NULL").Scan(&count); err != nil || count != 0 {
 		t.Fatalf("demo platform IDs: %d %v", count, err)
 	}
 	var step int
@@ -57,9 +58,9 @@ func TestPlatformUsersMigrationAndSharedLearning(t *testing.T) {
 	var wg sync.WaitGroup
 	ids := make(chan uuid.UUID, 32)
 	failures := make(chan error, 32)
-	for i := range 32 {
+	for range 32 {
 		wg.Go(func() {
-			account, err := users.UpsertTelegramUser(ctx, usecase.TelegramUserParams{TgID: 9999999, BotStarted: i%2 == 0})
+			account, err := users.UpsertMAXUser(ctx, usecase.MAXUserParams{MaxID: 8888888, FirstName: "Member"})
 			if err != nil {
 				failures <- err
 				return
@@ -73,57 +74,17 @@ func TestPlatformUsersMigrationAndSharedLearning(t *testing.T) {
 	for err := range failures {
 		t.Fatal(err)
 	}
-	var telegramID uuid.UUID
+	var memberID uuid.UUID
 	for id := range ids {
-		if telegramID == uuid.Nil {
-			telegramID = id
+		if memberID == uuid.Nil {
+			memberID = id
 		}
-		if id != telegramID {
-			t.Fatal("duplicate Telegram accounts")
+		if id != memberID {
+			t.Fatal("duplicate accounts")
 		}
 	}
-	if telegramID == maxAccount.User.ID {
-		t.Fatalf("accounts clashed: %s", telegramID)
-	}
-	telegram, err := users.GetAccount(ctx, telegramID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if telegram.ProfileComplete || telegram.User.FirstName != "" {
-		t.Fatalf("remote profile was trusted: %+v", telegram)
-	}
-	if _, err = users.ProfileInput(ctx, telegramID, "Фамилия", false); err != nil {
-		t.Fatal(err)
-	}
-	users = usecase.NewUserService(db.New(pool))
-	telegram, err = users.GetAccount(ctx, telegramID)
-	if err != nil || telegram.ProfileStep != "first_name" {
-		t.Fatalf("lost dialogue: %+v %v", telegram, err)
-	}
-	telegram, err = users.ProfileInput(ctx, telegramID, "Имя", false)
-	if err != nil || !telegram.ProfileComplete || telegram.User.FirstName != "Имя" || telegram.User.LastName.Value != "Фамилия" {
-		t.Fatalf("profile: %+v %v", telegram, err)
-	}
-	if _, err = users.ProfileInput(ctx, telegramID, "", true); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = users.ProfileInput(ctx, telegramID, "Новая фамилия", false); err != nil {
-		t.Fatal(err)
-	}
-	telegram, err = users.GetAccount(ctx, telegramID)
-	if err != nil || telegram.User.LastName.Value != "Фамилия" {
-		t.Fatalf("partial edit overwrote profile: %+v %v", telegram, err)
-	}
-	telegram, err = users.SaveProfile(ctx, telegramID, " Форма ", " Новая ")
-	if err != nil || telegram.ProfileStep != "" {
-		t.Fatalf("form did not clear dialogue: %+v %v", telegram, err)
-	}
-	if _, err = users.ProfileInput(ctx, telegramID, "Stale answer", false); err != nil {
-		t.Fatal(err)
-	}
-	telegram, err = users.UpsertTelegramUser(ctx, usecase.TelegramUserParams{TgID: 9999999})
-	if err != nil || telegram.User.FirstName != "Форма" || telegram.User.LastName.Value != "Новая" {
-		t.Fatalf("profile overwritten: %+v %v", telegram, err)
+	if memberID == maxAccount.User.ID {
+		t.Fatalf("accounts clashed: %s", memberID)
 	}
 	writer := repository.NewManualStore(pool)
 	sets := usecase.NewSetService(q, users, writer)
@@ -132,25 +93,25 @@ func TestPlatformUsersMigrationAndSharedLearning(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = sets.JoinSetByShareCode(ctx, telegramID, set.ShareCode.Value); err != nil {
+	if _, err = sets.JoinSetByShareCode(ctx, memberID, set.ShareCode.Value); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = sets.GetCardsBySetID(ctx, telegramID, set.ID); !errors.Is(err, usecase.ErrForbidden) {
+	if _, err = sets.GetCardsBySetID(ctx, memberID, set.ID); !errors.Is(err, usecase.ErrForbidden) {
 		t.Fatalf("expected ErrForbidden for shared member: %v", err)
 	}
 	list, err := sets.GetCardsBySetID(ctx, maxAccount.User.ID, set.ID)
 	if err != nil || len(list) != 1 {
 		t.Fatalf("author cards: %v %v", list, err)
 	}
-	if _, err = cards.AnswerQuestion(ctx, telegramID, list[0].ID, "true", uuid.New()); err != nil {
+	if _, err = cards.AnswerQuestion(ctx, memberID, list[0].ID, "true", uuid.New()); err != nil {
 		t.Fatal(err)
 	}
 	facts, err := q.GetFactsBySetID(ctx, pgtype.UUID{Bytes: set.ID, Valid: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = pool.QueryRow(ctx, "SELECT count(*) FROM user_fact_progress WHERE user_id=$1 AND fact_id=$2", telegramID, facts[0].ID).Scan(&count); err != nil || count != 1 {
-		t.Fatalf("Telegram progress: %d %v", count, err)
+	if err = pool.QueryRow(ctx, "SELECT count(*) FROM user_fact_progress WHERE user_id=$1 AND fact_id=$2", memberID, facts[0].ID).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("member progress: %d %v", count, err)
 	}
 	if err = pool.QueryRow(ctx, "SELECT count(*) FROM user_fact_progress WHERE user_id=$1 AND fact_id=$2", maxAccount.User.ID, facts[0].ID).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("progress leaked to MAX: %d %v", count, err)
@@ -159,35 +120,28 @@ func TestPlatformUsersMigrationAndSharedLearning(t *testing.T) {
 	if err != nil || len(board.Items) != 2 {
 		t.Fatalf("shared leaderboard: %+v %v", board, err)
 	}
-	delivery, err := users.GetAccount(ctx, telegramID)
-	if err != nil || delivery.TgID != 9999999 || delivery.MaxID != 0 || !delivery.BotStarted {
-		t.Fatalf("delivery: %+v %v", delivery, err)
-	}
 }
 
-func TestTelegramReminderEligibility(t *testing.T) {
+func TestDueFactsOnlyForMAXUsers(t *testing.T) {
 	pool := manualTestPool(t)
 	ctx := context.Background()
-	users := usecase.NewUserService(db.New(pool))
-	account, err := users.UpsertTelegramUser(ctx, usecase.TelegramUserParams{TgID: 42})
-	if err != nil {
-		t.Fatal(err)
-	}
-	check := func(want int) {
-		t.Helper()
-		saved, err := users.GetAccount(ctx, account.User.ID)
-		eligible := saved.TgID != 0 && saved.ProfileComplete && saved.BotStarted
-		if err != nil || eligible != (want == 1) {
-			t.Fatalf("delivery=%+v %v, want %d", saved, err, want)
+	reader := uuid.MustParse("00000000-0000-0000-0000-000000000d01")
+	unreachable := uuid.MustParse("00000000-0000-0000-0000-000000000d02")
+	set := uuid.MustParse("00000000-0000-0000-0000-000000000d03")
+	fact := uuid.MustParse("00000000-0000-0000-0000-000000000d04")
+	for _, sql := range []string{
+		"INSERT INTO users(id,first_name,max_id) VALUES('" + reader.String() + "','Reader',4242),('" + unreachable.String() + "','Unreachable',NULL)",
+		"INSERT INTO sets(id,title,author_id,share_code) VALUES('" + set.String() + "','Due','" + reader.String() + "','424242')",
+		"INSERT INTO user_sets(user_id,set_id) VALUES('" + reader.String() + "','" + set.String() + "'),('" + unreachable.String() + "','" + set.String() + "')",
+		"INSERT INTO facts(id,set_id,name) VALUES('" + fact.String() + "','" + set.String() + "','Due fact')",
+	} {
+		if _, err := pool.Exec(ctx, sql); err != nil {
+			t.Fatal(err)
 		}
 	}
-	check(0)
-	if _, err = users.SaveProfile(ctx, account.User.ID, "First", "Last"); err != nil {
-		t.Fatal(err)
+	// Nobody can be reminded without a MAX ID, so the run does not load them.
+	due, err := usecase.NewUserService(db.New(pool)).GetUsersWithDueFacts(ctx, time.Now(), "Europe/Moscow")
+	if err != nil || len(due) != 1 || due[0] != reader {
+		t.Fatalf("due users: %v %v", due, err)
 	}
-	check(0)
-	if _, err = users.UpsertTelegramUser(ctx, usecase.TelegramUserParams{TgID: 42, BotStarted: true}); err != nil {
-		t.Fatal(err)
-	}
-	check(1)
 }

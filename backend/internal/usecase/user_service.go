@@ -43,19 +43,6 @@ func optionalText(value *string) pgtype.Text {
 	return pgtype.Text{String: *value, Valid: true}
 }
 
-func (s *userServiceImpl) UpsertTelegramUser(ctx context.Context, params TelegramUserParams) (Account, error) {
-	if params.TgID <= 0 {
-		return Account{}, ErrValidation
-	}
-	row, err := s.querier.UpsertTelegramUser(ctx, db.UpsertTelegramUserParams{
-		TgID: pgtype.Int8{Int64: params.TgID, Valid: true}, Username: params.Username, IsBot: params.IsBot, TgBotStarted: params.BotStarted,
-	})
-	if err != nil {
-		return Account{}, fmt.Errorf("upsert Telegram user: %w", err)
-	}
-	return accountFromUser(row), nil
-}
-
 func (s *userServiceImpl) GetAccount(ctx context.Context, id uuid.UUID) (Account, error) {
 	var pgID pgtype.UUID
 	_ = pgID.Scan(id.String())
@@ -79,8 +66,7 @@ func accountFromUser(row db.User) Account {
 		user.Username.SetTo(row.Username.String)
 	}
 	setAvatar(&user, row.AvatarID)
-	return Account{User: user, MaxID: row.MaxID.Int64, TgID: row.TgID.Int64,
-		ProfileComplete: row.ProfileComplete, ProfileStep: row.ProfileStep, BotStarted: row.TgBotStarted,
+	return Account{User: user, MaxID: row.MaxID.Int64,
 		DataConsent: row.DataConsentAt.Valid, DataConsentAnswered: row.DataConsentAnsweredAt.Valid,
 		AvatarSource: row.AvatarSource.String}
 }

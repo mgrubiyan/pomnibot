@@ -20,17 +20,13 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
-var (
-	testAuthMaxID = uuid.MustParse("00000000-0000-0000-0000-000000000900")
-	testAuthTgID  = uuid.MustParse("00000000-0000-0000-0000-000000000901")
-)
+var testAuthMaxID = uuid.MustParse("00000000-0000-0000-0000-000000000900")
 
 type mockUserService struct {
 	usecase.UserService
 	ensureUserFunc func(context.Context, uuid.UUID) error
 	upsertCalls    []usecase.MAXUserParams
 	maxFunc        func(context.Context, usecase.MAXUserParams) (usecase.Account, error)
-	telegramFunc   func(context.Context, usecase.TelegramUserParams) (usecase.Account, error)
 }
 
 func (m *mockUserService) EnsureUser(ctx context.Context, id uuid.UUID) error {
@@ -47,10 +43,7 @@ func (m *mockUserService) UpsertMAXUser(ctx context.Context, p usecase.MAXUserPa
 		return m.maxFunc(ctx, p)
 	}
 	m.upsertCalls = append(m.upsertCalls, p)
-	return usecase.Account{User: contracts.User{ID: uuid.New(), FirstName: p.FirstName}, MaxID: p.MaxID, ProfileComplete: true}, nil
-}
-func (m *mockUserService) UpsertTelegramUser(ctx context.Context, p usecase.TelegramUserParams) (usecase.Account, error) {
-	return m.telegramFunc(ctx, p)
+	return usecase.Account{User: contracts.User{ID: uuid.New(), FirstName: p.FirstName}, MaxID: p.MaxID}, nil
 }
 
 func generateValidInitData(params map[string]string, botToken string) string {
@@ -87,49 +80,31 @@ func generateValidInitData(params map[string]string, botToken string) string {
 
 func TestAuthMiddleware(t *testing.T) {
 	for _, tc := range []struct {
-		name, scheme                            string
-		invalid, expired, dbFailure, incomplete bool
-		status                                  int
-		wantID                                  uuid.UUID
+		name, scheme                string
+		invalid, expired, dbFailure bool
+		status                      int
+		wantID                      uuid.UUID
 	}{
 		{name: "max", scheme: "max", status: 200, wantID: testAuthMaxID},
-		{name: "telegram", scheme: "tma", status: 200, wantID: testAuthTgID},
 		{name: "missing", status: 200}, {name: "unknown", scheme: "Bearer", status: 200},
 		// A signature that does not hold or has expired is refused instead of
 		// passing the request on as the shared test account.
-		{name: "invalid", scheme: "tma", invalid: true, status: 401},
-		{name: "invalid max", scheme: "max", invalid: true, status: 401},
+		{name: "invalid", scheme: "max", invalid: true, status: 401},
 		{name: "expired", scheme: "max", expired: true, status: 401},
 		{name: "database failure", scheme: "max", dbFailure: true, status: 500},
-		{name: "incomplete", scheme: "tma", incomplete: true, status: 403},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			calls := 0
-			account := func(platform string, id uuid.UUID) (usecase.Account, error) {
-				calls++
-				if tc.dbFailure {
-					return usecase.Account{}, errors.New("database unavailable")
-				}
-				saved := usecase.Account{User: contracts.User{ID: id, FirstName: "Saved"}, ProfileComplete: !tc.incomplete}
-				if platform == "max" {
-					saved.MaxID = 42
-				} else {
-					saved.TgID = 42
-				}
-				return saved, nil
-			}
 			users := &mockUserService{
 				maxFunc: func(_ context.Context, p usecase.MAXUserParams) (usecase.Account, error) {
+					calls++
 					if p.MaxID != 42 {
 						t.Fatalf("MAX external ID: %d", p.MaxID)
 					}
-					return account("max", testAuthMaxID)
-				},
-				telegramFunc: func(_ context.Context, p usecase.TelegramUserParams) (usecase.Account, error) {
-					if p.TgID != 42 {
-						t.Fatalf("Telegram external ID: %d", p.TgID)
+					if tc.dbFailure {
+						return usecase.Account{}, errors.New("database unavailable")
 					}
-					return account("telegram", testAuthTgID)
+					return usecase.Account{User: contracts.User{ID: testAuthMaxID, FirstName: "Saved"}, MaxID: 42}, nil
 				},
 			}
 			called := false
@@ -158,19 +133,16 @@ func TestAuthMiddleware(t *testing.T) {
 			}
 			request.Header.Set("X-Init-Data", "ignored")
 			response := httptest.NewRecorder()
-			AuthMiddleware("secret", "secret", users, nil)(next).ServeHTTP(response, request)
+			AuthMiddleware("secret", users, nil)(next).ServeHTTP(response, request)
 			if response.Code != tc.status {
 				t.Fatalf("%d: %s", response.Code, response.Body.String())
 			}
 			wantCalls := 0
-			if (tc.scheme == "max" || tc.scheme == "tma") && !tc.invalid && !tc.expired {
+			if tc.scheme == "max" && !tc.invalid && !tc.expired {
 				wantCalls = 1
 			}
 			if calls != wantCalls {
 				t.Fatalf("upsert calls=%d, want %d", calls, wantCalls)
-			}
-			if tc.incomplete && !strings.Contains(response.Body.String(), "profile_required") {
-				t.Fatal(response.Body.String())
 			}
 			if tc.status == 401 && !strings.Contains(response.Body.String(), "sign_in_expired") {
 				t.Fatal(response.Body.String())

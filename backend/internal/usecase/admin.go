@@ -12,22 +12,22 @@ import (
 	"github.com/mgrubiyan/pomnibot/backend/internal/repository/db"
 )
 
-// Admins see every complaint. They are named by their MAX and Telegram IDs,
-// which stay the same when the database is recreated; the IDs are positive,
+// Admins see every complaint. They are named by their MAX IDs, which stay
+// the same when the database is recreated; the IDs are positive,
 // so a user without the chat app never matches.
 type Admins struct {
-	MaxIDs, TgIDs []int64
+	MaxIDs []int64
 	// BrowserTestUser makes the user without a chat account an admin. Only
-	// locally: in prod that is whoever opens the site without MAX or Telegram.
+	// locally: in prod that is whoever opens the site without MAX.
 	BrowserTestUser bool
 }
 
 // Is reports whether the account belongs to an admin.
 func (a Admins) Is(account Account) bool {
-	if slices.Contains(a.MaxIDs, account.MaxID) || slices.Contains(a.TgIDs, account.TgID) {
+	if slices.Contains(a.MaxIDs, account.MaxID) {
 		return true
 	}
-	return a.BrowserTestUser && account.MaxID == 0 && account.TgID == 0
+	return a.BrowserTestUser && account.MaxID == 0
 }
 
 // AdminService shows admins what readers complained about across all sets.

@@ -11,11 +11,9 @@ import (
 )
 
 func profileResponse(account usecase.Account) *contracts.ProfileResponse {
-	response := &contracts.ProfileResponse{User: account.User, ProfileComplete: account.ProfileComplete,
+	response := &contracts.ProfileResponse{User: account.User,
 		DataConsent: account.DataConsent, DataConsentAnswered: account.DataConsentAnswered}
-	if account.TgID != 0 {
-		response.Platform.SetTo(contracts.ProfileResponsePlatformTelegram)
-	} else if account.MaxID != 0 {
+	if account.MaxID != 0 {
 		response.Platform.SetTo(contracts.ProfileResponsePlatformMax)
 	}
 	return response
@@ -54,7 +52,7 @@ func (h *APIHandler) GetProfile(ctx context.Context) (contracts.GetProfileRes, e
 		return profileResponse(account), nil
 	}
 	// Nobody can answer for the shared account, so it is never asked.
-	return profileResponse(usecase.Account{User: contracts.User{ID: uuid.Nil, FirstName: "Browser Test User"}, ProfileComplete: true, DataConsentAnswered: true}), nil
+	return profileResponse(usecase.Account{User: contracts.User{ID: uuid.Nil, FirstName: "Browser Test User"}, DataConsentAnswered: true}), nil
 }
 
 // PutProfileConsent is restricted to verified accounts.
@@ -72,25 +70,6 @@ func (h *APIHandler) PutProfileConsent(ctx context.Context, req *contracts.Conse
 	saved, err := h.users.SetDataConsent(ctx, account.User.ID, req.Given)
 	if err != nil {
 		return &contracts.PutProfileConsentInternalServerError{Message: internalError(ctx, "PutProfileConsent", err)}, nil
-	}
-	return profileResponse(saved), nil
-}
-
-// PutProfile is restricted to verified Telegram accounts.
-func (h *APIHandler) PutProfile(ctx context.Context, req *contracts.ProfileRequest) (contracts.PutProfileRes, error) {
-	account, ok := accountFromContext(ctx)
-	if !ok || account.TgID == 0 {
-		return &contracts.PutProfileForbidden{Message: "Telegram authorization required"}, nil
-	}
-	if h.users == nil {
-		return &contracts.PutProfileInternalServerError{Message: "profile service unavailable"}, nil
-	}
-	saved, err := h.users.SaveProfile(ctx, account.User.ID, req.FirstName, req.LastName)
-	if errors.Is(err, usecase.ErrValidation) {
-		return &contracts.PutProfileBadRequest{Message: err.Error()}, nil
-	}
-	if err != nil {
-		return &contracts.PutProfileInternalServerError{Message: internalError(ctx, "PutProfile", err)}, nil
 	}
 	return profileResponse(saved), nil
 }

@@ -39,7 +39,7 @@ func WithIssueNotifier(n IssueNotifier) CardServiceOption {
 	return func(s *cardServiceImpl) { s.issues = n }
 }
 
-// issueSendTimeout bounds one notification across all chat apps.
+// issueSendTimeout bounds one notification across all messengers.
 const issueSendTimeout = 30 * time.Second
 
 // Text is the message to the author.
@@ -47,8 +47,8 @@ func (r CardIssueReport) Text() string {
 	return fmt.Sprintf("⚠️ На карточку в наборе «%s» пожаловались. Откройте набор и нажмите «Жалобы».", r.SetTitle)
 }
 
-// ChatIssueNotifier sends complaints to the author in every chat app they
-// use. Sending runs in the background, so a slow chat API never holds up the
+// ChatIssueNotifier sends complaints to the author through its messengers.
+// Sending runs in the background, so a slow chat API never holds up the
 // complaint; Close joins the messages still going out.
 type ChatIssueNotifier struct {
 	accounts   AccountGetter

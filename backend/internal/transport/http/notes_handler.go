@@ -15,7 +15,7 @@ import (
 )
 
 // MaxNotesBytes is how much a document from the mini app may weigh, all its
-// files together: as much as the Telegram bot may download.
+// files together.
 const MaxNotesBytes = 20 << 20
 
 // maxNotesRequest fits MaxNotesBytes of files and their multipart headers.

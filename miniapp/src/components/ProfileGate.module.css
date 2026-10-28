@@ -1,9 +1,0 @@
-.form {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    width: 100%;
-    max-width: 480px;
-    margin: auto;
-    overflow: auto;
-}

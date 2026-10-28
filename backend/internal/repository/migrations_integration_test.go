@@ -42,8 +42,8 @@ func TestProcessingReportsMigrationPostgres(t *testing.T) {
 				if err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM cards").Scan(&before); err != nil || before == 0 {
 					t.Fatalf("missing main demo data: %d, %v", before, err)
 				}
-				// Real accounts carry a platform ID and must not be taken as agreeing.
-				if _, err = pool.Exec(ctx, "INSERT INTO users (first_name, max_id, tg_id) VALUES ('Real MAX', 777, NULL), ('Real Telegram', NULL, 888)"); err != nil {
+				// Real accounts carry a MAX ID and must not be taken as agreeing.
+				if _, err = pool.Exec(ctx, "INSERT INTO users (first_name, max_id) VALUES ('Real MAX', 777)"); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -70,12 +70,14 @@ func TestProcessingReportsMigrationPostgres(t *testing.T) {
 				// The browser account is shared by everyone who opens the site
 				// without a signature: nobody can agree for it.
 				var demo, demoAgreed, platform, platformAgreed int
-				if err := pool.QueryRow(ctx, `SELECT
-					COUNT(*) FILTER (WHERE max_id IS NULL AND tg_id IS NULL AND id <> '00000000-0000-0000-0000-000000000000'),
-					COUNT(*) FILTER (WHERE max_id IS NULL AND tg_id IS NULL AND id <> '00000000-0000-0000-0000-000000000000' AND data_consent_at IS NOT NULL),
-					COUNT(*) FILTER (WHERE max_id IS NOT NULL OR tg_id IS NOT NULL OR id = '00000000-0000-0000-0000-000000000000'),
-					COUNT(*) FILTER (WHERE (max_id IS NOT NULL OR tg_id IS NOT NULL OR id = '00000000-0000-0000-0000-000000000000') AND data_consent_at IS NOT NULL)
-					FROM users`).Scan(&demo, &demoAgreed, &platform, &platformAgreed); err != nil || demoAgreed != demo || platformAgreed != 0 {
+				if err := pool.QueryRow(ctx, `WITH marked AS (
+					SELECT data_consent_at, max_id IS NOT NULL OR id = '00000000-0000-0000-0000-000000000000' AS real FROM users
+				) SELECT
+					COUNT(*) FILTER (WHERE NOT real),
+					COUNT(*) FILTER (WHERE NOT real AND data_consent_at IS NOT NULL),
+					COUNT(*) FILTER (WHERE real),
+					COUNT(*) FILTER (WHERE real AND data_consent_at IS NOT NULL)
+					FROM marked`).Scan(&demo, &demoAgreed, &platform, &platformAgreed); err != nil || demoAgreed != demo || platformAgreed != 0 {
 					t.Fatalf("consent: demo %d/%d agreed, platform %d/%d agreed, error=%v", demoAgreed, demo, platformAgreed, platform, err)
 				}
 				// Whoever has agreed has answered; everyone else is asked on
@@ -85,8 +87,8 @@ func TestProcessingReportsMigrationPostgres(t *testing.T) {
 					t.Fatalf("answered differs from agreed for %d users, error=%v", mismatched, err)
 				}
 				// The demo sets' author is a real MAX account, so it stays out too:
-				// with the browser account and the two above, four.
-				if fromMain && (demo != 30 || platform != 4) {
+				// with the browser account and the one above, three.
+				if fromMain && (demo != 30 || platform != 3) {
 					t.Fatalf("consent fixture: demo=%d platform=%d", demo, platform)
 				}
 				if fromMain {

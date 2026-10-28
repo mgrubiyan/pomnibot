@@ -13,7 +13,7 @@ import (
 
 // NewRouter sets up the HTTP router combining OpenAPI handlers, SPA static file serving, and middlewares.
 // photos takes signed users' messenger photos; nil leaves avatars alone.
-func NewRouter(handler contracts.Handler, staticFS fs.FS, maxToken, telegramToken string, userService usecase.UserService, photos *PhotoImporter) (http.Handler, error) {
+func NewRouter(handler contracts.Handler, staticFS fs.FS, maxToken string, userService usecase.UserService, photos *PhotoImporter) (http.Handler, error) {
 	staticHandler := NewSPAHandler(staticFS)
 
 	apiServer, err := contracts.NewServer(
@@ -25,7 +25,7 @@ func NewRouter(handler contracts.Handler, staticFS fs.FS, maxToken, telegramToke
 		return nil, err
 	}
 
-	auth := authenticator{maxToken: maxToken, telegramToken: telegramToken, users: userService, photos: photos}
+	auth := authenticator{maxToken: maxToken, users: userService, photos: photos}
 	api := auth.middleware(limitUploads(apiServer))
 	// The WebSocket signs in with its first message.
 	apiHandler, _ := handler.(*APIHandler)

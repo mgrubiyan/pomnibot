@@ -5,7 +5,6 @@ import (
 
 	"github.com/mgrubiyan/pomnibot/backend/internal/config"
 	maxtransport "github.com/mgrubiyan/pomnibot/backend/internal/transport/max"
-	"github.com/mgrubiyan/pomnibot/backend/internal/transport/telegram"
 	"github.com/mgrubiyan/pomnibot/backend/internal/usecase"
 )
 
@@ -20,10 +19,5 @@ func newIssueNotifier(cfg config.Config, users usecase.UserService) (*usecase.Ch
 	if err != nil {
 		return nil, fmt.Errorf("initialize MAX client: %w", err)
 	}
-	messengers := []usecase.Messenger{maxtransport.NewMessenger(client, cfg.AppURL)}
-	// The same conditions the Telegram bot starts on.
-	if cfg.TelegramBotToken != "" && telegram.ValidAppURL(cfg.AppURL) {
-		messengers = append(messengers, telegram.NewMessenger(telegram.NewClient(cfg.TelegramBotToken), cfg.AppURL))
-	}
-	return usecase.NewChatIssueNotifier(users, messengers...), nil
+	return usecase.NewChatIssueNotifier(users, maxtransport.NewMessenger(client, cfg.AppURL)), nil
 }

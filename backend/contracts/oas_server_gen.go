@@ -186,12 +186,6 @@ type Handler interface {
 	//
 	// POST /sets/join
 	JoinSetByShareCode(ctx context.Context, req *JoinSetRequest) (JoinSetByShareCodeRes, error)
-	// PutProfile implements PutProfile operation.
-	//
-	// Complete or edit a verified Telegram profile and clear bot dialogue.
-	//
-	// PUT /profile
-	PutProfile(ctx context.Context, req *ProfileRequest) (PutProfileRes, error)
 	// PutProfileAvatar implements PutProfileAvatar operation.
 	//
 	// The image is re-encoded as JPEG, which drops its metadata. Set authors see it only when the user

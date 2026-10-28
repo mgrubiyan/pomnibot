@@ -33,7 +33,6 @@ type Config struct {
 	Port                  string
 	DatabaseURL           string
 	MaxBotToken           string
-	TelegramBotToken      string
 	AppURL                string
 	MaxAPIURL             string
 	MaxInsecureSkipVerify bool
@@ -49,8 +48,8 @@ type Config struct {
 	// Speech is enabled when YC_API_KEY is set, locally too: voice answers
 	// take the OCR's key and folder.
 	Speech *speechkit.Config
-	// Admins see every complaint: ADMIN_MAX_IDS and ADMIN_TG_IDS, and
-	// locally the browser test user.
+	// Admins see every complaint: ADMIN_MAX_IDS, and locally the browser
+	// test user.
 	Admins usecase.Admins
 }
 
@@ -115,7 +114,6 @@ func Load() (Config, error) {
 	}
 
 	cfg.MaxBotToken = value("BOT_TOKEN", "")
-	cfg.TelegramBotToken = value("TG_BOT_TOKEN", "")
 	domain := value("DOMAIN", "")
 	cfg.AppURL = "https://" + domain
 	cfg.MaxAPIURL = value("MAX_API_URL", "https://platform-api2.max.ru")
@@ -152,17 +150,12 @@ func Load() (Config, error) {
 
 func adminsFromEnv(local bool) (usecase.Admins, error) {
 	admins := usecase.Admins{BrowserTestUser: local}
-	for _, list := range []struct {
-		name string
-		dst  *[]int64
-	}{{"ADMIN_MAX_IDS", &admins.MaxIDs}, {"ADMIN_TG_IDS", &admins.TgIDs}} {
-		for _, field := range strings.FieldsFunc(value(list.name, ""), func(r rune) bool { return r == ',' || r == ' ' }) {
-			id, err := strconv.ParseInt(field, 10, 64)
-			if err != nil || id <= 0 {
-				return usecase.Admins{}, fmt.Errorf("%s: %q is not an ID", list.name, field)
-			}
-			*list.dst = append(*list.dst, id)
+	for _, field := range strings.FieldsFunc(value("ADMIN_MAX_IDS", ""), func(r rune) bool { return r == ',' || r == ' ' }) {
+		id, err := strconv.ParseInt(field, 10, 64)
+		if err != nil || id <= 0 {
+			return usecase.Admins{}, fmt.Errorf("ADMIN_MAX_IDS: %q is not an ID", field)
 		}
+		admins.MaxIDs = append(admins.MaxIDs, id)
 	}
 	return admins, nil
 }
