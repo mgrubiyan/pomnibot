@@ -52,7 +52,7 @@ func setProdEnv(t *testing.T) {
 	t.Helper()
 	values := map[string]string{
 		"APP_ENV": "prod", "PORT": "8081", "DATABASE_URL": "postgres://localhost/pomnibot",
-		"TG_BOT_TOKEN": "telegram-test-token", "BOT_TOKEN": "test-token", "DOMAIN": "example.test", "MAX_API_URL": "https://max.example.test",
+		"BOT_TOKEN": "test-token", "DOMAIN": "example.test", "MAX_API_URL": "https://max.example.test",
 		"MAX_INSECURE_SKIP_VERIFY": "false", "GIGACHAT_AUTH_KEY": "test-key",
 		"GIGACHAT_SCOPE": "GIGACHAT_API_PERS", "GIGACHAT_MODEL": "test-model",
 		"GIGACHAT_FALLBACK_MODEL": "fallback", "GIGACHAT_BASE_URL": "https://example.test/v1",
@@ -122,24 +122,6 @@ func TestLoadProd(t *testing.T) {
 
 }
 
-func TestLoadProdWithoutTelegramToken(t *testing.T) {
-	for _, token := range []string{"", "   "} {
-		t.Run("token="+token, func(t *testing.T) {
-			setProdEnv(t)
-			t.Setenv("TG_BOT_TOKEN", token)
-			cfg, err := Load()
-			if err != nil {
-				t.Fatalf("production must work without Telegram: %v", err)
-			}
-			if cfg.TelegramBotToken != "" || cfg.MaxBotToken != "test-token" {
-				t.Fatal("expected Telegram to be disabled and MAX to remain configured")
-			}
-		})
-	}
-}
-
-// Qwen on Yandex AI Studio does it all by default: it serves two requests at
-// once against the GigaChat plan's one, and its key and folder are the OCR's.
 func TestLoadProdDefaultsToQwenFirst(t *testing.T) {
 	setProdEnv(t)
 	cfg, err := Load()
@@ -215,25 +197,23 @@ func TestLoadProdRejectsAIStudioFirstWhenOff(t *testing.T) {
 func TestLoadAdmins(t *testing.T) {
 	setProdEnv(t)
 	t.Setenv("ADMIN_MAX_IDS", "123, 456")
-	t.Setenv("ADMIN_TG_IDS", "789")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := usecase.Admins{MaxIDs: []int64{123, 456}, TgIDs: []int64{789}}
+	want := usecase.Admins{MaxIDs: []int64{123, 456}}
 	if !reflect.DeepEqual(cfg.Admins, want) {
 		t.Fatalf("admins = %+v, want %+v", cfg.Admins, want)
 	}
 
-	// In prod the browser test user is anyone without MAX or Telegram.
+	// In prod the browser test user is anyone without MAX.
 	t.Setenv("ADMIN_MAX_IDS", "")
-	t.Setenv("ADMIN_TG_IDS", "")
 	if cfg, err = Load(); err != nil || !reflect.DeepEqual(cfg.Admins, usecase.Admins{}) {
 		t.Fatalf("no admins: %+v, %v", cfg.Admins, err)
 	}
 
-	t.Setenv("ADMIN_TG_IDS", "12a")
-	if _, err = Load(); err == nil || !strings.Contains(err.Error(), "ADMIN_TG_IDS") {
+	t.Setenv("ADMIN_MAX_IDS", "12a")
+	if _, err = Load(); err == nil || !strings.Contains(err.Error(), "ADMIN_MAX_IDS") {
 		t.Fatalf("bad ID: %v", err)
 	}
 }
@@ -242,7 +222,6 @@ func TestLoadLocalAdmin(t *testing.T) {
 	t.Setenv("APP_ENV", "local")
 	t.Setenv("PORT", "")
 	t.Setenv("ADMIN_MAX_IDS", "")
-	t.Setenv("ADMIN_TG_IDS", "")
 	cfg, err := Load()
 	if err != nil || !cfg.Admins.BrowserTestUser {
 		t.Fatalf("local user must be an admin: %+v, %v", cfg.Admins, err)

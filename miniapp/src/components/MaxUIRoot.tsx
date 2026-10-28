@@ -1,28 +1,11 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { MaxUI, useAppearance } from '@maxhub/max-ui';
-import { telegramApp } from '../platform';
 
 /** The MAX UI root that also paints the page behind the app. */
 export function MaxUIRoot({ children }: { children: ReactNode }) {
     const root = useRef<HTMLDivElement>(null);
-    const telegram = telegramApp();
-    const [theme, setTheme] = useState(telegram?.colorScheme);
-    useEffect(() => {
-        if (!telegram) return;
-        const update = () => {
-            setTheme(telegram.colorScheme);
-            for (const side of ['top', 'right', 'bottom', 'left'] as const) {
-                const inset = (telegram.safeAreaInset?.[side] ?? 0) + (telegram.contentSafeAreaInset?.[side] ?? 0);
-                document.documentElement.style.setProperty(`--telegram-safe-${side}`, `${inset}px`);
-            }
-        };
-        update();
-        const events = ['themeChanged', 'safeAreaChanged', 'contentSafeAreaChanged'];
-        events.forEach(event => telegram.onEvent(event, update));
-        return () => events.forEach(event => telegram.offEvent(event, update));
-    }, [telegram]);
     return (
-        <MaxUI ref={root} resetBody colorScheme={theme}>
+        <MaxUI ref={root} resetBody>
             <PageBackground root={root} />
             {children}
         </MaxUI>
@@ -48,19 +31,6 @@ function PageBackground({ root }: { root: RefObject<HTMLElement | null> }) {
         document.documentElement.style.backgroundColor = color;
         // Native controls and scrollbars follow the theme too (MAX web).
         document.documentElement.style.colorScheme = colorScheme;
-
-        // Telegram ignores theme-color and paints its bars itself; it takes #RRGGBB only.
-        // Clients older than 6.9 throw on a color value, which must not take the app down.
-        const telegram = telegramApp();
-        if (telegram && /^#[0-9a-f]{6}$/i.test(color)) {
-            try {
-                telegram.setHeaderColor?.(color);
-                telegram.setBackgroundColor?.(color);
-                telegram.setBottomBarColor?.(color);
-            } catch {
-                // The bars keep Telegram's own color.
-            }
-        }
 
         let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
         if (!meta) {

@@ -218,11 +218,6 @@ type User struct {
 	Username              pgtype.Text        `json:"username"`
 	IsBot                 bool               `json:"is_bot"`
 	MaxID                 pgtype.Int8        `json:"max_id"`
-	TgID                  pgtype.Int8        `json:"tg_id"`
-	ProfileComplete       bool               `json:"profile_complete"`
-	ProfileStep           string             `json:"profile_step"`
-	PendingLastName       string             `json:"pending_last_name"`
-	TgBotStarted          bool               `json:"tg_bot_started"`
 	ID                    pgtype.UUID        `json:"id"`
 	DataConsentAt         pgtype.Timestamptz `json:"data_consent_at"`
 	AvatarID              pgtype.UUID        `json:"avatar_id"`

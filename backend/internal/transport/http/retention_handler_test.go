@@ -103,7 +103,7 @@ func TestRetentionHTTPContract(t *testing.T) {
 		t.Fatalf("HTTP %d", recorder.Code)
 	}
 	// The endpoint remains behind the same authentication middleware as all set APIs.
-	router, err := NewRouter(handler, fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("app")}}, "token", "", nil, nil)
+	router, err := NewRouter(handler, fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("app")}}, "token", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

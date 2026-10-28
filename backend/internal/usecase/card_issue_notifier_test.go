@@ -14,32 +14,40 @@ import (
 
 func TestChatIssueNotifier(t *testing.T) {
 	authorID := uuid.New()
-	account := usecase.Account{User: contracts.User{ID: authorID}, MaxID: 5, TgID: 6}
+	account := usecase.Account{User: contracts.User{ID: authorID}, MaxID: 5}
 	accounts := accountsFunc(func(_ context.Context, id uuid.UUID) (usecase.Account, error) {
 		if id != authorID {
 			t.Errorf("account of %s", id)
 		}
 		return account, nil
 	})
-	failing, working := &messengerSpy{err: errors.New("blocked")}, &messengerSpy{}
-	n := usecase.NewChatIssueNotifier(accounts, failing, working)
-	ctx, cancel := context.WithCancel(context.Background())
-	n.CardIssueReported(ctx, usecase.CardIssueReport{AuthorID: authorID, SetTitle: "Биология"})
-	// The request is over by the time the message goes out.
-	cancel()
-	n.Close()
+	for _, m := range []*messengerSpy{{err: errors.New("blocked")}, {}} {
+		n := usecase.NewChatIssueNotifier(accounts, m)
+		ctx, cancel := context.WithCancel(context.Background())
+		n.CardIssueReported(ctx, usecase.CardIssueReport{AuthorID: authorID, SetTitle: "Биология"})
+		// The request is over by the time the message goes out.
+		cancel()
+		n.Close()
 
-	for _, m := range []*messengerSpy{failing, working} {
 		if len(m.sent) != 1 || m.sent[0].account != account {
 			t.Fatalf("sent = %+v", m.sent)
 		}
 		if m.ctxErr != nil {
 			t.Errorf("sent with a cancelled context: %v", m.ctxErr)
 		}
+		if text := m.sent[0].text; !strings.Contains(text, "«Биология»") || !strings.Contains(text, "«Жалобы»") {
+			t.Errorf("text = %q", text)
+		}
 	}
-	if text := working.sent[0].text; !strings.Contains(text, "«Биология»") || !strings.Contains(text, "«Жалобы»") {
-		t.Errorf("text = %q", text)
-	}
+}
+
+func TestChatIssueNotifier_NoMessenger(t *testing.T) {
+	n := usecase.NewChatIssueNotifier(accountsFunc(func(context.Context, uuid.UUID) (usecase.Account, error) {
+		t.Error("account looked up without a messenger")
+		return usecase.Account{}, nil
+	}), nil)
+	n.CardIssueReported(context.Background(), usecase.CardIssueReport{AuthorID: uuid.New()})
+	n.Close()
 }
 
 func TestChatIssueNotifier_NoAccount(t *testing.T) {

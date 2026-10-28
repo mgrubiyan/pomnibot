@@ -8,7 +8,7 @@ const POLL_MS = 2000;
 
 /**
  * ready: the mini app takes notes. off: here they go to the bot, as on a
- * server without models or outside MAX and Telegram.
+ * server without models or outside MAX.
  */
 export type NotesAccess = 'loading' | 'ready' | 'off';
 

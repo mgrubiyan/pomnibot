@@ -24,7 +24,7 @@ const (
 	maxPhotoDownload = 5 << 20
 )
 
-// PhotoImporter takes the user's photo from MAX or Telegram: the signed
+// PhotoImporter takes the user's photo from MAX: the signed
 // launch data carries its address on every sign-in. The photo is fetched in
 // the background and kept as the user's avatar, so the mini-app shows it
 // from our own address and the messenger's never reaches anyone else.

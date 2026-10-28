@@ -34,7 +34,6 @@ const (
 	GetSetShareCodeOperation     OperationName = "GetSetShareCode"
 	GetTodayOperation            OperationName = "GetToday"
 	JoinSetByShareCodeOperation  OperationName = "JoinSetByShareCode"
-	PutProfileOperation          OperationName = "PutProfile"
 	PutProfileAvatarOperation    OperationName = "PutProfileAvatar"
 	PutProfileConsentOperation   OperationName = "PutProfileConsent"
 	RecognizeSpeechOperation     OperationName = "RecognizeSpeech"

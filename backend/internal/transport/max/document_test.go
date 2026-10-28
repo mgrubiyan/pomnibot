@@ -213,7 +213,7 @@ func TestMAXUsesInternalIDForNotes(t *testing.T) {
 		if i.MaxID != 42 {
 			t.Errorf("identity: %+v", i)
 		}
-		return usecase.Account{User: contracts.User{ID: testID900}, MaxID: 42, ProfileComplete: true}, nil
+		return usecase.Account{User: contracts.User{ID: testID900}, MaxID: 42}, nil
 	}}
 	bot, err := NewBot(client, "https://example.test", users, notes.New(&mockFileExtractor{}, &mockCardGenerator{}, sets, 1))
 	if err != nil {

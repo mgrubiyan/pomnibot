@@ -94,7 +94,7 @@ func runStage(ctx context.Context, cfg Options, name string, n, rate int, d time
 	users := usecase.NewUserService(q)
 	store := repository.NewManualStore(pool)
 	handler := transport.NewAPIHandler(usecase.NewSetService(q, users, store), usecase.NewCardService(q, users, usecase.WithTransactions(store), usecase.WithManualCards(store)), usecase.NewHomescreenService(q, users), users)
-	router, err := transport.NewRouter(handler, staticFS, maxToken, telegramToken, users, nil)
+	router, err := transport.NewRouter(handler, staticFS, maxToken, users, nil)
 	if err != nil {
 		return result, err
 	}

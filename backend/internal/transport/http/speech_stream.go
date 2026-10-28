@@ -16,12 +16,12 @@ import (
 // speechStreamPath is a WebSocket, outside the OpenAPI contract: ogen
 // serves plain requests only.
 //
-// The mini app sends {"authorization": "max …" or "tma …"} first (browsers
+// The mini app sends {"authorization": "max …"} first (browsers
 // set no headers on a WebSocket), then the recording as binary messages of
 // mono 16-bit PCM at 16 kHz while it is spoken, then {"type": "end"}. The
 // server answers {"text": "…"} each time the text heard so far changes and
 // {"text": "…", "done": true} once it is fixed. A refusal is
-// {"error": "forbidden" | "sign_in_expired" | "profile_required" | "failed"}
+// {"error": "forbidden" | "sign_in_expired" | "failed"}
 // before the connection closes.
 const speechStreamPath = "/api/speech/stream"
 
@@ -111,7 +111,7 @@ func speechStream(h *APIHandler, auth authenticator) http.Handler {
 		if !ok {
 			return
 		}
-		ctx, refusal := signInSpeech(ctx, h, auth, msg.Authorization, r.URL.Path)
+		ctx, refusal := signInSpeech(ctx, h, auth, msg.Authorization)
 		if refusal != "" {
 			writeSpeech(ctx, conn, speechReply{Error: refusal})
 			_ = conn.Close(websocket.StatusPolicyViolation, refusal)
@@ -176,8 +176,8 @@ func readSignIn(ctx context.Context, conn *websocket.Conn, wait time.Duration) (
 }
 
 // signInSpeech gives ctx the reader's account, or names the refusal.
-func signInSpeech(ctx context.Context, h *APIHandler, auth authenticator, authorization, path string) (context.Context, string) {
-	signed, fail := auth.authenticate(ctx, authorization, path)
+func signInSpeech(ctx context.Context, h *APIHandler, auth authenticator, authorization string) (context.Context, string) {
+	signed, fail := auth.authenticate(ctx, authorization)
 	if fail != nil {
 		if fail.code != "" {
 			return ctx, fail.code
