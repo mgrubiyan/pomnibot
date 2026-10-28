@@ -17,7 +17,7 @@ WITH removed AS (
 )
 UPDATE users SET avatar_id = NULL, avatar_source = NULL
 WHERE users.id = $1
-RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id, data_consent_answered_at, avatar_source
+RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, id, data_consent_at, avatar_id, data_consent_answered_at, avatar_source
 `
 
 func (q *Queries) DeleteAvatar(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -30,11 +30,6 @@ func (q *Queries) DeleteAvatar(ctx context.Context, id pgtype.UUID) (User, error
 		&i.Username,
 		&i.IsBot,
 		&i.MaxID,
-		&i.TgID,
-		&i.ProfileComplete,
-		&i.ProfileStep,
-		&i.PendingLastName,
-		&i.TgBotStarted,
 		&i.ID,
 		&i.DataConsentAt,
 		&i.AvatarID,
@@ -49,7 +44,7 @@ INSERT INTO users (id, first_name, last_name, username, is_bot, last_active_at)
 VALUES ($1, '', NULL, NULL, FALSE, CURRENT_TIMESTAMP)
 ON CONFLICT (id) DO UPDATE
 SET last_active_at = CURRENT_TIMESTAMP
-RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id, data_consent_answered_at, avatar_source
+RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, id, data_consent_at, avatar_id, data_consent_answered_at, avatar_source
 `
 
 func (q *Queries) EnsureUser(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -62,11 +57,6 @@ func (q *Queries) EnsureUser(ctx context.Context, id pgtype.UUID) (User, error) 
 		&i.Username,
 		&i.IsBot,
 		&i.MaxID,
-		&i.TgID,
-		&i.ProfileComplete,
-		&i.ProfileStep,
-		&i.PendingLastName,
-		&i.TgBotStarted,
 		&i.ID,
 		&i.DataConsentAt,
 		&i.AvatarID,
@@ -103,7 +93,7 @@ func (q *Queries) GetAvatarImage(ctx context.Context, id pgtype.UUID) ([]byte, e
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id, data_consent_answered_at, avatar_source FROM users WHERE id = $1
+SELECT last_active_at, first_name, last_name, username, is_bot, max_id, id, data_consent_at, avatar_id, data_consent_answered_at, avatar_source FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -116,11 +106,6 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 		&i.Username,
 		&i.IsBot,
 		&i.MaxID,
-		&i.TgID,
-		&i.ProfileComplete,
-		&i.ProfileStep,
-		&i.PendingLastName,
-		&i.TgBotStarted,
 		&i.ID,
 		&i.DataConsentAt,
 		&i.AvatarID,
@@ -178,7 +163,7 @@ WITH added AS (
 )
 UPDATE users SET avatar_id = (SELECT id FROM added), avatar_source = NULL
 WHERE users.id = $1
-RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id, data_consent_answered_at, avatar_source
+RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, id, data_consent_at, avatar_id, data_consent_answered_at, avatar_source
 `
 
 type SaveAvatarParams struct {
@@ -197,11 +182,6 @@ func (q *Queries) SaveAvatar(ctx context.Context, arg SaveAvatarParams) (User, e
 		&i.Username,
 		&i.IsBot,
 		&i.MaxID,
-		&i.TgID,
-		&i.ProfileComplete,
-		&i.ProfileStep,
-		&i.PendingLastName,
-		&i.TgBotStarted,
 		&i.ID,
 		&i.DataConsentAt,
 		&i.AvatarID,
@@ -220,7 +200,7 @@ WITH added AS (
 )
 UPDATE users SET avatar_id = (SELECT id FROM added), avatar_source = $1
 WHERE users.id = $2
-RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id, data_consent_answered_at, avatar_source
+RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, id, data_consent_at, avatar_id, data_consent_answered_at, avatar_source
 `
 
 type SaveImportedAvatarParams struct {
@@ -240,11 +220,6 @@ func (q *Queries) SaveImportedAvatar(ctx context.Context, arg SaveImportedAvatar
 		&i.Username,
 		&i.IsBot,
 		&i.MaxID,
-		&i.TgID,
-		&i.ProfileComplete,
-		&i.ProfileStep,
-		&i.PendingLastName,
-		&i.TgBotStarted,
 		&i.ID,
 		&i.DataConsentAt,
 		&i.AvatarID,
@@ -267,7 +242,7 @@ UPDATE users SET
     data_consent_answered_at = COALESCE(data_consent_answered_at, CURRENT_TIMESTAMP),
     avatar_id = COALESCE((SELECT id FROM moved), avatar_id)
 WHERE users.id = $2
-RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id, data_consent_answered_at, avatar_source
+RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, id, data_consent_at, avatar_id, data_consent_answered_at, avatar_source
 `
 
 type SetDataConsentParams struct {
@@ -288,11 +263,6 @@ func (q *Queries) SetDataConsent(ctx context.Context, arg SetDataConsentParams) 
 		&i.Username,
 		&i.IsBot,
 		&i.MaxID,
-		&i.TgID,
-		&i.ProfileComplete,
-		&i.ProfileStep,
-		&i.PendingLastName,
-		&i.TgBotStarted,
 		&i.ID,
 		&i.DataConsentAt,
 		&i.AvatarID,
@@ -311,7 +281,7 @@ ON CONFLICT (max_id) DO UPDATE SET
     username = COALESCE(EXCLUDED.username, users.username),
     is_bot = EXCLUDED.is_bot,
     last_active_at = CURRENT_TIMESTAMP
-RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, tg_id, profile_complete, profile_step, pending_last_name, tg_bot_started, id, data_consent_at, avatar_id, data_consent_answered_at, avatar_source
+RETURNING last_active_at, first_name, last_name, username, is_bot, max_id, id, data_consent_at, avatar_id, data_consent_answered_at, avatar_source
 `
 
 type UpsertMAXUserParams struct {
@@ -338,11 +308,6 @@ func (q *Queries) UpsertMAXUser(ctx context.Context, arg UpsertMAXUserParams) (U
 		&i.Username,
 		&i.IsBot,
 		&i.MaxID,
-		&i.TgID,
-		&i.ProfileComplete,
-		&i.ProfileStep,
-		&i.PendingLastName,
-		&i.TgBotStarted,
 		&i.ID,
 		&i.DataConsentAt,
 		&i.AvatarID,
