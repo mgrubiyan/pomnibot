@@ -20,10 +20,14 @@ func verify(ctx context.Context, pool *pgxpool.Pool, w *workload) error {
 		}
 		seen[a.id] = true
 		var external int64
-		if err := pool.QueryRow(ctx, "SELECT max_id FROM users WHERE id=$1", a.id).Scan(&external); err != nil {
+		column := "max_id"
+		if a.index%2 == 1 {
+			column = "tg_id"
+		}
+		if err := pool.QueryRow(ctx, "SELECT "+column+" FROM users WHERE id=$1", a.id).Scan(&external); err != nil {
 			return err
 		}
-		if external != int64(10000000+a.index) {
+		if external != int64(10000000+a.index/2) {
 			return fmt.Errorf("wrong external identity: %d", external)
 		}
 		var membership, answers int64

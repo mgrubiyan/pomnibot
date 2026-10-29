@@ -9,9 +9,9 @@
        stands in the middle: a button or a line of text across the whole
        desktop is hard to read. The background still fills the window. */
     padding:
-        calc(12px + env(safe-area-inset-top, 0px))
-        max(calc(16px + env(safe-area-inset-right, 0px)), calc((100% - 560px) / 2))
-        calc(24px + env(safe-area-inset-bottom, 0px))
-        max(calc(16px + env(safe-area-inset-left, 0px)), calc((100% - 560px) / 2));
+        calc(12px + max(env(safe-area-inset-top, 0px), var(--telegram-safe-top, 0px)))
+        max(calc(16px + max(env(safe-area-inset-right, 0px), var(--telegram-safe-right, 0px))), calc((100% - 560px) / 2))
+        calc(24px + max(env(safe-area-inset-bottom, 0px), var(--telegram-safe-bottom, 0px)))
+        max(calc(16px + max(env(safe-area-inset-left, 0px), var(--telegram-safe-left, 0px))), calc((100% - 560px) / 2));
     gap: 16px;
 }

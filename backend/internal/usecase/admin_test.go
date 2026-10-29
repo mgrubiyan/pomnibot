@@ -16,7 +16,7 @@ import (
 )
 
 func TestAdmins_Is(t *testing.T) {
-	admins := usecase.Admins{MaxIDs: []int64{5}}
+	admins := usecase.Admins{MaxIDs: []int64{5}, TgIDs: []int64{6}}
 	local := usecase.Admins{BrowserTestUser: true}
 	tests := []struct {
 		name    string
@@ -25,7 +25,8 @@ func TestAdmins_Is(t *testing.T) {
 		want    bool
 	}{
 		{"MAX admin", admins, usecase.Account{MaxID: 5}, true},
-		{"another MAX user", admins, usecase.Account{MaxID: 6}, false},
+		{"Telegram admin", admins, usecase.Account{TgID: 6}, true},
+		{"IDs of the other app", admins, usecase.Account{MaxID: 6, TgID: 5}, false},
 		{"no chat account", admins, usecase.Account{}, false},
 		{"browser test user locally", local, usecase.Account{}, true},
 		{"chat user locally", local, usecase.Account{MaxID: 5}, false},

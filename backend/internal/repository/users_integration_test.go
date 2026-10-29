@@ -42,20 +42,33 @@ func TestUsersMigrationPreservesLegacyMAXData(t *testing.T) {
 	users := usecase.NewUserService(db.New(pool))
 	username := "same"
 	maxUser, err := users.UpsertMAXUser(ctx, usecase.MAXUserParams{MaxID: 42, FirstName: "Same", Username: &username})
-	if err != nil || maxUser.MaxID != 42 {
+	if err != nil || maxUser.MaxID != 42 || maxUser.TgID != 0 {
 		t.Fatalf("legacy MAX account changed: %+v %v", maxUser, err)
 	}
 	var authorID [16]byte
 	if err := pool.QueryRow(ctx, "SELECT author_id FROM sets WHERE share_code='424242'").Scan(&authorID); err != nil || authorID != maxUser.User.ID {
 		t.Fatalf("set author_id not updated to user UUID: %v vs %v, %v", authorID, maxUser.User.ID, err)
 	}
-	again, err := users.UpsertMAXUser(ctx, usecase.MAXUserParams{MaxID: 42})
+	tgUser, err := users.UpsertTelegramUser(ctx, usecase.TelegramUserParams{TgID: 42, Username: username, BotStarted: true})
+	if err != nil || tgUser.User.ID == maxUser.User.ID || tgUser.TgID != 42 || tgUser.MaxID != 0 {
+		t.Fatalf("platform IDs mixed: MAX=%+v TG=%+v err=%v", maxUser, tgUser, err)
+	}
+	tgUser, err = users.SaveProfile(ctx, tgUser.User.ID, "Same", "Name")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Identical names and usernames must not merge the accounts on re-entry.
+	again, err := users.UpsertTelegramUser(ctx, usecase.TelegramUserParams{TgID: 42, Username: username})
+	if err != nil || again.User.ID != tgUser.User.ID || !again.ProfileComplete {
+		t.Fatalf("Telegram re-entry: %+v %v", again, err)
+	}
+	again, err = users.UpsertMAXUser(ctx, usecase.MAXUserParams{MaxID: 42})
 	if err != nil || again.User.ID != maxUser.User.ID {
 		t.Fatalf("MAX re-entry: %+v %v", again, err)
 	}
 	// A messenger ID matching another account's internal ID is still a new user.
 	collision, err := users.UpsertMAXUser(ctx, usecase.MAXUserParams{MaxID: 99999, FirstName: "Same"})
-	if err != nil || collision.User.ID == maxUser.User.ID {
+	if err != nil || collision.User.ID == tgUser.User.ID || collision.User.ID == maxUser.User.ID {
 		t.Fatalf("internal ID used as external lookup: %+v %v", collision, err)
 	}
 	for table, before := range snapshots {
