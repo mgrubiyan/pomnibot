@@ -90,7 +90,7 @@ type notesServer struct {
 
 func newNotesServer(t *testing.T, handler *APIHandler, users usecase.UserService) notesServer {
 	t.Helper()
-	router, err := NewRouter(handler, fstest.MapFS{}, "secret", users, nil)
+	router, err := NewRouter(handler, fstest.MapFS{}, "secret", "", users, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +141,7 @@ func (s notesServer) waitState(want map[string]any) {
 }
 
 func notesUsers() *profileUsers {
-	return &profileUsers{account: usecase.Account{User: contracts.User{ID: uuid.MustParse("00000000-0000-0000-0000-000000000905"), FirstName: "Ann"}, MaxID: 42}}
+	return &profileUsers{account: usecase.Account{User: contracts.User{ID: uuid.MustParse("00000000-0000-0000-0000-000000000905"), FirstName: "Ann"}, MaxID: 42, ProfileComplete: true}}
 }
 
 func TestUploadNotesMakesTheSetInTheBackground(t *testing.T) {

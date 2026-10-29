@@ -98,6 +98,20 @@ func encodeJoinSetByShareCodeRequest(
 	return nil
 }
 
+func encodePutProfileRequest(
+	req *ProfileRequest,
+	r *http.Request,
+) error {
+	const contentType = "application/json"
+	e := new(jx.Encoder)
+	{
+		req.Encode(e)
+	}
+	encoded := e.Bytes()
+	ht.SetBody(r, bytes.NewReader(encoded), contentType)
+	return nil
+}
+
 func encodePutProfileAvatarRequest(
 	req *AvatarRequest,
 	r *http.Request,

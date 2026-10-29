@@ -233,7 +233,7 @@ export function Home({ onStart, onOpenSet, onAddNote, onOpenNotes, onJoinSet, on
                 <Typography.Text variant="description" color="secondary" asChild>
                     <h1 className={s.greeting}>Привет, {formatGreetingName(today.user)}</h1>
                 </Typography.Text>
-                {/* MAX gives the photo; there is nothing to change here. */}
+                {/* MAX or Telegram gives the photo; there is nothing to change here. */}
                 {showAvatar ? (
                     <span className={s.avatar}>
                         <UserAvatar user={today.user} size={36} />

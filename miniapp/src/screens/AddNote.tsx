@@ -27,7 +27,7 @@ const MAY_LEAVE = 'Можно выйти: набор появится на гл�
 
 /**
  * The notes go to the same queue as the bot's, so the set comes out the
- * same. Where the mini app cannot send them, as outside MAX,
+ * same. Where the mini app cannot send them, as outside MAX and Telegram,
  * the screen points to the bot as before.
  */
 export function AddNote({ onBack, onDone, resume = false }: AddNoteProps) {

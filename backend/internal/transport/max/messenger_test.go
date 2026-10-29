@@ -37,7 +37,7 @@ func TestMessengerSendToUser(t *testing.T) {
 	m := NewMessenger(client, "https://pomnibot.test/")
 	ctx := context.Background()
 
-	if err = m.SendToUser(ctx, usecase.Account{}, "text"); err != nil || sent.Load() != 0 {
+	if err = m.SendToUser(ctx, usecase.Account{TgID: 5}, "text"); err != nil || sent.Load() != 0 {
 		t.Fatalf("user without MAX: sent %d, %v", sent.Load(), err)
 	}
 	for range 2 {

@@ -1398,7 +1398,7 @@ func (*DeleteSetNotFound) deleteSetRes() {}
 
 // Ref: #/components/schemas/ErrorResponse
 type ErrorResponse struct {
-	// Machine-readable error code, including sign_in_expired.
+	// Machine-readable error code, including profile_required and sign_in_expired.
 	Code    OptString `json:"code"`
 	Message string    `json:"message"`
 }
@@ -2930,10 +2930,37 @@ func (o OptUUID) Or(d uuid.UUID) uuid.UUID {
 	return d
 }
 
+// Ref: #/components/schemas/ProfileRequest
+type ProfileRequest struct {
+	FirstName string `json:"firstName"`
+	LastName  string `json:"lastName"`
+}
+
+// GetFirstName returns the value of FirstName.
+func (s *ProfileRequest) GetFirstName() string {
+	return s.FirstName
+}
+
+// GetLastName returns the value of LastName.
+func (s *ProfileRequest) GetLastName() string {
+	return s.LastName
+}
+
+// SetFirstName sets the value of FirstName.
+func (s *ProfileRequest) SetFirstName(val string) {
+	s.FirstName = val
+}
+
+// SetLastName sets the value of LastName.
+func (s *ProfileRequest) SetLastName(val string) {
+	s.LastName = val
+}
+
 // Ref: #/components/schemas/ProfileResponse
 type ProfileResponse struct {
-	User     User                       `json:"user"`
-	Platform OptProfileResponsePlatform `json:"platform"`
+	User            User                       `json:"user"`
+	Platform        OptProfileResponsePlatform `json:"platform"`
+	ProfileComplete bool                       `json:"profileComplete"`
 	// The user lets set authors see their name and photo.
 	DataConsent bool `json:"dataConsent"`
 	// The user has said yes or no to the consent once; until then the mini-app asks.
@@ -2948,6 +2975,11 @@ func (s *ProfileResponse) GetUser() User {
 // GetPlatform returns the value of Platform.
 func (s *ProfileResponse) GetPlatform() OptProfileResponsePlatform {
 	return s.Platform
+}
+
+// GetProfileComplete returns the value of ProfileComplete.
+func (s *ProfileResponse) GetProfileComplete() bool {
+	return s.ProfileComplete
 }
 
 // GetDataConsent returns the value of DataConsent.
@@ -2970,6 +3002,11 @@ func (s *ProfileResponse) SetPlatform(val OptProfileResponsePlatform) {
 	s.Platform = val
 }
 
+// SetProfileComplete sets the value of ProfileComplete.
+func (s *ProfileResponse) SetProfileComplete(val bool) {
+	s.ProfileComplete = val
+}
+
 // SetDataConsent sets the value of DataConsent.
 func (s *ProfileResponse) SetDataConsent(val bool) {
 	s.DataConsent = val
@@ -2984,17 +3021,20 @@ func (*ProfileResponse) deleteProfileAvatarRes() {}
 func (*ProfileResponse) getProfileRes()          {}
 func (*ProfileResponse) putProfileAvatarRes()    {}
 func (*ProfileResponse) putProfileConsentRes()   {}
+func (*ProfileResponse) putProfileRes()          {}
 
 type ProfileResponsePlatform string
 
 const (
-	ProfileResponsePlatformMax ProfileResponsePlatform = "max"
+	ProfileResponsePlatformMax      ProfileResponsePlatform = "max"
+	ProfileResponsePlatformTelegram ProfileResponsePlatform = "telegram"
 )
 
 // AllValues returns all ProfileResponsePlatform values.
 func (ProfileResponsePlatform) AllValues() []ProfileResponsePlatform {
 	return []ProfileResponsePlatform{
 		ProfileResponsePlatformMax,
+		ProfileResponsePlatformTelegram,
 	}
 }
 
@@ -3002,6 +3042,8 @@ func (ProfileResponsePlatform) AllValues() []ProfileResponsePlatform {
 func (s ProfileResponsePlatform) MarshalText() ([]byte, error) {
 	switch s {
 	case ProfileResponsePlatformMax:
+		return []byte(s), nil
+	case ProfileResponsePlatformTelegram:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -3013,6 +3055,9 @@ func (s *ProfileResponsePlatform) UnmarshalText(data []byte) error {
 	switch ProfileResponsePlatform(data) {
 	case ProfileResponsePlatformMax:
 		*s = ProfileResponsePlatformMax
+		return nil
+	case ProfileResponsePlatformTelegram:
+		*s = ProfileResponsePlatformTelegram
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
@@ -3031,6 +3076,10 @@ type PutProfileAvatarInternalServerError ErrorResponse
 
 func (*PutProfileAvatarInternalServerError) putProfileAvatarRes() {}
 
+type PutProfileBadRequest ErrorResponse
+
+func (*PutProfileBadRequest) putProfileRes() {}
+
 type PutProfileConsentForbidden ErrorResponse
 
 func (*PutProfileConsentForbidden) putProfileConsentRes() {}
@@ -3038,6 +3087,14 @@ func (*PutProfileConsentForbidden) putProfileConsentRes() {}
 type PutProfileConsentInternalServerError ErrorResponse
 
 func (*PutProfileConsentInternalServerError) putProfileConsentRes() {}
+
+type PutProfileForbidden ErrorResponse
+
+func (*PutProfileForbidden) putProfileRes() {}
+
+type PutProfileInternalServerError ErrorResponse
+
+func (*PutProfileInternalServerError) putProfileRes() {}
 
 type RecallProbability float64
 

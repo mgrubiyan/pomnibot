@@ -32,6 +32,9 @@ var (
 	rn24AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
+	rn25AllowedHeaders = map[string]string{
+		"PUT": "Content-Type",
+	}
 	rn14AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
 	}
@@ -595,10 +598,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					switch r.Method {
 					case "GET":
 						s.handleGetProfileRequest([0]string{}, elemIsEscaped, w, r)
+					case "PUT":
+						s.handlePutProfileRequest([0]string{}, elemIsEscaped, w, r)
 					default:
 						s.notAllowed(w, r, notAllowedParams{
-							allowedMethods: "GET",
-							allowedHeaders: nil,
+							allowedMethods: "GET,PUT",
+							allowedHeaders: rn25AllowedHeaders,
 							acceptPost:     "",
 							acceptPatch:    "",
 						})
@@ -1680,6 +1685,15 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						r.name = GetProfileOperation
 						r.summary = "Read the saved profile and verified platform"
 						r.operationID = "GetProfile"
+						r.operationGroup = ""
+						r.pathPattern = "/profile"
+						r.args = args
+						r.count = 0
+						return r, true
+					case "PUT":
+						r.name = PutProfileOperation
+						r.summary = "Complete or edit a verified Telegram profile and clear bot dialogue"
+						r.operationID = "PutProfile"
 						r.operationGroup = ""
 						r.pathPattern = "/profile"
 						r.args = args

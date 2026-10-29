@@ -482,11 +482,13 @@ checks:
     requiredFields:
     - dataConsent
     - dataConsentAnswered
+    - profileComplete
     - user
     bodySchema:
       type: object
       required:
       - user
+      - profileComplete
       - dataConsent
       - dataConsentAnswered
       properties:
@@ -517,6 +519,9 @@ checks:
           type: string
           enum:
           - max
+          - telegram
+        profileComplete:
+          type: boolean
         dataConsent:
           type: boolean
           description: The user lets set authors see their name and photo
@@ -526,6 +531,70 @@ checks:
             the mini-app asks
   timeoutMs: 5000
   repeatable: true
+- id: PutProfile
+  name: Complete or edit a verified Telegram profile and clear bot dialogue
+  method: PUT
+  path: /profile
+  role: user
+  request:
+    headers:
+      Content-Type: application/json
+  expected:
+    statusCodes:
+    - 200
+    contentType: application/json
+    requiredFields:
+    - dataConsent
+    - dataConsentAnswered
+    - profileComplete
+    - user
+    bodySchema:
+      type: object
+      required:
+      - user
+      - profileComplete
+      - dataConsent
+      - dataConsentAnswered
+      properties:
+        user:
+          type: object
+          required:
+          - id
+          - firstName
+          properties:
+            id:
+              type: string
+              format: uuid
+            firstName:
+              type: string
+            lastName:
+              type: string
+            username:
+              type: string
+            avatarUrl:
+              type: string
+              description: The user's photo, when they have one and the viewer may
+                see it
+            anonymous:
+              type: boolean
+              description: The member has not let the set author see their name; firstName
+                is then empty, and lastName and username are left out.
+        platform:
+          type: string
+          enum:
+          - max
+          - telegram
+        profileComplete:
+          type: boolean
+        dataConsent:
+          type: boolean
+          description: The user lets set authors see their name and photo
+        dataConsentAnswered:
+          type: boolean
+          description: The user has said yes or no to the consent once; until then
+            the mini-app asks
+  timeoutMs: 5000
+  repeatable: false
 - id: PutProfileAvatar
   name: Replace the user's photo
   method: PUT
@@ -541,11 +610,13 @@ checks:
     requiredFields:
     - dataConsent
     - dataConsentAnswered
+    - profileComplete
     - user
     bodySchema:
       type: object
       required:
       - user
+      - profileComplete
       - dataConsent
       - dataConsentAnswered
       properties:
@@ -576,6 +647,9 @@ checks:
           type: string
           enum:
           - max
+          - telegram
+        profileComplete:
+          type: boolean
         dataConsent:
           type: boolean
           description: The user lets set authors see their name and photo
@@ -600,11 +674,13 @@ checks:
     requiredFields:
     - dataConsent
     - dataConsentAnswered
+    - profileComplete
     - user
     bodySchema:
       type: object
       required:
       - user
+      - profileComplete
       - dataConsent
       - dataConsentAnswered
       properties:
@@ -635,6 +711,9 @@ checks:
           type: string
           enum:
           - max
+          - telegram
+        profileComplete:
+          type: boolean
         dataConsent:
           type: boolean
           description: The user lets set authors see their name and photo

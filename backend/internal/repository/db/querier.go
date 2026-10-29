@@ -111,17 +111,20 @@ type Querier interface {
 	// Replaces the user's photo with the one from their messenger profile.
 	SaveImportedAvatar(ctx context.Context, arg SaveImportedAvatarParams) (User, error)
 	SaveProcessingReport(ctx context.Context, arg SaveProcessingReportParams) (int64, error)
+	SaveTelegramProfile(ctx context.Context, arg SaveTelegramProfileParams) (User, error)
 	// Giving consent again keeps the time it was first given, and any answer
 	// keeps the time of the first one. Withdrawing it moves the photo to a new
 	// address: authors may still hold the old one.
 	SetDataConsent(ctx context.Context, arg SetDataConsentParams) (User, error)
 	SetExists(ctx context.Context, id pgtype.UUID) (bool, error)
+	TelegramProfileInput(ctx context.Context, arg TelegramProfileInputParams) (User, error)
 	UpdateCard(ctx context.Context, arg UpdateCardParams) (UpdateCardRow, error)
 	UpdateCardStep(ctx context.Context, arg UpdateCardStepParams) (int64, error)
 	UpdateFact(ctx context.Context, arg UpdateFactParams) (Fact, error)
 	UpdateSetTitle(ctx context.Context, arg UpdateSetTitleParams) (int64, error)
 	UpsertFactProgress(ctx context.Context, arg UpsertFactProgressParams) (UserFactProgress, error)
 	UpsertMAXUser(ctx context.Context, arg UpsertMAXUserParams) (User, error)
+	UpsertTelegramUser(ctx context.Context, arg UpsertTelegramUserParams) (User, error)
 }
 
 var _ Querier = (*Queries)(nil)

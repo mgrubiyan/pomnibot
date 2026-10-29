@@ -127,7 +127,7 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 	}
 	photos := httptransport.NewPhotoImporter(users.(usecase.AvatarImporter), nil)
 	bots = append(bots, photos.Wait)
-	router, err := httptransport.NewRouter(api, assets, cfg.MaxBotToken, users, photos)
+	router, err := httptransport.NewRouter(api, assets, cfg.MaxBotToken, cfg.TelegramBotToken, users, photos)
 	if err != nil {
 		return fmt.Errorf("initialize router: %w", err)
 	}
@@ -136,7 +136,7 @@ func Run(ctx context.Context, cfg config.Config, assets fs.FS) error {
 		if err != nil {
 			return err
 		}
-		bots = append(bots, maxBot.Wait)
+		bots = append(bots, maxBot.Wait, startTelegramBot(ctx, cfg, maker, users))
 	}
 
 	server := &http.Server{

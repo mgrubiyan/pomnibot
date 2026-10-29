@@ -13,7 +13,8 @@ export interface paths {
         };
         /** Read the saved profile and verified platform */
         get: operations["GetProfile"];
-        put?: never;
+        /** Complete or edit a verified Telegram profile and clear bot dialogue */
+        put: operations["PutProfile"];
         post?: never;
         delete?: never;
         options?: never;
@@ -588,7 +589,8 @@ export interface components {
         ProfileResponse: {
             user: components["schemas"]["User"];
             /** @enum {string} */
-            platform?: "max";
+            platform?: "max" | "telegram";
+            profileComplete: boolean;
             /** @description The user lets set authors see their name and photo */
             dataConsent: boolean;
             /** @description The user has said yes or no to the consent once; until then the mini-app asks */
@@ -603,6 +605,10 @@ export interface components {
              * @description JPEG or PNG of at most 300 KB and 1024 px a side
              */
             image: string;
+        };
+        ProfileRequest: {
+            firstName: string;
+            lastName: string;
         };
         HealthResponse: {
             /** @example ok */
@@ -648,7 +654,7 @@ export interface components {
             message?: string;
         };
         ErrorResponse: {
-            /** @description Machine-readable error code, including sign_in_expired */
+            /** @description Machine-readable error code, including profile_required and sign_in_expired */
             code?: string;
             message: string;
         };
@@ -1029,7 +1035,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description Forbidden */
+        /** @description Forbidden; code profile_required means a Telegram profile must be completed */
         Forbidden: {
             headers: {
                 [name: string]: unknown;
@@ -1082,6 +1088,33 @@ export interface operations {
                     "application/json": components["schemas"]["ProfileResponse"];
                 };
             };
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    PutProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalServerError"];
         };
     };

@@ -121,6 +121,10 @@ type PutProfileConsentRes interface {
 	putProfileConsentRes()
 }
 
+type PutProfileRes interface {
+	putProfileRes()
+}
+
 type RecognizeSpeechRes interface {
 	recognizeSpeechRes()
 }

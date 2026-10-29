@@ -53,7 +53,7 @@ func (m *mockUserService) UpsertMAXUser(ctx context.Context, i usecase.MAXUserPa
 	if m.upsertMAXUserFunc != nil {
 		return m.upsertMAXUserFunc(ctx, i)
 	}
-	return usecase.Account{User: contracts.User{ID: maxTestUserID, FirstName: i.FirstName}, MaxID: i.MaxID}, nil
+	return usecase.Account{User: contracts.User{ID: maxTestUserID, FirstName: i.FirstName}, MaxID: i.MaxID, ProfileComplete: true}, nil
 }
 func (m *mockUserService) GetAccount(ctx context.Context, id uuid.UUID) (usecase.Account, error) {
 	if m.deliveryFunc != nil {
@@ -1056,7 +1056,7 @@ func TestNextRunDuration(t *testing.T) {
 func TestSendReviewReminders(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("uses MAX IDs and skips users without one and bypass users", func(t *testing.T) {
+	t.Run("uses MAX IDs and skips Telegram and bypass users", func(t *testing.T) {
 		type sentMsg struct {
 			UserID int64
 			Body   SendMessageRequest
@@ -1109,7 +1109,7 @@ func TestSendReviewReminders(t *testing.T) {
 				case testID102:
 					return usecase.Account{MaxID: 202}, nil
 				case testID103:
-					return usecase.Account{}, nil
+					return usecase.Account{TgID: 201}, nil
 				default:
 					t.Fatalf("unexpected internal ID %s", id)
 					return usecase.Account{}, nil

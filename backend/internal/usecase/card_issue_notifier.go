@@ -39,7 +39,7 @@ func WithIssueNotifier(n IssueNotifier) CardServiceOption {
 	return func(s *cardServiceImpl) { s.issues = n }
 }
 
-// issueSendTimeout bounds one notification.
+// issueSendTimeout bounds one notification across all chat apps.
 const issueSendTimeout = 30 * time.Second
 
 // Text is the message to the author.
@@ -47,26 +47,27 @@ func (r CardIssueReport) Text() string {
 	return fmt.Sprintf("⚠️ На карточку в наборе «%s» пожаловались. Откройте набор и нажмите «Жалобы».", r.SetTitle)
 }
 
-// ChatIssueNotifier sends complaints to the author in the chat. Sending runs in the background, so a slow chat API never holds up the
+// ChatIssueNotifier sends complaints to the author in every chat app they
+// use. Sending runs in the background, so a slow chat API never holds up the
 // complaint; Close joins the messages still going out.
 type ChatIssueNotifier struct {
-	accounts  AccountGetter
-	messenger Messenger
-	sending   sync.WaitGroup
+	accounts   AccountGetter
+	messengers []Messenger
+	sending    sync.WaitGroup
 
 	mu     sync.Mutex
 	closed bool // a request outliving the server's shutdown sends nothing
 }
 
-// NewChatIssueNotifier sends through messenger; with nil it sends nothing.
-func NewChatIssueNotifier(accounts AccountGetter, messenger Messenger) *ChatIssueNotifier {
-	return &ChatIssueNotifier{accounts: accounts, messenger: messenger}
+// NewChatIssueNotifier sends through messengers; with none it sends nothing.
+func NewChatIssueNotifier(accounts AccountGetter, messengers ...Messenger) *ChatIssueNotifier {
+	return &ChatIssueNotifier{accounts: accounts, messengers: messengers}
 }
 
 // CardIssueReported implements IssueNotifier. Failures are only logged: the
 // complaint is saved, and the author still sees it in the mini app.
 func (n *ChatIssueNotifier) CardIssueReported(ctx context.Context, report CardIssueReport) {
-	if n.messenger == nil {
+	if len(n.messengers) == 0 {
 		return
 	}
 	n.mu.Lock()
@@ -84,8 +85,11 @@ func (n *ChatIssueNotifier) CardIssueReported(ctx context.Context, report CardIs
 			slog.WarnContext(ctx, "card issue not sent to the author", "author_id", report.AuthorID, "error", err)
 			return
 		}
-		if err := n.messenger.SendToUser(ctx, account, report.Text()); err != nil {
-			slog.WarnContext(ctx, "card issue not sent to the author", "author_id", report.AuthorID, "error", err)
+		text := report.Text()
+		for _, m := range n.messengers {
+			if err := m.SendToUser(ctx, account, text); err != nil {
+				slog.WarnContext(ctx, "card issue not sent to the author", "author_id", report.AuthorID, "error", err)
+			}
 		}
 	})
 }

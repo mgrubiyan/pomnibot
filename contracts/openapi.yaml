@@ -31,6 +31,28 @@ paths:
                 $ref: '#/components/schemas/ProfileResponse'
         '500':
           $ref: '#/components/responses/InternalServerError'
+    put:
+      summary: Complete or edit a verified Telegram profile and clear bot dialogue
+      operationId: PutProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileRequest'
+      responses:
+        '200':
+          description: Saved profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
   /profile/consent:
     put:
@@ -1137,7 +1159,7 @@ components:
       type: apiKey
       in: header
       name: Authorization
-      description: 'max <original MAX initData>. Without it the request uses test user 0; credentials that do not hold or are older than an hour get 401 with code sign_in_expired.'
+      description: 'max <original MAX initData> or tma <original Telegram initData>. Without it the request uses test user 0; credentials that do not hold or are older than an hour get 401 with code sign_in_expired.'
   responses:
     BadRequest:
       description: Bad request / validation error
@@ -1158,7 +1180,7 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     Forbidden:
-      description: Forbidden
+      description: Forbidden; code profile_required means a Telegram profile must be completed
       content:
         application/json:
           schema:
@@ -1179,13 +1201,15 @@ components:
   schemas:
     ProfileResponse:
       type: object
-      required: [user, dataConsent, dataConsentAnswered]
+      required: [user, profileComplete, dataConsent, dataConsentAnswered]
       properties:
         user:
           $ref: '#/components/schemas/User'
         platform:
           type: string
-          enum: [max]
+          enum: [max, telegram]
+        profileComplete:
+          type: boolean
         dataConsent:
           type: boolean
           description: The user lets set authors see their name and photo
@@ -1206,6 +1230,18 @@ components:
           description: JPEG or PNG of at most 300 KB and 1024 px a side
           type: string
           format: byte
+    ProfileRequest:
+      type: object
+      required: [firstName, lastName]
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 100
     HealthResponse:
       type: object
       required:
@@ -1285,7 +1321,7 @@ components:
       properties:
         code:
           type: string
-          description: Machine-readable error code, including sign_in_expired
+          description: Machine-readable error code, including profile_required and sign_in_expired
         message:
           type: string
 

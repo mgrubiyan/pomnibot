@@ -67,11 +67,21 @@ type MAXUserParams struct {
 	IsBot              bool
 }
 
-// Account contains the saved user.
-// User.ID is internal; MaxID is only for messenger delivery.
+// TelegramUserParams never overwrites the manually entered profile names.
+type TelegramUserParams struct {
+	TgID              int64
+	Username          string
+	IsBot, BotStarted bool
+}
+
+// Account contains the saved user and Telegram conversation state.
+// User.ID is internal; MaxID and TgID are only for messenger delivery.
 type Account struct {
-	User  contracts.User
-	MaxID int64
+	User            contracts.User
+	MaxID, TgID     int64
+	ProfileComplete bool
+	ProfileStep     string
+	BotStarted      bool
 	// DataConsent lets set authors see the user's name.
 	DataConsent bool
 	// DataConsentAnswered: the user has said yes or no to it once, so the
@@ -91,7 +101,10 @@ type AvatarImporter interface {
 // UserService defines user domain operations.
 type UserService interface {
 	UpsertMAXUser(context.Context, MAXUserParams) (Account, error)
+	UpsertTelegramUser(context.Context, TelegramUserParams) (Account, error)
 	GetAccount(context.Context, uuid.UUID) (Account, error)
+	SaveProfile(context.Context, uuid.UUID, string, string) (Account, error)
+	ProfileInput(context.Context, uuid.UUID, string, bool) (Account, error)
 	SetDataConsent(context.Context, uuid.UUID, bool) (Account, error)
 	SaveAvatar(context.Context, uuid.UUID, []byte) (Account, error)
 	DeleteAvatar(context.Context, uuid.UUID) (Account, error)

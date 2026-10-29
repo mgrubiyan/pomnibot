@@ -14,6 +14,7 @@ services:
         required: false
     environment:
       - APP_ENV=${APP_ENV:-prod}
+      - TG_BOT_TOKEN=${TG_BOT_TOKEN:-}
       - PORT=8080
       - DOMAIN=${DOMAIN}
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable

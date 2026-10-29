@@ -26,16 +26,16 @@ func accountFromContext(ctx context.Context) (usecase.Account, bool) {
 // sign_in_expired: passing them on as the test account would record the
 // reader's answers there and show them other people's sets.
 // The messenger photo of a signed user is taken in the background by photos.
-func AuthMiddleware(maxToken string, users usecase.UserService, photos *PhotoImporter) func(http.Handler) http.Handler {
-	return authenticator{maxToken: maxToken, users: users, photos: photos}.middleware
+func AuthMiddleware(maxToken, telegramToken string, users usecase.UserService, photos *PhotoImporter) func(http.Handler) http.Handler {
+	return authenticator{maxToken: maxToken, telegramToken: telegramToken, users: users, photos: photos}.middleware
 }
 
 // authenticator checks the Authorization of a request, or of a WebSocket's
 // first message: browsers set no headers on a WebSocket.
 type authenticator struct {
-	maxToken string
-	users    usecase.UserService
-	photos   *PhotoImporter
+	maxToken, telegramToken string
+	users                   usecase.UserService
+	photos                  *PhotoImporter
 }
 
 // authFailure is a refusal, written as an ErrorResponse.
@@ -46,7 +46,7 @@ type authFailure struct {
 
 func (a authenticator) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx, fail := a.authenticate(r.Context(), r.Header.Get("Authorization"))
+		ctx, fail := a.authenticate(r.Context(), r.Header.Get("Authorization"), r.URL.Path)
 		if fail != nil {
 			writeAuthError(w, fail.status, fail.message, fail.code)
 			return
@@ -57,13 +57,16 @@ func (a authenticator) middleware(next http.Handler) http.Handler {
 
 // authenticate gives ctx the account the authorization belongs to, or the
 // shared test account without one.
-func (a authenticator) authenticate(ctx context.Context, authorization string) (context.Context, *authFailure) {
+func (a authenticator) authenticate(ctx context.Context, authorization, path string) (context.Context, *authFailure) {
 	fallback := WithUserName(WithUserID(ctx, uuid.Nil), "Browser Test User")
 	scheme, raw, ok := strings.Cut(authorization, " ")
 	var user *initDataUser
 	var err error
-	if ok && raw != "" && strings.EqualFold(scheme, "max") && a.maxToken != "" {
+	switch {
+	case ok && raw != "" && strings.EqualFold(scheme, "max") && a.maxToken != "":
 		user, err = validateInitData(raw, a.maxToken, time.Now())
+	case ok && raw != "" && strings.EqualFold(scheme, "tma") && a.telegramToken != "":
+		user, err = validateTelegramInitData(raw, a.telegramToken, time.Now())
 	}
 	if err != nil {
 		return nil, &authFailure{http.StatusUnauthorized, "Вход устарел, откройте приложение заново", "sign_in_expired"}
@@ -74,17 +77,25 @@ func (a authenticator) authenticate(ctx context.Context, authorization string) (
 	if a.users == nil {
 		return nil, &authFailure{500, "user service unavailable", ""}
 	}
-	first := strings.TrimSpace(user.FirstName)
-	if first == "" {
-		first = resolveUserName(*user)
+	var account usecase.Account
+	if strings.EqualFold(scheme, "max") {
+		first := strings.TrimSpace(user.FirstName)
+		if first == "" {
+			first = resolveUserName(*user)
+		}
+		last, username := strings.TrimSpace(user.LastName), strings.TrimSpace(user.Username)
+		account, err = a.users.UpsertMAXUser(ctx, usecase.MAXUserParams{MaxID: user.ID, FirstName: first, LastName: &last, Username: &username, IsBot: user.IsBot})
+	} else {
+		account, err = a.users.UpsertTelegramUser(ctx, usecase.TelegramUserParams{TgID: user.ID, Username: user.Username, IsBot: user.IsBot})
 	}
-	last, username := strings.TrimSpace(user.LastName), strings.TrimSpace(user.Username)
-	account, err := a.users.UpsertMAXUser(ctx, usecase.MAXUserParams{MaxID: user.ID, FirstName: first, LastName: &last, Username: &username, IsBot: user.IsBot})
 	if err != nil {
 		slog.ErrorContext(ctx, "resolve authenticated user", "error", err)
 		return nil, &authFailure{500, "failed to resolve user", ""}
 	}
 	a.photos.Sync(ctx, account, strings.TrimSpace(user.PhotoURL))
+	if account.TgID != 0 && !account.ProfileComplete && (path == "/api" || strings.HasPrefix(path, "/api/")) && path != "/api/profile" && path != "/api/health" {
+		return nil, &authFailure{http.StatusForbidden, "Заполните фамилию и имя", "profile_required"}
+	}
 	name := strings.TrimSpace(account.User.FirstName + " " + account.User.LastName.Value)
 	return context.WithValue(WithUserName(WithUserID(ctx, account.User.ID), name), accountContextKey, account), nil
 }
